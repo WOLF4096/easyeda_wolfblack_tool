@@ -1,0 +1,135 @@
+{
+	"name": "wolfblack-tool",
+	"uuid": "345f2952d65b1a5ca2f11721b90309c9",
+	"displayName": "狼黑工具",
+	"description": "EasyEDA Pro 增强工具",
+	"version": "1.7.2",
+	"publisher": "wolfblack",
+	"engines": {
+		"eda": "^2.2.43"
+	},
+	"license": "Apache-2.0",
+	"repository": {
+		"type": "github",
+		"url": "https://github.com/WOLF4096/easyeda_wolfblack_tool"
+	},
+	"categories": ["PCB","Schematic","Other"],
+	"keywords": ["PCB","BOM","原理图","二维码","网表","器件","位号"],
+	"images": {
+		"logo": "./images/logo.png"
+	},
+	"homepage": "https://github.com/WOLF4096/easyeda_wolfblack_tool",
+	"bugs": "https://github.com/WOLF4096/easyeda_wolfblack_tool/issues",
+	"activationEvents": {},
+	"entry": "./dist/index",
+	"dependentExtensions": {},
+	"headerMenus": {
+		"home": [],
+		"sch": [
+			{
+				"id": "wolfblacksch",
+				"title": "狼黑工具",
+				"menuItems": [
+					{
+						"id": "NetlistToSchematicid",
+						"title": "放置器件",
+						"menuItems": [
+							{
+								"id": "NetlistToSchematicPCB",
+								"title": "从PCB",
+								"registerFn": "NetlistToSchematicPCB"
+							},{
+								"id": "NetlistToSchematicNET",
+								"title": "从网表文件",
+								"registerFn": "NetlistToSchematicNET"
+							}
+						]
+					},{
+						"id": "AutoWirePlacerid",
+						"title": "放置导线",
+						"menuItems": [
+							{
+								"id": "AutoWirePlacerPCB",
+								"title": "从PCB",
+								"registerFn": "AutoWirePlacerPCB"
+							},{
+								"id": "AutoWirePlacerNET",
+								"title": "从网表文件",
+								"registerFn": "AutoWirePlacerNET"
+							}
+						]
+					},{
+						"id": "ClearEmptySupplierPropertiesSCH",
+						"title": "清空多余属性",
+						"registerFn": "ClearEmptySupplierPropertiesSCH"
+					},{
+						"id": "CodeConvert",
+						"title": "丝印代码转换",
+						"registerFn": "CodeConvert"
+					},{
+						"id": "About",
+						"title": "关于",
+						"registerFn": "About"
+					}
+				]
+			}
+		],
+		"pcb": [
+			{
+				"id": "wolfblackpcb",
+				"title": "狼黑工具",
+				"menuItems": [
+					{
+						"id": "import",
+						"title": "导入",
+						"menuItems": [
+							{
+								"id": "ImportImage",
+								"title": "图片",
+								"registerFn": "ImportImage"
+							},{
+								"id": "ImportQrcode",
+								"title": "二维码",
+								"registerFn": "ImportQrcode"
+							}
+						]
+					},{
+						"id": "Component",
+						"title": "器件",
+						"menuItems": [
+							{
+								"id": "CheckDesignators",
+								"title": "位号查重",
+								"registerFn": "CheckDesignators"
+							},{
+								"id": "CodeConvert",
+								"title": "丝印代码转换",
+								"registerFn": "CodeConvert"
+							},{
+								"id": "ClearEmptySupplierPropertiesPCB",
+								"title": "清空多余属性",
+								"registerFn": "ClearEmptySupplierPropertiesPCB"
+							},{
+								"id": "ImportBom",
+								"title": "导入 BOM",
+								"registerFn": "ImportBom"
+							},{
+								"id": "ReplaceComponent",
+								"title": "批量替换器件",
+								"registerFn": "ReplaceComponent"
+							}
+						]
+					},{
+						"id": "NetReplace",
+						"title": "批量修改网络",
+						"registerFn": "NetReplace"
+					},{
+						"id": "About",
+						"title": "关于",
+						"registerFn": "About"
+					}
+				]
+			}
+		]
+	}
+}
