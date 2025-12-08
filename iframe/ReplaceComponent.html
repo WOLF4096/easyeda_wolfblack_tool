@@ -1,0 +1,804 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>狼黑工具 - 批量替换器件</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: "Microsoft YaHei", sans-serif;
+        }
+        
+        body {
+            width: 1280px;
+            height: 720px;
+            overflow: hidden;
+            background-color: #f5f5f5;
+            color: #333;
+            padding: 20px;
+            position: relative;
+        }
+        
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding-bottom: 15px;
+            border-bottom: 1px solid #ddd;
+        }
+        
+        .title {
+            font-size: 24px;
+            font-weight: bold;
+            color: #2c3e50;
+        }
+        
+        .controls {
+            display: flex;
+            gap: 10px;
+        }
+        
+        button {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.3s;
+        }
+        
+        .select-all {
+            background-color: #e9ecef;
+            color: #495057;
+        }
+        
+        .paste {
+            background-color: #17a2b8;
+            color: white;
+        }
+        
+        .fetch {
+            background-color: #ffc107;
+            color: #212529;
+        }
+        
+        .import {
+            background-color: #28a745;
+            color: white;
+        }
+        
+        .import:disabled {
+            background-color: #6c757d;
+            cursor: not-allowed;
+        }
+        
+        button:hover:not(:disabled) {
+            opacity: 0.9;
+            transform: translateY(-2px);
+        }
+        
+        .table-container {
+            height: calc(100% - 120px);
+            overflow: auto;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            background-color: white;
+        }
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        
+        th, td {
+            padding: 5px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+        }
+        
+        th {
+            background-color: #f8f9fa;
+            font-weight: bold;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+        
+        tr:hover {
+            background-color: #f1f8ff;
+        }
+        
+        .status-section {
+            display: flex;
+            margin-top: 15px;
+            gap: 20px;
+        }
+        
+        .status-bar {
+            flex: 1;
+            padding: 10px;
+            border-radius: 4px;
+            font-size: 14px;
+            min-height: 40px;
+            display: flex;
+            align-items: center;
+        }
+        
+        .options {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+            padding: 10px;
+            border-radius: 4px;
+            background-color: #f8f9fa;
+            border: 1px solid #ddd;
+        }
+        
+        .option-item {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+        
+        .warning {
+            background-color: #fff3cd;
+            color: #856404;
+            border: 1px solid #ffeaa7;
+        }
+        
+        .success {
+            background-color: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+        
+        .info {
+            background-color: #d1edff;
+            color: #0c5460;
+            border: 1px solid #b3d9ff;
+        }
+        
+        .changed {
+            color: #e74c3c;
+            font-weight: bold;
+            font-size: 12px;
+        }
+        
+        .unchanged {
+            color: #7f8c8d;
+        }
+        
+        .checkbox-cell {
+            width: 40px;
+            text-align: center;
+        }
+        
+        input[type="checkbox"] {
+            transform: scale(1.2);
+        }
+        
+        .progress-bar {
+            width: 100%;
+            height: 10px;
+            background-color: #e9ecef;
+            border-radius: 5px;
+            margin-top: 5px;
+            overflow: hidden;
+        }
+        
+        .progress {
+            height: 100%;
+            background-color: #28a745;
+            width: 0%;
+            transition: width 0.3s;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="title">批量替换器件</div>
+        BOM列：位号、C编号，一行一个，从 Excel 复制后点击粘贴->
+        <div class="controls">
+            <button class="paste" id="pasteBtn">粘贴</button>
+            <button class="select-all" id="selectAll">全选</button>
+            <button class="fetch" id="fetchBtn">获取属性</button>
+            <button class="import" id="importBtn" disabled>导入文档</button>
+        </div>
+    </div>
+    
+    <div class="table-container">
+        <table id="bomTable">
+            <thead>
+                <tr>
+                    <th class="checkbox-cell"><input type="checkbox" id="masterCheckbox"></th>
+                    <!-- <th>唯一ID</th> -->
+                    <th>位号</th>
+                    <th>名称</th>
+                    <th>供应商编号</th>
+                    <th>供应商名称</th>
+                    <th>C编号</th>
+                    <th style="width: 300px;">封装（API问题，暂时无法修改）</th>
+                </tr>
+            </thead>
+            <tbody id="tableBody">
+                <!-- 数据将通过JavaScript动态填充 -->
+            </tbody>
+        </table>
+    </div>
+    
+    <div class="status-section">
+        <div class="status-bar" id="statusBar">
+            <!-- 状态信息将在这里显示 -->
+        </div>
+        <div class="options">
+            <div class="option-item">
+                <input type="checkbox" id="keepName">
+                <label for="keepName" style="width: 75px;">保留名称</label>
+            <!-- </div>
+            <div class="option-item"> -->
+                <!-- <input type="checkbox" id="keepFootprint" checked>
+                <label for="keepFootprint" style="width: 75px;">保留封装</label> -->
+            <!-- </div>
+            <div class="option-item"> -->
+                <!-- <input type="checkbox" id="keep3DModel" checked>
+                <label for="keep3DModel" style="width: 95px;">保留3D模型</label> -->
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 全局变量
+        let keepName = false;
+        // let keepFootprint = true;
+        // let keep3DModel = true;
+        let jsonData = {};
+        let tableData = [];
+        // let tempComponents = []; // 存储临时组件信息
+        let componentMap = {}; // 存储C编号到组件信息的映射
+        const pasteData = [];
+        // const pasteData = []; // [C编号、uuid、{位号C1、位号C2...}]
+        const newdevice = {};// 新变量：存储器件属性信息
+        
+        // DOM元素
+        const tableBody = document.getElementById('tableBody');
+        const statusBar = document.getElementById('statusBar');
+        const selectAllBtn = document.getElementById('selectAll');
+        const pasteBtn = document.getElementById('pasteBtn');
+        const fetchBtn = document.getElementById('fetchBtn');
+        const importBtn = document.getElementById('importBtn');
+        const masterCheckbox = document.getElementById('masterCheckbox');
+        const keepNameCheckbox = document.getElementById('keepName');
+        // const keepFootprintCheckbox = document.getElementById('keepFootprint');
+        // const keep3DModelCheckbox = document.getElementById('keep3DModel');
+        
+        // 初始化
+        document.addEventListener('DOMContentLoaded', async function() {
+            await loadBOMData();
+            updateStatusBar();
+        });
+        
+        // 加载BOM数据
+        async function loadBOMData() {
+            try {
+                // 模拟获取数据 - 实际环境中使用以下代码
+                const netdataa = await eda.pcb_Net.getNetlist('JLCEDA');
+                jsonData = JSON.parse(netdataa);
+                console.log(jsonData);
+                
+                // 转换数据格式以便表格显示
+                tableData = [];
+                for (const [uniqueId, component] of Object.entries(jsonData)) {
+                    const props = component.props || {};
+                    tableData.push({
+                        uniqueId: props["Unique ID"],
+                        designator: props.Designator || '',
+                        selected: false,
+                        changed: false,
+                        original: {
+                            name: props.Name || '',
+                            value: props.value || '',
+                            manufacturerPart: props['Manufacturer Part'] || '',
+                            manufacturer: props.Manufacturer || '',
+                            supplierPart: props['Supplier Part'] || '',
+                            footprint: props.FootprintName || ''
+                        },
+                        new:{
+                            name: '',
+                            value: '',
+                            manufacturerPart: '',
+                            manufacturer: '',
+                            supplierPart: '',
+                            footprint: ''
+                        }
+                    });
+                }
+                
+                renderTable();
+            } catch (error) {
+                console.error('加载BOM数据失败:', error);
+                statusBar.textContent = '加载BOM数据失败: ' + error.message;
+                statusBar.className = 'status-bar warning';
+            }
+        }
+        
+        // 渲染表格
+        function renderTable() {
+            tableBody.innerHTML = '';
+            
+            tableData.forEach((item, index) => {
+                const row = document.createElement('tr');
+                
+                // 复选框列
+                const checkboxCell = document.createElement('td');
+                checkboxCell.className = 'checkbox-cell';
+                const checkbox = document.createElement('input');
+                checkbox.type = 'checkbox';
+                checkbox.checked = item.selected;
+                checkbox.addEventListener('change', () => {
+                    item.selected = checkbox.checked;
+                    updateMasterCheckbox();
+                    updateSelectAllButton();
+                });
+                checkboxCell.appendChild(checkbox);
+                row.appendChild(checkboxCell);
+                
+                // 唯一ID列
+                // const uniqueIdCell = document.createElement('td');
+                // uniqueIdCell.textContent = item.uniqueId;
+                // row.appendChild(uniqueIdCell);
+                
+                // 位号列
+                const designatorCell = document.createElement('td');
+                designatorCell.textContent = item.designator;
+                row.appendChild(designatorCell);
+                
+                // console.log(keepName,keepFootprint);
+
+                // 名称列
+                const nameCell = document.createElement('td');
+                if (item.changed && !keepName && item.new.name && item.new.name !== item.original.name) {
+                    if(item.new.value){
+                        item.new.name = item.new.value;
+                    }
+                    // console.log(item.new.value)
+                    nameCell.innerHTML = `原始值：${item.original.name}<br />修改为：${item.new.name}`;
+                    nameCell.className = 'changed';
+                } else {
+                    nameCell.textContent = item.original.name;
+                }
+                row.appendChild(nameCell);
+                
+                // 供应商编号列
+                const manufacturerPartCell = document.createElement('td');
+                if (item.changed && item.new.manufacturerPart && item.new.manufacturerPart !== item.original.manufacturerPart) {
+                    manufacturerPartCell.innerHTML = `原始值：${item.original.manufacturerPart}<br />修改为：${item.new.manufacturerPart}`;
+                    manufacturerPartCell.className = 'changed';
+                } else {
+                    manufacturerPartCell.textContent = item.original.manufacturerPart;
+                }
+                row.appendChild(manufacturerPartCell);
+                
+                // 供应商名称列
+                const manufacturerCell = document.createElement('td');
+                if (item.changed && item.new.manufacturer && item.new.manufacturer !== item.original.manufacturer) {
+                    manufacturerCell.innerHTML = `原始值：${item.original.manufacturer}<br />修改为：${item.new.manufacturer}`;
+                    manufacturerCell.className = 'changed';
+                } else {
+                    manufacturerCell.textContent = item.original.manufacturer;
+                }
+                row.appendChild(manufacturerCell);
+                
+                // C编号列
+                const supplierPartCell = document.createElement('td');
+                if (item.changed && item.new.supplierPart) {
+                    supplierPartCell.innerHTML = `原始值：${item.original.supplierPart}<br />修改为：${item.new.supplierPart}`;
+                    supplierPartCell.className = 'changed';
+                } else {
+                    supplierPartCell.textContent = item.original.supplierPart;
+                }
+                row.appendChild(supplierPartCell);
+                
+                // 封装列
+                const footprintCell = document.createElement('td');
+                // if (item.changed && item.new.footprint && item.new.footprint !== item.original.footprint) {
+                //     footprintCell.innerHTML = `原始值：${item.original.footprint}<br />修改为：${item.new.footprint}`;
+                //     footprintCell.className = 'changed';
+                // } else {
+                    footprintCell.textContent = item.original.footprint;
+                // }
+                // footprintCell.textContent = item.original.footprint;
+                row.appendChild(footprintCell);
+
+                tableBody.appendChild(row);
+            });
+        }
+        
+        // 更新状态栏
+        function updateStatusBar() {
+            // 检查唯一ID是否有空值或重复
+            const uniqueIds = tableData.map(item => item.uniqueId);
+            const hasEmptyUniqueId = uniqueIds.some(id => !id);
+            const hasDuplicateUniqueId = new Set(uniqueIds).size !== uniqueIds.length;
+            
+            if (hasEmptyUniqueId || hasDuplicateUniqueId) {
+                statusBar.textContent = '唯一ID 存在 空值 或 重复，请先 重置唯一ID 再进行后续操作';
+                statusBar.className = 'status-bar warning';
+                pasteBtn.disabled = true;
+                fetchBtn.disabled = true;
+                importBtn.disabled = true;
+            } else {
+                statusBar.textContent = '数据正常，可以进行下一步';
+                statusBar.className = 'status-bar success';
+                pasteBtn.disabled = false;
+                fetchBtn.disabled = false;
+                importBtn.disabled = false;
+            }
+        }
+
+        // 为每个复选框添加点击事件
+        [keepNameCheckbox].forEach(checkbox => {
+            checkbox.addEventListener('click', function() {
+                keepName = keepNameCheckbox.checked;
+                // keepFootprint = keepFootprintCheckbox.checked;
+                // keep3DModel = keep3DModelCheckbox.checked;
+                
+                // 调用渲染表格函数
+                renderTable();
+            });
+        });
+
+        // 全选/取消全选
+        selectAllBtn.addEventListener('click', function() {
+            const allSelected = tableData.every(item => item.selected);
+            tableData.forEach(item => {
+                item.selected = !allSelected;
+            });
+            renderTable();
+            updateMasterCheckbox();
+            updateSelectAllButton();
+        });
+        
+        // 更新全选按钮文本
+        function updateSelectAllButton() {
+            const allSelected = tableData.length > 0 && tableData.every(item => item.selected);
+            selectAllBtn.textContent = allSelected ? '全不选' : '全选';
+        }
+        
+        // 主复选框状态更新
+        masterCheckbox.addEventListener('change', function() {
+            tableData.forEach(item => {
+                item.selected = masterCheckbox.checked;
+            });
+            renderTable();
+            updateSelectAllButton();
+        });
+        
+        // 更新主复选框状态
+        function updateMasterCheckbox() {
+            const allSelected = tableData.length > 0 && tableData.every(item => item.selected);
+            const someSelected = tableData.some(item => item.selected);
+            
+            masterCheckbox.checked = allSelected;
+            masterCheckbox.indeterminate = someSelected && !allSelected;
+        }
+        
+        // 粘贴功能
+        pasteBtn.addEventListener('click', async function() {
+            try {
+                // 从剪贴板获取文本
+                const clipboardText = await navigator.clipboard.readText();
+                
+                // 解析CSV或TSV
+                const lines = clipboardText.trim().split('\n');
+                
+                
+                // 确定分隔符（逗号或制表符）
+                // const firstLine = lines[0];
+                // const isTsv = firstLine.includes('\t') && !firstLine.includes(',');
+                const delimiter = '\t';
+                
+                // 解析每一行
+                for (let i = 0; i < lines.length; i++) {
+                    const line = lines[i].trim();
+                    if (!line) continue;
+                    
+                    const parts = line.split(delimiter);
+                    
+                    // 自动补齐字段，确保至少有2个字段
+                    const paddedParts = [...parts];
+                    while (paddedParts.length < 2) {
+                        paddedParts.push(''); // 用空字符串补齐缺失的字段
+                    }
+                    
+                    // 如果字段超过2个，只取前2个
+                    const finalParts = paddedParts.slice(0, 2);
+                    
+                    // 处理位号，可能包含多个位号用逗号分隔
+                    const designators = finalParts[0].split(',').map(d => d.trim()).filter(d => d);
+                    const cNumber = finalParts[1].trim();
+                    
+                    pasteData.push({
+                        designators: designators,
+                        cNumber: cNumber
+                    });
+                }
+                
+                // 更新表格数据 - 修正匹配逻辑
+                let updateCount = 0;
+                tableData.forEach(item => {
+                    // 查找包含当前位号的粘贴项
+                    const pasteItem = pasteData.find(p => p.designators.includes(item.designator));
+                    if (pasteItem && pasteItem.cNumber) {
+                        // 检查是否有变更
+                        // const hasChanges = pasteItem.cNumber !== item.original.supplierPart;
+                        
+                        // if (hasChanges) {
+                            item.new.supplierPart = pasteItem.cNumber;
+                            item.changed = true;
+                            item.selected = true;
+                            updateCount++;
+                            
+                            console.log(`更新位号 ${item.designator} 的C编号为 ${pasteItem.cNumber}`);
+                        // }
+                    }
+                });
+                
+                // 打印粘贴数据用于调试
+                console.log('粘贴数据:', pasteData);
+                console.log('匹配到的粘贴项数量:', updateCount);
+                
+                renderTable();
+                updateMasterCheckbox();
+                updateSelectAllButton();
+                statusBar.textContent = `成功更新了 ${updateCount} 个组件的C编号，已自动勾选有变更的项目`;
+                statusBar.className = 'status-bar success';
+                
+            } catch (error) {
+                console.error('粘贴失败:', error);
+                statusBar.textContent = '粘贴失败: ' + error.message;
+                statusBar.className = 'status-bar warning';
+            }
+        });
+        
+        // 获取功能 - 完全从剪贴板构建数据
+        fetchBtn.addEventListener('click', async function() {
+            try {
+                console.log('从剪贴板构建的组件数组:', pasteData);
+                
+                if (pasteData.length === 0) {
+                    statusBar.textContent = '剪贴板中没有有效的C编号和位号数据';
+                    statusBar.className = 'status-bar warning';
+                    return;
+                }
+
+                // 获取系统库UUID
+                const libUuid = await eda.lib_LibrariesList.getSystemLibraryUuid();
+                
+                // 为每个C编号获取UUID和器件属性
+                // const newdevice = {};
+                // 使用获取到的器件属性更新表格数据
+                let updatedCount = 0;
+                let errorCount = 0;
+
+                for (let i = 0; i < pasteData.length; i++) {
+                    const item = pasteData[i];
+                    
+                    // 更新状态栏
+                    // 在获取属性时，进度计算可能除零
+                    statusBar.innerHTML = `正在获取UUID，进度 ${i+1}/${pasteData.length}，${Math.round((i+1)/pasteData.length*100)}%`;
+                    // 当 pasteData.length 为 0 时会出错
+                    statusBar.className = 'status-bar info';
+
+            
+                    try {
+                        // 使用立创C编号搜索
+                        const deviceInfo = await eda.lib_Device.getByLcscIds(item.cNumber, '', false);
+                        
+                        if (deviceInfo && deviceInfo.length > 0) {
+                            const uuid = deviceInfo[0].uuid;
+                            item.uuid = uuid;
+                            // 获取器件完整信息
+                            const deviceFullInfo = await eda.lib_Device.get(uuid, libUuid);
+                            // console.log(deviceFullInfo);
+                            if (deviceFullInfo && deviceFullInfo.property) {
+                                newdevice[item.cNumber] = {
+                                    name: deviceFullInfo.property.name || "",
+                                    value: deviceFullInfo.property.otherProperty.Value || "",
+                                    manufacturer: deviceFullInfo.property.manufacturer || "",
+                                    manufacturerId: deviceFullInfo.property.manufacturerId || "",
+                                    footprint: deviceFullInfo.association.footprintUuid || "",
+                                    otherProperty: deviceFullInfo.property.otherProperty || {}
+                                };
+                                console.log(`成功获取C编号 ${item.cNumber} 的器件属性`);
+                                // console.log(deviceFullInfo.property.otherProperty.Value);
+
+                            }
+                        } else {
+                            errorCount++;
+                            console.log(`没有找到C编号 ${item.cNumber} 的信息`);
+                        }
+                    } catch (error) {
+                        console.error(`获取C编号 ${item.cNumber} 的信息失败:`, error);
+                    }
+                }
+
+                tableData.forEach(tableItem => {
+                    // 在componentArray中查找包含当前位号的条目
+                    const componentItem = pasteData.find(comp => 
+                        comp.designators && comp.designators.includes(tableItem.designator)
+                    );
+                    
+                    if (componentItem && newdevice[componentItem.cNumber]) {
+                        const deviceProp = newdevice[componentItem.cNumber];
+                        const otherProp = deviceProp.otherProperty;
+                        
+                        // 检查是否有变更
+                        const hasChanges = 
+                            deviceProp.name !== tableItem.original.name ||
+                            deviceProp.manufacturerId !== tableItem.original.manufacturerPart ||
+                            deviceProp.manufacturer !== tableItem.original.manufacturer;
+                        
+                        if (hasChanges) {
+                            tableItem.new.name = deviceProp.name;
+                            tableItem.new.value = deviceProp.value;
+                            tableItem.new.manufacturerPart = deviceProp.manufacturerId;
+                            tableItem.new.manufacturer = deviceProp.manufacturer;
+                            tableItem.new.footprint = deviceProp.footprint;
+                            tableItem.changed = true;
+                            updatedCount++;
+                            
+                            console.log(`更新位号 ${tableItem.designator}: C编号=${componentItem.cNumber}`);
+                        }
+                    }
+                });
+
+                statusBar.textContent = `成功获取并更新了 ${updatedCount} 个组件的属性` + (errorCount > 0 ? `，但有 ${errorCount} 个组件没有找到` : '');
+                statusBar.className = 'status-bar success';
+                renderTable();
+                
+            } catch (error) {
+                console.error('获取失败:', error);
+                statusBar.textContent = '获取失败: ' + error.message;
+                statusBar.className = 'status-bar warning';
+            }
+        });
+        
+        // 导入功能
+        importBtn.addEventListener('click', async function() {
+            try {
+                // 获取选中的项目
+                const selectedItems = tableData.filter(item => item.selected);
+                
+                if (selectedItems.length === 0) {
+                    statusBar.textContent = '请至少选择一个项目进行导入';
+                    statusBar.className = 'status-bar warning';
+                    return;
+                }
+                
+                // 获取选项状态
+                keepName = keepNameCheckbox.checked;
+                // keepFootprint = keepFootprintCheckbox.checked;
+                // keep3DModel = keep3DModelCheckbox.checked;
+                
+                // 使用全局存储的数据
+                // const pasteData = window.pasteData || [];
+                // const newdevice = window.newdevice || {};
+                
+                if (pasteData.length === 0) {
+                    statusBar.textContent = '请先执行获取属性操作';
+                    statusBar.className = 'status-bar warning';
+                    return;
+                }
+
+                // 更新JSON数据
+                let importCount = 0;
+                selectedItems.forEach(item => {
+                    // 在pasteData中查找包含当前位号的条目
+                    const componentItem = pasteData.find(comp => 
+                        comp.designators && comp.designators.includes(item.designator)
+                    );
+
+                    if (componentItem && jsonData[item.uniqueId] && newdevice[componentItem.cNumber]) {
+                        console.log('处理位号:', item.designator, 'C编号:', componentItem.cNumber);
+                        
+                        const data = jsonData[item.uniqueId].props; // 备份原始属性
+                        const newProps = newdevice[componentItem.cNumber].otherProperty; // 新属性
+                        
+                        // 清空原有props
+                        jsonData[item.uniqueId].props = {};
+                        
+                        // 将新属性全部导入
+                        Object.assign(jsonData[item.uniqueId].props, newProps);
+
+                        // 删除Symbol属性
+                        delete jsonData[item.uniqueId].props.Symbol;
+
+                        // 替换器件uuid
+                        jsonData[item.uniqueId].props.Device = componentItem.uuid;
+                        
+                        // 添加供应商封装属性
+                        // if (jsonData[item.uniqueId].props["Supplier Footprint"]) {
+                        //     jsonData[item.uniqueId].props["供应商封装"] = jsonData[item.uniqueId].props["Supplier Footprint"];
+                        // }
+                        
+                        // 默认保留的属性
+                        jsonData[item.uniqueId].props.Designator = data.Designator;
+                        jsonData[item.uniqueId].props["Unique ID"] = data["Unique ID"];
+                        jsonData[item.uniqueId].props["Add into BOM"] = data["Add into BOM"];
+                        jsonData[item.uniqueId].props["Group ID"] = data["Group ID"];
+                        jsonData[item.uniqueId].props["Channel ID"] = data["Channel ID"];
+                        
+                        // 根据选项保留属性
+                        if (keepName) {
+                            jsonData[item.uniqueId].props.Name = data.Name;
+                        }
+                        
+
+                        // bug 封装属性存在问题，不能有效获取封装
+                        // if (keepFootprint) {
+                            jsonData[item.uniqueId].props.Footprint = data.Footprint;
+                            jsonData[item.uniqueId].props.FootprintName = data.FootprintName;
+                        // } else {
+                        //     delete jsonData[item.uniqueId].props.Footprint;
+                        //     delete jsonData[item.uniqueId].props.FootprintName;
+                        // }
+                        
+                        // bug 导入变更无法应用
+                        // if (keep3DModel) {
+                        //     jsonData[item.uniqueId].props["3D Model"] = data["3D Model"];
+                        //     jsonData[item.uniqueId].props["3D Model Title"] = data["3D Model Title"];
+                        //     jsonData[item.uniqueId].props["3D Model Transform"] = data["3D Model Transform"];
+                        // }
+                        // console.log(keepName,keepFootprint,keep3DModel);
+                        // console.log(data["3D Model"],data["3D Model Title"],data["3D Model Transform"]);
+                        
+                        // 更新表格数据以反映更改
+                        item.new.name = jsonData[item.uniqueId].props.Name || '';
+                        item.new.manufacturerPart = jsonData[item.uniqueId].props["Manufacturer Part"] || '';
+                        item.new.manufacturer = jsonData[item.uniqueId].props.Manufacturer || '';
+                        item.new.supplierPart = jsonData[item.uniqueId].props["Supplier Part"] || '';
+                        item.new.footprint = jsonData[item.uniqueId].props.FootprintName || '';
+                        
+                        // 检查是否有变更
+                        item.changed = (
+                            item.new.name !== item.original.name ||
+                            item.new.manufacturerPart !== item.original.manufacturerPart ||
+                            item.new.manufacturer !== item.original.manufacturer ||
+                            item.new.supplierPart !== item.original.supplierPart ||
+                            item.new.footprint !== item.original.footprint
+                        );
+                        
+                        importCount++;
+                        console.log(`导入位号 ${item.designator} 成功`);
+                    } else {
+                        console.warn(`无法处理位号 ${item.designator}:`, {
+                            hasComponentItem: !!componentItem,
+                            hasJsonData: !!jsonData[item.uniqueId],
+                            hasNewDevice: !!(componentItem && newdevice[componentItem.cNumber])
+                        });
+                    }
+                });
+                console.log('导入后的JSON数据:', jsonData);
+                // 写回JSON数据
+                const listjson = JSON.stringify(jsonData, null, 2);
+                await eda.pcb_Net.setNetlist('JLCEDA', listjson);
+
+                // renderTable();
+                statusBar.textContent = `成功导入了 ${importCount} 个组件的标准化属性`;
+                statusBar.className = 'status-bar success';
+                // loadBOMData();
+                eda.sys_IFrame.closeIFrame("ReplaceComponent");//隐藏窗口
+            } catch (error) {
+                console.error('导入失败:', error);
+                statusBar.textContent = '导入失败: ' + error.message;
+                statusBar.className = 'status-bar warning';
+            }
+        });
+        
+    </script>
+</body>
+</html>

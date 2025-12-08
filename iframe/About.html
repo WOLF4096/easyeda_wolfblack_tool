@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=540, height=900, initial-scale=1.0">
+    <title>狼黑工具 - 关于</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            width: 540px;
+            height: 720px;
+            font-family: "Microsoft YaHei", "Segoe UI", sans-serif;
+            font-size: 14px;
+            line-height: 1.6;
+            color: #333;
+            padding: 20px;
+            overflow-y: auto;
+            overflow-x: hidden;
+            background-color: #ffffff;
+        }
+        
+        .container {
+            max-width: 500px;
+            margin: 0 auto;
+        }
+        
+        .header {
+            display: flex;
+            align-items: center;
+            margin-bottom: 25px;
+            padding-bottom: 15px;
+            border-bottom: 1px solid #eaeaea;
+            gap: 15px;
+        }
+        
+        .logo {
+            width: 64px;
+            height: 64px;
+            flex-shrink: 0;
+            object-fit: contain;
+        }
+        
+        .header-content {
+            flex: 1;
+        }
+        
+        h1 {
+            font-size: 20px;
+            color: #222;
+            margin-bottom: 5px;
+            font-weight: 600;
+        }
+        
+        .subtitle {
+            font-size: 14px;
+            color: #666;
+            margin-bottom: 10px;
+        }
+        
+        .section {
+            margin-bottom: 25px;
+        }
+        
+        h2 {
+            font-size: 16px;
+            color: #222;
+            margin-bottom: 10px;
+            padding-bottom: 5px;
+            border-bottom: 1px solid #f0f0f0;
+            font-weight: 600;
+        }
+        
+        .link-list {
+            list-style-type: none;
+        }
+        
+        .link-list li {
+            margin-bottom: 8px;
+            padding-left: 5px;
+        }
+        
+        .link-list a {
+            color: #0066cc;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            padding: 4px 0;
+        }
+        
+        .link-list a:hover {
+            color: #004d99;
+            text-decoration: underline;
+        }
+        
+        .link-icon {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            margin-right: 8px;
+            background-size: contain;
+            background-repeat: no-repeat;
+            background-position: center;
+        }
+        
+        .icon-github {
+            background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="%230066cc"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>');
+        }
+        
+        .icon-link {
+            background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="%230066cc"><path d="M10 6v2H5v11h11v-5h2v6a1 1 0 01-1 1H4a1 1 0 01-1-1V7a1 1 0 011-1h6zm11-3v8h-2V6.413l-7.793 7.794-1.414-1.414L17.585 5H13V3h8a1 1 0 011 1z"/></svg>');
+        }
+        
+        .icon-doc {
+            background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="%230066cc"><path d="M8 2h9a1 1 0 01.707.293l4 4A1 1 0 0122 7v14a1 1 0 01-1 1H3a1 1 0 01-1-1V3a1 1 0 011-1h5zm10.586 6L16 3.414V8h2.586zM16 10H8v2h8v-2zm-8 4h8v2H8v-2z"/></svg>');
+        }
+        
+        .disclaimer {
+            background-color: #fff8f8;
+            border: 1px solid #ffdddd;
+            border-radius: 6px;
+            padding: 15px;
+            margin-top: 10px;
+        }
+        
+        .disclaimer h2 {
+            color: #cc0000;
+            border-bottom: 1px solid #ffcccc;
+        }
+        
+        .disclaimer ol {
+            margin-left: 20px;
+            margin-bottom: 10px;
+        }
+        
+        .disclaimer li {
+            margin-bottom: 8px;
+        }
+        
+        .warning {
+            color: #cc0000;
+            font-weight: 600;
+        }
+        
+        .footer {
+            text-align: center;
+            margin-top: 20px;
+            padding-top: 15px;
+            border-top: 1px solid #eaeaea;
+            font-size: 12px;
+            color: #888;
+        }
+        
+        @media (max-width: 540px) {
+            body {
+                padding: 15px;
+            }
+            
+            .header {
+                gap: 12px;
+            }
+            
+            .logo {
+                width: 60px;
+                height: 60px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <img src="../images/logo.png" alt="狼黑工具 Logo" class="logo">
+            <div class="header-content">
+                <h1>狼黑工具</h1>
+                <div class="subtitle">WolfBlack Tool for EasyEDA Pro 增强工具</div>
+            </div>
+        </div>
+        
+        <div class="section">
+            <h2>项目链接</h2>
+            <ul class="link-list">
+                <li>
+                    <a href="https://github.com/WOLF4096/easyeda_wolfblack_tool" target="_blank">
+                        <span class="link-icon icon-github"></span>
+                        项目主页（Github）
+                    </a>
+                </li>
+                <li>
+                    <a href="https://ext.lceda.cn/item/darksteel/wolfblack-tool" target="_blank">
+                        <span class="link-icon icon-link"></span>
+                        嘉立创EDA扩展广场
+                    </a>
+                </li>
+                <li>
+                    <a href="https://github.com/WOLF4096/easyeda_wolfblack_tool/blob/main/UserManual.md" target="_blank">
+                        <span class="link-icon icon-doc"></span>
+                        使用文档
+                    </a>
+                </li>
+                <li>
+                    <a href="https://github.com/WOLF4096/easyeda_wolfblack_tool/blob/main/CHANGELOG.md" target="_blank">
+                        <span class="link-icon icon-doc"></span>
+                        更新日志
+                    </a>
+                </li>
+            </ul>
+        </div>
+        
+        <div class="section disclaimer">
+            <h2>免责声明</h2>
+            <p class="warning">重要提示：</p>
+            <ol>
+                <li><strong>备份重要文件</strong>：使用前请务必备份设计文件</li>
+                <li><strong>测试环境验证</strong>：建议先在测试环境中验证功能</li>
+                <li><strong>数据安全</strong>：使用第三方工具存在数据风险</li>
+                <li><strong>责任限制</strong>：作者不对使用本工具造成的任何直接或间接损失负责</li>
+            </ol>
+            <p>请在使用本工具前仔细阅读以上声明，使用即表示您已理解并同意上述条款。</p>
+        </div>
+        
+        <div class="footer">
+            <p>© 2025 狼黑工具 - 嘉立创EDA扩展插件</p>
+            <p style="margin-top: 5px;">本工具根据个人需求开发，仅供学习和参考使用</p>
+        </div>
+    </div>
+</body>
+</html>

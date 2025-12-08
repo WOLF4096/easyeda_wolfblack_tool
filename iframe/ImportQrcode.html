@@ -1,0 +1,1228 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>狼黑工具 - 二维码生成器</title>
+
+    <!-- EDA环境使用本地加载js -->
+    <script src="/iframe/js/qrcode-generator.js"></script>
+    <script src="/iframe/js/jsQR.js"></script>
+
+    <!-- 浏览器环境使用本地加载js -->
+    <!-- <script src="js/qrcode-generator.js"></script>
+    <script src="js/jsQR.js"></script> -->
+    
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: "Microsoft YaHei", sans-serif;
+        }
+
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .container {
+            width: 540px;
+            height: 640px;
+            background-color: white;
+            padding: 12px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            padding-bottom: 15px;
+        }
+
+        .header p {
+            margin: 10px;
+            text-align: left;
+            font-weight: bold;
+        }
+
+        .import-btn {
+            padding: 10px 16px;
+            background-color: #f0f0f0;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.3s;
+        }
+
+        .import-btn:hover {
+            background-color: #e0e0e0;
+        }
+
+        .text-input {
+            width: 100%;
+            height: 88px;
+            padding: 12px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            resize: none;
+            margin-bottom: 20px;
+            font-size: 14px;
+            text-align: left; /* 明确左对齐 */
+        }
+
+        .text-input:focus {
+            border-color: #4a90e2;
+            outline: none;
+            box-shadow: 0 0 0 2px rgba(74, 144, 226, 0.2);
+        }
+
+        .controls {
+            display: flex;
+            margin-bottom: 10px;
+            gap: 20px;
+            height: 220px;
+        }
+
+        .left-controls, .right-controls {
+            flex: 1;
+            padding: 15px;
+            background-color: #f9f9f9;
+            border-radius: 8px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+        }
+
+        .control-group {
+            margin-bottom: 16px;
+        }
+
+        .control-label {
+            display: block;
+            margin-bottom: 6px;
+            font-size: 14px;
+            color: #333;
+            font-weight: 500;
+        }
+
+        .slider-container {
+            display: flex;
+            align-items: center;
+            height: 14px;
+        }
+
+        .slider {
+            flex: 1;
+            height: 10px;
+            background: #ddd;
+            border-radius: 5px;
+            outline: none;
+        }
+
+        .slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: #4a90e2;
+            cursor: pointer;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        }
+
+        .slider-value {
+            width: 50px;
+            text-align: right;
+            margin-left: 10px;
+            font-size: 14px;
+            font-weight: 500;
+            color: #4a90e2;
+        }
+
+        .color-row {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+        }
+
+        .color-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            flex: 1;
+        }
+
+        .color-picker {
+            width: 100%;
+            height: 35px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            cursor: pointer;
+        }
+
+        /* 输出类型切换按钮风格同 mm/mil */
+        .output-toggle {
+            display: flex;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            overflow: hidden;
+            margin-top: 6px;
+        }
+
+        .output-option {
+            padding: 8px 16px;
+            background-color: #f0f0f0;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.2s;
+            flex: 1;
+            text-align: center;
+        }
+
+        .output-option.active {
+            background-color: #4a90e2;
+            color: white;
+        }
+
+        .size-control {
+            display: flex;
+            align-items: center;
+            margin-top: 8px;
+        }
+
+        .size-input {
+            width: 60px;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            margin-right: 6px;
+        }
+
+        .unit-toggle {
+            display: flex;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            overflow: hidden;
+        }
+
+        .unit-option {
+            padding: 8px 12px;
+            background-color: #f0f0f0;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.2s;
+            flex: 1;
+            text-align: center;
+        }
+
+        .unit-option.active {
+            background-color: #4a90e2;
+            color: white;
+        }
+
+        .info-text {
+            margin: 15px 0;
+            font-size: 14px;
+            color: #666;
+            text-align: center;
+            padding: 10px;
+            background-color: #f0f8ff;
+            border-radius: 6px;
+        }
+
+        .preview-container {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 3px;
+        }
+
+        .preview-box {
+            width: 150px;
+            height: 150px;
+            border: 1px solid #ddd;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background-color: #f9f9f9;
+            cursor: pointer;
+            overflow: hidden;
+            transition: all 0.3s;
+            position: relative;
+        }
+
+        .preview-box:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+            border-color: #4a90e2;
+        }
+
+        .hidden {
+            display: none;
+        }
+
+        .file-input {
+            display: none;
+        }
+
+        .checkbox-group {
+            display: flex;
+            align-items: center;
+            margin-top: 8px;
+        }
+
+        .checkbox-group input {
+            margin-right: 6px;
+        }
+
+        .status-message {
+            padding: 10px;
+            border-radius: 6px;
+            margin-top: 10px;
+            text-align: center;
+            font-weight: 500;
+        }
+
+        .status-message.success {
+            background-color: #e8f5e9;
+            color: #2e7d32;
+            border: 1px solid #c8e6c9;
+        }
+
+        .status-message.error {
+            background-color: #ffebee;
+            color: #c62828;
+            border: 1px solid #ffcdd2;
+        }
+
+        .layer-select {
+            margin-left: 8px;
+            padding: 4px 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            background-color: white;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <p>粘贴文本内容：</p>
+            <button class="import-btn" id="import-qr-btn">从二维码导入</button>
+        </div>
+
+        <textarea class="text-input" id="text-input" placeholder="输入二维码内容..."></textarea>
+
+        <input type="file" class="file-input" id="file-input" accept="image/*">
+
+        <div class="controls">
+            <div class="left-controls">
+                <div class="control-group">
+                    <label class="control-label">容错级别: <span id="error-level-value">M (15%)</span></label>
+                    <div class="slider-container">
+                        <input type="range" min="0" max="3" value="1" class="slider" id="error-level">
+                    </div>
+                </div>
+
+                <div class="control-group">
+                    <label class="control-label">色块大小: <span id="block-size-value">20 px</span></label>
+                    <div class="slider-container">
+                        <input type="range" min="1" max="100" value="20" class="slider" id="block-size">
+                    </div>
+                </div>
+
+                <div class="control-group">
+                    <label class="control-label">白边色块: <span id="margin-size-value">1</span></label>
+                    <div class="slider-container">
+                        <input type="range" min="0" max="20" value="1" class="slider" id="margin-size">
+                    </div>
+                </div>
+                    <label class="control-label"><span id="qrcode-px-value"></span></label>
+            </div>
+
+            <div class="right-controls">
+                <div class="control-group">
+                    <div class="size-control">尺寸：
+                        <input type="number" class="size-input" id="qr-size" value="25.4" min="1" step="0.1">
+                        <div class="unit-toggle">
+                            <div class="unit-option active" id="unit-mm">mm</div>
+                            <div class="unit-option" id="unit-mil">mil</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="control-group">
+                    <div class="output-toggle">
+                        <div class="output-option active" id="type-image">图片</div>
+                        <div class="output-option" id="type-vector">矢量</div>
+                    </div>
+                </div>
+
+                <div id="image-controls">
+                    <div class="control-group">
+                        <div class="color-row">
+                            <div class="color-item">
+                                <label class="control-label">前景色</label>
+                                <input type="color" class="color-picker" id="foreground-color" value="#000000">
+                            </div>
+                            <div class="color-item">
+                                <label class="control-label">背景色</label>
+                                <input type="color" class="color-picker" id="background-color" value="#FFFFFF">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="vector-controls" class="hidden">
+                    <div class="control-group">
+                        <label class="control-label">矢量选项</label>
+                        <div class="checkbox-group">
+                            <input type="checkbox" id="invert-image">
+                            <label for="invert-image">反向图像（黑白反转）</label>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="info-text">
+            单击二维码，放置在
+            <select id="layer-select">
+                <!-- 选项会在JS中动态生成 -->
+            </select>
+        </div>
+
+        <div class="preview-container">
+            <div><div class="preview-box" id="preview-1"><canvas id="qr-canvas-1"></canvas></div></div>
+            <div><div class="preview-box" id="preview-2"><canvas id="qr-canvas-2"></canvas></div></div>
+            <div><div class="preview-box" id="preview-3"><canvas id="qr-canvas-3"></canvas></div></div>
+        </div>
+
+        <div id="status-message" class="status-message hidden"></div>
+    </div>
+
+    <script>
+        
+        let currentOutputType = 'image';    // 默认输出类型：'image' 图片模式 或 'vector' 矢量模式
+        let currentUnit = 'mm';             // 默认尺寸单位：'mm' 毫米 或 'mil' 密耳
+        let followInterval = null;          // 图片跟随鼠标移动的定时器ID
+        let ID;                             // 在EDA环境中放置的图元ID
+        let qrcodepx;                       // 二维码的目标像素尺寸
+        let storedQRCodeCanvas = null;      // 存储生成的二维码画布，用于后续处理
+        let currentLayer = 'TOP_SILKSCREEN';// 选择的图层，默认顶层丝印层
+        let layerMap = {};                  // 修改图层映射定义
+
+        // DOM 元素
+        const importQrBtn = document.getElementById('import-qr-btn');
+        const fileInput = document.getElementById('file-input');
+        const textInput = document.getElementById('text-input');
+        const errorLevelSlider = document.getElementById('error-level');
+        const errorLevelValue = document.getElementById('error-level-value');
+        const blockSizeSlider = document.getElementById('block-size');
+        const blockSizeValue = document.getElementById('block-size-value');
+        const marginSizeSlider = document.getElementById('margin-size');
+        const marginSizeValue = document.getElementById('margin-size-value');
+        const qrcodeSizeValue = document.getElementById('qrcode-px-value');
+        const typeImageBtn = document.getElementById('type-image');
+        const typeVectorBtn = document.getElementById('type-vector');
+        const imageControls = document.getElementById('image-controls');
+        const vectorControls = document.getElementById('vector-controls');
+        const foregroundColor = document.getElementById('foreground-color');
+        const backgroundColor = document.getElementById('background-color');
+        const invertCheckbox = document.getElementById('invert-image');
+        const qrSizeInput = document.getElementById('qr-size');
+        const unitMm = document.getElementById('unit-mm');
+        const unitMil = document.getElementById('unit-mil');
+        const qrCanvas1 = document.getElementById('qr-canvas-1');
+        const qrCanvas2 = document.getElementById('qr-canvas-2');
+        const qrCanvas3 = document.getElementById('qr-canvas-3');
+        const statusMessage = document.getElementById('status-message');
+
+        // 初始化事件
+        function initEventListeners() {
+            importQrBtn.addEventListener('click', () => fileInput.click());
+            fileInput.addEventListener('change', handleFileSelect);
+
+            errorLevelSlider.addEventListener('input', updateErrorLevel);
+            blockSizeSlider.addEventListener('input', updateBlockSize);
+            marginSizeSlider.addEventListener('input', updateMarginSize);
+
+            typeImageBtn.addEventListener('click', () => setOutputType('image'));
+            typeVectorBtn.addEventListener('click', () => setOutputType('vector'));
+
+            foregroundColor.addEventListener('input', updateQrCode);
+            backgroundColor.addEventListener('input', updateQrCode);
+            invertCheckbox.addEventListener('change', updateQrCode);
+
+            unitMm.addEventListener('click', () => setUnit('mm'));
+            unitMil.addEventListener('click', () => setUnit('mil'));
+
+            [1,2,3].forEach(i => {
+                document.getElementById(`preview-${i}`).addEventListener('click', () => handlePlaceQrCode(i-1));
+            });
+
+            textInput.addEventListener('input', updateQrCode);
+            qrSizeInput.addEventListener('input', updateQrCode);
+        }
+
+        // 处理文件选择
+        async function handleFileSelect(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+            try {
+                const imageData = await getImageDataFromFile(file);
+                const code = jsQR(imageData.data, imageData.width, imageData.height);
+                
+                if (code) {
+                    textInput.value = code.data;
+                    if (typeof eda !== 'undefined' && eda.sys_ToastMessage) {
+                        eda.sys_ToastMessage.showMessage('成功导入二维码内容', 2);
+                    }
+                    updateQrCode();
+                } else {
+                    if (typeof eda !== 'undefined' && eda.sys_ToastMessage) {
+                        eda.sys_ToastMessage.showMessage('未检测到二维码，请上传有效二维码图片', 1);
+                    }
+                }
+            } catch (err) {
+                console.error('解析失败:', err);
+                if (typeof eda !== 'undefined' && eda.sys_ToastMessage) {
+                    eda.sys_ToastMessage.showMessage('解析失败，请上传有效二维码图片', 1);
+                }
+            }
+        }
+
+        // 从文件获取图像数据
+        function getImageDataFromFile(file) {
+            return new Promise((resolve, reject) => {
+                const img = new Image();
+                const canvas = document.createElement('canvas');
+                const ctx = canvas.getContext('2d');
+                
+                img.onload = () => {
+                    canvas.width = img.width;
+                    canvas.height = img.height;
+                    ctx.drawImage(img, 0, 0);
+                    const imageData = ctx.getImageData(0, 0, img.width, img.height);
+                    resolve(imageData);
+                };
+                
+                img.onerror = reject;
+                img.src = URL.createObjectURL(file);
+            });
+        }
+
+        // 二维码容错选择
+        function updateErrorLevel() {
+            const v = parseInt(errorLevelSlider.value);
+            const texts = ['L (7%)', 'M (15%)', 'Q (25%)', 'H (30%)'];
+            errorLevelValue.textContent = texts[v];
+            updateQrCode();
+        }
+
+        // 色块大小选择
+        function updateBlockSize() {
+            blockSizeValue.textContent = `${blockSizeSlider.value} px`;
+            updateQrCode();
+        }
+
+        // 白边色块选择
+        function updateMarginSize() {
+            marginSizeValue.textContent = marginSizeSlider.value;
+            updateQrCode();
+        }
+
+        // mm 与 mil 切换
+        function setUnit(unit) {
+            currentUnit = unit;
+            if (unit === 'mm') {
+                unitMm.classList.add('active');
+                unitMil.classList.remove('active');
+            } else {
+                unitMm.classList.remove('active');
+                unitMil.classList.add('active');
+            }
+        }
+
+        // 图片 与 矢量 切换
+        function setOutputType(type) {
+            currentOutputType = type;
+            if (type === 'image') {
+                typeImageBtn.classList.add('active');
+                typeVectorBtn.classList.remove('active');
+                imageControls.classList.remove('hidden');
+                vectorControls.classList.add('hidden');
+            } else {
+                typeImageBtn.classList.remove('active');
+                typeVectorBtn.classList.add('active');
+                imageControls.classList.add('hidden');
+                vectorControls.classList.remove('hidden');
+            }
+            // 更新图层选项
+            updateLayerOptions(type);
+            updateQrCode();
+        }
+
+        // 获取前景色
+        function getForegroundColor() {
+            // 从颜色选择器获取或使用默认值
+            const fgPicker = document.getElementById('foreground-color');
+            return fgPicker ? fgPicker.value : '#000000';
+        }
+
+        // 获取背景色
+        function getBackgroundColor() {
+            // 从颜色选择器获取或使用默认值
+            const bgPicker = document.getElementById('background-color');
+            return bgPicker ? bgPicker.value : '#FFFFFF';
+        }
+
+        // 图层配置
+        const layerOptions = {
+            image: [
+                { value: 'TOP_SILKSCREEN', text: '顶层-丝印层', default: true },
+                { value: 'BOTTOM_SILKSCREEN', text: '底层-丝印层' },
+                { value: 'DOCUMENT', text: '文档层' }
+            ],
+            vector: [
+                { value: 'TOP', text: '顶层' },
+                { value: 'TOP_SILKSCREEN', text: '顶层-丝印层', default: true },
+                { value: 'TOP_SOLDER_MASK', text: '顶层-阻焊层' },
+                { value: 'TOP_ASSEMBLY', text: '顶层-装配层' },
+                { value: 'BOTTOM', text: '底层' },
+                { value: 'BOTTOM_SILKSCREEN', text: '底层-丝印层' },
+                { value: 'BOTTOM_SOLDER_MASK', text: '底层-阻焊层' },
+                { value: 'BOTTOM_ASSEMBLY', text: '底层-装配层' },
+                { value: 'DOCUMENT', text: '文档层' },
+                { value: 'MECHANICAL', text: '机械层' },
+                { value: 'DRILL_DRAWING', text: '钻孔图层' }
+            ]
+        };
+
+        // 图层映射到EDA常量
+        if (typeof eda !== 'undefined') {
+            // 图层映射到EDA常量
+            layerMap = {
+                'TOP':                  EPCB_LayerId.TOP,
+                'TOP_SILKSCREEN':       EPCB_LayerId.TOP_SILKSCREEN,
+                'TOP_SOLDER_MASK':      EPCB_LayerId.TOP_SOLDER_MASK,
+                'TOP_ASSEMBLY':         EPCB_LayerId.TOP_ASSEMBLY,
+                'BOTTOM':               EPCB_LayerId.BOTTOM,
+                'BOTTOM_SILKSCREEN':    EPCB_LayerId.BOTTOM_SILKSCREEN,
+                'BOTTOM_SOLDER_MASK':   EPCB_LayerId.BOTTOM_SOLDER_MASK,
+                'BOTTOM_ASSEMBLY':      EPCB_LayerId.BOTTOM_ASSEMBLY,
+                'DOCUMENT':             EPCB_LayerId.DOCUMENT,
+                'MECHANICAL':           EPCB_LayerId.MECHANICAL,
+                'DRILL_DRAWING':        EPCB_LayerId.DRILL_DRAWING
+            };
+        }
+
+        // 初始化图层选择器
+        function initLayerSelector() {
+            const layerSelect = document.getElementById('layer-select');
+            updateLayerOptions(currentOutputType);
+            
+            layerSelect.addEventListener('change', function() {
+                currentLayer = this.value;
+            });
+        }
+
+        // 更新图层选项
+        function updateLayerOptions(outputType) {
+            const layerSelect = document.getElementById('layer-select');
+            const options = layerOptions[outputType];
+            
+            // 清空现有选项
+            layerSelect.innerHTML = '';
+            
+            // 添加新选项
+            options.forEach(option => {
+                const optionElement = document.createElement('option');
+                optionElement.value = option.value;
+                optionElement.textContent = option.text;
+                if (option.default) {
+                    optionElement.selected = true;
+                    currentLayer = option.value;
+                }
+                layerSelect.appendChild(optionElement);
+            });
+        }
+
+        // 获取当前图层ID
+        function getCurrentLayerId() {
+            return layerMap[currentLayer] || 'EPCB_LayerId.TOP_SILKSCREEN';
+        }
+
+        // 防抖函数
+        function debounce(func, wait) {
+            let timeout;
+            return function executedFunction(...args) {
+                const later = () => {
+                    clearTimeout(timeout);
+                    func.apply(this, args);
+                };
+                clearTimeout(timeout);
+                timeout = setTimeout(later, wait);
+            };
+        }
+
+        // 准备生成二维码
+        const updateQrCode = debounce(function() {
+            console.log('防抖执行:', new Date().toISOString());
+            let text = textInput.value || '狼黑工具';
+            const ecl = ['L','M','Q','H'][parseInt(errorLevelSlider.value)];
+            const cellSize = parseInt(blockSizeSlider.value);
+            const margin = parseInt(marginSizeSlider.value);
+
+            let fg = foregroundColor.value;
+            let bg = backgroundColor.value;
+
+            // 矢量模式下强制使用黑白
+            if(currentOutputType === 'vector' && invertCheckbox.checked){
+                fg = '#FFFFFF';
+                bg = '#000000';
+            }else if(currentOutputType === 'vector' && !invertCheckbox.checked){
+                fg = '#000000';
+                bg = '#FFFFFF';
+            }
+            
+            // 生成显示在qr-canvas-2的二维码
+            generateQRCode(qrCanvas2, text, ecl, cellSize, margin, fg, bg);
+            
+            // 生成存储在变量中的二维码
+            generateStoredQRCode(text, ecl, 32, margin, fg, bg);
+
+            // 检查是否在EDA环境中
+            if (typeof eda === 'undefined') {
+                // 不在EDA环境中，执行下载操作
+                console.log('二维码已更新');
+            }else{
+                eda.sys_ToastMessage.showMessage('二维码已更新', 2);
+            }
+            
+        }, 400);
+
+        // 生成普通二维码
+        function generateQRCode(canvas, text, ecl, cellSize, margin, dark, light) {
+            try {
+                // 将文本转换为UTF-8编码
+                const utf8Text = unescape(encodeURIComponent(text));
+                
+                const qr = qrcode(0, ecl);
+                qr.addData(utf8Text, 'Byte'); // 明确指定使用Byte模式
+                qr.make();
+                
+                const qrSize = qr.getModuleCount();
+                const totalSize = qrSize + 2 * margin;
+                const size = totalSize * cellSize;
+                
+                canvas.width = size;
+                canvas.height = size;
+
+                qrcodeSizeValue.textContent = `二维码大小: ${size} x ${size} px`;
+                qrcodepx = size;
+
+                canvas.style.width = "150px";
+                canvas.style.height = "150px";
+                
+                const ctx = canvas.getContext('2d');
+                ctx.fillStyle = light;
+                ctx.fillRect(0, 0, size, size);
+                
+                ctx.fillStyle = dark;
+                for (let row = 0; row < qrSize; row++) {
+                    for (let col = 0; col < qrSize; col++) {
+                        if (qr.isDark(row, col)) {
+                            ctx.fillRect(
+                                (margin + col) * cellSize,
+                                (margin + row) * cellSize,
+                                cellSize,
+                                cellSize
+                            );
+                        }
+                    }
+                }
+            } catch (err) {
+                console.error('生成二维码失败:', err);
+                if (typeof eda !== 'undefined' && eda.sys_ToastMessage) {
+                    eda.sys_ToastMessage.showMessage('生成二维码失败，请检查输入内容', 1);
+                }
+            }
+        }
+
+        // 生成普通二维码，存储在变量中
+        function generateStoredQRCode(text, ecl, cellSize, margin, dark, light) {
+            try {
+                // 创建临时canvas用于存储
+                const tempCanvas = document.createElement('canvas');
+                
+                // 将文本转换为UTF-8编码
+                const utf8Text = unescape(encodeURIComponent(text));
+                
+                const qr = qrcode(0, ecl);
+                qr.addData(utf8Text, 'Byte');
+                qr.make();
+                
+                const qrSize = qr.getModuleCount();
+                const totalSize = qrSize + 2 * margin;
+                const size = totalSize * cellSize;
+                
+                tempCanvas.width = size;
+                tempCanvas.height = size;
+                
+                const ctx = tempCanvas.getContext('2d');
+                ctx.fillStyle = light;
+                ctx.fillRect(0, 0, size, size);
+                
+                ctx.fillStyle = dark;
+                for (let row = 0; row < qrSize; row++) {
+                    for (let col = 0; col < qrSize; col++) {
+                        if (qr.isDark(row, col)) {
+                            ctx.fillRect(
+                                (margin + col) * cellSize,
+                                (margin + row) * cellSize,
+                                cellSize,
+                                cellSize
+                            );
+                        }
+                    }
+                }
+                
+                // 存储二维码
+                storedQRCodeCanvas = tempCanvas;
+                
+                // 处理存储的二维码并显示在qr-canvas-1和qr-canvas-3
+                processStoredQRCode();
+                
+            } catch (err) {
+                console.error('生成存储二维码失败:', err);
+                if (typeof eda !== 'undefined' && eda.sys_ToastMessage) {
+                    eda.sys_ToastMessage.showMessage('生成二维码失败，请检查输入内容', 1);
+                }
+            }
+        }
+
+        // 处理存储的二维码
+        function processStoredQRCode() {
+            if (!storedQRCodeCanvas) return;
+            
+            // 使用上一个版本的方法处理二维码
+            const processedCanvas1 = applyImageProcessing(storedQRCodeCanvas, 44, 45 , 4, 3);
+            const processedCanvas3 = applyImageProcessing(storedQRCodeCanvas, 44, 135, 4, 3);
+            
+            // 显示处理后的二维码
+            displayProcessedQRCode(qrCanvas1, processedCanvas1);
+            displayProcessedQRCode(qrCanvas3, processedCanvas3);
+        }
+        
+        // 显示处理后的二维码
+        function displayProcessedQRCode(targetCanvas, processedCanvas) {
+            targetCanvas.width = processedCanvas.width;
+            targetCanvas.height = processedCanvas.height;
+            const ctx = targetCanvas.getContext('2d');
+            ctx.drawImage(processedCanvas, 0, 0);
+            
+            targetCanvas.style.width = "150px";
+            targetCanvas.style.height = "150px";
+        }
+
+        // 应用图像处理（基于上一个版本的方法）
+        function applyImageProcessing(originalCanvas, degree, angle, scale, sigma) {
+            // 创建临时画布用于处理
+            const tempCanvas = document.createElement('canvas');
+            const tempCtx = tempCanvas.getContext('2d');
+            const width = originalCanvas.width;
+            const height = originalCanvas.height;
+            tempCanvas.width = width;
+            tempCanvas.height = height;
+            
+            // 复制原始图像到临时画布
+            tempCtx.drawImage(originalCanvas, 0, 0);
+            
+            // 创建运动模糊核并应用
+            const blurredCanvas = createMotionBlur(tempCanvas, degree, angle);
+            
+            // 应用高斯模糊
+            const gaussianCanvas = applyGaussianBlur(blurredCanvas, sigma);
+
+            // 使用双线性插值将图像缩放到指定尺寸
+            const scaledCanvas = scaleImageBilinear(gaussianCanvas, width * scale, width * scale);
+
+            // 应用索引颜色处理（替代二值化）
+            const indexedCanvas = applyIndexedColorAccurate(scaledCanvas);
+
+            // 使用双线性插值将图像缩放到指定尺寸
+            const finalCanvas = scaleImageBilinear(indexedCanvas, qrcodepx, qrcodepx);
+
+            return finalCanvas;
+        }
+
+        // 创建运动模糊效果（从中心向两边扩散，保持颜色）
+        function createMotionBlur(canvas, degree, angle) {
+            const tempCanvas = document.createElement('canvas');
+            const tempCtx = tempCanvas.getContext('2d');
+            const width = canvas.width;
+            const height = canvas.height;
+            tempCanvas.width = width;
+            tempCanvas.height = height;
+            
+            // 绘制原始图像
+            tempCtx.drawImage(canvas, 0, 0);
+            
+            // 创建运动模糊效果
+            const imageData = tempCtx.getImageData(0, 0, width, height);
+            const data = imageData.data;
+            const blurData = new Uint8ClampedArray(data.length);
+            
+            // 计算模糊方向
+            const rad = angle * Math.PI / 180;
+            const oppositeRad = (angle + 180) * Math.PI / 180; // 相反方向
+            
+            // 计算两个方向的单位向量
+            const dx = Math.cos(rad);
+            const dy = Math.sin(rad);
+            const dxOpposite = Math.cos(oppositeRad);
+            const dyOpposite = Math.sin(oppositeRad);
+            
+            // 计算每个方向的采样距离
+            const halfDegree = Math.floor(degree / 2);
+            
+            // 应用运动模糊（从中心向两边扩散，保持颜色）
+            for (let y = 0; y < height; y++) {
+                for (let x = 0; x < width; x++) {
+                    let totalR = 0, totalG = 0, totalB = 0;
+                    let count = 0;
+                    
+                    // 包含中心点（i=0）
+                    for (let i = -halfDegree; i <= halfDegree; i++) {
+                        let bx, by;
+                        
+                        if (i < 0) {
+                            // 向相反方向采样
+                            bx = Math.round(x + dxOpposite * Math.abs(i));
+                            by = Math.round(y + dyOpposite * Math.abs(i));
+                        } else if (i > 0) {
+                            // 向指定方向采样
+                            bx = Math.round(x + dx * i);
+                            by = Math.round(y + dy * i);
+                        } else {
+                            // 中心点（当前位置）
+                            bx = x;
+                            by = y;
+                        }
+                        
+                        if (bx >= 0 && bx < width && by >= 0 && by < height) {
+                            const index = (by * width + bx) * 4;
+                            totalR += data[index];     // 红色通道
+                            totalG += data[index + 1]; // 绿色通道
+                            totalB += data[index + 2]; // 蓝色通道
+                            count++;
+                        }
+                    }
+                    
+                    // 计算各通道平均值
+                    const avgR = count > 0 ? Math.round(totalR / count) : 0;
+                    const avgG = count > 0 ? Math.round(totalG / count) : 0;
+                    const avgB = count > 0 ? Math.round(totalB / count) : 0;
+                    
+                    const index = (y * width + x) * 4;
+                    blurData[index] = avgR;        // 红色
+                    blurData[index + 1] = avgG;    // 绿色
+                    blurData[index + 2] = avgB;    // 蓝色
+                    blurData[index + 3] = 255;     // alpha通道
+                }
+            }
+            
+            // 应用模糊效果
+            tempCtx.putImageData(new ImageData(blurData, width, height), 0, 0);
+            return tempCanvas;
+        }
+
+        // 应用高斯模糊
+        function applyGaussianBlur(canvas, sigma) {
+            // 创建临时画布
+            const tempCanvas = document.createElement('canvas');
+            const tempCtx = tempCanvas.getContext('2d');
+            const width = canvas.width;
+            const height = canvas.height;
+            tempCanvas.width = width;
+            tempCanvas.height = height;
+            
+            // 使用浏览器内置模糊效果
+            tempCtx.filter = `blur(${sigma}px)`;
+            tempCtx.drawImage(canvas, 0, 0);
+            
+            return tempCanvas;
+        }
+
+        // 双线性插值缩放函数
+        function scaleImageBilinear(canvas, targetWidth, targetHeight) {
+            const sourceWidth = canvas.width;
+            const sourceHeight = canvas.height;
+            
+            const tempCanvas = document.createElement('canvas');
+            const tempCtx = tempCanvas.getContext('2d');
+            tempCanvas.width = targetWidth;
+            tempCanvas.height = targetHeight;
+            
+            // 启用双线性插值
+            tempCtx.imageSmoothingEnabled = true;
+            tempCtx.imageSmoothingQuality = 'high';
+            
+            // 使用drawImage进行双线性插值缩放
+            tempCtx.drawImage(canvas, 0, 0, sourceWidth, sourceHeight, 0, 0, targetWidth, targetHeight);
+            
+            return tempCanvas;
+        }
+
+        // 更精确的索引颜色处理（使用颜色距离）
+        function applyIndexedColorAccurate(canvas) {
+            const tempCanvas = document.createElement('canvas');
+            const tempCtx = tempCanvas.getContext('2d');
+            const width = canvas.width;
+            const height = canvas.height;
+            tempCanvas.width = width;
+            tempCanvas.height = height;
+            
+            // 绘制图像并获取像素数据
+            tempCtx.drawImage(canvas, 0, 0);
+            const imageData = tempCtx.getImageData(0, 0, width, height);
+            const data = imageData.data;
+            
+            // 获取前景色和背景色
+            const fgColor = getForegroundColor();
+            const bgColor = getBackgroundColor();
+            
+            // 将颜色转换为RGB值
+            const fgRGB = hexToRgb(fgColor);
+            const bgRGB = hexToRgb(bgColor);
+            
+            // 应用索引颜色（基于颜色距离）
+            for (let i = 0; i < data.length; i += 4) {
+                const r = data[i];
+                const g = data[i + 1];
+                const b = data[i + 2];
+                
+                // 计算到前景色和背景色的欧几里得距离
+                const distToFg = colorDistance(r, g, b, fgRGB.r, fgRGB.g, fgRGB.b);
+                const distToBg = colorDistance(r, g, b, bgRGB.r, bgRGB.g, bgRGB.b);
+                
+                // 选择距离更近的颜色
+                if (distToFg < distToBg) {
+                    // 使用前景色
+                    data[i] = fgRGB.r;
+                    data[i + 1] = fgRGB.g;
+                    data[i + 2] = fgRGB.b;
+                } else {
+                    // 使用背景色
+                    data[i] = bgRGB.r;
+                    data[i + 1] = bgRGB.g;
+                    data[i + 2] = bgRGB.b;
+                }
+                // 强制alpha通道为不透明
+                data[i + 3] = 255;
+            }
+            
+            tempCtx.putImageData(imageData, 0, 0);
+            return tempCanvas;
+        }
+
+        // 计算颜色之间的欧几里得距离
+        function colorDistance(r1, g1, b1, r2, g2, b2) {
+            return Math.sqrt(
+                Math.pow(r1 - r2, 2) + 
+                Math.pow(g1 - g2, 2) + 
+                Math.pow(b1 - b2, 2)
+            );
+        }
+
+        // 十六进制颜色转RGB
+        function hexToRgb(hex) {
+            // 移除#号
+            hex = hex.replace(/^#/, '');
+            
+            // 解析RGB值
+            if (hex.length === 3) {
+                hex = hex[0] + hex[0] + hex[1] + hex[1] + hex[2] + hex[2];
+            }
+            
+            const num = parseInt(hex, 16);
+            return {
+                r: (num >> 16) & 255,
+                g: (num >> 8) & 255,
+                b: num & 255
+            };
+        }
+
+        // 图片转blob
+        function base64ToBlob(base64, contentType) {
+            const base64Message = base64.split(',')[1];
+            const byteCharacters = atob(base64Message);
+            let byteArrays = [];
+            for (let i = 0; i < byteCharacters.length; i++) {
+                byteArrays.push(byteCharacters.charCodeAt(i));
+            }
+            const blob = new Blob([new Uint8Array(byteArrays)], {
+                type: contentType,
+            });
+            return blob;
+        }
+
+        // 检测环境选择处理方式
+        async function handlePlaceQrCode(index) {
+            const canvas = document.getElementById(`qr-canvas-${index+1}`);
+            
+            // 检查是否在EDA环境中
+            if (typeof eda === 'undefined') {
+                // 不在EDA环境中，执行下载操作
+                downloadQRCode(canvas);
+                return;
+            }
+            
+            try {
+                if (currentOutputType === 'image') {
+                    await handlePlaceImage(canvas);
+                } else {
+                    await handlePlaceVector(canvas);
+                }
+            } catch (err) {
+                console.error('放置二维码失败:', err);
+                if (typeof eda !== 'undefined' && eda.sys_ToastMessage) {
+                    eda.sys_ToastMessage.showMessage('放置二维码失败', 1);
+                }
+            }
+        }
+
+        // 下载二维码
+        function downloadQRCode(canvas) {
+            if (!canvas) return;
+            
+            // 生成文件名：当前日期时间_QRCode.png
+            const now = new Date();
+            const year = now.getFullYear();
+            const month = String(now.getMonth() + 1).padStart(2, '0');
+            const day = String(now.getDate()).padStart(2, '0');
+            const hours = String(now.getHours()).padStart(2, '0');
+            const minutes = String(now.getMinutes()).padStart(2, '0');
+            const seconds = String(now.getSeconds()).padStart(2, '0');
+            
+            const filename = `${year}${month}${day}_${hours}${minutes}${seconds}_QRCode.png`;
+            
+            const url = canvas.toDataURL('image/png');
+            const link = document.createElement('a');
+            link.download = filename;
+            link.href = url;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+        }
+
+        // 放置图片二维码
+        async function handlePlaceImage(canvas) {
+            const base64 = canvas.toDataURL('image/png');
+            
+            // 获取尺寸
+            let width = parseFloat(qrSizeInput.value);
+            let height = parseFloat(qrSizeInput.value);
+            
+            if (currentUnit === 'mm') {
+                // 转换为mil
+                width = width * 39.37007874015748;
+                height = height * 39.37007874015748;
+            }
+            // 使用当前选择的图层
+            const layerId = getCurrentLayerId();
+            // 放置图像
+            const colorObj = eda.pcb_PrimitiveObject.create(layerId, 0, 0, base64, width.toFixed(2), height.toFixed(2), 0, false, 'img', false);
+            ID = (await colorObj).getState_PrimitiveId();
+            
+            eda.sys_IFrame.hideIFrame("ImportQrcode");//隐藏窗口
+            
+            // 启动定时器，让图片跟随鼠标
+            followInterval = setInterval(async () => {
+                try {
+                    const currentPoint = await eda.pcb_SelectControl.getCurrentMousePosition();
+                    //跟随鼠标移动
+                    await eda.pcb_PrimitiveObject.modify(ID, {
+                        topLeftX: currentPoint.x,
+                        topLeftY: currentPoint.y
+                    });
+                } catch (error) {
+                    console.error('更新图像位置失败:', error);
+                    if (typeof eda !== 'undefined' && eda.sys_ToastMessage) {
+                        eda.sys_ToastMessage.showMessage('更新图像位置失败', 1);
+                    }
+                    clearInterval(followInterval); // 出错时清理定时器，避免内存泄漏
+                }
+            }, 10);
+        }
+
+        // 放置矢量二维码
+        async function handlePlaceVector(canvas) {
+            const base64 = canvas.toDataURL('image/png');
+            const BlobData = base64ToBlob(base64, 'image/png');
+            
+            // 获取尺寸
+            let width = parseFloat(qrSizeInput.value);
+            let height = parseFloat(qrSizeInput.value);
+            
+            if (currentUnit === 'mm') {
+                // 转换为mil
+                width = width * 39.37007874015748;
+                height = height * 39.37007874015748;
+            }
+
+            // 使用当前选择的图层
+            const layerId = getCurrentLayerId();
+            // 图像需要先转为复杂多边形
+            const edaImage = await eda.pcb_MathPolygon.convertImageToComplexPolygon(BlobData, width.toFixed(2), height.toFixed(2), 0.5, 0, 0, 0, true, false);
+            // 放置图像
+            const noColorImg = eda.pcb_PrimitiveImage.create(0, 0, edaImage, layerId, width.toFixed(2), height.toFixed(2), 0, false, false);
+            ID = (await noColorImg).getState_PrimitiveId();
+
+            eda.sys_IFrame.hideIFrame("ImportQrcode");//隐藏窗口
+            
+            // 启动定时器，让图片跟随鼠标
+            followInterval = setInterval(async () => {
+                try {
+                    const currentPoint = await eda.pcb_SelectControl.getCurrentMousePosition();
+                    //跟随鼠标移动
+                    await eda.pcb_PrimitiveImage.modify(ID, {
+                        x: currentPoint.x,
+                        y: currentPoint.y
+                    });
+                } catch (error) {
+                    console.error('更新图像位置失败:', error);
+                    if (typeof eda !== 'undefined' && eda.sys_ToastMessage) {
+                        eda.sys_ToastMessage.showMessage('更新图像位置失败', 1);
+                    }
+                    clearInterval(followInterval); // 出错时清理定时器，避免内存泄漏
+                }
+            }, 10);
+        }
+
+        // 监听页面失去焦点
+        window.onblur = async function() {
+            clearInterval(followInterval);
+            followInterval = null;
+            // eda.sys_IFrame.closeIFrame("ImportQrcode")//关闭窗口
+        };
+
+        // 初始化函数
+        function init() {
+            initEventListeners();      // 初始化所有事件监听器
+            initLayerSelector();       // 初始化图层选择器
+            updateErrorLevel();        // 更新容错级别显示
+            updateBlockSize();         // 更新色块大小显示
+            updateMarginSize();        // 更新白边大小显示
+            updateQrCode();            // 生成初始二维码
+        }
+
+        // 加载完后启动
+        document.addEventListener('DOMContentLoaded', init);
+    </script>
+</body>
+</html>

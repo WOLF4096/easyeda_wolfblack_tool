@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>狼黑工具 - 批量修改网络</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: Arial, sans-serif;
+        }
+        
+        body {
+            background-color: #f0f2f5;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            padding: 0px;
+        }
+        
+        .container {
+            width: 470px;
+            height: 640px;
+            background-color: white;
+            border-radius: 0px;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+        
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background-color: #2c3e50;
+            color: white;
+            padding: 12px 16px;
+        }
+        
+        h1 {
+            font-size: 16px;
+            font-weight: 600;
+        }
+        
+        .execute-btn {
+            background-color: #3498db;
+            color: white;
+            border: none;
+            padding: 6px 14px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 500;
+            transition: background-color 0.2s;
+        }
+        
+        .execute-btn:hover {
+            background-color: #2980b9;
+        }
+        
+        .execute-btn:disabled {
+            background-color: #95a5a6;
+            cursor: not-allowed;
+        }
+        
+        .content {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            padding: 16px;
+        }
+        
+        .input-section {
+            margin-bottom: 16px;
+        }
+        
+        label {
+            display: block;
+            margin-bottom: 6px;
+            font-size: 13px;
+            color: #2c3e50;
+            font-weight: 500;
+        }
+        
+        .format-selector {
+            display: flex;
+            margin-bottom: 8px;
+            gap: 10px;
+        }
+        
+        .format-option {
+            display: flex;
+            align-items: center;
+            cursor: pointer;
+        }
+        
+        .format-option input {
+            margin-right: 5px;
+        }
+        
+        textarea {
+            width: 100%;
+            height: 200px;
+            padding: 10px;
+            border: 1px solid #dcdfe6;
+            border-radius: 4px;
+            resize: none;
+            font-size: 13px;
+            line-height: 1.4;
+            transition: border-color 0.2s;
+        }
+        
+        textarea:focus {
+            outline: none;
+            border-color: #3498db;
+        }
+        
+        .result-section {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .result-textarea {
+            flex: 1;
+            height: 100%;
+            background-color: #f8f9fa;
+        }
+        
+        .status {
+            margin-top: 10px;
+            padding: 8px 10px;
+            border-radius: 4px;
+            font-size: 13px;
+            display: none;
+        }
+        
+        .status.success {
+            background-color: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+            display: block;
+        }
+        
+        .status.error {
+            background-color: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+            display: block;
+        }
+        
+        .instructions {
+            font-size: 11px;
+            color: #7f8c8d;
+            margin-top: 6px;
+            line-height: 1.3;
+        }
+        
+        .example {
+            background-color: #f8f9fa;
+            border-left: 3px solid #3498db;
+            padding: 8px 10px;
+            margin-top: 8px;
+            font-size: 11px;
+            color: #2c3e50;
+        }
+        
+        .file-info {
+            margin-top: 5px;
+            font-size: 11px;
+            color: #7f8c8d;
+            font-style: italic;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>自动识别 CSV / TSV</h1>
+            <button id="executeBtn" class="execute-btn">执行</button>
+        </div>
+        <div class="content">
+            <div class="input-section">
+                <label for="csvInput">数据格式：</label>
+                <div class="format-selector">
+                    <div class="format-option">
+                        <input type="radio" id="formatCsv" name="format" value="csv" checked>
+                        <label for="formatCsv">CSV (逗号分隔)</label>
+                    </div>
+                    <div class="format-option">
+                        <input type="radio" id="formatTsv" name="format" value="tsv">
+                        <label for="formatTsv">TSV (制表符分隔)</label>
+                    </div>
+                </div>
+                
+                <label for="csvInput">粘贴数据：</label>
+                <textarea id="csvInput" placeholder="粘贴CSV或TSV格式文本，每行格式为：旧网络名称,新网络名称"></textarea>
+            </div>
+            
+            <div class="result-section">
+                <label for="resultOutput">处理结果：</label>
+                <textarea id="resultOutput" class="result-textarea" readonly placeholder="处理结果将显示在这里..."></textarea>
+                <div id="status" class="status"></div>
+            </div>
+        </div>
+    </div>
+    <script>
+        const resultOutput = document.getElementById('resultOutput');
+        const executeBtn = document.getElementById('executeBtn');
+        const formatCsv = document.getElementById('formatCsv');
+        const formatTsv = document.getElementById('formatTsv');
+        const csvInput = document.getElementById('csvInput');
+        const status = document.getElementById('status');
+
+        // 更新文件格式信息
+        function updateFormatInfo() {
+            const format = formatCsv.checked ? 'CSV' : 'TSV';
+            const separator = formatCsv.checked ? '逗号' : '制表符';
+            
+            // 更新占位符文本
+            if (formatCsv.checked) {
+                csvInput.placeholder = "粘贴CSV格式文本，每行格式为：旧网络名称,新网络名称";
+            } else {
+                csvInput.placeholder = "粘贴TSV格式文本，每行格式为：旧网络名称    新网络名称";
+            }
+        }
+        
+        // 监听格式选择变化
+        formatCsv.addEventListener('change', updateFormatInfo);
+        formatTsv.addEventListener('change', updateFormatInfo);
+
+        // 执行
+        executeBtn.addEventListener('click', async function() {
+            // 禁用按钮，防止重复点击
+            executeBtn.disabled = true;
+            executeBtn.textContent = '处理中...';
+            
+            // 清空之前的结果
+            resultOutput.value = '';
+            status.className = 'status';
+            
+            try {
+                // 获取粘贴内容
+                const content = csvInput.value.trim();
+                
+                if (!content) {
+                    throw new Error('请粘贴CSV或TSV格式文本');
+                }
+                
+                // 获取网表
+                const netdataa = await eda.pcb_Net.getNetlist('JLCEDA');
+                const jsonData = JSON.parse(netdataa);
+                
+                // 根据选择的格式确定分隔符
+                const separator = formatCsv.checked ? ',' : '\t';
+                
+                // 解析替换规则
+                const lines = content.split('\n');
+                const replaceRules = [];
+                
+                for (const line of lines) {
+                    const trimmedLine = line.trim();
+                    if (trimmedLine) {
+                        const parts = trimmedLine.split(separator).map(item => item.trim());
+                        if (parts.length >= 2) {
+                            const oldName = parts[0];
+                            const newName = parts[1];
+                            if (oldName && newName) {
+                                replaceRules.push({ oldName, newName });
+                            }
+                        }
+                    }
+                }
+                
+                if (replaceRules.length === 0) {
+                    throw new Error('未找到有效的替换规则，请检查数据格式和分隔符');
+                }
+                
+                resultOutput.value += `找到 ${replaceRules.length} 条替换规则\n\n`;
+                
+                // 创建替换映射表用于快速查找
+                const replaceMap = new Map();
+                for (const rule of replaceRules) {
+                    replaceMap.set(rule.oldName, rule.newName);
+                }
+                
+                let totalReplacements = 0;
+                
+                // 遍历JSON数据，只在pins中进行替换
+                for (const componentKey in jsonData) {
+                    const component = jsonData[componentKey];
+                    
+                    if (component.pins && typeof component.pins === 'object') {
+                        for (const pinKey in component.pins) {
+                            const currentNetName = component.pins[pinKey];
+                            
+                            // 完全匹配检查
+                            if (currentNetName && replaceMap.has(currentNetName)) {
+                                const newNetName = replaceMap.get(currentNetName);
+                                resultOutput.value += `替换: ${component.props.Designator} 的引脚 ${pinKey} 从 "${currentNetName}" 到 "${newNetName}"\n`;
+                                component.pins[pinKey] = newNetName;
+                                totalReplacements++;
+                            }
+                        }
+                    }
+                }
+                
+                resultOutput.value += `\n总共完成了 ${totalReplacements} 次网络名称替换\n`;
+                
+                // 写回数据
+                const updatedJsonString = JSON.stringify(jsonData, null, 2);
+                await eda.pcb_Net.setNetlist('JLCEDA', updatedJsonString);
+                
+                // 显示成功状态
+                status.textContent = `✅ 成功完成 ${totalReplacements} 次网络名称替换`;
+                status.className = 'status success';
+                
+            } catch (error) {
+                console.error('批量替换网络名称时出错:', error);
+                
+                // 显示错误状态
+                status.textContent = `❌ 替换过程中出错: ${error.message}`;
+                status.className = 'status error';
+                
+                resultOutput.value = `错误: ${error.message}\n\n`;
+                resultOutput.value += `提示：请检查数据格式是否正确，并确保选择了正确的分隔符类型。`;
+            } finally {
+                // 恢复按钮状态
+                executeBtn.disabled = false;
+                executeBtn.textContent = '执行';
+            }
+        });
+        
+        // 自动检测粘贴内容的格式
+        csvInput.addEventListener('input', function() {
+            const content = csvInput.value.trim();
+            if (!content) return;
+            
+            // 检测分隔符类型
+            const firstLine = content.split('\n')[0];
+            const commaCount = (firstLine.match(/,/g) || []).length;
+            const tabCount = (firstLine.match(/\t/g) || []).length;
+            
+            // 如果检测到制表符就选择tsv，否则选择csv
+            if (tabCount > 0) {
+                formatTsv.checked = true;
+            } else {
+                formatCsv.checked = true;
+            }
+            updateFormatInfo();
+        });
+
+        // 初始更新格式信息
+        document.addEventListener('DOMContentLoaded', function() {
+            updateFormatInfo();
+        });
+    </script>
+</body>
+</html>
