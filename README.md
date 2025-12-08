@@ -1,11 +1,7 @@
 # 狼黑工具 - EasyEDA Pro 增强工具
 
-![EasyEDA 专业版](https://img.shields.io/badge/EasyEDA-Pro-blue)
-![版本支持](https://img.shields.io/badge/版本支持-V2%20%7C%20V3-green)
-![状态](https://img.shields.io/badge/状态-持续更新-orange)
-
 ## 🌟 简介
-**狼黑工具** (WolfBlack Tool) 是一款为 **嘉立创EDA专业版** 设计的实用插件集合，旨在提升PCB与原理图设计效率，提供便捷的图像、BOM、网络、器件等批量处理功能。
+**狼黑工具** 是一款为 **嘉立创EDA专业版** 设计的实用插件集合，旨在提升PCB与原理图设计效率，提供便捷的图像、BOM、网络、器件等批量处理功能。
 
 ---
 
