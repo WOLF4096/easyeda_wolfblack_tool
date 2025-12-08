@@ -5,6 +5,11 @@
 
 ---
 
+## 📖 使用文档
+每个功能均配有 **流程图** 与 **步骤说明** ，请查看 [使用文档 - Github](https://github.com/WOLF4096/easyeda_wolfblack_tool/blob/main/UserManual.md)  
+
+---
+
 ## 📦 安装
 
 ### 方式一：从文件导入
@@ -42,11 +47,6 @@
 
 ---
 
-## 📖 详细使用说明
-每个功能均配有 **流程图** 与 **步骤说明** ，请查看 [使用文档 - Github](https://github.com/WOLF4096/easyeda_wolfblack_tool/blob/main/UserManual.md)  
-
-
----
 
 ## 🚧 待发布功能
 - 过孔焊盘互转
