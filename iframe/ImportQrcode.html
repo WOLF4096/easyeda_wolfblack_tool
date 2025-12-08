@@ -414,6 +414,8 @@
         let storedQRCodeCanvas = null;      // 存储生成的二维码画布，用于后续处理
         let currentLayer = 'TOP_SILKSCREEN';// 选择的图层，默认顶层丝印层
         let layerMap = {};                  // 修改图层映射定义
+        let fgColor;
+        let bgColor;
 
         // DOM 元素
         const importQrBtn = document.getElementById('import-qr-btn');
@@ -550,7 +552,7 @@
         // 图片 与 矢量 切换
         function setOutputType(type) {
             currentOutputType = type;
-            if (type === 'image') {
+            if (currentOutputType === 'image') {
                 typeImageBtn.classList.add('active');
                 typeVectorBtn.classList.remove('active');
                 imageControls.classList.remove('hidden');
@@ -991,10 +993,16 @@
             tempCtx.drawImage(canvas, 0, 0);
             const imageData = tempCtx.getImageData(0, 0, width, height);
             const data = imageData.data;
-            
+
             // 获取前景色和背景色
-            const fgColor = getForegroundColor();
-            const bgColor = getBackgroundColor();
+            if (currentOutputType === 'image') {
+                fgColor = getForegroundColor();
+                bgColor = getBackgroundColor();                
+            } else {
+                fgColor = "#000000";
+                bgColor = "#FFFFFF";    
+            }
+
             
             // 将颜色转换为RGB值
             const fgRGB = hexToRgb(fgColor);
