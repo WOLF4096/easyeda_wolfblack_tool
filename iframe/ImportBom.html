@@ -153,7 +153,7 @@
 </head>
 <body>
     <div class="header">
-        <div class="title">狼黑工具 - 导入BOM</div>
+        <div class="title">导入BOM</div>
         <div>BOM列：位号、名称、立创编号、制造商编号、制造商名称，一行一个，从Excel复制后点击粘贴-></div>
         <div class="controls">
             <button class="paste" id="pasteBtn">粘贴</button>
@@ -189,6 +189,7 @@
         // 全局变量
         let jsonData = {};
         let tableData = [];
+        let Page;
         
         // DOM元素
         const tableBody = document.getElementById('tableBody');
@@ -532,13 +533,21 @@
                 // 将修改后的数据转换回JSON字符串
                 const listjson = JSON.stringify(jsonData, null, 2);
                 
-                // 写回JSON数据 - 实际环境中使用以下代码
-                await eda.pcb_Net.setNetlist('JLCEDA', listjson);
-                
+                // 写回JSON数据
+                // await eda.pcb_Net.setNetlist('JLCEDA', listjson);
+
+                // 写回JSON数据
+                console.log(Page);
+                if (Page === "PCB"){
+                    await eda.pcb_Net.setNetlist('JLCEDA', listjson);
+                }else{
+                    await eda.sch_Netlist.setNetlist('JLCEDA', listjson);
+                }
+
                 statusBar.textContent = `成功导入了 ${selectedItems.length} 个组件的属性`;
                 statusBar.className = 'status-bar success';
 
-                // x写回成功，刷新列表
+                // 写回成功，刷新列表
                 loadBOMData()
             } catch (error) {
                 console.error('导入失败:', error);
@@ -549,9 +558,19 @@
         
         // 初始化
         document.addEventListener('DOMContentLoaded', async function() {
+
             // 获取网表
-            const netdataa = await eda.pcb_Net.getNetlist('JLCEDA');
-            jsonData = JSON.parse(netdataa);             
+            try {
+                const NetList = await eda.pcb_Net.getNetlist('JLCEDA');
+                jsonData = JSON.parse(NetList);
+                Page = "PCB";
+            } catch (error) {
+                const NetList = await eda.sch_Netlist.getNetlist('JLCEDA');
+                jsonData = JSON.parse(NetList);
+                Page = "SCH";
+            }
+            // const netdataa = await eda.pcb_Net.getNetlist('JLCEDA');
+            // jsonData = JSON.parse(netdataa);             
             await loadBOMData();
             updateStatusBar();
         });

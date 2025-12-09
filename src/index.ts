@@ -52,6 +52,11 @@ export async function CheckDesignators() {
     const { checkDuplicateDesignators } = await import('./js/CheckDesignators');
     await checkDuplicateDesignators();
 }
+// 从网表恢复3D模型
+export async function NetlistUpdate3DModels() {
+    const { update3DModelsFromNetlist } = await import('./js/NetlistUpdate3DModels');
+    await update3DModelsFromNetlist();
+}
 // 批量修改网络
 export async function NetReplace() {
 	eda.sys_IFrame.openIFrame("/iframe/NetReplace.html", 470, 640, "NetReplace");

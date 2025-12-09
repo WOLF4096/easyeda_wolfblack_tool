@@ -3,7 +3,7 @@
 	"uuid": "345f2952d65b1a5ca2f11721b90309c9",
 	"displayName": "狼黑工具",
 	"description": "EasyEDA Pro 增强工具",
-	"version": "1.7.2",
+	"version": "1.7.5",
 	"publisher": "wolfblack",
 	"engines": {
 		"eda": "^2.2.43"
@@ -14,7 +14,7 @@
 		"url": "https://github.com/WOLF4096/easyeda_wolfblack_tool"
 	},
 	"categories": ["PCB","Schematic","Other"],
-	"keywords": ["PCB","BOM","原理图","二维码","网表","器件","位号"],
+	"keywords": ["PCB","BOM","原理图","二维码","网表","器件","位号","3D模型"],
 	"images": {
 		"logo": "./images/logo.png"
 	},
@@ -24,7 +24,32 @@
 	"entry": "./dist/index",
 	"dependentExtensions": {},
 	"headerMenus": {
-		"home": [],
+		"home": [
+			{
+				"id": "wolfblackhome",
+				"title": "狼黑工具",
+				"menuItems": [
+					{
+						"id": "About",
+						"title": "关于",
+						"registerFn": "About"
+					}
+				]
+			}
+		],
+		"blank": [
+			{
+				"id": "wolfblackblank",
+				"title": "狼黑工具",
+				"menuItems": [
+					{
+						"id": "About",
+						"title": "关于",
+						"registerFn": "About"
+					}
+				]
+			}
+		],
 		"sch": [
 			{
 				"id": "wolfblacksch",
@@ -59,13 +84,23 @@
 							}
 						]
 					},{
-						"id": "ClearEmptySupplierPropertiesSCH",
-						"title": "清空多余属性",
-						"registerFn": "ClearEmptySupplierPropertiesSCH"
-					},{
-						"id": "CodeConvert",
-						"title": "丝印代码转换",
-						"registerFn": "CodeConvert"
+						"id": "Component",
+						"title": "器件",
+						"menuItems": [
+							{
+								"id": "CodeConvert",
+								"title": "丝印代码转换",
+								"registerFn": "CodeConvert"
+							},{
+								"id": "ClearEmptySupplierPropertiesSCH",
+								"title": "清空多余属性",
+								"registerFn": "ClearEmptySupplierPropertiesSCH"
+							},{
+								"id": "ImportBom",
+								"title": "导入 BOM",
+								"registerFn": "ImportBom"
+							}
+						]
 					},{
 						"id": "About",
 						"title": "关于",
@@ -117,6 +152,10 @@
 								"id": "ReplaceComponent",
 								"title": "批量替换器件",
 								"registerFn": "ReplaceComponent"
+							},{
+								"id": "NetlistUpdate3DModels",
+								"title": "从网表恢复3D模型",
+								"registerFn": "NetlistUpdate3DModels"
 							}
 						]
 					},{

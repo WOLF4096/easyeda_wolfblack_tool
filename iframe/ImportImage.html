@@ -433,8 +433,10 @@
         let currentLayer = 'DOC';   // 默认图层
         let originalAspectRatio = 1;
         let currentImage = null;
+        let base64img = null;
         let followInterval = null;
         let isCalculatingFromDpi = false;
+        let status = false;
         
         // 单位转换因子 (1 inch = 25.4 mm = 1000 mil)
         const mmToInch = 1 / 25.4;
@@ -655,6 +657,7 @@
 
         // 处理图像选择
         async function handleImageSelect() {
+            status = false;
             try {
                 // 使用 eda 文件系统打开文件选择对话框
                 const fileResult = await eda.sys_FileSystem.openReadFileDialog(['.png', '.jpg', '.jpeg', '.bmp'], false);
@@ -735,7 +738,9 @@
         
         //创建图像到画布
         async function handlePlaceImage() {
-            const base64 = await convertToBase64(currentImage);//转base64
+            //转base64
+            base64img = await convertToBase64(currentImage);
+            status = true;
             let ID;
             // 获取尺寸（转换为mil）
             let width = parseFloat(widthInput.value);
@@ -754,7 +759,7 @@
                 case 'BS': LayerId = EPCB_LayerId.BOTTOM_SILKSCREEN; break;
                 default:   LayerId = EPCB_LayerId.DOCUMENT; break;
             }
-            const colorObj = eda.pcb_PrimitiveObject.create(LayerId,0,0,base64,width.toFixed(2),height.toFixed(2),0,false,'img',false);
+            const colorObj = eda.pcb_PrimitiveObject.create(LayerId,0,0,base64img,width.toFixed(2),height.toFixed(2),0,false,'img',false);
             ID = (await colorObj).getState_PrimitiveId();
             
             eda.sys_IFrame.hideIFrame("ImportImage");//隐藏窗口
@@ -777,9 +782,11 @@
 
         // 监听页面失去焦点
         window.onblur = async function() {
-            clearInterval(followInterval);
-            followInterval = null;
-            eda.sys_IFrame.closeIFrame("ImportImage")//关闭窗口
+            if(status){
+                clearInterval(followInterval);
+                followInterval = null;
+                eda.sys_IFrame.closeIFrame("ImportImage")//关闭窗口
+            }
         };
 
         handleImageSelect();// 启动时选择图片

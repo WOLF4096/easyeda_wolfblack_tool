@@ -201,7 +201,7 @@
 <body>
     <div class="header">
         <div class="title">批量替换器件</div>
-        BOM列：位号、C编号，一行一个，从 Excel 复制后点击粘贴->
+        使用前备份网表，BOM列：位号、C编号，一行一个，从 Excel 复制后点击粘贴->
         <div class="controls">
             <button class="paste" id="pasteBtn">粘贴</button>
             <button class="select-all" id="selectAll">全选</button>
@@ -221,7 +221,7 @@
                     <th>供应商编号</th>
                     <th>供应商名称</th>
                     <th>C编号</th>
-                    <th style="width: 300px;">封装（API问题，暂时无法修改）</th>
+                    <th style="width: 300px;">封装（暂时无法修改）</th>
                 </tr>
             </thead>
             <tbody id="tableBody">
@@ -236,6 +236,7 @@
         </div>
         <div class="options">
             <div class="option-item">
+                已知问题：1.无法修改封装&nbsp;2.会丢失3D模型，但可从网表恢复&nbsp;&nbsp;
                 <input type="checkbox" id="keepName">
                 <label for="keepName" style="width: 75px;">保留名称</label>
             <!-- </div>
@@ -259,8 +260,8 @@
         let tableData = [];
         // let tempComponents = []; // 存储临时组件信息
         let componentMap = {}; // 存储C编号到组件信息的映射
+        let Page;
         const pasteData = [];
-        // const pasteData = []; // [C编号、uuid、{位号C1、位号C2...}]
         const newdevice = {};// 新变量：存储器件属性信息
         
         // DOM元素
@@ -284,11 +285,19 @@
         // 加载BOM数据
         async function loadBOMData() {
             try {
-                // 模拟获取数据 - 实际环境中使用以下代码
-                const netdataa = await eda.pcb_Net.getNetlist('JLCEDA');
-                jsonData = JSON.parse(netdataa);
-                console.log(jsonData);
+                // 获取网表
+                try {
+                    const NetList = await eda.pcb_Net.getNetlist('JLCEDA');
+                    jsonData = JSON.parse(NetList);
+                    Page = "PCB";
+                } catch (error) {
+                    const NetList = await eda.sch_Netlist.getNetlist('JLCEDA');
+                    jsonData = JSON.parse(NetList);
+                    Page = "SCH";
+                }
                 
+                console.log('导入前的JSON数据:', jsonData);
+
                 // 转换数据格式以便表格显示
                 tableData = [];
                 for (const [uniqueId, component] of Object.entries(jsonData)) {
@@ -715,7 +724,18 @@
                         Object.assign(jsonData[item.uniqueId].props, newProps);
 
                         // 删除Symbol属性
-                        delete jsonData[item.uniqueId].props.Symbol;
+                        // delete jsonData[item.uniqueId].props.Symbol;
+
+                        if (Page === "PCB"){
+                            // 删除Symbol属性
+                            delete jsonData[item.uniqueId].props.Symbol;
+                        }else{
+
+                            // 存在异常，待后续修复
+                            jsonData[item.uniqueId].props.Symbol = data.Symbol;
+                            jsonData[item.uniqueId].props["SymbolName"] = data["SymbolName"];
+                            console.log('符号', data.Symbol);
+                        }
 
                         // 替换器件uuid
                         jsonData[item.uniqueId].props.Device = componentItem.uuid;
@@ -782,11 +802,17 @@
                         });
                     }
                 });
-                console.log('导入后的JSON数据:', jsonData);
                 // 写回JSON数据
                 const listjson = JSON.stringify(jsonData, null, 2);
-                await eda.pcb_Net.setNetlist('JLCEDA', listjson);
-
+                console.log('导入后的JSON数据:', listjson);
+                // await eda.pcb_Net.setNetlist('JLCEDA', listjson);
+                // 写回JSON数据
+                console.log(Page);
+                if (Page === "PCB"){
+                    await eda.pcb_Net.setNetlist('JLCEDA', listjson);
+                }else{
+                    await eda.sch_Netlist.setNetlist('JLCEDA', listjson);
+                }
                 // renderTable();
                 statusBar.textContent = `成功导入了 ${importCount} 个组件的标准化属性`;
                 statusBar.className = 'status-bar success';
