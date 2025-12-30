@@ -57,6 +57,23 @@ export async function NetlistUpdate3DModels() {
     const { update3DModelsFromNetlist } = await import('./js/NetlistUpdate3DModels');
     await update3DModelsFromNetlist();
 }
+
+// 焊盘 ⇒ 过孔
+export async function PadToVia() {
+    const module = await import('./js/PadViaConverter');
+    await module.PadViaConverter.toVia();
+}
+// 过孔 ⇒ 焊盘
+export async function ViaToPad() {
+    const module = await import('./js/PadViaConverter');
+    await module.PadViaConverter.toPad();
+}
+// 焊盘 ⇄ 过孔
+export async function PadViaToggle() {
+    const module = await import('./js/PadViaConverter');
+    await module.PadViaConverter.toggle();
+}
+
 // 批量修改网络
 export async function NetReplace() {
 	eda.sys_IFrame.openIFrame("/iframe/NetReplace.html", 470, 640, "NetReplace");

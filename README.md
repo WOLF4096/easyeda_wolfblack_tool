@@ -38,11 +38,11 @@
 | 批量修改网络 | 批量更改引脚网络名称，支持Excel规则粘贴 | PCB | [打开](https://www.jlc-bbs.com/platform/a/1202044) |
 | 放置器件 | 从PCB或网表导入器件并自动放置到原理图 | SCH | [打开](https://www.jlc-bbs.com/platform/a/1202071) |
 | 放置导线 | 根据PCB/网表网络差异，自动为未连接引脚放置导线 | SCH | [打开](https://www.jlc-bbs.com/platform/a/1202119) |
+| 过孔焊盘互转 | 快速在焊盘和过孔之间进行转换 | PCB | [打开](https://www.jlc-bbs.com/platform/a/1202426) |
 
 ## 🚧 待发布功能
 | **功能** | **简介** | **适用于** | **状态** |
 | :--- | :--- | :--- | :--- |
-| 过孔焊盘互转 | PCB上的过孔焊盘互转 | PCB | 开发中 |
 | 线条导线互转 | PCB上的线条导线互转 | PCB | 开发中 |
 | 批量修改封装名 | 批量修改封装名 | PCB & SCH | 测试中 |
 | 导入Gerber | 导入Gerber至PCB画布 | PCB | 开发中 |
