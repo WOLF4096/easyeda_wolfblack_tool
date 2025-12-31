@@ -9,7 +9,7 @@
 
 ### 方式一：从文件导入
 1. 从以下地址下载插件文件：
-   - [GitHub](https://github.com/WOLF4096/easyeda_wolfblack_tool)
+   - [GitHub](https://github.com/WOLF4096/easyeda_wolfblack_tool/tree/main/build/dist)
    - [嘉立创EDA扩展广场](https://ext.lceda.cn/item/darksteel/wolfblack-tool)
 2. 在EDA中选择：
    - **V2**：设置 → 扩展 → 扩展管理器 → 导入扩展
