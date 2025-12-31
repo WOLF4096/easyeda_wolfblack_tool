@@ -74,6 +74,25 @@ export async function PadViaToggle() {
     await module.PadViaConverter.toggle();
 }
 
+// 线条 ⇒ 导线
+export async function PolylinetoWire() {
+    const module = await import('./js/WireConverter');
+    await module.WireConverter.toWire();
+}
+// 导线 ⇒ 线条
+export async function WiretoPolyline() {
+    const module = await import('./js/WireConverter');
+    await module.WireConverter.toPolyline();
+}
+// 导线 ⇄ 线条
+export async function WirePolylinetoggle() {
+    const module = await import('./js/WireConverter');
+    await module.WireConverter.toggle();
+}
+
+
+
+
 // 批量修改网络
 export async function NetReplace() {
 	eda.sys_IFrame.openIFrame("/iframe/NetReplace.html", 470, 640, "NetReplace");
