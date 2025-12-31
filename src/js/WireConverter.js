@@ -1,17 +1,15 @@
 /**
- * 导线(Primitive Line/Arc) 与 线条(Polyline)/区域(Region) 互转工具 v2
+ * 导线(Primitive Line/Arc) 与 线条(Polyline)/区域(Region) 互转工具 v2.1
  * * 功能说明：
  * 1. toWire(): 将选中的 Polyline/Region 转为 Line/Arc (导线)
  * 2. toPolyline(): 将选中的 Line/Arc 转为 Polyline (线条)
  * 3. toggle(): 智能判断，互相转换
  * * * 更新说明：
  * - 增加对 Region (圆形、矩形、圆角矩形) 转导线的支持
- * 
- * 已知矩形转换为导线，网络会消失，原因：api未返回网络值
- * 已知V3版本转换圆形为导线，会只剩下个半圆，解决方法：在圆形上随便放点东西
+ * - 修复 Region 转导线时网络丢失的问题 (通过 getSelectedPrimitives 补充 Net 信息)
+ * * 已知V3版本转换圆形为导线，会只剩下个半圆，解决方法：在圆形上随便放点东西
  * 通过api获取的线宽异常，需要x10倍才是正确的值
- * 
- */
+ * */
 
 export const WireConverter = {
 
@@ -20,8 +18,12 @@ export const WireConverter = {
      */
     toWire: async function() {
         const primitives = await eda.pcb_SelectControl.getAllSelectedPrimitives();
-        console.log(primitives);
+        console.log("Basic Primitives:", primitives);
         if (!primitives || primitives.length === 0) return;
+
+        // [修复] 获取 Region 的详细信息以提取 Net 属性
+        const detailedPrimitives = await eda.pcb_SelectControl.getSelectedPrimitives();
+        const netMap = this._buildNetMap(detailedPrimitives);
 
         eda.sys_Log.add("开始转换 轮廓对象 ⇒ 导线");
         
@@ -30,9 +32,11 @@ export const WireConverter = {
             if (item.primitiveType === "Polyline" && item.polygon && item.polygon.polygon) {
                 await this._convertPolyToWire(item);
             }
-            // 处理 Region (新增)
+            // 处理 Region
             else if (item.primitiveType === "Region" && item.complexPolygon && item.complexPolygon.polygon) {
-                await this._convertRegionToWire(item);
+                // 传入从 detailedPrimitives 中查找到的 net
+                const externalNet = netMap[item.primitiveId];
+                await this._convertRegionToWire(item, externalNet);
             }
         }
         eda.sys_Log.add("转换完成");
@@ -67,6 +71,10 @@ export const WireConverter = {
         console.log(primitives);
         if (!primitives || primitives.length === 0) return;
 
+        // [修复] 获取 Region 的详细信息以提取 Net 属性
+        const detailedPrimitives = await eda.pcb_SelectControl.getSelectedPrimitives();
+        const netMap = this._buildNetMap(detailedPrimitives);
+
         eda.sys_Log.add("开始转换 导线 ⇄ 线条");
 
         for (let item of primitives) {
@@ -74,7 +82,9 @@ export const WireConverter = {
                 await this._convertPolyToWire(item);
             } 
             else if (item.primitiveType === "Region") {
-                await this._convertRegionToWire(item);
+                // 传入从 detailedPrimitives 中查找到的 net
+                const externalNet = netMap[item.primitiveId];
+                await this._convertRegionToWire(item, externalNet);
             }
             else if (item.primitiveType === "Line" || item.primitiveType === "Arc") {
                 await this._convertWireToPoly(item);
@@ -85,6 +95,21 @@ export const WireConverter = {
     },
 
     // ================= 内部逻辑方法 =================
+
+    /**
+     * 辅助方法：构建 globalIndex 到 Net 的映射表
+     */
+    _buildNetMap: function(detailedPrimitives) {
+        const map = {};
+        if (detailedPrimitives && Array.isArray(detailedPrimitives)) {
+            detailedPrimitives.forEach(p => {
+                if (p.globalIndex) {
+                    map[p.globalIndex] = p.net || "";
+                }
+            });
+        }
+        return map;
+    },
 
     /**
      * 辅助方法：检查铜层
@@ -111,7 +136,7 @@ export const WireConverter = {
         const arr = polyItem.polygon.polygon;
         const net = polyItem.net || "";
         const layer = polyItem.layer;
-        const width = polyItem.lineWidth * 10;// 对bug的针对性修复，获取到的线宽比实际小10倍
+        const width = polyItem.lineWidth * 10; // 修复线宽问题
 
         // 数据合法性检查
         if (!arr || arr.length < 2 || typeof arr[0] !== 'number') return;
@@ -121,7 +146,6 @@ export const WireConverter = {
         let currentMode = 'L'; 
         let i = 2;
 
-        // 先删除原图元，避免新创建的图元相交自动拆分后无法删除的情况
         await eda.pcb_PrimitivePolyline.delete(polyItem.primitiveId);
 
         while (i < arr.length) {
@@ -158,14 +182,18 @@ export const WireConverter = {
 
     /**
      * 核心逻辑 2：将 Region (Circle/Rect/Polygon) 拆解为 Line/Arc
-     * 支持：CIRCLE, R, 以及通用多边形数据(以坐标开头)
+     * @param {Object} regionItem - 原始对象
+     * @param {String} overrideNet - [新增] 从 getSelectedPrimitives 获取到的正确网络
      */
-    _convertRegionToWire: async function(regionItem) {
+    _convertRegionToWire: async function(regionItem, overrideNet) {
         // 1. 检查铜层
         if (!this._checkCopperLayer(regionItem.layer, regionItem.primitiveId)) return;
 
         const arr = regionItem.complexPolygon.polygon;
-        const net = regionItem.net || ""; 
+        
+        // 优先使用传入的 overrideNet，如果为 undefined/null 则尝试回退到 item.net (虽然已知为空)
+        const net = (overrideNet !== undefined && overrideNet !== null) ? overrideNet : (regionItem.net || "");
+        
         const layer = regionItem.layer;
         const width = regionItem.lineWidth * 10; 
         
@@ -183,7 +211,6 @@ export const WireConverter = {
 
         // ==========================================
         // 情况 A: 通用多边形 Region (以数字坐标开头)
-        // 对应您提供的 "Fill Region" 数据
         // ==========================================
         if (typeof firstVal === 'number') {
             if (arr.length < 2) return;
@@ -196,7 +223,6 @@ export const WireConverter = {
             while (i < arr.length) {
                 const val = arr[i];
 
-                // 切换模式检测
                 if (typeof val === 'string') {
                     currentMode = val;
                     i++;
@@ -204,38 +230,33 @@ export const WireConverter = {
                 }
 
                 if (currentMode === 'L') {
-                    // 直线: x, y
                     const endX = arr[i];
                     const endY = arr[i + 1];
                     await eda.pcb_PrimitiveLine.create(net, layer, startX, startY, endX, endY, width, false);
-                    
                     startX = endX;
                     startY = endY;
                     i += 2;
                 } 
                 else if (currentMode === 'ARC' || currentMode === 'CARC') {
-                    // 圆弧: angle, endX, endY
                     const angle = arr[i];
                     const endX = arr[i + 1];
                     const endY = arr[i + 2];
                     await eda.pcb_PrimitiveArc.create(net, layer, startX, startY, endX, endY, angle, width, 1, false);
-                    
                     startX = endX;
                     startY = endY;
                     i += 3;
                 }
                 else {
-                    // 未知命令，跳过防止死循环
                     i++;
                 }
             }
-            return; // 处理完毕，直接返回
+            return; 
         }
 
         // ==========================================
         // 情况 B: 特殊形状 (CIRCLE / R)
         // ==========================================
-        const type = firstVal; // 此时 type 为 string
+        const type = firstVal; 
 
         // === 处理圆形 (CIRCLE) ===
         if (type === "CIRCLE") {
@@ -243,7 +264,6 @@ export const WireConverter = {
             const cy = arr[2];
             const r = arr[3];
 
-            // 拆分为两个 180 度圆弧
             await eda.pcb_PrimitiveArc.create(net, layer, cx - r, cy, cx + r, cy, 180, width, 1, false);
             await eda.pcb_PrimitiveArc.create(net, layer, cx + r, cy, cx - r, cy, 180, width, 1, false);
         }
@@ -276,7 +296,6 @@ export const WireConverter = {
                 };
             };
 
-            // 矩形点位计算 (复用之前的逻辑)
             const p1_start = rotatePoint(x + r, y);
             const p1_end   = rotatePoint(x + w - r, y);
             const p2_start = p1_end; 
@@ -294,7 +313,6 @@ export const WireConverter = {
             const p8_start = p7_end;
             const p8_end   = p1_start;
 
-            // 生成图元
             if (w > 2 * r) await eda.pcb_PrimitiveLine.create(net, layer, p1_start.x, p1_start.y, p1_end.x, p1_end.y, width, false);
             if (r > 0) await eda.pcb_PrimitiveArc.create(net, layer, p2_start.x, p2_start.y, p2_end.x, p2_end.y, -90, width, 1, false);
             if (Math.abs(h_vector) > 2 * r) await eda.pcb_PrimitiveLine.create(net, layer, p3_start.x, p3_start.y, p3_end.x, p3_end.y, width, false);
@@ -313,7 +331,6 @@ export const WireConverter = {
     _convertWireToPoly: async function(wireItem) {
         let polygonArr = [];
 
-        // 先删除原图元，避免新创建的图元相交自动拆分后无法删除的情况
         if (wireItem.primitiveType === "Line") {
             await eda.pcb_PrimitiveLine.delete(wireItem.primitiveId);
         } else {
@@ -338,13 +355,3 @@ export const WireConverter = {
         );
     }
 };
-
-// ================= 使用示例 =================
-// 菜单按钮1：转为导线
-// await WireConverter.toWire();
-
-// 菜单按钮2：转为线条
-// await WireConverter.toPolyline();
-
-// 菜单按钮3：互转
-// await WireConverter.toggle();
