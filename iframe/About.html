@@ -2,231 +2,533 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=540, height=900, initial-scale=1.0">
     <title>狼黑工具 - 关于</title>
     <style>
+        :root {
+            /* 暗色主题变量 */
+            --primary-color: #177ddc;
+            --primary-hover: #1890ff;
+            --primary-bg: rgba(23, 125, 220, 0.15); /* 深色下的半透明背景 */
+            
+            --text-main: #dbdbdb;    /* 主文字：灰白 */
+            --text-sub: #a6a6a6;     /* 次级文字：浅灰 */
+            --text-light: #6e6e6e;   /* 辅助文字：深灰 */
+            
+            --bg-color: #141414;     /* 整体背景：极深灰 */
+            --card-bg: #1f1f1f;      /* 卡片背景：深灰 */
+            --border-color: #303030; /* 边框颜色 */
+            --table-hover: #262626;  /* 表格悬停 */
+            --th-bg: #262626;        /* 表头背景 */
+            
+            /* 标签颜色 - 暗色模式适配 */
+            --tag-pcb-bg: #111d2c;
+            --tag-pcb-text: #177ddc;
+            --tag-sch-bg: #2b1d11;
+            --tag-sch-text: #d89614;
+            --tag-global-bg: #162312;
+            --tag-global-text: #49aa19;
+        }
+
         * {
             margin: 0;
             padding: 0;
             box-sizing: border-box;
+            outline: none;
         }
         
         body {
-            width: 540px;
+            width: 680px;
             height: 720px;
-            font-family: "Microsoft YaHei", "Segoe UI", sans-serif;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
             font-size: 14px;
-            line-height: 1.6;
-            color: #333;
-            padding: 20px;
+            line-height: 1.5;
+            color: var(--text-main);
+            background-color: var(--bg-color);
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* 滚动条美化 - 暗色 */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #434343;
+            border-radius: 3px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #595959;
+        }
+        
+        .main-wrapper {
+            flex: 1;
             overflow-y: auto;
-            overflow-x: hidden;
-            background-color: #ffffff;
+            padding: 24px 32px;
+            display: flex;
+            flex-direction: column;
+            gap: 24px;
         }
         
-        .container {
-            max-width: 500px;
-            margin: 0 auto;
-        }
-        
+        /* 头部设计 */
         .header {
             display: flex;
             align-items: center;
-            margin-bottom: 25px;
-            padding-bottom: 15px;
-            border-bottom: 1px solid #eaeaea;
-            gap: 15px;
+            background: var(--card-bg);
+            padding: 16px 24px;
+            border-radius: 12px;
+            border: 1px solid var(--border-color);
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
         }
-        
+
         .logo {
-            width: 64px;
-            height: 64px;
+            width: 56px;
+            height: 56px;
             flex-shrink: 0;
             object-fit: contain;
+            margin-right: 16px;
         }
         
-        .header-content {
-            flex: 1;
-        }
-        
-        h1 {
+        .header-content h1 {
             font-size: 20px;
-            color: #222;
-            margin-bottom: 5px;
-            font-weight: 600;
+            font-weight: 700;
+            margin-bottom: 4px;
+            color: var(--text-main);
         }
         
         .subtitle {
-            font-size: 14px;
-            color: #666;
-            margin-bottom: 10px;
+            font-size: 12px;
+            background: var(--primary-bg);
+            color: var(--primary-color);
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-weight: 500;
         }
         
-        .section {
-            margin-bottom: 25px;
+        /* 链接网格 */
+        .link-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 12px;
         }
         
-        h2 {
-            font-size: 16px;
-            color: #222;
-            margin-bottom: 10px;
-            padding-bottom: 5px;
-            border-bottom: 1px solid #f0f0f0;
-            font-weight: 600;
-        }
-        
-        .link-list {
-            list-style-type: none;
-        }
-        
-        .link-list li {
-            margin-bottom: 8px;
-            padding-left: 5px;
-        }
-        
-        .link-list a {
-            color: #0066cc;
-            text-decoration: none;
-            display: inline-flex;
+        .link-card {
+            display: flex;
             align-items: center;
-            padding: 4px 0;
+            justify-content: center;
+            padding: 10px;
+            background: var(--card-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            text-decoration: none;
+            color: var(--text-sub);
+            font-size: 13px;
+            transition: all 0.2s;
         }
         
-        .link-list a:hover {
-            color: #004d99;
-            text-decoration: underline;
+        .link-card:hover {
+            border-color: var(--primary-color);
+            color: var(--primary-color);
+            background: rgba(23, 125, 220, 0.05);
         }
         
         .link-icon {
-            display: inline-block;
             width: 16px;
             height: 16px;
             margin-right: 8px;
             background-size: contain;
             background-repeat: no-repeat;
-            background-position: center;
+        }
+
+        /* 表格部分 */
+        .feature-section {
+            background: var(--card-bg);
+            border-radius: 12px;
+            border: 1px solid var(--border-color);
+            /* overflow: hidden; 防止圆角被子元素覆盖 */
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+        }
+
+        th {
+            text-align: left;
+            padding: 12px 16px;
+            background: var(--th-bg);
+            color: var(--text-sub);
+            font-weight: 500;
+            font-size: 12px;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        td {
+            padding: 10px 12px;
+            border-bottom: 1px solid var(--border-color);
+            vertical-align: middle;
+            color: var(--text-sub);
+        }
+
+        tr:last-child td {
+            border-bottom: none;
+        }
+
+        tr:hover td {
+            background-color: var(--table-hover);
+        }
+
+        /* 表格列宽控制 */
+        .col-func { width: 20%; font-weight: 600; color: var(--text-main); }
+        .col-desc { width: 45%; color: var(--text-sub); line-height: 1.4; font-size: 12px; }
+        .col-env { width: 17%; }
+        .col-act { width: 15%; text-align: center; }
+
+        /* 堆叠样式 */
+        .env-stack {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            align-items: flex-start;
         }
         
-        .icon-github {
-            background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="%230066cc"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>');
+        /* 新增：标签行，用于将两个标签放在同一行 */
+        .tag-row {
+            display: flex;
+            flex-direction: row;
+            gap: 4px;
         }
-        
-        .icon-link {
-            background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="%230066cc"><path d="M10 6v2H5v11h11v-5h2v6a1 1 0 01-1 1H4a1 1 0 01-1-1V7a1 1 0 011-1h6zm11-3v8h-2V6.413l-7.793 7.794-1.414-1.414L17.585 5H13V3h8a1 1 0 011 1z"/></svg>');
+
+        .tag {
+            font-size: 11px;
+            padding: 1px 6px;
+            border-radius: 4px;
+            line-height: 1.4;
+            display: inline-block;
+            font-weight: 500;
+            white-space: nowrap;
         }
-        
-        .icon-doc {
-            background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="%230066cc"><path d="M8 2h9a1 1 0 01.707.293l4 4A1 1 0 0122 7v14a1 1 0 01-1 1H3a1 1 0 01-1-1V3a1 1 0 011-1h5zm10.586 6L16 3.414V8h2.586zM16 10H8v2h8v-2zm-8 4h8v2H8v-2z"/></svg>');
+
+        .tag-scope.pcb { background: var(--tag-pcb-bg); color: var(--tag-pcb-text); border: 1px solid rgba(23, 125, 220, 0.2); }
+        .tag-scope.sch { background: var(--tag-sch-bg); color: var(--tag-sch-text); border: 1px solid rgba(216, 150, 20, 0.2); }
+        .tag-scope.global { background: var(--tag-global-bg); color: var(--tag-global-text); border: 1px solid rgba(73, 170, 25, 0.2); }
+
+        .ver-text {
+            font-size: 11px;
+            color: #888;
+            font-family: Consolas, monospace;
+            background: #303030;
+            padding: 1px 4px;
+            border-radius: 3px;
         }
-        
+
+        /* 按钮样式 */
+        .btn-open {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 6px 12px;
+            color: var(--primary-color);
+            background: transparent;
+            border: 1px solid rgba(23, 125, 220, 0.3);
+            border-radius: 4px;
+            text-decoration: none;
+            font-size: 12px;
+            transition: all 0.2s;
+        }
+
+        .btn-open:hover {
+            background: var(--primary-color);
+            color: #fff;
+            border-color: var(--primary-color);
+        }
+
+        /* 免责声明 - 暗色适配 */
         .disclaimer {
-            background-color: #fff8f8;
-            border: 1px solid #ffdddd;
-            border-radius: 6px;
-            padding: 15px;
-            margin-top: 10px;
+            background-color: #2a1215; /* 暗红背景 */
+            border: 1px solid #58181c; /* 暗红边框 */
+            border-radius: 8px;
+            padding: 16px;
         }
         
-        .disclaimer h2 {
-            color: #cc0000;
-            border-bottom: 1px solid #ffcccc;
-        }
-        
-        .disclaimer ol {
-            margin-left: 20px;
-            margin-bottom: 10px;
-        }
-        
-        .disclaimer li {
-            margin-bottom: 8px;
-        }
-        
-        .warning {
-            color: #cc0000;
+        .disclaimer-title {
+            color: #e84749; /* 亮红色文字 */
             font-weight: 600;
+            margin-bottom: 8px;
+            font-size: 13px;
+            display: flex;
+            align-items: center;
         }
         
+        .disclaimer-content {
+            font-size: 12px;
+            color: #a6a6a6;
+            margin-left: 0;
+            padding-left: 20px;
+        }
+        
+        .disclaimer-content li {
+            margin-bottom: 4px;
+        }
+
         .footer {
             text-align: center;
-            margin-top: 20px;
-            padding-top: 15px;
-            border-top: 1px solid #eaeaea;
+            padding: 16px 0;
             font-size: 12px;
-            color: #888;
+            color: #595959;
+            background: var(--card-bg);
+            border-top: 1px solid var(--border-color);
         }
-        
-        @media (max-width: 540px) {
-            body {
-                padding: 15px;
-            }
-            
-            .header {
-                gap: 12px;
-            }
-            
-            .logo {
-                width: 60px;
-                height: 60px;
-            }
-        }
+
+        /* 图标SVG定义 - 修改 fill 颜色为浅灰 (%23a6a6a6) 以适应深色背景 */
+        .icon-github { background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="%23a6a6a6"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>'); }
+        .icon-link { background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="%23a6a6a6"><path d="M10 6v2H5v11h11v-5h2v6a1 1 0 01-1 1H4a1 1 0 01-1-1V7a1 1 0 011-1h6zm11-3v8h-2V6.413l-7.793 7.794-1.414-1.414L17.585 5H13V3h8a1 1 0 011 1z"/></svg>'); }
+        .icon-doc { background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="%23a6a6a6"><path d="M8 2h9a1 1 0 01.707.293l4 4A1 1 0 0122 7v14a1 1 0 01-1 1H3a1 1 0 01-1-1V3a1 1 0 011-1h5zm10.586 6L16 3.414V8h2.586zM16 10H8v2h8v-2zm-8 4h8v2H8v-2z"/></svg>'); }
     </style>
 </head>
 <body>
-    <div class="container">
+    <div class="main-wrapper">
         <div class="header">
-            <img src="../images/logo.png" alt="狼黑工具 Logo" class="logo">
+            <img src="../images/logo.png" alt="Logo" class="logo">
             <div class="header-content">
                 <h1>狼黑工具</h1>
-                <div class="subtitle">WolfBlack Tool for EasyEDA Pro 增强工具</div>
+                <div class="subtitle">WolfBlack Tool for EasyEDA Pro</div>
             </div>
+            </div>
+        
+        <div class="link-grid">
+            <a href="https://github.com/WOLF4096/easyeda_wolfblack_tool" target="_blank" class="link-card">
+                <span class="link-icon icon-github"></span>Github 主页
+            </a>
+            <a href="https://github.com/WOLF4096/easyeda_wolfblack_tool/blob/main/CHANGELOG.md" target="_blank" class="link-card">
+                <span class="link-icon icon-doc"></span>更新日志
+            </a>
+            <a href="https://ext.lceda.cn/item/darksteel/wolfblack-tool" target="_blank" class="link-card">
+                <span class="link-icon icon-link"></span>嘉立创EDA扩展广场
+            </a>
         </div>
         
-        <div class="section">
-            <h2>项目链接</h2>
-            <ul class="link-list">
-                <li>
-                    <a href="https://github.com/WOLF4096/easyeda_wolfblack_tool" target="_blank">
-                        <span class="link-icon icon-github"></span>
-                        项目主页 - Github
-                    </a>
-                </li>
-                <li>
-                    <a href="https://ext.lceda.cn/item/darksteel/wolfblack-tool" target="_blank">
-                        <span class="link-icon icon-link"></span>
-                        嘉立创EDA扩展广场
-                    </a>
-                </li>
-                <li>
-                    <a href="https://github.com/WOLF4096/easyeda_wolfblack_tool/tree/main" target="_blank">
-                        <span class="link-icon icon-doc"></span>
-                        使用教程 - Github
-                    </a>
-                </li>
-                <li>
-                    <a href="https://github.com/WOLF4096/easyeda_wolfblack_tool/blob/main/CHANGELOG.md" target="_blank">
-                        <span class="link-icon icon-doc"></span>
-                        更新日志 - Github
-                    </a>
-                </li>
-            </ul>
+        <div class="feature-section">
+            <table>
+                <thead>
+                    <tr>
+                        <th class="col-func">功能名称</th>
+                        <th class="col-desc">简介</th>
+                        <th class="col-env">环境 & 版本</th>
+                        <th class="col-act">使用方法</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td class="col-func">导入图片</td>
+                        <td class="col-desc">无损导入PNG/JPG，支持DPI调整</td>
+                        <td>
+                            <div class="env-stack">
+                                <span class="tag tag-scope pcb">PCB(半离线)</span>
+                                <span class="ver-text">V2 / V3</span>
+                            </div>
+                        </td>
+                        <td class="col-act"><a href="https://www.jlc-bbs.com/platform/a/1220989" target="_blank" class="btn-open">打开</a></td>
+                    </tr>
+                    <tr>
+                        <td class="col-func">导入二维码</td>
+                        <td class="col-desc">生成图片或矢量二维码放置到PCB</td>
+                        <td>
+                            <div class="env-stack">
+                                <span class="tag tag-scope pcb">PCB</span>
+                                <span class="ver-text">V2 / V3</span>
+                            </div>
+                        </td>
+                        <td class="col-act"><a href="https://www.jlc-bbs.com/platform/a/1221020" target="_blank" class="btn-open">打开</a></td>
+                    </tr>
+                    <tr>
+                        <td class="col-func">工作时间统计</td>
+                        <td class="col-desc">统计每日使用时间并生成图表 (本地数据)</td>
+                        <td>
+                            <div class="env-stack">
+                                <span class="tag tag-scope global">全局</span>
+                                <span class="ver-text">V2 / V3</span>
+                            </div>
+                        </td>
+                        <td class="col-act"><a href="https://www.jlc-bbs.com/platform/a/1221046" target="_blank" class="btn-open">打开</a></td>
+                    </tr>
+                    
+                    <tr>
+                        <td class="col-func">过孔焊盘互转</td>
+                        <td class="col-desc">快速在焊盘和过孔之间进行转换</td>
+                        <td>
+                            <div class="env-stack">
+                                <span class="tag tag-scope pcb">PCB</span>
+                                <span class="ver-text">V2 / V3</span>
+                            </div>
+                        </td>
+                        <td class="col-act"><a href="https://www.jlc-bbs.com/platform/a/1221301" target="_blank" class="btn-open">打开</a></td>
+                    </tr>
+                    <tr>
+                        <td class="col-func">线条导线互转</td>
+                        <td class="col-desc">快速在导线和轮廓对象之间进行转换</td>
+                        <td>
+                            <div class="env-stack">
+                                <span class="tag tag-scope pcb">PCB</span>
+                                <span class="ver-text">V2 / V3</span>
+                            </div>
+                        </td>
+                        <td class="col-act"><a href="https://www.jlc-bbs.com/platform/a/1221325" target="_blank" class="btn-open">打开</a></td>
+                    </tr>
+                    <tr>
+                        <td class="col-func">创建封装</td>
+                        <td class="col-desc">将画布离散图元组成封装并生成符号</td>
+                        <td>
+                            <div class="env-stack">
+                                <span class="tag tag-scope pcb">PCB</span>
+                                <span class="ver-text">V2</span>
+                            </div>
+                        </td>
+                        <td class="col-act"><a href="https://www.jlc-bbs.com/platform/a/1221362" target="_blank" class="btn-open">打开</a></td>
+                    </tr>
+                    <tr>
+                        <td class="col-func">位号查重</td>
+                        <td class="col-desc">快速检查并定位PCB中位号重复的器件</td>
+                        <td>
+                            <div class="env-stack">
+                                <span class="tag tag-scope pcb">PCB</span>
+                                <span class="ver-text">V2 / V3</span>
+                            </div>
+                        </td>
+                        <td class="col-act"><a href="https://www.jlc-bbs.com/platform/a/1221381" target="_blank" class="btn-open">打开</a></td>
+                    </tr>
+                    
+                    <tr>
+                        <td class="col-func">生成物理网络</td>
+                        <td class="col-desc">类似AD配置物理网络，速度极快</td>
+                        <td>
+                            <div class="env-stack">
+                                <span class="tag tag-scope pcb">PCB</span>
+                                <span class="ver-text">V2 / V3</span>
+                            </div>
+                        </td>
+                        <td class="col-act"><a href="https://www.jlc-bbs.com/platform/a/1221422" target="_blank" class="btn-open">打开</a></td>
+                    </tr>
+                    <tr>
+                        <td class="col-func">批量修改网络</td>
+                        <td class="col-desc">批量改名，支持从Excel粘贴规则</td>
+                        <td>
+                            <div class="env-stack">
+                                <span class="tag tag-scope pcb">PCB</span>
+                                <span class="ver-text">V2 / V3</span>
+                            </div>
+                        </td>
+                        <td class="col-act"><a href="https://www.jlc-bbs.com/platform/a/1221464" target="_blank" class="btn-open">打开</a></td>
+                    </tr>
+                    <tr>
+                        <td class="col-func">丝印代码转换</td>
+                        <td class="col-desc">R/C/L编码转实际值 (如"104"→"100nF")</td>
+                        <td>
+                            <div class="env-stack">
+                                <div class="tag-row">
+                                    <span class="tag tag-scope pcb">PCB</span>
+                                    <span class="tag tag-scope sch">原理图</span>
+                                </div>
+                                <span class="ver-text">V2 / V3</span>
+                            </div>
+                        </td>
+                        <td class="col-act"><a href="https://www.jlc-bbs.com/platform/a/1221485" target="_blank" class="btn-open">打开</a></td>
+                    </tr>
+                    <tr>
+                        <td class="col-func">清空多余属性</td>
+                        <td class="col-desc">自动清理供应商为空的属性，保持整洁</td>
+                        <td>
+                            <div class="env-stack">
+                                <div class="tag-row">
+                                    <span class="tag tag-scope pcb">PCB</span>
+                                    <span class="tag tag-scope sch">原理图</span>
+                                </div>
+                                <span class="ver-text">V2 / V3</span>
+                            </div>
+                        </td>
+                        <td class="col-act"><a href="https://www.jlc-bbs.com/platform/a/1221495" target="_blank" class="btn-open">打开</a></td>
+                    </tr>
+                    <tr>
+                        <td class="col-func">导入BOM</td>
+                        <td class="col-desc">Excel复制BOM，批量更新属性</td>
+                        <td>
+                            <div class="env-stack">
+                                <div class="tag-row">
+                                    <span class="tag tag-scope pcb">PCB</span>
+                                    <span class="tag tag-scope sch">原理图</span>
+                                </div>
+                                <span class="ver-text">V2 / V3</span>
+                            </div>
+                        </td>
+                        <td class="col-act"><a href="https://www.jlc-bbs.com/platform/a/1221515" target="_blank" class="btn-open">打开</a></td>
+                    </tr>
+                    <tr>
+                        <td class="col-func">批量替换器件</td>
+                        <td class="col-desc">通过C编号统一物料规格(需备份网表)</td>
+                        <td>
+                            <div class="env-stack">
+                                <span class="tag tag-scope pcb">PCB</span>
+                                <span class="ver-text">V2 / V3</span>
+                            </div>
+                        </td>
+                        <td class="col-act"><a href="https://www.jlc-bbs.com/platform/a/1221533" target="_blank" class="btn-open">打开</a></td>
+                    </tr>
+                    <tr>
+                        <td class="col-func">恢复3D模型</td>
+                        <td class="col-desc">修复因批量替换器件丢失的3D模型</td>
+                        <td>
+                            <div class="env-stack">
+                                <span class="tag tag-scope pcb">PCB</span>
+                                <span class="ver-text">V2 / V3</span>
+                            </div>
+                        </td>
+                        <td class="col-act"><a href="https://www.jlc-bbs.com/platform/a/1221572" target="_blank" class="btn-open">打开</a></td>
+                    </tr>
+                    
+                    <tr>
+                        <td class="col-func">放置器件</td>
+                        <td class="col-desc">从PCB/网表导入器件并放置到原理图</td>
+                        <td>
+                            <div class="env-stack">
+                                <span class="tag tag-scope sch">原理图</span>
+                                <span class="ver-text">V2 / V3</span>
+                            </div>
+                        </td>
+                        <td class="col-act"><a href="https://www.jlc-bbs.com/platform/a/1221620" target="_blank" class="btn-open">打开</a></td>
+                    </tr>
+                    <tr>
+                        <td class="col-func">放置导线</td>
+                        <td class="col-desc">根据PCB差异自动连接未连引脚</td>
+                        <td>
+                            <div class="env-stack">
+                                <span class="tag tag-scope sch">原理图</span>
+                                <span class="ver-text">V2 / V3</span>
+                            </div>
+                        </td>
+                        <td class="col-act"><a href="https://www.jlc-bbs.com/platform/a/1221655" target="_blank" class="btn-open">打开</a></td>
+                    </tr>
+                </tbody>
+            </table>
         </div>
         
-        <div class="section disclaimer">
-            <h2>免责声明</h2>
-            <p class="warning">重要提示：</p>
-            <ol>
-                <li><strong>备份重要文件</strong>：使用前请务必备份设计文件</li>
-                <li><strong>测试环境验证</strong>：建议先在测试环境中验证功能</li>
-                <li><strong>数据安全</strong>：使用第三方工具存在数据风险</li>
-                <li><strong>责任限制</strong>：作者不对使用本工具造成的任何直接或间接损失负责</li>
+        <div class="disclaimer">
+            <div class="disclaimer-title">⚠️ 免责声明与注意事项</div>
+            <ol class="disclaimer-content">
+                <li><strong>备份文件</strong>：操作前请务必备份 PCB 工程文件。</li>
+                <li><strong>功能验证</strong>：建议先在测试工程中验证功能是否符合预期。</li>
+                <li><strong>责任限制</strong>：作者不对因插件使用导致的任何数据丢失负责。</li>
             </ol>
-            <p>请在使用本工具前仔细阅读以上声明，使用即表示您已理解并同意上述条款。</p>
         </div>
-        
-        <div class="footer">
-            <p>© 2025 狼黑工具 - 嘉立创EDA扩展插件</p>
-            <p style="margin-top: 5px;">本工具根据个人需求开发，仅供学习和参考使用</p>
-        </div>
+    </div>
+    
+    <div class="footer">
+        <p>© 2025 狼黑工具 | 提高工作效率的实用插件合集</p>
     </div>
 </body>
 </html>

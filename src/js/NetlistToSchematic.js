@@ -1,5 +1,20 @@
 export async function placeComponentsEfficiently(viewType = "PCB") {
     // console.log(`当前视图类型: ${viewType}`);
+    
+    // 1. 版本检测
+    let isV3 = false;
+    try {
+        if (typeof eda !== 'undefined' && eda.sys_Environment && eda.sys_Environment.getEditorCurrentVersion) {
+            const version = eda.sys_Environment.getEditorCurrentVersion();
+            console.log('当前EDA版本:', version);
+            if (version && version.toString().startsWith('3')) {
+                isV3 = true;
+            }
+        }
+    } catch (e) {
+        console.warn("版本检测忽略", e);
+    }
+
     let jsonObject;
     let netdataa;
     if (viewType === "NET") {
@@ -45,11 +60,20 @@ export async function placeComponentsEfficiently(viewType = "PCB") {
         // 添加短暂延迟，避免操作过快
         await delay(1000);
     } else {
-        eda.sys_Log.add(`不支持的导入方式: ${importMethod}`, "error");
-        throw new Error(`不支持的导入方式: ${importMethod}`);
+        eda.sys_Log.add(`不支持的导入方式: ${viewType}`, "error"); // 修复变量名 importMethod -> viewType
+        throw new Error(`不支持的导入方式: ${viewType}`);
     }
     // 解析 JSON
     jsonObject = JSON.parse(netdataa);
+    
+    // 2. 确定组件数据源 (兼容 V2/V3)
+    let componentsMap = jsonObject;
+    if (isV3 && jsonObject.components) {
+        componentsMap = jsonObject.components;
+        console.log("识别为 V3 格式网表结构");
+    } else {
+        console.log("识别为 V2 格式网表结构");
+    }
     
     // 初始化变量 - 使用Map提高查找性能
     let cacheHitCount = 0;
@@ -121,8 +145,8 @@ export async function placeComponentsEfficiently(viewType = "PCB") {
     // 记录开始时间
     const startTime = Date.now();
     
-    // 第一阶段：查找UUID
-    await findUUIDs(jsonObject);
+    // 第一阶段：查找UUID (传入 componentsMap)
+    await findUUIDs(componentsMap);
     
     const uuidLookupTime = Date.now();
     
@@ -145,8 +169,8 @@ export async function placeComponentsEfficiently(viewType = "PCB") {
         await eda.sch_PrimitiveText.create(10, -50, '运行过程中不要切换视图，否则会停止放置', 0, '#00ff00', 'Arial', 30, false, false, false, 0);
     }
 
-    async function findUUIDs(jsonObject) {
-        const totalComponents = Object.keys(jsonObject).length;
+    async function findUUIDs(componentsMap) {
+        const totalComponents = Object.keys(componentsMap).length;
         let processedCount = 0;
 
         // 添加计时变量
@@ -156,7 +180,15 @@ export async function placeComponentsEfficiently(viewType = "PCB") {
         
         console.log(`开始处理 ${totalComponents} 个器件...`);
         
-        for (const [uniqueId, netItem] of Object.entries(jsonObject)) {
+        // 3. 使用 componentsMap 进行遍历
+        for (const [uniqueId, netItem] of Object.entries(componentsMap)) {
+            // 防御性检查：确保 props 存在
+            if (!netItem || !netItem.props) {
+                console.warn(`跳过无效节点: ${uniqueId}`);
+                processedCount++; // 跳过也算进度，防止进度条卡住
+                continue;
+            }
+
             const designator = netItem.props['Designator'] || '';
             const name = netItem.props['Name'] || '';
             const deviceName = netItem.props['DeviceName'] || '';
@@ -458,7 +490,7 @@ export async function placeComponentsEfficiently(viewType = "PCB") {
     }
     
     async function showStatistics(startTime, uuidLookupTime, endTime) {
-        const totalComponents = Object.keys(jsonObject).length;
+        const totalComponents = Object.keys(componentsMap).length; // 修正为使用 componentsMap 统计
         const successCount = cNumberExactMatch.length + nameExactMatch.length + nameFuzzyMatch.length;
         const failureCount = failedComponents.length;
         const totalTime = (endTime - startTime) / 1000;

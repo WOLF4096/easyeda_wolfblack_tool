@@ -1,5 +1,5 @@
 //
-// 此代码根据 2.2.43 版本开发，更新后可能无法使用或者异常
+// 此代码已更新以兼容 V2 和 V3 版本
 //
 // 导线长度
 const WIRE_LENGTH = 40;
@@ -54,6 +54,15 @@ const perfMonitor = new PerformanceMonitor();
 export async function placeWires(importMethod) {
     perfMonitor.start();
     try {
+        // 版本检测日志
+        try {
+            if (typeof eda !== 'undefined' && eda.sys_Environment && eda.sys_Environment.getEditorCurrentVersion) {
+                console.log('当前EDA版本:', eda.sys_Environment.getEditorCurrentVersion());
+            }
+        } catch (e) {
+            console.log("版本检测跳过");
+        }
+
         // console.log("开始执行放置导线功能，导入方式:", importMethod);
         
         // 1. 获取选中的器件
@@ -65,7 +74,7 @@ export async function placeWires(importMethod) {
         
         // 2. 获取原理图网表
         const schematicNetlist = await getSchematicNetlist();
-        
+        console.log(schematicNetlist);
         let pcbNetlist;
 
         // 3. 根据导入方式获取PCB网表
@@ -79,15 +88,15 @@ export async function placeWires(importMethod) {
             await delay(1000);            
         } else if (importMethod === "NET") {
             const fileData = await importNetlistFromFile();
-            pcbNetlist = formatFileNetlist(fileData,selectedComponents);
+            pcbNetlist = formatFileNetlist(fileData, selectedComponents);
         } else {
             eda.sys_Log.add(`不支持的导入方式: ${importMethod}`, "error");
             throw new Error(`不支持的导入方式: ${importMethod}`);
         }
 
 
-        // 格式化网表数据
-        const formattedSchematicNetlist = formatSchematicNetlist(schematicNetlist,selectedComponents);
+        // 格式化网表数据 (这里包含了 V2/V3 的兼容处理)
+        const formattedSchematicNetlist = formatSchematicNetlist(schematicNetlist, selectedComponents);
 
         // 处理单个或多个器件
         const componentsArray = Array.isArray(selectedComponents) ? selectedComponents : [selectedComponents];
@@ -177,6 +186,7 @@ export async function placeWires(importMethod) {
 async function switchToPCB() {
     try {
         const splitData = await eda.dmt_EditorControl.getSplitScreenTree();
+        
         const pcbTab = splitData.tabs.find(tab => tab.data?.doctype === 3);
         
         if (!pcbTab) {
@@ -214,7 +224,9 @@ async function switchToSchematic() {
 // 获取原理图网表
 async function getSchematicNetlist() {
     try {
-        return await eda.sch_Netlist.getNetlist();
+        const net = await eda.sch_Netlist.getNetlist("JLCEDA");
+        // console.log(net);
+        return net;
     } catch (error) {
         eda.sys_Log.add("获取原理图网表失败", "error");
         console.error("获取原理图网表失败:", error);
@@ -222,11 +234,12 @@ async function getSchematicNetlist() {
     }
 }
 
-// 获取SCH选中的器件信息
+// 获取SCH选中的器件信息 (已更新适配 V2/V3 API)
 async function getSelectedComponent() {
     try {
-        const primitives = await eda.sch_SelectControl.getSelectedPrimitives();
-        
+        let primitives;
+        primitives = await eda.sch_SelectControl.getAllSelectedPrimitives();
+
         // 过滤出类型为Component的图元
         const components = primitives.filter(item => item.primitiveType === "Component");
         
@@ -238,8 +251,24 @@ async function getSelectedComponent() {
         const componentMap = new Map();
         
         for (const component of components) {
-            const uniqueId = component.param.uniqueId;
-            const designator = component.param.designator;
+            // 兼容性处理变量提取
+            let uniqueId, designator, componentId;
+            
+            // V3 结构: 直接在根对象中
+            if (component.uniqueId && component.primitiveId) {
+                uniqueId = component.uniqueId;
+                designator = component.designator;
+                componentId = component.primitiveId;
+            } 
+            // V2 结构: 在 param 对象中
+            else if (component.param && component.id) {
+                uniqueId = component.param.uniqueId;
+                designator = component.param.designator;
+                componentId = component.id;
+            } else {
+                console.warn("未识别的组件结构", component);
+                continue;
+            }
             
             if (!componentMap.has(uniqueId)) {
                 componentMap.set(uniqueId, {
@@ -249,7 +278,7 @@ async function getSelectedComponent() {
                 });
             }
             
-            componentMap.get(uniqueId).componentIds.push(component.id);
+            componentMap.get(uniqueId).componentIds.push(componentId);
         }
         
         const uniqueComponents = Array.from(componentMap.values());
@@ -263,7 +292,7 @@ async function getSelectedComponent() {
                 designator: component.designator
             };
         }
-
+        
         // 返回所有器件信息
         return uniqueComponents.map(comp => ({
             componentIds: comp.componentIds,
@@ -281,7 +310,7 @@ async function getSelectedComponent() {
 async function getPCBSelection() {
     try {
         const pcbData = await eda.pcb_SelectControl.getAllSelectedPrimitives();
-        
+        console.log(pcbData);
         // PCB接口可能返回数组或单个对象
         if (Array.isArray(pcbData)) {
             // 过滤出器件类型
@@ -330,11 +359,24 @@ function readFileAsText(file) {
     });
 }
 
-// 格式化原理图网表数据
+// 格式化原理图网表数据 (支持 V2 和 V3 格式)
 function formatSchematicNetlist(netlistData, selectedComponents) {
     const formatted = [];
     const parsedData = JSON.parse(netlistData);
     
+    // V3 兼容处理：确定组件数据源
+    let componentsMap = parsedData;
+    let isV3 = false;
+    
+    // 如果存在 components 字段，说明是 V3 格式
+    if (parsedData.components) {
+        componentsMap = parsedData.components;
+        isV3 = true;
+        console.log("识别为 V3 格式网表");
+    } else {
+        console.log("识别为 V2 格式网表");
+    }
+
     // 处理单个或多个选中器件
     const componentsArray = Array.isArray(selectedComponents) ? selectedComponents : [selectedComponents];
     
@@ -346,7 +388,7 @@ function formatSchematicNetlist(netlistData, selectedComponents) {
         // console.log(`处理选中器件: ${component.designator} (${uniqueId})`);
         
         // 直接获取该器件在网表中的数据
-        const componentData = parsedData[uniqueId];
+        const componentData = componentsMap[uniqueId];
         
         if (!componentData) {
             console.warn(`⚠️ 未在网表中找到器件 ${uniqueId}`);
@@ -354,32 +396,42 @@ function formatSchematicNetlist(netlistData, selectedComponents) {
         }
         
         // console.log("网表中的器件数据:", componentData);
-        // console.log("引脚数据:", componentData.pins);
         
-        const { props, pins } = componentData;
-        
-        if (!props || !pins) {
-            console.warn(`⚠️ 器件 ${uniqueId} 数据不完整`);
-            continue;
+        const props = componentData.props;
+        if (!props) {
+             console.warn(`⚠️ 器件 ${uniqueId} 属性数据不完整`);
+             continue;
         }
-        
-        // 处理引脚数据
-        const pinEntries = Object.entries(pins);
-        // console.log(`为器件 ${props.Designator} 添加 ${pinEntries.length} 个引脚`);
-        
-        for (const [pinNumber, netName] of pinEntries) {
-            formatted.push({
-                uniqueId: uniqueId,
-                designator: props.Designator,
-                pin: pinNumber,
-                netName: netName || ""
-            });
+
+        // 提取引脚数据 - 区分 V2 和 V3 结构
+        if (isV3 && componentData.pinInfoMap) {
+            // V3 逻辑: 使用 pinInfoMap, 结构为 { "1": { "net": "GND" }, ... }
+            const pinEntries = Object.entries(componentData.pinInfoMap);
+            for (const [pinNumber, pinInfo] of pinEntries) {
+                formatted.push({
+                    uniqueId: uniqueId,
+                    designator: props.Designator,
+                    pin: pinNumber,
+                    netName: (pinInfo && pinInfo.net) ? pinInfo.net : ""
+                });
+            }
+        } else if (componentData.pins) {
+             // V2 逻辑: 使用 pins, 结构为 { "1": "GND", ... }
+            const pinEntries = Object.entries(componentData.pins);
+            for (const [pinNumber, netName] of pinEntries) {
+                formatted.push({
+                    uniqueId: uniqueId,
+                    designator: props.Designator,
+                    pin: pinNumber,
+                    netName: netName || ""
+                });
+            }
+        } else {
+            console.warn(`⚠️ 器件 ${uniqueId} 没有找到 pins 或 pinInfoMap 数据`);
         }
-        
-        // console.log(`成功添加器件 ${props.Designator}`);
     }
     
-    console.log(`共 ${formatted.length} 个引脚`);
+    console.log(`共提取 ${formatted.length} 个引脚信息`);
     return formatted;
 }
 
@@ -417,9 +469,9 @@ function formatPCBNetlist(pcbData) {
 }
 
 // 格式化文件网表数据
-function formatFileNetlist(fileData,selectedComponents) {
-    // 文件格式与原理图网表格式相同
-    return formatSchematicNetlist(fileData,selectedComponents);
+function formatFileNetlist(fileData, selectedComponents) {
+    // 文件格式与原理图网表格式相同，调用统一处理函数
+    return formatSchematicNetlist(fileData, selectedComponents);
 }
 
 // 处理网表数据，找出需要放置导线的引脚
@@ -616,6 +668,3 @@ async function drawSingleWire(pinInfo, netName) {
 function delay(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
 }
-
-// placeWires("fromPCB");
-// placeWires("fromNetlistFile");

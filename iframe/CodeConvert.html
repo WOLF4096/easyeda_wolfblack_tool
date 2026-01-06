@@ -39,6 +39,18 @@
             font-size: 20px;
             font-weight: bold;
             color: #333;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .version-tag {
+            font-size: 12px;
+            font-weight: normal;
+            background-color: #e0e0e0;
+            padding: 2px 6px;
+            border-radius: 4px;
+            color: #555;
         }
         
         .controls {
@@ -134,7 +146,10 @@
 <body>
     <div class="container">
         <div class="header">
-            <div class="title">丝印代码转换工具</div>
+            <div class="title">
+                丝印代码转换工具
+                <span id="versionTag" class="version-tag">检测中...</span>
+            </div>
             只处理位号以C、R、L开头的元件
             <div class="controls">
                 <div class="select-all">
@@ -157,8 +172,7 @@
                     </tr>
                 </thead>
                 <tbody id="tableBody">
-                    <!-- 数据将通过JS动态填充 -->
-                </tbody>
+                    </tbody>
             </table>
         </div>
         
@@ -169,7 +183,9 @@
 
         let componentsData = [];
         let jsonData = null;
+        let componentsMap = null; // 指向实际的组件对象集合（V2指向根，V3指向components属性）
         let Page;
+        let isV3 = false;
 
         // E96系列电阻代码映射表 (标准E96系列值)
         const E96_VALUES = {
@@ -196,8 +212,13 @@
         function processComponentsData() {
             componentsData = [];
             
-            for (const key in jsonData) {
-                const component = jsonData[key];
+            // 使用 componentsMap 替代 jsonData 进行遍历
+            for (const key in componentsMap) {
+                const component = componentsMap[key];
+                
+                // 确保有 props 属性 (防止读取到元数据)
+                if (!component.props) continue;
+
                 const designator = component.props.Designator;
                 const name = component.props.Name;
                 const uniqueId = component.props["Unique ID"];
@@ -652,23 +673,31 @@
         async function executeConversion() {
             try {
                 let modifiedCount = 0;
-                // 更新JSON数据
+                
+                // 使用 componentsMap 遍历查找并更新
                 for (const component of componentsData) {
                     if (component.modified && component.shouldModify) {
-                        // 找到对应的组件
-                        for (const key in jsonData) {
-                            if (jsonData[key].props["Unique ID"] === component.uniqueId) {
+                        
+                        // 在映射表中查找对应组件
+                        for (const key in componentsMap) {
+                            const mapComponent = componentsMap[key];
+                            if (mapComponent && mapComponent.props && mapComponent.props["Unique ID"] === component.uniqueId) {
                                 // 更新Name和Value字段
-                                jsonData[key].props.Name = component.value;
-                                jsonData[key].props.Value = component.value;
+                                mapComponent.props.Name = component.value;
+                                mapComponent.props.Value = component.value;
                                 modifiedCount++;
                                 break;
                             }
                         }
                     }
                 }
+                
+                // 注意：由于 componentsMap 是引用 jsonData 的一部分（或全部），
+                // 修改 componentsMap 会自动更新 jsonData。
+                // 所以这里直接 stringify jsonData 即可。
+                
                 const listjson = JSON.stringify(jsonData);
-                // 写回JSON数据
+                
                 console.log(Page);
                 if (Page === "PCB"){
                     await eda.pcb_Net.setNetlist('JLCEDA', listjson);
@@ -693,25 +722,58 @@
 
         // 初始化函数
         async function initialize() {
-            // 获取网络列表数据
-            // let NetList;
+            const verTag = document.getElementById('versionTag');
+            
+            // 检测版本
             try {
-                const NetList = await eda.pcb_Net.getNetlist('JLCEDA');
-                jsonData = JSON.parse(NetList);
-                Page = "PCB";
-            } catch (error) {
-                const NetList = await eda.sch_Netlist.getNetlist('JLCEDA');
-                jsonData = JSON.parse(NetList);
-                Page = "SCH";
+                if (typeof eda !== 'undefined' && eda.sys_Environment && eda.sys_Environment.getEditorCurrentVersion) {
+                    const version = eda.sys_Environment.getEditorCurrentVersion();
+                    console.log('当前EDA版本:', version);
+                    if (version && version.toString().startsWith('3')) {
+                        isV3 = true;
+                        verTag.textContent = "V3模式";
+                    } else {
+                        verTag.textContent = "V2模式";
+                    }
+                } else {
+                    verTag.textContent = "V2模式 (默认)";
+                }
+            } catch (e) {
+                console.warn("版本检测失败，默认使用V2模式", e);
+                verTag.textContent = "V2模式";
             }
+
             try {
+                // 获取网络列表数据
+                let NetList;
+                try {
+                    NetList = await eda.pcb_Net.getNetlist('JLCEDA');
+                    Page = "PCB";
+                } catch (error) {
+                    NetList = await eda.sch_Netlist.getNetlist('JLCEDA');
+                    Page = "SCH";
+                }
+                
+                jsonData = JSON.parse(NetList);
+                
+                // 关键点：确定组件数据源
+                if (isV3 && jsonData.components) {
+                    componentsMap = jsonData.components;
+                } else {
+                    // V2 或 V3结构不匹配回退
+                    componentsMap = jsonData;
+                }
                 
                 // 改进的检查唯一ID是否为空或者重复的代码
                 let hasEmptyUniqueId = false;
                 const seenIds = {};
 
-                for (const key in jsonData) {
-                    const uniqueId = jsonData[key].props["Unique ID"];
+                // 使用 componentsMap 进行检查
+                for (const key in componentsMap) {
+                    const component = componentsMap[key];
+                    if (!component.props) continue; // 跳过非组件项
+
+                    const uniqueId = component.props["Unique ID"];
                     
                     // 检查是否为空
                     if (!uniqueId || uniqueId === "") {
@@ -741,7 +803,7 @@
                 if (hasEmptyUniqueId) {
                     showStatus("部分元件的唯一ID为空/重复，可以在菜单栏-设计-重置唯一ID，否则会出现异常", "error");
                 }else{
-                    showStatus("数据加载成功，请仔细检查后，选择要转换的组件", "info");
+                    showStatus(`数据加载成功 (${isV3 ? 'V3' : 'V2'})，请仔细检查后，选择要转换的组件`, "info");
                 }
                 
             } catch (error) {

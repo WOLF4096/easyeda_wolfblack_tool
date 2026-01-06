@@ -2,6 +2,15 @@
 // 有bug，可以修改模型，但"3D Model Title"似乎没变
 export async function update3DModelsFromNetlist() {
     try {
+        // 版本检测日志
+        try {
+            if (typeof eda !== 'undefined' && eda.sys_Environment && eda.sys_Environment.getEditorCurrentVersion) {
+                const version = eda.sys_Environment.getEditorCurrentVersion();
+                console.log('当前EDA版本:', version);
+            }
+        } catch (e) {
+            console.warn("版本检测忽略");
+        }
 
         // 1. 导入网表文件
         console.log("步骤1: 导入网表文件...");
@@ -11,7 +20,13 @@ export async function update3DModelsFromNetlist() {
         // 2. 创建Designator到3D模型信息的映射
         console.log("步骤2: 解析网表文件...");
         const designator3DMap = parseNetlist3DInfo(netlistData);
-        console.log(`找到 ${Object.keys(designator3DMap).length} 个带3D模型的器件`);
+        const mapSize = Object.keys(designator3DMap).length;
+        console.log(`找到 ${mapSize} 个带3D模型的器件`);
+        
+        if (mapSize === 0) {
+            eda.sys_Message.showToastMessage("未在网表中找到有效的3D模型数据，请检查网表格式", "warn");
+            return;
+        }
         
         // 3. 获取PCB中所有器件
         console.log("步骤3: 获取PCB器件信息...");
@@ -70,13 +85,28 @@ export async function update3DModelsFromNetlist() {
         }
     }
 
-    // 2. 解析网表文件中的3D模型信息
+    // 2. 解析网表文件中的3D模型信息 (兼容 V2/V3)
     function parseNetlist3DInfo(netlistData) {
         const designator3DMap = {};
         let count = 0;
         
-        for (const key in netlistData) {
-            const component = netlistData[key];
+        // --- 兼容性处理开始 ---
+        let componentsSource = netlistData;
+        let isV3Data = false;
+
+        // V3 版本的网表，组件信息在 'components' 字段下
+        if (netlistData && netlistData.components) {
+            componentsSource = netlistData.components;
+            isV3Data = true;
+            console.log("识别为 V3 格式网表结构");
+        } else {
+            console.log("识别为 V2 格式网表结构");
+        }
+        // --- 兼容性处理结束 ---
+
+        for (const key in componentsSource) {
+            const component = componentsSource[key];
+            // 确保是有效组件对象（V3中可能包含其他元数据，需校验props）
             if (component && component.props) {
                 const designator = component.props.Designator;
                 const model3D = component.props["3D Model"];
@@ -93,8 +123,8 @@ export async function update3DModelsFromNetlist() {
                     count++;
                     
                     // 可选：输出前几个作为示例
-                    if (count <= 5) {
-                        console.log(`找到器件: ${designator}, 3D模型: ${modelTitle}`);
+                    if (count <= 3) {
+                        console.log(`[解析] 找到器件: ${designator}, 3D模型: ${modelTitle}`);
                     }
                 }
             }
@@ -137,7 +167,7 @@ export async function update3DModelsFromNetlist() {
             const primitiveId = component.primitiveId;
             
             if (!designator || !primitiveId) {
-                console.warn(`器件缺少designator或primitiveId:`, component);
+                // console.warn(`器件缺少designator或primitiveId:`, component);
                 continue;
             }
             
@@ -147,7 +177,7 @@ export async function update3DModelsFromNetlist() {
                 const modelInfo = designator3DMap[designator];
                 
                 try {
-                    console.log(`正在更新器件 ${designator} (ID: ${primitiveId})`);
+                    // console.log(`正在更新器件 ${designator} (ID: ${primitiveId})`);
                     
                     // 更新3D模型信息
                     await eda.pcb_PrimitiveComponent.modify(primitiveId, {
@@ -167,7 +197,7 @@ export async function update3DModelsFromNetlist() {
                         message: "更新成功"
                     });
                     
-                    console.log(`✓ ${designator}: 3D模型更新成功`);
+                    // console.log(`✓ ${designator}: 3D模型更新成功`);
                     
                 } catch (error) {
                     results.failed++;
@@ -189,12 +219,13 @@ export async function update3DModelsFromNetlist() {
 
     // 5. 显示更新结果
     function showUpdateResults(results) {
-        console.log("\n========== 更新结果汇总 ==========");
-        console.log(`总共PCB器件: ${results.total}`);
-        console.log(`匹配到的器件: ${results.matched}`);
-        console.log(`成功更新: ${results.updated}`);
-        console.log(`更新失败: ${results.failed}`);
-        console.log("==============================\n");
+        eda.sys_Log.add("========== 更新结果汇总 ==========", "info");
+        eda.sys_Log.add(`总共PCB器件: ${results.total}`, "info");
+        eda.sys_Log.add(`匹配到的器件: ${results.matched}`, "info");
+        eda.sys_Log.add(`成功更新: ${results.updated}`, "info");
+        eda.sys_Log.add(`更新失败: ${results.failed}`, "info");
+        eda.sys_Log.add("=================================", "info");
+        eda.sys_PanelControl.openBottomPanel("log");
         
         // 显示详细信息
         if (results.failed > 0) {
@@ -227,5 +258,3 @@ export async function update3DModelsFromNetlist() {
     }
 
 }
-// 调用主函数
-// update3DModelsFromNetlist();

@@ -35,6 +35,18 @@
             font-size: 24px;
             font-weight: bold;
             color: #2c3e50;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .version-tag {
+            font-size: 12px;
+            font-weight: normal;
+            background-color: #e0e0e0;
+            padding: 2px 6px;
+            border-radius: 4px;
+            color: #555;
         }
         
         .controls {
@@ -153,7 +165,10 @@
 </head>
 <body>
     <div class="header">
-        <div class="title">导入BOM</div>
+        <div class="title">
+            导入BOM
+            <span id="versionTag" class="version-tag">检测中...</span>
+        </div>
         <div>BOM列：位号、名称、立创编号、制造商编号、制造商名称，一行一个，从Excel复制后点击粘贴-></div>
         <div class="controls">
             <button class="paste" id="pasteBtn">粘贴</button>
@@ -176,20 +191,20 @@
                 </tr>
             </thead>
             <tbody id="tableBody">
-                <!-- 数据将通过JavaScript动态填充 -->
-            </tbody>
+                </tbody>
         </table>
     </div>
     
     <div class="status-bar" id="statusBar">
-        <!-- 状态信息将在这里显示 -->
-    </div>
+        </div>
 
     <script>
         // 全局变量
         let jsonData = {};
+        let componentsMap = {}; // 指向实际组件列表的引用 (兼容V2/V3)
         let tableData = [];
         let Page;
+        let isV3 = false;
         
         // DOM元素
         const tableBody = document.getElementById('tableBody');
@@ -198,16 +213,23 @@
         const pasteBtn = document.getElementById('pasteBtn');
         const importBtn = document.getElementById('importBtn');
         const masterCheckbox = document.getElementById('masterCheckbox');
+        const versionTag = document.getElementById('versionTag');
 
         // 加载BOM数据
         async function loadBOMData() {
             try {
                 // 转换数据格式以便表格显示
                 tableData = [];
-                for (const [uniqueId, component] of Object.entries(jsonData)) {
-                    const props = component.props || {};
+                
+                // 使用 componentsMap 遍历，而不是直接遍历 jsonData
+                for (const [key, component] of Object.entries(componentsMap)) {
+                    // 确保有 props 且不是元数据
+                    if (!component || !component.props) continue;
+
+                    const props = component.props;
                     tableData.push({
-                        uniqueId: props["Unique ID"],
+                        jsonKey: key, // 保存对象键，用于回写时定位 (V2是$1, V3是UUID)
+                        uniqueId: props["Unique ID"], // 显示用的ID
                         designator: props.Designator || '',
                         name: props.Name || '',
                         supplierPart: props['Supplier Part'] || '',
@@ -256,7 +278,8 @@
                 
                 // 唯一ID列
                 const uniqueIdCell = document.createElement('td');
-                uniqueIdCell.textContent = item.uniqueId;
+                uniqueIdCell.textContent = item.uniqueId || "空";
+                if (!item.uniqueId) uniqueIdCell.style.color = "red";
                 row.appendChild(uniqueIdCell);
                 
                 // 位号列
@@ -311,16 +334,25 @@
         // 更新状态栏
         function updateStatusBar() {
             // 检查唯一ID是否有空值或重复
-            const uniqueIds = tableData.map(item => item.uniqueId);
-            const hasEmptyUniqueId = uniqueIds.some(id => !id);
-            const hasDuplicateUniqueId = new Set(uniqueIds).size !== uniqueIds.length;
+            const uniqueIds = tableData.map(item => item.uniqueId).filter(id => id && id !== "");
+            const hasEmptyUniqueId = tableData.some(item => !item.uniqueId || item.uniqueId === "");
+            
+            // 检查重复 (只检查非空ID)
+            const uniqueIdsSet = new Set(uniqueIds);
+            const hasDuplicateUniqueId = uniqueIdsSet.size !== uniqueIds.length;
             
             if (hasEmptyUniqueId || hasDuplicateUniqueId) {
-                statusBar.textContent = '唯一ID存在空值或者重复，请先重置唯一ID';
+                let msg = '注意：';
+                if (hasEmptyUniqueId) msg += '存在空的唯一ID; ';
+                if (hasDuplicateUniqueId) msg += '存在重复的唯一ID; ';
+                msg += '建议先重置唯一ID，否则可能导致异常。';
+                
+                statusBar.textContent = msg;
                 statusBar.className = 'status-bar warning';
-                importBtn.disabled = true;
+                // 兼容性策略：即便ID有问题，也允许导入，因为我们现在使用 internal Key (jsonKey) 定位
+                importBtn.disabled = false; 
             } else {
-                statusBar.textContent = '数据正常，可以导入';
+                statusBar.textContent = `数据加载成功 (${isV3 ? 'V3模式' : 'V2模式'})，可以导入`;
                 statusBar.className = 'status-bar success';
                 importBtn.disabled = false;
             }
@@ -452,6 +484,7 @@
                                 tableItem.manufacturerPart = pasteItem.manufacturerPart;
                                 tableItem.manufacturer = pasteItem.manufacturer;
                                 tableItem.changed = true;
+                                tableItem.selected = true; // 自动勾选有变更的项
                                 updateCount++;
                                 matchedDesignators.add(designator);
                                 
@@ -473,9 +506,11 @@
                 console.log('未匹配的表格项:', unmatchedItems.map(item => item.designator));
                 
                 renderTable();
+                updateMasterCheckbox(); // 更新全选框状态
+                updateSelectAllButton();
                 
                 if (updateCount > 0) {
-                    statusBar.textContent = `成功更新了 ${updateCount} 个组件的属性`;
+                    statusBar.textContent = `成功更新了 ${updateCount} 个组件的属性 (已自动勾选)`;
                     statusBar.className = 'status-bar success';
                 } else {
                     statusBar.textContent = '没有检测到需要更新的属性';
@@ -502,20 +537,25 @@
                 }
                 
                 // 更新JSON数据
+                let successCount = 0;
                 selectedItems.forEach(item => {
-                    if (jsonData[item.uniqueId]) {
-                        jsonData[item.uniqueId].props.Name = item.name || item.original.name;
-                        jsonData[item.uniqueId].props['Supplier Part'] = item.supplierPart || item.original.supplierPart;
-                        jsonData[item.uniqueId].props['Manufacturer Part'] = item.manufacturerPart || item.original.manufacturerPart;
-                        jsonData[item.uniqueId].props.Manufacturer = item.manufacturer || item.original.manufacturer;
+                    // 使用 jsonKey 在 componentsMap 中查找，比 UniqueId 更可靠
+                    // 因为 item.jsonKey 是我们从 Object.entries 中直接拿到的
+                    if (item.jsonKey && componentsMap[item.jsonKey]) {
+                        const comp = componentsMap[item.jsonKey];
+                        
+                        comp.props.Name = item.name || item.original.name;
+                        comp.props['Supplier Part'] = item.supplierPart || item.original.supplierPart;
+                        comp.props['Manufacturer Part'] = item.manufacturerPart || item.original.manufacturerPart;
+                        comp.props.Manufacturer = item.manufacturer || item.original.manufacturer;
 
                         // 根据Supplier Part设置Supplier
-                        if (jsonData[item.uniqueId].props['Supplier Part'] && 
-                            jsonData[item.uniqueId].props['Supplier Part'].trim() !== '' && 
-                            jsonData[item.uniqueId].props['Supplier Part'].trim().toUpperCase().startsWith('C')) {
-                            jsonData[item.uniqueId].props.Supplier = "LCSC";
+                        if (comp.props['Supplier Part'] && 
+                            comp.props['Supplier Part'].trim() !== '' && 
+                            comp.props['Supplier Part'].trim().toUpperCase().startsWith('C')) {
+                            comp.props.Supplier = "LCSC";
                         } else {
-                            jsonData[item.uniqueId].props.Supplier = "";
+                            comp.props.Supplier = "";
                         }
 
                         // 重置变更状态
@@ -527,28 +567,31 @@
                             manufacturerPart: item.manufacturerPart,
                             manufacturer: item.manufacturer
                         };
+                        successCount++;
+                    } else {
+                        console.warn("找不到组件键值:", item.jsonKey);
                     }
                 });
                 
                 // 将修改后的数据转换回JSON字符串
+                // 此时 componentsMap 的修改已经体现在 jsonData 中
                 const listjson = JSON.stringify(jsonData, null, 2);
                 
                 // 写回JSON数据
-                // await eda.pcb_Net.setNetlist('JLCEDA', listjson);
-
-                // 写回JSON数据
-                console.log(Page);
+                console.log("写入数据到:", Page);
                 if (Page === "PCB"){
                     await eda.pcb_Net.setNetlist('JLCEDA', listjson);
-                }else{
+                } else {
                     await eda.sch_Netlist.setNetlist('JLCEDA', listjson);
                 }
 
-                statusBar.textContent = `成功导入了 ${selectedItems.length} 个组件的属性`;
+                statusBar.textContent = `成功导入了 ${successCount} 个组件的属性`;
                 statusBar.className = 'status-bar success';
 
                 // 写回成功，刷新列表
-                loadBOMData()
+                setTimeout(() => {
+                    loadBOMData();
+                }, 500);
             } catch (error) {
                 console.error('导入失败:', error);
                 statusBar.textContent = '导入失败: ' + error.message;
@@ -559,20 +602,52 @@
         // 初始化
         document.addEventListener('DOMContentLoaded', async function() {
 
+            // 版本检测
+            try {
+                if (typeof eda !== 'undefined' && eda.sys_Environment && eda.sys_Environment.getEditorCurrentVersion) {
+                    const version = eda.sys_Environment.getEditorCurrentVersion();
+                    console.log('当前EDA版本:', version);
+                    if (version && version.toString().startsWith('3')) {
+                        isV3 = true;
+                        versionTag.textContent = "V3模式";
+                    } else {
+                        versionTag.textContent = "V2模式";
+                    }
+                } else {
+                    versionTag.textContent = "V2模式 (默认)";
+                }
+            } catch (e) {
+                console.warn("版本检测失败", e);
+                versionTag.textContent = "模式未知";
+            }
+
             // 获取网表
             try {
-                const NetList = await eda.pcb_Net.getNetlist('JLCEDA');
+                let NetList;
+                try {
+                    NetList = await eda.pcb_Net.getNetlist('JLCEDA');
+                    Page = "PCB";
+                } catch (error) {
+                    NetList = await eda.sch_Netlist.getNetlist('JLCEDA');
+                    Page = "SCH";
+                }
+                
                 jsonData = JSON.parse(NetList);
-                Page = "PCB";
+
+                // 设置数据源映射
+                if (isV3 && jsonData.components) {
+                    componentsMap = jsonData.components;
+                } else {
+                    componentsMap = jsonData;
+                }
+
+                await loadBOMData();
+                updateStatusBar();
+                
             } catch (error) {
-                const NetList = await eda.sch_Netlist.getNetlist('JLCEDA');
-                jsonData = JSON.parse(NetList);
-                Page = "SCH";
+                console.error("初始化错误", error);
+                statusBar.textContent = "初始化失败: " + error.message;
             }
-            // const netdataa = await eda.pcb_Net.getNetlist('JLCEDA');
-            // jsonData = JSON.parse(netdataa);             
-            await loadBOMData();
-            updateStatusBar();
         });
                 
     </script>

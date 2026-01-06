@@ -16,6 +16,7 @@ import * as extensionConfig from '../extension.json';
 export function activate(status?: 'onStartupFinished', arg?: string): void {
 
 }
+
 // 从PCB网表在原理图放置器件
 export async function NetlistToSchematicPCB() {
     const { placeComponentsEfficiently } = await import('./js/NetlistToSchematic');
@@ -90,8 +91,10 @@ export async function WirePolylinetoggle() {
     await module.WireConverter.toggle();
 }
 
-
-
+// 创建封装
+export async function CreateFootprint() {
+	eda.sys_IFrame.openIFrame("/iframe/CreateFootprint.html", 400, 128, "CreateFootprint");
+}
 
 // 批量修改网络
 export async function NetReplace() {
@@ -113,11 +116,48 @@ export async function ImportBom() {
 export async function ImportQrcode() {
 	eda.sys_IFrame.openIFrame("/iframe/ImportQrcode.html", 540, 640, "ImportQrcode");
 }
-//丝印代码转换
+// 丝印代码转换
 export function CodeConvert() {
 	eda.sys_IFrame.openIFrame("/iframe/CodeConvert.html", 720, 640, "CodeConvert");
 }
+
+// 工作时间统计 - 前端界面
+export async function WorkingHours() {
+	eda.sys_IFrame.openIFrame("/iframe/WorkingHours.html", 540, 680, "WorkingHours");
+}
+// 工作时间统计 - 后台记录
+export async function WorkingHoursJs() {
+    const module = await import('./js/WorkingHours');
+    await module.WorkingHours();
+}
+
+// 配置物理网络
+export async function ConfigurePhysicalNets() {
+    const module = await import('./js/ConfigurePhysicalNets');
+    eda.sys_Dialog.showConfirmationMessage(
+        '使用前必须确保每个器件都有不重复的唯一ID和位号\n如果没有，可在 菜单栏 ⇒ 设计 ⇒ 重置唯一ID\n如果处理完没有反应，可以重新打开工程后尝试', 
+        '设置物理网络', 
+        '继续', 
+        '取消', 
+        async mainButtonClicked => {
+        if (mainButtonClicked) {
+            await module.configurePhysicalNets();
+        } else {
+            eda.sys_Message.showToastMessage('已取消', "info");
+        }
+    });
+}
+
+
 //关于
 export function About() {
-	eda.sys_IFrame.openIFrame("/iframe/About.html", 540, 720, "About");
+	eda.sys_IFrame.openIFrame("/iframe/About.html", 680, 720, "About");
+}
+
+// 启动软件时执行，
+const INIT_FLAG_KEY = `__EXTENSION_${extensionConfig.name}_INITIALIZED__`;
+if (!globalThis[INIT_FLAG_KEY]) {
+    console.log(`======= [${extensionConfig.name}] 插件首次加载，执行初始化 =======`);
+    WorkingHoursJs();//后台记录工作时间
+    globalThis[INIT_FLAG_KEY] = true;
 }
