@@ -9,7 +9,7 @@
 | 导入图片 | 将PNG/JPG/BMP无损导入PCB图层，支持尺寸与DPI调整 | PCB(半离线) | V2 / V3 | [打开](https://www.jlc-bbs.com/platform/a/1220989) |
 | 导入二维码 | 生成/识别二维码，支持图片或矢量模式，可放置到PCB | PCB | V2 / V3 | [打开](https://www.jlc-bbs.com/platform/a/1221020) |
 | 工作时间统计 | 统计每天使用时间，并生成图表，数据全部存在本地 | 全局 | V2 / V3 | [打开](https://www.jlc-bbs.com/platform/a/1221046) |
-|
+||||||
 | 过孔焊盘互转 | 快速在焊盘和过孔之间进行转换 | PCB | V2 / V3 | [打开](https://www.jlc-bbs.com/platform/a/1221301) |
 | 线条导线互转 | 快速在导线和轮廓对象之间进行转换 | PCB | V2 / V3 | [打开](https://www.jlc-bbs.com/platform/a/1221325) |
 | 创建封装 | 在PCB画布将离散图元组成封装，并生成简单符号 | PCB | V2 | [打开](https://www.jlc-bbs.com/platform/a/1221362) |
@@ -21,7 +21,7 @@
 | 导入BOM | 从Excel复制BOM，批量更新器件属性 | PCB & SCH | V2 / V3 | [打开](https://www.jlc-bbs.com/platform/a/1221515) |
 | 批量替换器件 | 通过C编号批量替换器件，统一物料规格，需备份网表 | PCB | V2 / V3 | [打开](https://www.jlc-bbs.com/platform/a/1221533) |
 | 恢复3D模型 | 使用批量替换器件会丢失3D模型，使用此方法恢复 | PCB | V2 / V3 | [打开](https://www.jlc-bbs.com/platform/a/1221572) |
-|
+|||||
 | 放置器件 | 从PCB或网表导入器件并自动放置到原理图 | SCH | V2 / V3 | [打开](https://www.jlc-bbs.com/platform/a/1221620) |
 | 放置导线 | 根据PCB/网表网络差异，自动为未连接引脚放置导线 | SCH | V2 / V3 | [打开](https://www.jlc-bbs.com/platform/a/1221655) |
 
