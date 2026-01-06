@@ -58,10 +58,9 @@
 
 ### 插件信息
 - **插件名称**：狼黑工具 (WolfBlack Tool)
-- **插件作者**：WOLF4096
 - **开发平台**：嘉立创EDA专业版 V2.2.43（部分兼容V3）
-- **使用方法**：[使用文档 - Github](https://github.com/WOLF4096/easyeda_wolfblack_tool/blob/main/UserManual.md)
 - **更新日志**：[更新日志 - Github](https://github.com/WOLF4096/easyeda_wolfblack_tool/blob/main/CHANGELOG.md)
+- **扩展广场**：[扩展广场](https://ext.lceda.cn/item/darksteel/wolfblack-tool)
 
 ### ⚠️ 免责声明
 1. 本工具根据个人需求开发
