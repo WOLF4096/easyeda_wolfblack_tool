@@ -679,7 +679,9 @@ export async function configurePhysicalNets() {
     // 1. 获取通用数据
     let netlistJson = null;
     try {
-        let res = await eda.pcb_Net.getNetlist('JLCEDA');
+        // let res = await eda.pcb_Net.getNetlist('JLCEDA');
+        const getNetlistFile = await eda.pcb_ManufactureData.getNetlistFile();
+        const res = await getNetlistFile.text();
         netlistJson = (typeof res === 'string') ? JSON.parse(res) : res;
     } catch(e) { console.error("读取网表失败:", e); return; }
 

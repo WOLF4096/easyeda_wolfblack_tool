@@ -744,18 +744,22 @@
             }
 
             try {
-                // 获取网络列表数据
+                
+                let getNetlist;
                 let NetList;
                 try {
-                    NetList = await eda.pcb_Net.getNetlist('JLCEDA');
+                    getNetlist = await eda.pcb_ManufactureData.getNetlistFile('JLCEDA');
+                    NetList = await getNetlist.text();
                     Page = "PCB";
                 } catch (error) {
-                    NetList = await eda.sch_Netlist.getNetlist('JLCEDA');
+                    getNetlist = await eda.sch_ManufactureData.getNetlistFile('JLCEDA');
+                    NetList = await getNetlist.text();
                     Page = "SCH";
                 }
-                
+                // console.log(NetList);
                 jsonData = JSON.parse(NetList);
-                
+
+
                 // 关键点：确定组件数据源
                 if (isV3 && jsonData.components) {
                     componentsMap = jsonData.components;

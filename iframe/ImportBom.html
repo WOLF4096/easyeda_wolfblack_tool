@@ -623,16 +623,20 @@
 
             // 获取网表
             try {
+                let getNetlist;
                 let NetList;
                 try {
-                    NetList = await eda.pcb_Net.getNetlist('JLCEDA');
+                    getNetlist = await eda.pcb_ManufactureData.getNetlistFile('JLCEDA');
+                    NetList = await getNetlist.text();
                     Page = "PCB";
                 } catch (error) {
-                    NetList = await eda.sch_Netlist.getNetlist('JLCEDA');
+                    getNetlist = await eda.sch_ManufactureData.getNetlistFile('JLCEDA');
+                    NetList = await getNetlist.text();
                     Page = "SCH";
                 }
-                
+                // console.log(NetList);
                 jsonData = JSON.parse(NetList);
+
 
                 // 设置数据源映射
                 if (isV3 && jsonData.components) {

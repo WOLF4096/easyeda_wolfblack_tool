@@ -224,9 +224,8 @@ async function switchToSchematic() {
 // 获取原理图网表
 async function getSchematicNetlist() {
     try {
-        const net = await eda.sch_Netlist.getNetlist("JLCEDA");
-        // console.log(net);
-        return net;
+        let getNetlistFile = await eda.sch_ManufactureData.getNetlistFile('JLCEDA');
+        return await getNetlistFile.text();
     } catch (error) {
         eda.sys_Log.add("获取原理图网表失败", "error");
         console.error("获取原理图网表失败:", error);

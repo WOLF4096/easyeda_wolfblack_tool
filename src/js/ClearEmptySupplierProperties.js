@@ -4,6 +4,7 @@ export async function ClearEmptySupplierProperties(dataSource = 'PCB') {
         async mainButtonClicked => {
             if (mainButtonClicked) {
                 try {
+
                     // 1. 版本检测
                     let isV3 = false;
                     try {
@@ -18,18 +19,19 @@ export async function ClearEmptySupplierProperties(dataSource = 'PCB') {
                         console.warn("版本检测失败，默认使用V2模式", e);
                     }
 
-                    let netdataa;
-                    // 根据数据源选择相应的获取方式
-                    if (dataSource === 'SCH') {
-                        netdataa = await eda.sch_Netlist.getNetlist('JLCEDA');
-                        console.log('从原理图获取网表成功');
-                    } else {
-                        netdataa = await eda.pcb_Net.getNetlist('JLCEDA');
-                        console.log('从PCB获取网表成功');
+                    let getNetlist;
+                    let NetList;
+                    try {
+                        getNetlist = await eda.pcb_ManufactureData.getNetlistFile('JLCEDA');
+                        NetList = await getNetlist.text();
+                        Page = "PCB";
+                    } catch (error) {
+                        getNetlist = await eda.sch_ManufactureData.getNetlistFile('JLCEDA');
+                        NetList = await getNetlist.text();
+                        Page = "SCH";
                     }
-
-                    const jsonData = JSON.parse(netdataa);
-                    
+                    // console.log(NetList);
+                    jsonData = JSON.parse(NetList);
                     // 2. 确定组件遍历的数据源
                     // V2: jsonData 直接就是组件Map
                     // V3: jsonData.components 才是组件Map

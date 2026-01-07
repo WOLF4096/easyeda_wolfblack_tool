@@ -55,7 +55,11 @@ export async function placeComponentsEfficiently(viewType = "PCB") {
         // 用户点击"确定"，继续执行
         await switchToPCB();
         eda.sys_Message.showToastMessage('正在获取数据', 2);
-        netdataa = await eda.pcb_Net.getNetlist('JLCEDA');
+        // netdataa = await eda.pcb_Net.getNetlist('JLCEDA');
+
+        const getNetlistFile = await eda.pcb_ManufactureData.getNetlistFile();
+        netdataa = await getNetlistFile.text();
+
         await switchToSchematic();
         // 添加短暂延迟，避免操作过快
         await delay(1000);

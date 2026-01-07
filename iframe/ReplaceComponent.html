@@ -306,15 +306,19 @@
         async function loadBOMData() {
             try {
                 // 获取网表
+                let getNetlist;
+                let NetList;
                 try {
-                    const NetList = await eda.pcb_Net.getNetlist('JLCEDA');
-                    jsonData = JSON.parse(NetList);
+                    getNetlist = await eda.pcb_ManufactureData.getNetlistFile('JLCEDA');
+                    NetList = await getNetlist.text();
                     Page = "PCB";
                 } catch (error) {
-                    const NetList = await eda.sch_Netlist.getNetlist('JLCEDA');
-                    jsonData = JSON.parse(NetList);
+                    getNetlist = await eda.sch_ManufactureData.getNetlistFile('JLCEDA');
+                    NetList = await getNetlist.text();
                     Page = "SCH";
                 }
+                // console.log(NetList);
+                jsonData = JSON.parse(NetList);
                 
                 console.log('导入前的JSON数据:', jsonData);
 

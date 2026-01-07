@@ -226,7 +226,9 @@
                         verLabel.textContent = '(V2模式)';
                     }
 
-                    const rawData = await eda.pcb_Net.getNetlist('JLCEDA');
+                    // const rawData = await eda.pcb_Net.getNetlist('JLCEDA');
+                    const getNetlistFile = await eda.pcb_ManufactureData.getNetlistFile();
+                    const rawData = await getNetlistFile.text();
                     cachedNetlistData = JSON.parse(rawData);
                     
                     status.textContent = '✅ 网表已加载，可直接输入位号查询或粘贴数据替换。';
@@ -327,7 +329,9 @@
                 const content = csvInput.value.trim();
                 if (!content) throw new Error('请从 Excel 复制粘贴替换规则');
                 
-                const netdataRaw = await eda.pcb_Net.getNetlist('JLCEDA');
+                // const netdataRaw = await eda.pcb_Net.getNetlist('JLCEDA');
+                const getNetlistFile = await eda.pcb_ManufactureData.getNetlistFile();
+                const netdataRaw = await getNetlistFile.text();
                 let jsonData = JSON.parse(netdataRaw);
                 cachedNetlistData = jsonData; 
 
