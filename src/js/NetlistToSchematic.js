@@ -18,16 +18,6 @@ export async function placeComponentsEfficiently(viewType = "PCB") {
     let jsonObject;
     let netdataa;
     if (viewType === "NET") {
-        // 从网表导入部分，加入对话框确认
-        const userConfirmed = confirm("注意：此操作将从 嘉立创EDA格式 的 网表文件 获取器件并放置到原理图中\n\n是否继续？");
-        
-        // 如果用户点击"取消"，结束函数
-        if (!userConfirmed) {
-            // 可选：显示取消提示
-            eda.sys_Message.showToastMessage('已取消 从 网表文件 放置器件 的操作', 2);
-            return;
-        }
-
         // 导入网表文件
         const listtxt = await eda.sys_FileSystem.openReadFileDialog();
         let fileContent = await listtxt.text();
@@ -42,21 +32,10 @@ export async function placeComponentsEfficiently(viewType = "PCB") {
         netdataa = jsonString.trim();
         
     } else if (viewType === "PCB") {
-        // 从PCB导入部分，加入对话框确认
-        const userConfirmed = confirm("注意：此操作将从PCB获取器件并放置到原理图中\n\n是否继续？");
-        
-        // 如果用户点击"取消"，结束函数
-        if (!userConfirmed) {
-            // 可选：显示取消提示
-            eda.sys_Message.showToastMessage('已取消 从 PCB 放置器件 的操作', 2);
-            return;
-        }
-
         // 用户点击"确定"，继续执行
         await switchToPCB();
         eda.sys_Message.showToastMessage('正在获取数据', 2);
         // netdataa = await eda.pcb_Net.getNetlist('JLCEDA');
-
         const getNetlistFile = await eda.pcb_ManufactureData.getNetlistFile();
         netdataa = await getNetlistFile.text();
 
@@ -65,6 +44,7 @@ export async function placeComponentsEfficiently(viewType = "PCB") {
         await delay(1000);
     } else {
         eda.sys_Log.add(`不支持的导入方式: ${viewType}`, "error"); // 修复变量名 importMethod -> viewType
+        eda.sys_PanelControl.openBottomPanel("log");
         throw new Error(`不支持的导入方式: ${viewType}`);
     }
     // 解析 JSON
@@ -106,12 +86,14 @@ export async function placeComponentsEfficiently(viewType = "PCB") {
             
             if (!pcbTab) {
                 eda.sys_Log.add("未找到PCB界面", "error");
+                eda.sys_PanelControl.openBottomPanel("log");
                 throw new Error("未找到PCB界面");
             }
             
             await eda.dmt_EditorControl.activateDocument(pcbTab.tabId);
         } catch (error) {
             eda.sys_Log.add("切换PCB界面失败", "error");
+            eda.sys_PanelControl.openBottomPanel("log");
             console.error("切换PCB界面失败:", error);
             throw new Error("切换PCB界面失败");
         }
@@ -125,12 +107,14 @@ export async function placeComponentsEfficiently(viewType = "PCB") {
             
             if (!schTab) {
                 eda.sys_Log.add("未找到原理图界面", "error");
+                eda.sys_PanelControl.openBottomPanel("log");
                 throw new Error("未找到原理图界面");
             }
             
             await eda.dmt_EditorControl.activateDocument(schTab.tabId);
         } catch (error) {
             eda.sys_Log.add("切换原理图界面失败", "error");
+            eda.sys_PanelControl.openBottomPanel("log");
             console.error("切换原理图界面失败:", error);
             throw new Error("切换原理图界面失败");
         }

@@ -1,0 +1,740 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>导出工程资料</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <style>
+        :root {
+            --bg-color: #1e1e1e;
+            --text-main: #e0e0e0;
+            --text-muted: #888;
+            --accent: #ff9d00;
+            --border-normal: #555;
+            --input-bg: #252526;
+            --hover: #2a2d2e;
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: transparent;
+            font-family: "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            font-size: 13px;
+            color: var(--text-main);
+            overflow: hidden;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+        }
+
+        .app-container {
+            width: 640px;
+            height: 680px; /* 稍微增加高度以适应 loading 提示 */
+            background-color: var(--bg-color);
+            padding: 20px 20px;
+            box-sizing: border-box;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            box-shadow: 0 0 20px rgba(0,0,0,0.5); 
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #333;
+            margin-bottom: 5px;
+        }
+
+        .project-select-group {
+            display: flex;
+            align-items: center;
+            flex-grow: 1;
+            margin-right: 20px;
+            gap: 10px;
+        }
+
+        .project-label {
+            font-weight: bold;
+            color: var(--accent);
+            white-space: nowrap;
+        }
+
+        select {
+            background-color: var(--input-bg);
+            border: 1px solid var(--border-normal);
+            color: white;
+            padding: 6px 10px;
+            border-radius: 4px;
+            outline: none;
+            width: 100%;
+            font-family: "Consolas", "Monaco", "Courier New", monospace; 
+        }
+
+        .btn-group {
+            display: flex;
+            gap: 10px;
+        }
+
+        button.action-btn {
+            background-color: var(--input-bg);
+            border: 1px solid var(--border-normal);
+            color: var(--text-main);
+            padding: 6px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+            transition: all 0.2s;
+        }
+
+        button.action-btn:hover {
+            background-color: var(--hover);
+            border-color: #777;
+        }
+
+        button.action-btn.primary {
+            background-color: #333;
+            border-color: var(--accent);
+            color: var(--accent);
+        }
+
+        button.action-btn.primary:hover {
+            background-color: #444;
+        }
+
+        button.action-btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        .section-title {
+            color: var(--text-muted);
+            font-size: 14px;
+            font-weight: 600;
+            margin: 5px 0 2px 0;
+            padding-left: 8px;
+            border-left: 3px solid var(--accent);
+        }
+
+        .grid-row {
+            display: grid;
+            grid-template-columns: 190px 1fr 140px; 
+            gap: 10px;
+            align-items: center;
+            padding: 4px 4px;
+            border-radius: 4px;
+            min-height: 28px;
+            transition: background-color 0.2s;
+        }
+
+        .grid-row:hover {
+            background-color: rgba(255, 255, 255, 0.03);
+        }
+
+        .col-check {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            user-select: none;
+            cursor: pointer;
+            font-size: 13px;
+        }
+
+        input[type="checkbox"] {
+            accent-color: var(--accent);
+            cursor: pointer;
+        }
+
+        .col-input input {
+            width: 100%;
+            box-sizing: border-box;
+            background-color: var(--input-bg);
+            border: 1px solid #333;
+            color: #a9dc76;
+            padding: 4px 8px;
+            border-radius: 3px;
+            font-family: "Consolas", "Monaco", monospace;
+            font-size: 12px;
+            outline: none;
+            transition: opacity 0.2s;
+        }
+        
+        .col-input input:focus {
+            border-color: var(--accent);
+        }
+
+        .col-opt {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            transition: opacity 0.2s;
+        }
+
+        input.opt-password {
+            width: 100%;
+            background-color: var(--input-bg);
+            border: 1px solid #333;
+            color: #ccc;
+            padding: 4px 8px;
+            border-radius: 3px;
+            font-size: 12px;
+            outline: none;
+            text-align: center;
+        }
+
+        .choice-group {
+            display: flex;
+            gap: 6px;
+            justify-content: center;
+        }
+
+        .choice-btn {
+            background: transparent;
+            border: 1px solid var(--border-normal);
+            color: var(--text-muted);
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            cursor: pointer;
+            user-select: none;
+            transition: all 0.2s;
+            text-align: center;
+            min-width: 24px;
+        }
+
+        .choice-btn:hover {
+            border-color: #777;
+            color: #ccc;
+        }
+
+        .choice-btn.active {
+            border-color: var(--accent);
+            color: var(--accent);
+            background-color: rgba(255, 157, 0, 0.05);
+        }
+
+        .grid-row.disabled .col-input,
+        .grid-row.disabled .col-opt {
+            opacity: 0.3;
+            pointer-events: none;
+        }
+        
+        .grid-row.disabled .col-check {
+            color: #666;
+        }
+
+        .d-none {
+            display: none !important;
+        }
+
+        #statusMsg {
+            color: var(--accent);
+            font-size: 12px;
+            margin-right: 10px;
+            display: none;
+        }
+
+    </style>
+</head>
+<body>
+
+<div class="app-container">
+    <div class="header">
+        <div class="project-select-group">
+            <span class="project-label">选择工程：</span>
+            <select id="projectSelect" onchange="handleSelectionChange()">
+                <option value="" disabled selected>正在加载工程信息...</option>
+            </select>
+        </div>
+        <div class="btn-group">
+            <span id="statusMsg">正在打包...</span>
+            <button class="action-btn" onclick="savePreset()">保存预设</button>
+            <button id="btnExport" class="action-btn primary" onclick="exportFiles()">导出资料</button>
+        </div>
+    </div>
+
+    <div id="section-source">
+        <div class="section-title">工程源文件</div>
+        
+        <div class="grid-row" id="row-v3">
+            <label class="col-check">
+                <input type="checkbox" checked onchange="toggleRow('row-v3')"> 工程文件 V3
+            </label>
+            <div class="col-input"><input type="text" data-base="工程文件V3.epro2" value="工程文件V3.epro2"></div>
+            <div class="col-opt"><input type="text" placeholder="密码" class="opt-password"></div>
+        </div>
+
+        <div class="grid-row" id="row-v2-off">
+            <label class="col-check">
+                <input type="checkbox" checked onchange="toggleRow('row-v2-off')"> 工程文件 V2 (官方)
+            </label>
+            <div class="col-input"><input type="text" data-base="工程文件V2_官方转换.epro" value="工程文件V2_官方转换.epro"></div>
+            <div class="col-opt"><input type="text" placeholder="密码" class="opt-password"></div>
+        </div>
+
+        <div class="grid-row" id="row-v2-self">
+            <label class="col-check">
+                <input type="checkbox" onchange="toggleRow('row-v2-self')"> 工程文件 V2 (自研)
+            </label>
+            <div class="col-input"><input type="text" data-base="工程文件V3_自研转换.epro" value="工程文件V3_自研转换.epro"></div>
+            <div class="col-opt"><input type="text" placeholder="密码" class="opt-password"></div>
+        </div>
+
+        <div class="grid-row" id="row-altium">
+            <label class="col-check">
+                <input type="checkbox" onchange="toggleRow('row-altium')"> AD（默认导出全部）
+            </label>
+            <div class="col-input"><input type="text" data-base="工程文件AD.zip" value="工程文件AD.zip"></div>
+            <div class="col-opt"></div>
+        </div>
+
+        <div class="grid-row" id="row-pads">
+            <label class="col-check">
+                <input type="checkbox" onchange="toggleRow('row-pads')"> PADS（默认导出全部）
+            </label>
+            <div class="col-input"><input type="text" data-base="工程文件PADS.zip" value="工程文件PADS.zip"></div>
+            <div class="col-opt"></div>
+        </div>
+    </div>
+
+    <div id="section-production">
+        <div class="section-title">生产制造</div>
+
+        <div class="grid-row" id="row-gerber">
+            <label class="col-check">
+                <input type="checkbox" checked onchange="toggleRow('row-gerber')"> 制板文件 (Gerber)
+            </label>
+            <div class="col-input"><input type="text" data-base="制板文件Gerber.zip" value="制板文件Gerber.zip"></div>
+            <div class="col-opt">
+                <div class="choice-group">
+                    <div class="choice-btn" onclick="toggleBtn(this)">彩色丝印</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="grid-row" id="row-bom">
+            <label class="col-check">
+                <input type="checkbox" checked onchange="toggleRow('row-bom')"> 物料清单 (BOM)
+            </label>
+            <div class="col-input"><input type="text" data-base="物料清单BOM.xls" value="物料清单BOM.xls"></div>
+            <div class="col-opt">
+                <div class="choice-group">
+                    <div class="choice-btn active" onclick="selectOne(this)">xlsx</div>
+                    <div class="choice-btn" onclick="selectOne(this)">csv</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="grid-row" id="row-coord">
+            <label class="col-check">
+                <input type="checkbox" checked onchange="toggleRow('row-coord')"> 坐标文件 (Pick&Place)
+            </label>
+            <div class="col-input"><input type="text" data-base="坐标文件.xls" value="坐标文件.xls"></div>
+            <div class="col-opt">
+                <div class="choice-group">
+                    <div class="choice-btn active" onclick="selectOne(this)">xlsx</div>
+                    <div class="choice-btn" onclick="selectOne(this)">csv</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="section-aux">
+        <div class="section-title">辅助资料</div>
+
+        <div class="grid-row" id="row-ibom">
+            <label class="col-check">
+                <input type="checkbox" checked onchange="toggleRow('row-ibom')"> 交互式 BOM (HTML)
+            </label>
+            <div class="col-input"><input type="text" data-base="交互式BOM.html" value="交互式BOM.html"></div>
+            <div class="col-opt"></div>
+        </div>
+
+        <div class="grid-row" id="row-sch">
+            <label class="col-check">
+                <input type="checkbox" checked onchange="toggleRow('row-sch')"> 原理图 PDF
+            </label>
+            <div class="col-input"><input type="text" data-base="原理图PDF.pdf" value="原理图PDF.pdf"></div>
+            <div class="col-opt"></div>
+        </div>
+
+        <div class="grid-row" id="row-pcb">
+            <label class="col-check">
+                <input type="checkbox" onchange="toggleRow('row-pcb')"> PCB PDF
+            </label>
+            <div class="col-input"><input type="text" data-base="PCB.pdf" value="PCB.pdf"></div>
+            <div class="col-opt"></div>
+        </div>
+
+        <div class="grid-row" id="row-3d">
+            <label class="col-check">
+                <input type="checkbox" onchange="toggleRow('row-3d')"> PCBA 3D 模型
+            </label>
+            <div class="col-input"><input type="text" data-base="3D模型_PCB.step" value="3D模型_PCB.step"></div>
+            <div class="col-opt">
+                <div class="choice-group">
+                    <div class="choice-btn" onclick="selectOne(this)">stl</div>
+                    <div class="choice-btn active" onclick="selectOne(this)">step</div>
+                    <div class="choice-btn" onclick="selectOne(this)">obj</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- <div class="grid-row" id="row-shell">
+            <label class="col-check">
+                <input type="checkbox" onchange="toggleRow('row-shell')"> 3D 外壳文件
+            </label>
+            <div class="col-input"><input type="text" data-base="3D外壳_PCB.step" value="3D外壳_PCB.step"></div>
+            <div class="col-opt">
+                <div class="choice-group">
+                    <div class="choice-btn" onclick="selectOne(this)">stl</div>
+                    <div class="choice-btn active" onclick="selectOne(this)">step</div>
+                    <div class="choice-btn" onclick="selectOne(this)">obj</div>
+                </div>
+            </div>
+        </div> -->
+    </div>
+</div>
+
+<script>
+    // 模拟数据 (Fallbacks)
+    const MOCK_PROJECT_INFO = {
+        "itemType": "Project",
+        "friendlyName": "Test260109",
+        "uuid": "mock-project-uuid",
+        "name": "name/test260109",
+        "data": [
+            {
+                "itemType": "Board",
+                "name": "Board1",
+                "uuid": "mock-board1-uuid",
+                "schematic": { "itemType": "Schematic", "name": "Schematic1", "uuid": "mock-sch1-uuid" },
+                "pcb": { "itemType": "PCB", "name": "PCB1", "uuid": "mock-pcb1-uuid" }
+            },
+            {
+                "itemType": "Board",
+                "name": "Board1_1",
+                "uuid": "mock-board2-uuid",
+                "schematic": { "itemType": "Schematic", "name": "Schematic1_1" },
+                "pcb": { "itemType": "PCB", "name": "PCB1_1" }
+            },
+            {
+                "itemType": "PCB",
+                "name": "PCB2",
+                "uuid": "mock-pcb2-uuid",
+                "parentBoardUuid": ""
+            }
+        ]
+    };
+
+    document.addEventListener('DOMContentLoaded', async () => {
+        // 初始化
+        document.querySelectorAll('.grid-row').forEach(row => {
+            const checkbox = row.querySelector('.col-check input[type="checkbox"]');
+            if (checkbox) updateRowState(row, checkbox.checked);
+        });
+
+        await loadProjectStructure();
+    });
+
+    async function loadProjectStructure() {
+        let projectInfo;
+        const select = document.getElementById('projectSelect');
+        select.innerHTML = ''; 
+
+        try {
+            if (typeof eda !== 'undefined' && eda.dmt_Project) {
+                projectInfo = await eda.dmt_Project.getCurrentProjectInfo();
+            } else {
+                throw new Error("API not found");
+            }
+        } catch (e) {
+            console.warn("API not found, using mock data.");
+            projectInfo = MOCK_PROJECT_INFO;
+        }
+
+        if (!projectInfo || !projectInfo.data) {
+            select.innerHTML = '<option disabled>无工程数据</option>';
+            return;
+        }
+
+        // 1. 工程根节点
+        const rootOpt = document.createElement('option');
+        rootOpt.text = `📂 工程: ${projectInfo.friendlyName}`;
+        rootOpt.value = projectInfo.friendlyName;
+        rootOpt.setAttribute('data-type', 'Project');
+        rootOpt.setAttribute('data-uuid', projectInfo.uuid); // 存储UUID
+        select.add(rootOpt);
+
+        // 2. 遍历
+        const totalItems = projectInfo.data.length;
+
+        projectInfo.data.forEach((item, index) => {
+            const isLastItem = (index === totalItems - 1);
+            const branchChar = isLastItem ? '└' : '├';
+            const childIndentPrefix = isLastItem ? '\u00A0\u00A0' : '│\u00A0';
+
+            // Board
+            if (item.itemType === 'Board') {
+                addOption(select, item.name, `${branchChar} ${item.name}`, 'Board', item.uuid);
+
+                const children = [];
+                if (item.schematic) children.push({ ...item.schematic, type: 'Schematic', label: 'SCH' });
+                if (item.pcb) children.push({ ...item.pcb, type: 'PCB', label: 'PCB' });
+
+                children.forEach((child, cIndex) => {
+                    const isLastChild = (cIndex === children.length - 1);
+                    const childBranch = isLastChild ? '└' : '├';
+                    const childText = `${childIndentPrefix}\u00A0${childBranch} ${child.label}:${child.name}`;
+                    addOption(select, child.name, childText, child.type, child.uuid);
+                });
+            } 
+            // 独立 Schematic/PCB
+            else if ((item.itemType === 'Schematic' || item.itemType === 'PCB') && !item.parentBoardUuid) {
+                const prefix = item.itemType === 'Schematic' ? "SCH:" : "PCB:";
+                addOption(select, item.name, `${branchChar} ${prefix}${item.name}`, item.itemType, item.uuid);
+            }
+        });
+
+        // 默认选中
+        for(let i=0; i<select.options.length; i++) {
+            if(!select.options[i].disabled) {
+                select.selectedIndex = i;
+                handleSelectionChange(); 
+                break;
+            }
+        }
+    }
+
+    function addOption(selectElement, value, text, type, uuid) {
+        const opt = document.createElement('option');
+        opt.value = value;
+        opt.text = text;
+        opt.setAttribute('data-type', type);
+        if(uuid) opt.setAttribute('data-uuid', uuid);
+        selectElement.add(opt);
+    }
+
+    function handleSelectionChange() {
+        const select = document.getElementById('projectSelect');
+        const selectedOption = select.options[select.selectedIndex];
+        if (!selectedOption) return;
+
+        const name = selectedOption.value;
+        const type = selectedOption.getAttribute('data-type');
+
+        updateFilenames(name);
+        updateVisibility(type);
+    }
+
+    function updateFilenames(name) {
+        if (!name) return;
+        const textInputs = document.querySelectorAll('.col-input input[type="text"]');
+        textInputs.forEach(input => {
+            const baseName = input.getAttribute('data-base');
+            // 更新显示的文件名
+            input.value = `${name}_${baseName}`;
+        });
+    }
+
+    function updateVisibility(type) {
+        document.querySelectorAll('.d-none').forEach(el => el.classList.remove('d-none'));
+
+        const sectionProd = document.getElementById('section-production');
+        const rowIbom = document.getElementById('row-ibom');
+        const rowPcbPdf = document.getElementById('row-pcb');
+        const row3d = document.getElementById('row-3d');
+        const rowShell = document.getElementById('row-shell');
+        const rowSchPdf = document.getElementById('row-sch');
+
+        if (type === 'Schematic') {
+            if(sectionProd) sectionProd.classList.add('d-none');
+            if(rowIbom) rowIbom.classList.add('d-none');
+            if(rowPcbPdf) rowPcbPdf.classList.add('d-none');
+            if(row3d) row3d.classList.add('d-none');
+            if(rowShell) rowShell.classList.add('d-none');
+        } else if (type === 'PCB') {
+            if(rowSchPdf) rowSchPdf.classList.add('d-none');
+        }
+    }
+
+    // --- 导出核心逻辑 ---
+
+    async function exportFiles() {
+        const select = document.getElementById('projectSelect');
+        const selectedOption = select.options[select.selectedIndex];
+        
+        if(!selectedOption) return;
+
+        const projectName = selectedOption.value;
+        const projectUuid = selectedOption.getAttribute('data-uuid');
+        // 如果是API调用，通常需要确保当前环境已加载对应文档。
+        // 由于部分API（如BomFile）不接受UUID，假设它们作用于当前活动文档。
+        
+        const btn = document.getElementById('btnExport');
+        const status = document.getElementById('statusMsg');
+
+        // UI Loading State
+        btn.disabled = true;
+        btn.innerText = "处理中...";
+        status.style.display = 'inline';
+
+        const zip = new JSZip();
+        let fileCount = 0;
+
+        try {
+            // 定义辅助函数：检查是否启用并添加文件到zip
+            const processRow = async (rowId, apiCall) => {
+                const row = document.getElementById(rowId);
+                // 检查行是否存在且未被禁用（未被UI隐藏）且Checkbox被勾选
+                if (row && !row.classList.contains('disabled') && !row.classList.contains('d-none') && row.offsetParent !== null) {
+                    const checkbox = row.querySelector('.col-check input[type="checkbox"]');
+                    if (checkbox && checkbox.checked) {
+                        const fileNameInput = row.querySelector('.col-input input');
+                        const fileName = fileNameInput.value;
+                        
+                        try {
+                            const fileBlob = await apiCall(fileName);
+                            if (fileBlob) {
+                                zip.file(fileName, fileBlob);
+                                fileCount++;
+                                console.log(`已添加: ${fileName}`);
+                            }
+                        } catch (err) {
+                            console.error(`导出失败 [${rowId}]:`, err);
+                            // 可以选择是否alert错误，这里仅log
+                        }
+                    }
+                }
+            };
+
+            // 1. 工程文件 V3
+            await processRow('row-v3', async (name) => {
+                const pwd = document.querySelector('#row-v3 .opt-password').value || undefined;
+                return await eda.sys_FileManager.getProjectFile(projectUuid, pwd, '.epro2');
+            });
+
+            // 2. 工程文件 V2 (官方)
+            await processRow('row-v2-off', async (name) => {
+                const pwd = document.querySelector('#row-v2-off .opt-password').value || undefined;
+                return await eda.sys_FileManager.getProjectFile(projectUuid, pwd, '.epro');
+            });
+            
+            // 3. 工程文件 V2 (自研) - 跳过
+            // await processRow('row-v2-self', ...);
+
+            // 4. Altium
+            await processRow('row-altium', async () => eda.pcb_ManufactureData.getAltiumDesignerFile());
+
+            // 5. PADS
+            await processRow('row-pads', async () => eda.pcb_ManufactureData.getPadsFile());
+
+            // 6. Gerber
+            await processRow('row-gerber', async (name) => {
+                const colorSilk = document.querySelector('#row-gerber .choice-btn.active')?.innerText.includes('彩色');
+                return await eda.pcb_ManufactureData.getGerberFile(name, !!colorSilk);
+            });
+
+            // 7. BOM
+            await processRow('row-bom', async (name) => {
+                const format = document.querySelector('#row-bom .choice-btn.active').innerText.trim(); // xlsx or csv
+                // 注意API期望 xlsx 或 csv (小写)
+                return await eda.pcb_ManufactureData.getBomFile(name, format);
+            });
+
+            // 8. 坐标文件
+            await processRow('row-coord', async (name) => {
+                const format = document.querySelector('#row-coord .choice-btn.active').innerText.trim();
+                return await eda.pcb_ManufactureData.getPickAndPlaceFile(name, format);
+            });
+
+            // 9. 交互式BOM (暂无接口，跳过)
+
+            // 10. 原理图 PDF
+            await processRow('row-sch', async (name) => {
+                return await eda.pcb_ManufactureData.getPdfFile(name, "A Multi Page PDF");
+            });
+
+            // 11. PCB PDF
+            await processRow('row-pcb', async (name) => {
+                return await eda.pcb_ManufactureData.getPdfFile(name, "A Multi Page PDF");
+            });
+
+            // 12. 3D PCBA
+            await processRow('row-3d', async (name) => {
+                const type = document.querySelector('#row-3d .choice-btn.active').innerText.trim(); // stl/step/obj
+                // 参数参考: fileName, fileType, element?, modelMode?, autoGenerate?
+                // 使用默认的可选参数
+                return await eda.pcb_ManufactureData.get3DFile(name, type);
+            });
+
+            // 13. 3D 外壳
+            await processRow('row-shell', async (name) => {
+                // const type = document.querySelector('#row-shell .choice-btn.active').innerText.trim();
+                // return await eda.pcb_ManufactureData.get3DShellFile(name, type);
+            });
+
+            // 打包并下载
+            if (fileCount > 0) {
+                status.innerText = "生成压缩包...";
+                const content = await zip.generateAsync({type: "blob"});
+                const zipName = `${projectName}_导出.zip`;
+                eda.sys_FileSystem.saveFile(content, zipName);
+                // alert(`导出成功！包含 ${fileCount} 个文件。`);
+            } else {
+                alert("未获取到任何文件，请检查选择或API状态。");
+            }
+
+        } catch (error) {
+            console.error(error);
+            alert("导出过程中发生错误: " + error.message);
+        } finally {
+            btn.disabled = false;
+            btn.innerText = "导出资料";
+            status.style.display = 'none';
+        }
+    }
+
+
+    // --- UI 交互辅助函数 ---
+
+    function toggleRow(rowId) {
+        const row = document.getElementById(rowId);
+        const checkbox = row.querySelector('.col-check input[type="checkbox"]');
+        updateRowState(row, checkbox.checked);
+    }
+
+    function updateRowState(row, isChecked) {
+        if (isChecked) {
+            row.classList.remove('disabled');
+        } else {
+            row.classList.add('disabled');
+        }
+    }
+
+    function selectOne(btn) {
+        if (btn.closest('.grid-row').classList.contains('disabled')) return;
+        const group = btn.parentElement;
+        group.querySelectorAll('.choice-btn').forEach(sib => sib.classList.remove('active'));
+        btn.classList.add('active');
+    }
+
+    function toggleBtn(btn) {
+        if (btn.closest('.grid-row').classList.contains('disabled')) return;
+        btn.classList.toggle('active');
+    }
+
+    function savePreset() {
+        // alert("预设保存成功！");
+    }
+
+</script>
+
+</body>
+</html>

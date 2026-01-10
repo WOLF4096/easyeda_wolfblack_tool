@@ -146,5 +146,7 @@ export async function ClearEmptySupplierProperties(dataSource = 'PCB') {
                 // 选择否执行
                 eda.sys_Message.showToastMessage("已取消操作", 2);   
             }
-        });
+        }
+    );
 }
+

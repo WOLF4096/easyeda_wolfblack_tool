@@ -67,14 +67,14 @@ export async function placeWires(importMethod) {
         
         // 1. 获取选中的器件
         const selectedComponents = await getSelectedComponent();
+        
         if (!selectedComponents) {
             await eda.sys_Message.showToastMessage("请先在原理图中选择一个器件", 2);        
             throw new Error("未选中任何器件");
         }
-        
         // 2. 获取原理图网表
         const schematicNetlist = await getSchematicNetlist();
-        console.log(schematicNetlist);
+        
         let pcbNetlist;
 
         // 3. 根据导入方式获取PCB网表
@@ -91,6 +91,7 @@ export async function placeWires(importMethod) {
             pcbNetlist = formatFileNetlist(fileData, selectedComponents);
         } else {
             eda.sys_Log.add(`不支持的导入方式: ${importMethod}`, "error");
+            eda.sys_PanelControl.openBottomPanel("log");
             throw new Error(`不支持的导入方式: ${importMethod}`);
         }
 
@@ -191,12 +192,14 @@ async function switchToPCB() {
         
         if (!pcbTab) {
             eda.sys_Log.add("未找到PCB界面", "error");
+            eda.sys_PanelControl.openBottomPanel("log");
             throw new Error("未找到PCB界面");
         }
         
         await eda.dmt_EditorControl.activateDocument(pcbTab.tabId);
     } catch (error) {
         eda.sys_Log.add("切换PCB界面失败", "error");
+        eda.sys_PanelControl.openBottomPanel("log");
         console.error("切换PCB界面失败:", error);
         throw new Error("切换PCB界面失败");
     }
@@ -210,12 +213,14 @@ async function switchToSchematic() {
         
         if (!schTab) {
             eda.sys_Log.add("未找到原理图界面", "error");
+            eda.sys_PanelControl.openBottomPanel("log");
             throw new Error("未找到原理图界面");
         }
         
         await eda.dmt_EditorControl.activateDocument(schTab.tabId);
     } catch (error) {
         eda.sys_Log.add("切换原理图界面失败", "error");
+        eda.sys_PanelControl.openBottomPanel("log");
         console.error("切换原理图界面失败:", error);
         throw new Error("切换原理图界面失败");
     }
@@ -228,6 +233,7 @@ async function getSchematicNetlist() {
         return await getNetlistFile.text();
     } catch (error) {
         eda.sys_Log.add("获取原理图网表失败", "error");
+        eda.sys_PanelControl.openBottomPanel("log");
         console.error("获取原理图网表失败:", error);
         throw new Error("获取原理图网表失败");
     }
@@ -237,7 +243,13 @@ async function getSchematicNetlist() {
 async function getSelectedComponent() {
     try {
         let primitives;
-        primitives = await eda.sch_SelectControl.getAllSelectedPrimitives();
+        // 1. 版本检测
+        const currentVersion = eda.sys_Environment.getEditorCurrentVersion();
+        if(currentVersion && currentVersion.startsWith('2.2.45')){
+            primitives = await eda.sch_SelectControl.getSelectedPrimitives();
+        }else{
+            primitives = await eda.sch_SelectControl.getAllSelectedPrimitives();
+        }
 
         // 过滤出类型为Component的图元
         const components = primitives.filter(item => item.primitiveType === "Component");
@@ -300,6 +312,7 @@ async function getSelectedComponent() {
         }));
     } catch (error) {
         eda.sys_Log.add("获取选中器件失败", "error");
+        eda.sys_PanelControl.openBottomPanel("log");
         console.error("获取选中器件失败:", error);
         throw new Error("获取选中器件失败");
     }
@@ -309,7 +322,7 @@ async function getSelectedComponent() {
 async function getPCBSelection() {
     try {
         const pcbData = await eda.pcb_SelectControl.getAllSelectedPrimitives();
-        console.log(pcbData);
+        // console.log(pcbData);
         // PCB接口可能返回数组或单个对象
         if (Array.isArray(pcbData)) {
             // 过滤出器件类型
@@ -319,6 +332,7 @@ async function getPCBSelection() {
             return [pcbData];
         } else {
             eda.sys_Log.add("PCB中未选中任何器件", "error");
+            eda.sys_PanelControl.openBottomPanel("log");
             throw new Error("PCB中未选中任何器件");
         }
     } catch (error) {
@@ -539,11 +553,13 @@ async function getMultiplePinPositions(pinsData) {
                     };
                 } else {
                     eda.sys_Log.add(`在图元 ${componentId} 中未找到引脚 ${pinNumber}`);
+                    eda.sys_PanelControl.openBottomPanel("log");
                     console.warn(`在图元 ${componentId} 中未找到引脚 ${pinNumber}`);
                 }
             }
         } catch (error) {
             eda.sys_Log.add(`获取图元 ${componentId} 引脚信息失败:`, "error");
+            eda.sys_PanelControl.openBottomPanel("log");
             console.error(`获取图元 ${componentId} 引脚信息失败:`, error);
         }
     }
@@ -567,6 +583,7 @@ async function drawWiresForPins(pinsData) {
             
             if (!pinInfo) {
                 eda.sys_Log.add(`未找到引脚 ${pin} 的位置信息`, "warn");
+                eda.sys_PanelControl.openBottomPanel("log");
                 console.warn(`未找到引脚 ${pin} 的位置信息`);
                 results.push({
                     componentId: componentId,
@@ -659,6 +676,7 @@ async function drawSingleWire(pinInfo, netName) {
     } catch (error) {
         eda.sys_Log.add("绘制导线失败", "error");
         console.log([startX, startY, endX, endY], netName);
+        eda.sys_PanelControl.openBottomPanel("log");
         throw error;
     }
 }

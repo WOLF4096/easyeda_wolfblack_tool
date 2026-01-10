@@ -367,19 +367,25 @@
                 // console.log(symHeader + symStyles + symPins + symBox);
 
                 // 8. 使用API放置器件
-                // 这个API放置的器件保存后会丢失，但是不用这个API的话原理图符号就会出问题
-                // 解决办法，先创建一个后删除，用另一个API放置器件
-                let primitiveIds;
-                await eda.pcb_PrimitiveComponent
-                .create(
-                    { 'libraryUuid': LIBRARY_UUID, 'uuid': dev_uuid },
-                    EPCB_LayerId.TOP, 
-                    originX, originY, 0, false)
-                .then((result) => {
-                    primitiveIds = result.primitiveId;
-                });
-                // console.log(ID);
-                await eda.pcb_PrimitiveComponent.delete(primitiveIds);// 删除创建的器件
+
+                // 如果是2.2.43，执行这一段，2.2.45跳过
+                // 1. 版本检测
+                const currentVersion = eda.sys_Environment.getEditorCurrentVersion();
+                if(currentVersion && currentVersion.startsWith('2.2.43')){
+                    let primitiveIds;
+                    // 这个API放置的器件保存后会丢失，但是不用这个API的话原理图符号就会出问题
+                    // 解决办法，先创建一个后删除，用另一个API放置器件
+                    await eda.pcb_PrimitiveComponent
+                    .create(
+                        { 'libraryUuid': LIBRARY_UUID, 'uuid': dev_uuid },
+                        EPCB_LayerId.TOP, 
+                        originX, originY, 0, false)
+                    .then((result) => {
+                        primitiveIds = result.primitiveId;
+                    });
+                    // console.log(primitiveIds);
+                    await eda.pcb_PrimitiveComponent.delete(primitiveIds);// 删除创建的器件
+                }
 
                 // G. 放置器件，这个API可以在PCB上放置器件，保存后不会丢失，将就一下
                 eda.sch_PrimitiveComponent.create(

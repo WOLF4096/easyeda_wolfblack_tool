@@ -20,12 +20,36 @@ export function activate(status?: 'onStartupFinished', arg?: string): void {
 // 从PCB网表在原理图放置器件
 export async function NetlistToSchematicPCB() {
     const { placeComponentsEfficiently } = await import('./js/NetlistToSchematic');
-    await placeComponentsEfficiently("PCB");
+    eda.sys_Dialog.showConfirmationMessage(
+        '注意：此操作将从 PCB 导入元件到原理图画布\n是否继续？', 
+        '从PCB导入元件到原理图画布', 
+        '继续', 
+        '取消', 
+        async mainButtonClicked => {
+            if (mainButtonClicked) {
+                await placeComponentsEfficiently("PCB");
+            } else {
+                eda.sys_Message.showToastMessage('已取消 从 PCB 放置器件 的操作', "info");
+            }
+        }
+    );
 }
 // 从网表文件在原理图放置器件
 export async function NetlistToSchematicNET() {
     const { placeComponentsEfficiently } = await import('./js/NetlistToSchematic');
-    await placeComponentsEfficiently("NET");
+    eda.sys_Dialog.showConfirmationMessage(
+        '注意：此操作将从 网表文件 导入元件到原理图画布\n是否继续？', 
+        '从网表文件导入元件到原理图画布', 
+        '继续', 
+        '取消', 
+        async mainButtonClicked => {
+            if (mainButtonClicked) {
+                await placeComponentsEfficiently("NET");
+            } else {
+                eda.sys_Message.showToastMessage('已取消 从 网表文件 放置器件 的操作', "info");
+            }
+        }
+    );
 }
 
 // 从PCB获取引脚信息放置导线
@@ -120,6 +144,17 @@ export async function ImportQrcode() {
 export function CodeConvert() {
 	eda.sys_IFrame.openIFrame("/iframe/CodeConvert.html", 720, 640, "CodeConvert");
 }
+// 导出工程资料
+// export function OutFilePackage() {
+// 	eda.sys_IFrame.openIFrame("/iframe/OutFilePackage.html", 640, 720, "CodeConvert");
+// }
+// {
+// 						"id": "OutFilePackage",
+// 						"title": "导出工程资料",
+// 						"registerFn": "OutFilePackage"
+// 					},
+
+
 
 // 工作时间统计 - 前端界面
 export async function WorkingHours() {
@@ -131,9 +166,9 @@ export async function WorkingHoursJs() {
     await module.WorkingHours();
 }
 
-// 配置物理网络
-export async function ConfigurePhysicalNets() {
-    const module = await import('./js/ConfigurePhysicalNets');
+// 配置物理网络 - 极速
+export async function ConfigurePhysicalNetsExtremespeed() {
+    const module = await import('./js/ConfigurePhysicalNetsExtremespeed');
     eda.sys_Dialog.showConfirmationMessage(
         '使用前必须确保每个器件都有不重复的唯一ID和位号\n如果没有，可在 菜单栏 ⇒ 设计 ⇒ 重置唯一ID\n如果处理完没有反应，可以重新打开工程后尝试', 
         '设置物理网络', 
@@ -147,7 +182,16 @@ export async function ConfigurePhysicalNets() {
         }
     });
 }
+// 配置物理网络 - 传统
+export async function ConfigurePhysicalNetsTradition() {
+	eda.sys_IFrame.openIFrame("/iframe/ConfigurePhysicalNetsTradition.html", 500, 500, "ConfigurePhysicalNetsTradition");
+}
 
+// 导入AltiumDesigner网表
+export async function ImportAltiumDesignerNetlist() {
+    const module = await import('./js/ImportAltiumDesignerNetlist');
+    await module.ImportAltiumDesignerNetlist();
+}
 
 //关于
 export function About() {
