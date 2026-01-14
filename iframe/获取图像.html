@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PCB Real-time View 1024x768</title>
+    <style>
+        /* 重置页面样式，确保无边距 */
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            background-color: #000; /* 整体背景黑色 */
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            overflow: hidden; /* 隐藏滚动条 */
+        }
+
+        /* 定义画布容器：严格的1024x768，无边框 */
+        .canvas-container {
+            width: 1024px;
+            height: 768px;
+            background-color: #1e1e1e; /* 画布区域背景色（当图片比例不一致时显示） */
+            position: relative;
+            /* 确保无边框和阴影 */
+            border: none;
+            box-shadow: none;
+        }
+
+        /* 图像样式：填满容器并保持比例 */
+        #pcb-image {
+            width: 100%;
+            height: 100%;
+            /* 核心属性：保持纵横比缩放，完整显示在容器内 */
+            object-fit: contain; 
+            display: block;
+        }
+
+        /* 状态浮层（可选，用于调试，不影响布局） */
+        #status-overlay {
+            position: absolute;
+            top: 5px;
+            left: 5px;
+            color: rgba(255, 255, 255, 0.5);
+            font-family: Consolas, monospace;
+            font-size: 12px;
+            pointer-events: none; /* 鼠标穿透 */
+            text-shadow: 1px 1px 2px black;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="canvas-container">
+        <img id="pcb-image" alt="" />
+        <div id="status-overlay">初始化...</div>
+    </div>
+
+    <script>
+        // --- 配置项 ---
+        const REFRESH_INTERVAL = 40; // 刷新间隔(ms)。太快可能导致EDA软件卡顿，建议 >= 100ms
+
+        // --- DOM 元素 ---
+        const imgElement = document.getElementById('pcb-image');
+        const statusElement = document.getElementById('status-overlay');
+        
+        let isRunning = true;
+        let currentTabId = null;
+
+        /**
+         * 辅助函数：更新状态显示
+         */
+        function updateStatus(msg, isError = false) {
+            statusElement.innerText = msg;
+            statusElement.style.color = isError ? 'rgba(255, 50, 50, 0.8)' : 'rgba(255, 255, 255, 0.5)';
+            if (isError) console.error(msg);
+        }
+
+        /**
+         * 核心逻辑：查找 PCB Tab ID
+         */
+        async function findPcbTabId() {
+            if (typeof eda === 'undefined') throw new Error("未检测到全局 'eda' 对象");
+            
+            const splitData = await eda.dmt_EditorControl.getSplitScreenTree();
+            // doctype === 3 对应 PCB 文档
+            const pcbTab = splitData.tabs.find(tab => tab.data?.doctype === 3);
+            
+            if (!pcbTab) throw new Error("未找到活动的 PCB 文档窗口");
+            return pcbTab.tabId;
+        }
+
+        /**
+         * 主循环：实时获取图像
+         */
+        async function startStreamLoop() {
+            updateStatus("正在连接 EDA API...");
+
+            while (isRunning) {
+                const startTime = Date.now();
+                
+                try {
+                    // 1. 如果还没找到TabId，尝试寻找
+                    if (!currentTabId) {
+                        currentTabId = await findPcbTabId();
+                        updateStatus(`已连接 TabID: ${currentTabId}`);
+                    }
+                    
+                    // 2. 获取图像 Blob
+                    // 注意：如果 Tab 被关闭，这个调用可能会抛出异常，需要在 catch 中处理
+                    const imgBlob = await eda.dmt_EditorControl.getCurrentRenderedAreaImage(currentTabId);
+                    
+                    if (imgBlob && imgBlob.size > 0) {
+                        // 3. 创建新的 ObjectURL
+                        const newUrl = URL.createObjectURL(imgBlob);
+                        
+                        // 4. 内存管理：图像加载完成后，释放旧的 URL
+                        const oldUrl = imgElement.src;
+                        imgElement.onload = () => {
+                            if (oldUrl && oldUrl.startsWith('blob:')) {
+                                URL.revokeObjectURL(oldUrl);
+                            }
+                            // 可选：更新一点动态信息证明在刷新
+                            // updateStatus(`Tab: ${currentTabId} | T: ${Date.now() % 10000}`); 
+                        };
+                        
+                        // 5. 设置新图像
+                        imgElement.src = newUrl;
+                    } else {
+                        // Blob 为空，可能是 Tab 处于非激活状态或渲染未就绪
+                        console.warn("获取到空图像数据");
+                    }
+                } catch (e) {
+                    // 捕获异常，例如 Tab 被关闭
+                    updateStatus(`错误: ${e.message || '连接中断'}`, true);
+                    // 重置 tabId，以便下次循环尝试重新查找
+                    currentTabId = null;
+                    // 出错后稍微多等待一会儿再重试
+                    await new Promise(r => setTimeout(r, 1000));
+                }
+
+                // 计算需要等待的时间，保持帧率稳定
+                const elapsedTime = Date.now() - startTime;
+                const delay = Math.max(0, REFRESH_INTERVAL - elapsedTime);
+                
+                if (isRunning) {
+                    await new Promise(resolve => setTimeout(resolve, delay));
+                }
+            }
+        }
+
+        // --- 入口判断 ---
+        // 检查是否在 iframe 中或者是否能直接访问 eda
+        if (typeof eda !== 'undefined') {
+             startStreamLoop();
+        } else if (window.parent && typeof window.parent.eda !== 'undefined') {
+             // 如果在 iframe 中运行，向上寻找 eda 对象
+             window.eda = window.parent.eda;
+             startStreamLoop();
+        } else {
+            updateStatus("严重错误: 无法访问 EDA API 环境", true);
+        }
+
+    </script>
+</body>
+</html>

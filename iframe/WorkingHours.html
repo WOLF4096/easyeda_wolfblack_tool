@@ -394,14 +394,14 @@
             const wSum = sumArray(wData);
             const iSum = sumArray(iData);
             document.getElementById('trendSummary').innerHTML = 
-                `${label}: 工作<span class="sum-val">${formatTimeCN(wSum)}</span> 摸鱼<span class="sum-val">${formatTimeCN(iSum)}</span>`;
+                `${label}: 工作<span class="sum-val">${formatTimeCN(wSum)}</span> 休息<span class="sum-val">${formatTimeCN(iSum)}</span>`;
         }
 
         function updateDetailSummary(wTotalMin, iTotalMin) {
             const wH = wTotalMin/60;
             const iH = iTotalMin/60;
             document.getElementById('detailSummary').innerHTML = 
-                `工作<span class="sum-val">${formatTimeCN(wH)}</span> 摸鱼<span class="sum-val">${formatTimeCN(iH)}</span>`;
+                `工作<span class="sum-val">${formatTimeCN(wH)}</span> 休息<span class="sum-val">${formatTimeCN(iH)}</span>`;
         }
 
         // === 5. 渲染 Dashboard ===
@@ -683,7 +683,7 @@
             const wTotal = sumArray(pData.work);
             const iTotal = sumArray(pData.idle);
             document.getElementById('rankHistorySummary').innerHTML = 
-                `工作<span class="sum-val">${formatTimeCN(wTotal)}</span> 摸鱼<span class="sum-val">${formatTimeCN(iTotal)}</span>`;
+                `工作<span class="sum-val">${formatTimeCN(wTotal)}</span> 休息<span class="sum-val">${formatTimeCN(iTotal)}</span>`;
             
             let xH = DB.dates.slice(startIdx);
             let wH = pData.work.slice(startIdx);
@@ -741,7 +741,7 @@
                         return html;
                     }
                 },
-                legend: { data: ['工作', '摸鱼'], right: 0, top: 0, itemWidth: 10, itemHeight: 10, textStyle: { fontSize: 10, color: '#aaa' } },
+                legend: { data: ['工作', '休息'], right: 0, top: 0, itemWidth: 10, itemHeight: 10, textStyle: { fontSize: 10, color: '#aaa' } },
                 grid: { left: 5, right: 15, top: 30, bottom: 20, containLabel: true },
                 xAxis: { type: 'category', boundaryGap: false, data: xData, axisLabel: { interval: 'auto', fontSize: 10, color: '#666',
                     formatter: function(value) {
@@ -760,7 +760,7 @@
                 },
                 series: [
                     { name: '工作', type: 'line', stack: 'T', smooth: true, showSymbol: false, areaStyle: { opacity: 0.5 }, itemStyle: { color: '#00D000' }, data: wData },
-                    { name: '摸鱼', type: 'line', stack: 'T', smooth: true, showSymbol: false, areaStyle: { opacity: 0.5 }, itemStyle: { color: '#FF9800' }, data: iData }
+                    { name: '休息', type: 'line', stack: 'T', smooth: true, showSymbol: false, areaStyle: { opacity: 0.5 }, itemStyle: { color: '#FF9800' }, data: iData }
                 ]
             };
         }

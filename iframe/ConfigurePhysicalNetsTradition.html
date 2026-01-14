@@ -486,8 +486,10 @@
                     primitives.push({ id: item[1], type: "VIA", net: item[3], layer: LAYER_MULTI, _rawRange: item[4], shape: "ROUND", x: Number(item[5]), y: Number(item[6]), w: dia, h: dia, r: dia / 2 });
                 } else if (type === "ARC") {
                     primitives.push({ id: item[1], type: "ARC", net: item[3], layer: item[4], shape: "line", x1: Number(item[5]), y1: Number(item[6]), x2: Number(item[7]), y2: Number(item[8]), w: Number(item[9]) });
-                } else if (type === "FILL" || type === "POUR" || type === "POLY") {
-                    let shapeData = (type === "POUR") ? item[8] : item[7];
+                // 删除了 type === "POUR" 的判断，并简化了 shapeData 获取逻辑（因为 FILL/POLY 都在索引 7）
+                } else if (type === "FILL" || type === "POLY") {
+                    let shapeData = item[7];
+                    
                     while(Array.isArray(shapeData) && shapeData.length > 0 && Array.isArray(shapeData[0])) {
                         if (shapeData[0][0] === "R" || typeof shapeData[0][0] === "number") break; 
                         shapeData = shapeData[0];
@@ -618,10 +620,14 @@
                     }
                 }
                 // --- 4. 面状图形解析 (FILL, POLY, REGION...) ---
-                else if (type === "FILL" || type === "REGION" || type === "POLY" || type === "POUR" || type === "COPPER_AREA") {
+                // 1. 在判断条件中移除 type === "POUR"
+                if (type === "FILL" || type === "REGION" || type === "POLY" || type === "COPPER_AREA") {
+                    // V3 高级多边形/区域解析逻辑
                     let shapeData = null;
+
                     if (isV3Array) {
-                        shapeData = (type === "POUR" || type === "COPPER_AREA") ? mergedItem[8] : mergedItem[7];
+                        // 2. 在数据获取逻辑中移除 POUR 的判断，保留 COPPER_AREA
+                        shapeData = (type === "COPPER_AREA") ? mergedItem[8] : mergedItem[7];
                     } else {
                         if (mergedItem.path) shapeData = mergedItem.path;
                         else if (mergedItem.points) shapeData = mergedItem.points;

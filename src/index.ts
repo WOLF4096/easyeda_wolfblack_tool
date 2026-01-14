@@ -144,16 +144,6 @@ export async function ImportQrcode() {
 export function CodeConvert() {
 	eda.sys_IFrame.openIFrame("/iframe/CodeConvert.html", 720, 640, "CodeConvert");
 }
-// 导出工程资料
-// export function OutFilePackage() {
-// 	eda.sys_IFrame.openIFrame("/iframe/OutFilePackage.html", 640, 720, "CodeConvert");
-// }
-// {
-// 						"id": "OutFilePackage",
-// 						"title": "导出工程资料",
-// 						"registerFn": "OutFilePackage"
-// 					},
-
 
 
 // 工作时间统计 - 前端界面
@@ -187,6 +177,7 @@ export async function ConfigurePhysicalNetsTradition() {
 	eda.sys_IFrame.openIFrame("/iframe/ConfigurePhysicalNetsTradition.html", 500, 500, "ConfigurePhysicalNetsTradition");
 }
 
+
 // 导入AltiumDesigner网表
 export async function ImportAltiumDesignerNetlist() {
     const module = await import('./js/ImportAltiumDesignerNetlist');
@@ -205,3 +196,28 @@ if (!globalThis[INIT_FLAG_KEY]) {
     WorkingHoursJs();//后台记录工作时间
     globalThis[INIT_FLAG_KEY] = true;
 }
+
+
+// 测试 ============================================================================
+
+// 导出工程资料
+// export function OutFilePackage() {
+// 	eda.sys_IFrame.openIFrame("/iframe/OutFilePackage.html", 640, 720, "CodeConvert");
+// }
+// {
+// 						"id": "OutFilePackage",
+// 						"title": "导出工程资料",
+// 						"registerFn": "OutFilePackage"
+// 					},
+
+
+// 测试
+// export async function Getimg() {
+// 	eda.sys_IFrame.openIFrame("/iframe/获取图像.html", 1024, 768, "获取图像");
+// }
+
+// {
+// 						"id": "Getimg",
+// 						"title": "测试",
+// 						"registerFn": "Getimg"
+// 					},

@@ -377,8 +377,9 @@ async function runLogicV2(rawSource, netlistJson, allPads) {
                     id: item[1], type: "ARC", net: item[3], layer: item[4],
                     shape: "line", x1: Number(item[5]), y1: Number(item[6]), x2: Number(item[7]), y2: Number(item[8]), w: Number(item[9])
                 });
-            } else if (type === "FILL" || type === "POUR" || type === "POLY") {
-                let shapeData = (type === "POUR") ? item[8] : item[7];
+            // 删除了 type === "POUR" 的判断，并简化了 shapeData 获取逻辑（因为 FILL/POLY 都在索引 7）
+            } else if (type === "FILL" || type === "POLY") {
+                let shapeData = item[7];
                 
                 while(Array.isArray(shapeData) && shapeData.length > 0 && Array.isArray(shapeData[0])) {
                     if (shapeData[0][0] === "R" || typeof shapeData[0][0] === "number") {
@@ -615,12 +616,14 @@ async function runLogicV3(rawSource, netlistJson, allPads) {
                         shape: "line", x1: Number(mergedItem[5]), y1: Number(mergedItem[6]), x2: Number(mergedItem[7]), y2: Number(mergedItem[8]), w: Number(mergedItem[9])
                     });
                 }
-            } else if (type === "FILL" || type === "REGION" || type === "POLY" || type === "POUR" || type === "COPPER_AREA") {
+            // 1. 在判断条件中移除 type === "POUR"
+            } else if (type === "FILL" || type === "REGION" || type === "POLY" || type === "COPPER_AREA") {
                 // V3 高级多边形/区域解析逻辑
                 let shapeData = null;
 
                 if (isV3Array) {
-                    shapeData = (type === "POUR" || type === "COPPER_AREA") ? mergedItem[8] : mergedItem[7];
+                    // 2. 在数据获取逻辑中移除 POUR 的判断，保留 COPPER_AREA
+                    shapeData = (type === "COPPER_AREA") ? mergedItem[8] : mergedItem[7];
                 } else {
                     // 优先读取 path (V3 对象模式)，其次 points，最后尝试矩形属性
                     if (mergedItem.path) {

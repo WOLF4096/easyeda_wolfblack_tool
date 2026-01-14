@@ -183,48 +183,56 @@ export async function placeWires(importMethod) {
     }
 }
 
-// 切换到PCB界面
+
+
+
+
+// 全局变量，用于记录跳转前的原理图Tab ID
+let _lastSchematicTabId = null;
+
+// 1. 切换到当前板子对应的PCB界面
 async function switchToPCB() {
     try {
-        const splitData = await eda.dmt_EditorControl.getSplitScreenTree();
-        
-        const pcbTab = splitData.tabs.find(tab => tab.data?.doctype === 3);
-        
-        if (!pcbTab) {
-            eda.sys_Log.add("未找到PCB界面", "error");
-            eda.sys_PanelControl.openBottomPanel("log");
-            throw new Error("未找到PCB界面");
+        // A. 记录当前原理图信息 (如果当前是在原理图界面)
+        const curDoc = await eda.dmt_SelectControl.getCurrentDocumentInfo();
+        console.log(curDoc);
+        if (curDoc && curDoc.documentType === 1) { // 1 代表原理图
+            _lastSchematicTabId = curDoc.uuid + '@' + curDoc.parentProjectUuid;
+            console.log(_lastSchematicTabId);
+            console.log(curDoc.tabId);
         }
-        
-        await eda.dmt_EditorControl.activateDocument(pcbTab.tabId);
+
+        // B. 获取当前板子对应的 PCB UUID
+        const boardInfo = await eda.dmt_Board.getCurrentBoardInfo();
+        console.log(boardInfo);
+        if (!boardInfo || !boardInfo.pcb) throw new Error("未获取到板子信息");
+        const targetPcbUuid = boardInfo.pcb.uuid;
+
+        // C. 在分屏树中查找 匹配该UUID 的 PCB Tab
+        const splitData = await eda.dmt_EditorControl.getSplitScreenTree();
+        // TabId 通常格式为 "UUID@ProjectID"，所以使用 includes 匹配
+        const pcbTab = splitData.tabs.find(tab => tab.tabId.includes(targetPcbUuid));
+        console.log(pcbTab);
+        if (pcbTab) {
+            await eda.dmt_EditorControl.activateDocument(pcbTab.tabId);
+        } else {
+            await eda.sys_Message.showToastMessage("未找到当前板子对应的PCB窗口，请确认PCB已打开",2);
+        }
     } catch (error) {
-        eda.sys_Log.add("切换PCB界面失败", "error");
-        eda.sys_PanelControl.openBottomPanel("log");
-        console.error("切换PCB界面失败:", error);
-        throw new Error("切换PCB界面失败");
+        console.error("切换PCB失败:", error);
     }
 }
 
-// 切换到原理图界面
+// 2. 切换回原来的原理图界面
 async function switchToSchematic() {
     try {
-        const splitData = await eda.dmt_EditorControl.getSplitScreenTree();
-        const schTab = splitData.tabs.find(tab => tab.data?.sch === true);
-        
-        if (!schTab) {
-            eda.sys_Log.add("未找到原理图界面", "error");
-            eda.sys_PanelControl.openBottomPanel("log");
-            throw new Error("未找到原理图界面");
-        }
-        
-        await eda.dmt_EditorControl.activateDocument(schTab.tabId);
+        console.log(_lastSchematicTabId);//没有输出
+        await eda.dmt_EditorControl.activateDocument(_lastSchematicTabId);//没有跳转回原来的页面
     } catch (error) {
-        eda.sys_Log.add("切换原理图界面失败", "error");
-        eda.sys_PanelControl.openBottomPanel("log");
-        console.error("切换原理图界面失败:", error);
-        throw new Error("切换原理图界面失败");
+        console.error("切换原理图失败:", error);
     }
 }
+
 
 // 获取原理图网表
 async function getSchematicNetlist() {
