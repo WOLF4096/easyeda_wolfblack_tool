@@ -322,11 +322,13 @@
 ["HEAD",{"originX":0,"originY":0,"version":"2","symbolType":2}]
 ["PART","${deviceName}.1",{"BBOX":${bboxStr}}]
 `;
-                let symStyles = `["FONTSTYLE","st1","Arial",1.5,0,0,0,0,0,0,1,0]
-["FONTSTYLE","st2","Arial",1.5,0,0,0,0,0,0,2,2]
-["FONTSTYLE","st3","Arial",1.5,0,0,0,0,0,0,1,2]
-["FONTSTYLE","st4","Arial",1.5,0,0,0,0,0,0,2,0]
-["LINESTYLE","st5",1,0,null,null,null]
+
+                // FONTSTYLE 格式: ["FONTSTYLE", ID, 颜色, 背景色, 字体名, 字号, 斜体, 粗体, 下划线, 删除线, 垂直对齐, 水平对齐]
+                let symStyles = `["FONTSTYLE","st1",null,null,null,null,null,null,null,null,1,0]
+["FONTSTYLE","st2",null,null,null,null,null,null,null,null,2,2]
+["FONTSTYLE","st3",null,null,null,null,null,null,null,null,1,2]
+["FONTSTYLE","st4",null,null,null,null,null,null,null,null,2,0]
+["LINESTYLE","st5",null,null,null,null,null]
 `;
 
                 let symPins = "";

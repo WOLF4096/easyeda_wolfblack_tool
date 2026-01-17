@@ -200,10 +200,11 @@ if (!globalThis[INIT_FLAG_KEY]) {
 
 // 测试 ============================================================================
 
-// 导出工程资料
+// 测试 - 导出工程资料
 // export function OutFilePackage() {
 // 	eda.sys_IFrame.openIFrame("/iframe/OutFilePackage.html", 640, 720, "CodeConvert");
 // }
+
 // {
 // 						"id": "OutFilePackage",
 // 						"title": "导出工程资料",
@@ -211,13 +212,13 @@ if (!globalThis[INIT_FLAG_KEY]) {
 // 					},
 
 
-// 测试
-// export async function Getimg() {
-// 	eda.sys_IFrame.openIFrame("/iframe/获取图像.html", 1024, 768, "获取图像");
+// 测试 - 导入Gerber
+// export async function ImportGerber() {
+// 	eda.sys_IFrame.openIFrame("/iframe/ImportGerber.html", 1280, 900, "ImportGerber");
 // }
 
-// {
-// 						"id": "Getimg",
-// 						"title": "测试",
-// 						"registerFn": "Getimg"
-// 					},
+// ,{
+// 								"id": "ImportGerber",
+// 								"title": "Gerber",
+// 								"registerFn": "ImportGerber"
+// 							}
