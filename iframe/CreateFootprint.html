@@ -1,0 +1,523 @@
+<!doctype html>
+<html lang="zh-CN">
+	<head>
+		<meta charset="UTF-8" />
+		<title>狼黑工具 - 创建封装 (仅支持V2版本)</title>
+		<style>
+			body {
+				margin: 0;
+				padding: 0;
+				width: 400px;
+				height: 120px;
+				overflow: hidden;
+				font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+				background-color: #f5f5f5;
+			}
+			.container {
+				width: 100%;
+				height: 100%;
+				box-sizing: border-box;
+				padding: 15px;
+				display: flex;
+				flex-direction: column;
+				justify-content: space-between;
+			}
+			.input-group {
+				width: 100%;
+			}
+			input[type='text'] {
+				width: 100%;
+				padding: 10px;
+				border: 1px solid #ccc;
+				border-radius: 4px;
+				font-size: 14px;
+				outline: none;
+				box-sizing: border-box;
+				transition: border-color 0.2s;
+			}
+			input[type='text']:focus {
+				border-color: #1976d2;
+			}
+			.footer {
+				display: flex;
+				flex-direction: row;
+				align-items: center;
+				gap: 16px;
+				width: 100%;
+			}
+			select {
+				flex: 1;
+				padding: 8px;
+				border: 1px solid #ccc;
+				border-radius: 4px;
+				font-size: 13px;
+				outline: none;
+				background-color: white;
+				cursor: pointer;
+			}
+			button {
+				padding: 8px 16px;
+				background-color: #1976d2;
+				color: white;
+				border: none;
+				border-radius: 4px;
+				font-size: 13px;
+				font-weight: 500;
+				cursor: pointer;
+				white-space: nowrap;
+				transition: background-color 0.2s;
+			}
+			button:hover {
+				background-color: #1565c0;
+			}
+			button:active {
+				background-color: #0d47a1;
+			}
+			button:disabled {
+				background-color: #b0bec5;
+				cursor: not-allowed;
+			}
+			select:focus {
+				border-color: #1976d2;
+			}
+		</style>
+	</head>
+	<body>
+		<div class="container">
+			<div class="input-group">
+				<input type="text" id="pkgNameInput" placeholder="输入封装名称 (例如: QFP-32)" />
+			</div>
+
+			<div class="footer">
+				选择库
+				<select id="libSelect" title="目标库">
+					<option value="" disabled selected>正在加载库列表...</option>
+				</select>
+
+				<button id="runBtn" disabled>创建封装</button>
+			</div>
+		</div>
+
+		<script>
+			function showMsg(msg, type = 'info') {
+				if (window.eda && window.eda.sys_Message && window.eda.sys_Message.showToastMessage) {
+					window.eda.sys_Message.showToastMessage(msg, type);
+				}
+			}
+
+			(async function initLibList() {
+				const select = document.getElementById('libSelect');
+				const btn = document.getElementById('runBtn');
+				try {
+					let components0 = await eda.lib_LibrariesList.getAllLibrariesList();
+					select.innerHTML = '';
+					if (components0 && components0.length > 0) {
+						components0.forEach((lib, index) => {
+							let opt = document.createElement('option');
+							opt.value = lib.uuid;
+							opt.innerText = lib.name;
+							if (index === 0) opt.selected = true;
+							select.appendChild(opt);
+						});
+						btn.disabled = false;
+					} else {
+						let opt = document.createElement('option');
+						opt.innerText = '未找到可用库';
+						select.appendChild(opt);
+					}
+				} catch (err) {
+					console.error('加载库列表失败:', err);
+					select.innerHTML = `<option value="">加载失败</option>`;
+					showMsg('加载库列表失败: ' + err.message, 'error');
+				}
+			})();
+
+			document.getElementById('runBtn').addEventListener('click', async function () {
+				const btn = document.getElementById('runBtn');
+				const inputVal = document.getElementById('pkgNameInput').value.trim();
+				const libSelect = document.getElementById('libSelect');
+				const LIBRARY_UUID = libSelect.value;
+
+				if (!LIBRARY_UUID) {
+					showMsg('请先选择一个目标库！', 'warn');
+					return;
+				}
+
+				btn.disabled = true;
+				btn.innerText = '处理中...';
+
+				try {
+					console.log(`>>> 开始创建封装 (目标库UUID: ${LIBRARY_UUID})...`);
+
+					const ALLOWED_TYPES = ['Pad', 'Polyline', 'Region'];
+
+					// A. 获取选中
+					let allSelected = await eda.pcb_SelectControl.getAllSelectedPrimitives();
+					if (!allSelected || allSelected.length === 0) {
+						throw new Error('请先在 PCB 中选中图元！');
+					}
+
+					let targetPrimitives = allSelected.filter((p) => ALLOWED_TYPES.includes(p.primitiveType));
+					console.log(`选中 ${allSelected.length} 个, 过滤后处理 ${targetPrimitives.length} 个`);
+
+					if (targetPrimitives.length === 0) {
+						throw new Error('未选中有效图元 (Pad, Region, Polyline)');
+					}
+
+					// B. 计算原点
+					let pads = targetPrimitives.filter((p) => p.primitiveType === 'Pad');
+					let originX = 0,
+						originY = 0;
+
+					if (pads.length === 1) {
+						originX = pads[0].x;
+						originY = pads[0].y;
+					} else if (pads.length > 1) {
+						let minX = Infinity,
+							minY = Infinity,
+							maxX = -Infinity,
+							maxY = -Infinity;
+						pads.forEach((p) => {
+							if (p.x < minX) minX = p.x;
+							if (p.x > maxX) maxX = p.x;
+							if (p.y < minY) minY = p.y;
+							if (p.y > maxY) maxY = p.y;
+						});
+						originX = (minX + maxX) / 2;
+						originY = (minY + maxY) / 2;
+					} else {
+						let minX = Infinity,
+							minY = Infinity,
+							maxX = -Infinity,
+							maxY = -Infinity;
+						targetPrimitives.forEach((p) => {
+							let x = p.x,
+								y = p.y;
+							if ((x === undefined || x === null) && (p.polygon || p.complexPolygon)) {
+								let polyArr = (p.polygon || p.complexPolygon).polygon;
+								for (let i = 0; i < polyArr.length - 1; i++) {
+									if (typeof polyArr[i] === 'number' && typeof polyArr[i + 1] === 'number') {
+										x = polyArr[i];
+										y = polyArr[i + 1];
+										break;
+									}
+								}
+							}
+							if (x !== undefined && y !== undefined) {
+								if (x < minX) minX = x;
+								if (x > maxX) maxX = x;
+								if (y < minY) minY = y;
+								if (y > maxY) maxY = y;
+							}
+						});
+						if (minX === Infinity) {
+							minX = 0;
+							maxX = 0;
+							minY = 0;
+							maxY = 0;
+						}
+						originX = (minX + maxX) / 2;
+						originY = (minY + maxY) / 2;
+					}
+
+					// C. 命名
+					let uniquePadNumbers = new Set();
+					pads.forEach((p) => {
+						if (p.padNumber !== undefined && p.padNumber !== null && String(p.padNumber).trim() !== '') {
+							uniquePadNumbers.add(String(p.padNumber).trim());
+						}
+					});
+					let pinCount = uniquePadNumbers.size;
+					let deviceName = '';
+
+					if (inputVal && inputVal.length > 0) {
+						deviceName = inputVal;
+					} else {
+						const now = new Date();
+						const timeStr = `${now.getHours().toString().padStart(2, '0')}${now.getMinutes().toString().padStart(2, '0')}${now.getSeconds().toString().padStart(2, '0')}`;
+						deviceName = `NEW-${pinCount}Pin_${timeStr}`;
+					}
+
+					// D. 创建库元素
+					let fp_uuid = await eda.lib_Footprint.create(LIBRARY_UUID, deviceName);
+					let sym_uuid = await eda.lib_Symbol.create(LIBRARY_UUID, deviceName);
+
+					// 创建器件并关联封装和符号
+					let dev_uuid = await eda.lib_Device.create(
+						LIBRARY_UUID,
+						deviceName,
+						undefined,
+						{
+							symbolType: 2,
+							symbol: { uuid: sym_uuid, libraryUuid: LIBRARY_UUID },
+							footprint: { uuid: fp_uuid, libraryUuid: LIBRARY_UUID },
+						},
+						undefined,
+						{
+							addIntoBom: true,
+							addIntoPcb: true,
+							designator: 'U?',
+							name: deviceName,
+							// manufacturer: '',// 设置了但不生效
+							// manufacturerId: '',
+							// supplier: '',
+							// supplierId: '',
+							// otherProperty: { 'FPuuid': fp_uuid, 'SYMuuid': sym_uuid }
+						},
+					);
+
+					// 修改器件属性，API存在BUG，无法修改
+					// await eda.lib_Device.modify(dev_uuid, LIBRARY_UUID, deviceName,
+					//         undefined, undefined,'新建器件', {
+					//         designator: 'U?',
+					//         addIntoBom: true,
+					//         addIntoPcb: true,
+					//         otherProperty: {
+					//             '器件UUID': dev_uuid,
+					//             '封装UUID': fp_uuid ,
+					//             '符号UUID': sym_uuid
+					//         }
+					//     }
+					// );
+
+					console.log('创建器件成功');
+					console.log(fp_uuid, sym_uuid, dev_uuid);
+
+					// E. 生成封装源码
+					let fpHeader = `["DOCTYPE","FOOTPRINT","1.8"]
+["HEAD",{"editorVersion":"2.2.43.4","importFlag":0,"uuid":"${fp_uuid}","source":"generated","title":"${deviceName}"}]
+["CANVAS",0,0,"mil",10,10,10,10,100,100,0,0,5]
+["LAYER",1,"TOP","Top Layer",3,"#ff0000",1,"#7f0000",1]
+["LAYER",2,"BOTTOM","Bottom Layer",3,"#0000ff",1,"#00007f",1]
+["LAYER",3,"TOP_SILK","Top Silkscreen Layer",3,"#ffcc00",1,"#7f6600",1]
+["LAYER",4,"BOT_SILK","Bottom Silkscreen Layer",3,"#66cc33",1,"#336619",1]
+["LAYER",5,"TOP_SOLDER_MASK","Top Solder Mask Layer",3,"#800080",1,"#400040",1]
+["LAYER",6,"BOT_SOLDER_MASK","Bottom Solder Mask Layer",3,"#aa00ff",1,"#55007f",1]
+["LAYER",7,"TOP_PASTE_MASK","Top Paste Mask Layer",3,"#808080",1,"#404040",1]
+["LAYER",8,"BOT_PASTE_MASK","Bottom Paste Mask Layer",3,"#800000",1,"#400000",1]
+["LAYER",9,"TOP_ASSEMBLY","Top Assembly Layer",3,"#33cc99",1,"#19664c",1]
+["LAYER",10,"BOT_ASSEMBLY","Bottom Assembly Layer",3,"#5555ff",1,"#2a2a7f",1]
+["LAYER",11,"OUTLINE","Board Outline Layer",3,"#ff00ff",1,"#7f007f",1]
+["LAYER",12,"MULTI","Multi-Layer",3,"#c0c0c0",1,"#606060",1]
+["LAYER",13,"DOCUMENT","Document Layer",3,"#ffffff",1,"#7f7f7f",1]
+["LAYER",14,"MECHANICAL","Mechanical Layer",3,"#f022f0",1,"#781178",1]
+["LAYER",47,"HOLE","Hole Layer",3,"#222222",1,"#111111",1]
+["ACTIVE_LAYER",1]
+["NET","",null,null,1,null,0,null]
+["PRIMITIVE","PAD",1,1]
+`;
+					function transformPath(arr, ox, oy) {
+						let newArr = [...arr];
+						if (newArr.length === 0) return newArr;
+						let type = newArr[0];
+						if (type === 'R' || type === 'CIRCLE') {
+							if (typeof newArr[1] === 'number') newArr[1] -= ox;
+							if (typeof newArr[2] === 'number') newArr[2] -= oy;
+						} else {
+							let i = 0;
+							if (typeof newArr[0] === 'number') {
+								newArr[0] -= ox;
+								newArr[1] -= oy;
+								i = 2;
+							}
+							while (i < newArr.length) {
+								let cmd = newArr[i];
+								if (typeof cmd === 'number') {
+									newArr[i] -= ox;
+									newArr[i + 1] -= oy;
+									i += 2;
+								} else if (cmd === 'L') {
+									newArr[i + 1] -= ox;
+									newArr[i + 2] -= oy;
+									i += 3;
+								} else if (cmd === 'ARC') {
+									newArr[i + 2] -= ox;
+									newArr[i + 3] -= oy;
+									i += 4;
+								} else {
+									i++;
+								}
+							}
+						}
+						return newArr;
+					}
+
+					let primitivesSource = '';
+					targetPrimitives.forEach((prim) => {
+						// 1. Pad
+						if (prim.primitiveType === 'Pad') {
+							let relX = prim.x - originX;
+							let relY = prim.y - originY;
+							let shapeStr = JSON.stringify(prim.pad || ['ELLIPSE', 60, 60]);
+							let holeData = prim.hole ? [...prim.hole] : null;
+							if (holeData) {
+								if (typeof holeData[1] === 'number') holeData[1] = parseFloat((holeData[1] * 10).toFixed(4));
+								if (typeof holeData[2] === 'number') holeData[2] = parseFloat((holeData[2] * 10).toFixed(4));
+							}
+							let holeStr = holeData ? JSON.stringify(holeData) : 'null';
+							let specialPadStr = JSON.stringify(prim.specialPad || []);
+							let line = `["PAD","${prim.primitiveId}",0,"",${prim.layer},"${prim.padNumber}",${relX},${relY},${prim.rotation},${holeStr},${shapeStr},${specialPadStr},0,0,0,1,0,null,null,null,null,0,null,null,null,null,[]]`;
+							primitivesSource += line + '\n';
+						}
+						// 2. Polyline
+						else if (prim.primitiveType === 'Polyline') {
+							if (prim.polygon && prim.polygon.polygon) {
+								let pathData = transformPath(prim.polygon.polygon, originX, originY);
+								let rawWidth = prim.lineWidth !== undefined ? prim.lineWidth : 0.1;
+								let width = parseFloat((rawWidth * 10).toFixed(4));
+								primitivesSource += `["POLY","${prim.primitiveId}",0,"",${prim.layer},${width},${JSON.stringify(pathData)},0]\n`;
+							}
+						}
+						// 3. Region
+						else if (prim.primitiveType === 'Region') {
+							if (prim.complexPolygon && prim.complexPolygon.polygon) {
+								let pathData = transformPath(prim.complexPolygon.polygon, originX, originY);
+								let rawWidth = prim.lineWidth !== undefined ? prim.lineWidth : 0;
+								let width = parseFloat((rawWidth * 10).toFixed(4));
+
+								if (prim.regionName === 'Prohibited Region') {
+									let fillPathStr = JSON.stringify([pathData]);
+									primitivesSource += `["REGION","${prim.primitiveId}",0,${prim.layer},${width},[2],${fillPathStr},0,null]\n`;
+								} else if (prim.regionName === 'Fill Region' || prim.regionName === 'Slot Region' || pathData[0] === 'CIRCLE') {
+									let fillPathStr = JSON.stringify([pathData]);
+									primitivesSource += `["FILL","${prim.primitiveId}",0,"",${prim.layer},${width},0,${fillPathStr},0]\n`;
+								} else {
+									let pathStr = JSON.stringify(pathData);
+									primitivesSource += `["POLY","${prim.primitiveId}",0,"",${prim.layer},${width},${pathStr},0]\n`;
+								}
+							}
+						}
+					});
+
+					await eda.lib_Footprint.updateDocumentSource(fp_uuid, LIBRARY_UUID, fpHeader + primitivesSource);
+					console.log('封装源码生成完毕');
+					// console.log(fpHeader + primitivesSource);
+
+					// ================= F. 生成符号源码 (含动态BBOX和CCW排序) =================
+
+					// 1. 准备数据和排序 (将排序逻辑前置)
+					let sortedPins = Array.from(uniquePadNumbers).sort((a, b) => {
+						let na = parseInt(a),
+							nb = parseInt(b);
+						if (!isNaN(na) && !isNaN(nb)) return na - nb;
+						return a.localeCompare(b);
+					});
+
+					let totalPins = sortedPins.length;
+					let leftCount = Math.ceil(totalPins / 2);
+					let rowHeight = 10;
+
+					// 2. 提前计算几何尺寸
+					let topY = 10;
+					let maxRows = Math.max(leftCount, totalPins - leftCount);
+					let bottomY = 10 - (maxRows - 1) * 10;
+					let geometricCenterY = (topY + bottomY) / 2;
+					let snappedCenterY = Math.round(geometricCenterY / 10) * 10;
+					let startY = 10 - snappedCenterY;
+
+					let boxTop = startY + 10;
+					let boxBottom = startY - (maxRows - 1) * rowHeight - 10;
+					if (totalPins <= 1) boxBottom = boxTop - 20;
+
+					// 3. 计算 BBOX 并生成 Header
+					// X范围: -40(左引脚起点) 到 40(右引脚起点)。矩形体是 -20 到 20。
+					// 为了确保原理图中容易选中，BBOX 最好包含引脚端点。
+					let bboxStr = `[-40,${boxBottom},40,${boxTop}]`;
+
+					let symHeader = `["DOCTYPE","SYMBOL","1.1"]
+["HEAD",{"originX":0,"originY":0,"version":"2","symbolType":2}]
+["PART","${deviceName}.1",{"BBOX":${bboxStr}}]
+`;
+
+					// FONTSTYLE 格式: ["FONTSTYLE", ID, 颜色, 背景色, 字体名, 字号, 斜体, 粗体, 下划线, 删除线, 垂直对齐, 水平对齐]
+					let symStyles = `["FONTSTYLE","st1",null,null,null,null,null,null,null,null,1,0]
+["FONTSTYLE","st2",null,null,null,null,null,null,null,null,2,2]
+["FONTSTYLE","st3",null,null,null,null,null,null,null,null,1,2]
+["FONTSTYLE","st4",null,null,null,null,null,null,null,null,2,0]
+["LINESTYLE","st5",null,null,null,null,null]
+`;
+
+					let symPins = '';
+					const createAttr = (id, parent, key, val, x, y, font) => {
+						let safeVal = val !== undefined && val !== null && val !== '' ? val : '?';
+						return `["ATTR","${id}","${parent}","${key}","${safeVal}",0,1,${x},${y},0,"${font}",0]`;
+					};
+
+					// 4. 生成引脚 (CCW 逆时针顺序)
+					for (let i = 0; i < totalPins; i++) {
+						if (i < leftCount) {
+							// 左侧: 从上往下
+							let pinNum = sortedPins[i];
+							let y = startY - i * rowHeight;
+							let pId = `pL${i}`;
+							symPins += `["PIN","${pId}",1,null,-40,${y},20,0,null,0,0]\n`;
+							symPins += createAttr(`nL${i}`, pId, 'NAME', pinNum, -17, y, 'st1') + '\n';
+							symPins += createAttr(`uL${i}`, pId, 'NUMBER', pinNum, -25, y, 'st2') + '\n';
+						} else {
+							// 右侧: 从下往上 (倒序取值)
+							let rightIndex = i - leftCount;
+							let pinIndex = totalPins - 1 - rightIndex;
+							let pinNum = sortedPins[pinIndex];
+
+							let y = startY - rightIndex * rowHeight;
+							let pId = `pR${i}`;
+							symPins += `["PIN","${pId}",1,null,40,${y},20,180,null,0,0]\n`;
+							symPins += createAttr(`nR${i}`, pId, 'NAME', pinNum, 17, y, 'st3') + '\n';
+							symPins += createAttr(`uR${i}`, pId, 'NUMBER', pinNum, 25, y, 'st4') + '\n';
+						}
+					}
+
+					// 5. 生成矩形框
+					let symBox = `["RECT","box",-20,${boxTop},20,${boxBottom},0,0,0,"st5",0]`;
+
+					await eda.lib_Symbol.updateDocumentSource(sym_uuid, LIBRARY_UUID, symHeader + symStyles + symPins + symBox);
+					console.log('符号源码生成完毕');
+					// console.log(symHeader + symStyles + symPins + symBox);
+
+					// 8. 使用API放置器件
+
+					// 如果是2.2.43，执行这一段，2.2.45跳过
+					// 1. 版本检测
+					const currentVersion = eda.sys_Environment.getEditorCurrentVersion();
+					if (currentVersion && currentVersion.startsWith('2.2.43')) {
+						let primitiveIds;
+						// 这个API放置的器件保存后会丢失，但是不用这个API的话原理图符号就会出问题
+						// 解决办法，先创建一个后删除，用另一个API放置器件
+						await eda.pcb_PrimitiveComponent
+							.create({ 'libraryUuid': LIBRARY_UUID, 'uuid': dev_uuid }, EPCB_LayerId.TOP, originX, originY, 0, false)
+							.then((result) => {
+								primitiveIds = result.primitiveId;
+							});
+						// console.log(primitiveIds);
+						await eda.pcb_PrimitiveComponent.delete(primitiveIds); // 删除创建的器件
+					}
+
+					// 放置器件，这个API可以在PCB上放置器件，保存后不会丢失
+					eda.sch_PrimitiveComponent.create({ 'libraryUuid': LIBRARY_UUID, 'uuid': dev_uuid }, 0, 0, '', 0, false, true, true);
+
+					// 删除选中的图元
+					let idsToRemove = targetPrimitives.map((p) => ({ id: p.primitiveId, type: p.primitiveType }));
+					for (let item of idsToRemove) {
+						try {
+							if (item.type === 'Pad') eda.pcb_PrimitivePad.delete(item.id);
+							else if (item.type === 'Polyline') eda.pcb_PrimitivePolyline.delete(item.id);
+							else if (item.type === 'Region') eda.pcb_PrimitivePour.delete(item.id);
+						} catch (e) {}
+					}
+
+					eda.sys_IFrame.hideIFrame('CreateFootprint');
+					document.getElementById('pkgNameInput').value = '';
+
+					console.log('转换完成！');
+					showMsg('成功创建封装: ' + deviceName, 'success');
+				} catch (err) {
+					console.error('执行错误: ', err);
+					showMsg(err.message, 'error');
+				} finally {
+					btn.disabled = false;
+					btn.innerText = '创建封装';
+				}
+			});
+		</script>
+	</body>
+</html>

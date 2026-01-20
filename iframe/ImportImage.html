@@ -1,0 +1,813 @@
+<!doctype html>
+<html lang="zh-CN">
+	<head>
+		<meta charset="UTF-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+		<title>狼黑工具 - 导入图片</title>
+		<style>
+			* {
+				margin: 0;
+				padding: 0;
+				box-sizing: border-box;
+				font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+			}
+
+			.container {
+				/* width: 960px;
+            height: 680px; */
+				width: 100%;
+				height: 100vh;
+				display: flex;
+			}
+
+			.preview-section {
+				flex: 1;
+				padding: 20px;
+				border-right: 1px solid #eaeaea;
+				display: flex;
+				flex-direction: column;
+			}
+
+			.preview-title {
+				font-size: 18px;
+				font-weight: 600;
+				color: #2c3e50;
+				margin-bottom: 15px;
+				display: flex;
+				align-items: center;
+			}
+
+			.preview-title i {
+				margin-right: 8px;
+				color: #3498db;
+			}
+
+			.preview-box {
+				flex: 1;
+				border: 2px dashed #bdc3c7;
+				border-radius: 8px;
+				display: flex;
+				justify-content: center;
+				align-items: center;
+				overflow: hidden;
+				background-color: #f8f9fa;
+				transition: all 0.3s ease;
+			}
+
+			.preview-box:hover {
+				border-color: #3498db;
+			}
+
+			.preview-box img {
+				max-width: 100%;
+				max-height: 100%;
+				object-fit: contain;
+				display: none;
+			}
+
+			.preview-placeholder {
+				text-align: center;
+				color: #7f8c8d;
+			}
+
+			.preview-placeholder i {
+				font-size: 48px;
+				margin-bottom: 15px;
+				color: #bdc3c7;
+			}
+
+			.preview-placeholder p {
+				font-size: 16px;
+			}
+
+			.control-section {
+				width: 320px;
+				padding: 20px;
+				display: flex;
+				flex-direction: column;
+			}
+
+			.button-group {
+				display: flex;
+				gap: 12px;
+				margin-bottom: 17px;
+			}
+
+			.btn {
+				flex: 1;
+				padding: 12px 16px;
+				border: none;
+				border-radius: 6px;
+				font-weight: 600;
+				cursor: pointer;
+				transition: all 0.3s ease;
+				display: flex;
+				align-items: center;
+				justify-content: center;
+				gap: 8px;
+			}
+
+			.btn-primary {
+				background-color: #3498db;
+				color: white;
+			}
+
+			.btn-primary:hover {
+				background-color: #2980b9;
+				transform: translateY(-2px);
+				box-shadow: 0 4px 8px rgba(52, 152, 219, 0.3);
+			}
+
+			.btn-secondary {
+				background-color: #2ecc71;
+				color: white;
+			}
+
+			.btn-secondary:hover {
+				background-color: #27ae60;
+				transform: translateY(-2px);
+				box-shadow: 0 4px 8px rgba(46, 204, 113, 0.3);
+			}
+
+			.btn:disabled {
+				background-color: #bdc3c7;
+				cursor: not-allowed;
+				transform: none;
+				box-shadow: none;
+			}
+
+			.section-title {
+				font-size: 16px;
+				font-weight: 600;
+				color: #2c3e50;
+				margin-bottom: 15px;
+				padding-bottom: 8px;
+				border-bottom: 1px solid #ecf0f1;
+			}
+
+			.input-group {
+				display: flex;
+				margin-bottom: 20px;
+				gap: 20px;
+			}
+
+			.input-column {
+				width: 100%;
+			}
+
+			.input-row {
+				display: flex;
+				margin-bottom: 12px;
+				align-items: center;
+			}
+
+			.input-row label {
+				width: 40px;
+				font-size: 14px;
+				color: #34495e;
+			}
+
+			.input-field {
+				flex: 1;
+				padding: 8px;
+				border: 1px solid #dce4ec;
+				border-radius: 4px;
+				font-size: 14px;
+				transition: border 0.3s;
+				width: 50%;
+			}
+
+			.input-field:focus {
+				border-color: #3498db;
+				outline: none;
+				box-shadow: 0 0 0 2px rgba(52, 152, 219, 0.2);
+			}
+
+			.input-field:disabled {
+				background-color: #f5f5f5;
+				color: #999;
+				cursor: not-allowed;
+			}
+
+			.unit-selector {
+				display: flex;
+				margin-top: 10px;
+				border: 1px solid #dce4ec;
+				border-radius: 4px;
+				overflow: hidden;
+				width: 100%;
+			}
+
+			.layer-selector {
+				display: flex;
+				margin-top: 10px;
+				border: 1px solid #dce4ec;
+				border-radius: 4px;
+				overflow: hidden;
+				width: 100%;
+			}
+
+			.unit-option {
+				flex: 1;
+				padding: 10px 12px;
+				background-color: #f8f9fa;
+				font-size: 14px;
+				cursor: pointer;
+				transition: background-color 0.2s;
+				text-align: center;
+			}
+
+			.unit-option.active {
+				background-color: #3498db;
+				color: white;
+			}
+
+			.layer-option {
+				flex: 1;
+				padding: 10px 12px;
+				background-color: #f8f9fa;
+				font-size: 14px;
+				cursor: pointer;
+				transition: background-color 0.2s;
+				text-align: center;
+			}
+
+			.layer-option.active {
+				background-color: #3498db;
+				color: white;
+			}
+
+			.aspect-ratio {
+				display: flex;
+				align-items: center;
+				margin-top: 10px;
+				margin-bottom: 15px;
+			}
+
+			.aspect-ratio label {
+				font-size: 14px;
+				color: #34495e;
+				margin-left: 8px;
+				cursor: pointer;
+			}
+
+			.checkbox {
+				width: 18px;
+				height: 18px;
+				cursor: pointer;
+			}
+
+			.dpi-options {
+				display: flex;
+				flex-direction: column;
+				gap: 8px;
+				margin-bottom: 15px;
+			}
+
+			.dpi-option {
+				padding: 7px;
+				background-color: #f8f9fa;
+				border: 1px solid #eaeaea;
+				border-radius: 4px;
+				text-align: center;
+				cursor: pointer;
+				transition: all 0.2s;
+			}
+
+			.dpi-option:hover {
+				background-color: #e9f7fe;
+				border-color: #3498db;
+			}
+
+			.dpi-option.active {
+				background-color: #3498db;
+				color: white;
+				border-color: #2980b9;
+			}
+
+			.custom-dpi {
+				display: flex;
+				align-items: center;
+				margin-top: 10px;
+			}
+
+			.custom-dpi label {
+				width: 50px;
+				font-size: 14px;
+				color: #34495e;
+			}
+
+			.info-text {
+				margin-top: auto;
+				padding: 15px;
+				background-color: #f8f9fa;
+				border-radius: 6px;
+				font-size: 14px;
+				color: #7f8c8d;
+				line-height: 1.5;
+			}
+
+			.info-text strong {
+				color: #2c3e50;
+			}
+
+			.icon {
+				display: inline-block;
+				width: 20px;
+				height: 20px;
+				background-size: contain;
+				background-repeat: no-repeat;
+			}
+
+			.icon-image {
+				background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="%23333"><path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z"/></svg>');
+			}
+
+			.icon-upload {
+				background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="white"><path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM14 13v4h-4v-4H7l5-5 5 5h-3z"/></svg>');
+			}
+
+			.icon-export {
+				background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="white"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>');
+			}
+		</style>
+	</head>
+	<body>
+		<div class="container">
+			<!-- 左侧图像预览区域 -->
+			<div class="preview-section">
+				<div class="preview-title">
+					<i class="icon icon-image"></i>
+					图像预览
+				</div>
+				<div class="preview-box" id="previewBox">
+					<div class="preview-placeholder">
+						<i class="icon icon-image"></i>
+						<p>请选择图像文件</p>
+					</div>
+					<img id="previewImage" alt="预览图像" />
+				</div>
+			</div>
+			<!-- 右侧功能区域 -->
+			<div class="control-section">
+				<div class="button-group">
+					<button class="btn btn-primary" id="selectImageBtn">
+						<i class="icon icon-upload"></i>
+						选择/更换图像
+					</button>
+				</div>
+				<div class="button-group">
+					<button class="btn btn-secondary" id="placeImageBtn" disabled>
+						<i class="icon icon-export"></i>
+						放置到画布上
+					</button>
+				</div>
+				<div class="input-group">
+					<div class="input-column">
+						<div class="section-title">图像尺寸设置</div>
+						<div class="unit-selector">
+							<div class="unit-option" data-unit="mm">mm</div>
+							<div class="unit-option active" data-unit="mil">mil</div>
+						</div>
+						<br />
+						<div class="input-row">
+							<label>宽度:</label>
+							<input type="number" class="input-field" id="widthInput" min="0" step="0.1" />
+						</div>
+						<div class="input-row">
+							<label>高度:</label>
+							<input type="number" class="input-field" id="heightInput" min="0" step="0.1" />
+						</div>
+						<div class="aspect-ratio">
+							<input type="checkbox" class="checkbox" id="aspectRatioCheckbox" checked />
+							<label for="aspectRatioCheckbox">保持横纵比</label>
+						</div>
+					</div>
+					<div class="input-column">
+						<div class="section-title">DPI快速选择</div>
+						<div class="dpi-options">
+							<div class="dpi-option" data-dpi="300">300 DPI</div>
+							<div class="dpi-option" data-dpi="600">600 DPI</div>
+							<div class="dpi-option" data-dpi="1200">1200 DPI</div>
+							<div class="dpi-option" data-dpi="2400">2400 DPI</div>
+						</div>
+						<div class="custom-dpi">
+							<label>自定义</label>
+							<input type="number" class="input-field" id="customDpiInput" min="1" placeholder="DPI值" />
+						</div>
+					</div>
+				</div>
+				<!-- 在 .input-group 后新增一个独立区块 -->
+				<div class="input-column">
+					<div class="section-title">放置图层</div>
+					<div class="layer-selector">
+						<div class="layer-option" data-layer="TS">顶层丝印</div>
+						<div class="layer-option" data-layer="BS">底层丝印</div>
+						<div class="layer-option active" data-layer="DOC">文档层</div>
+					</div>
+					<br />
+				</div>
+				<div class="info-text">
+					<strong>使用说明：</strong><br />
+					1. 仅支持PNG/JPG/BMP格式<br />
+					2. 图像分辨率不能超过16384px<br />
+					3. 放置大图会卡，属于正常现象
+				</div>
+			</div>
+		</div>
+		<script>
+			// DOM元素
+			const previewBox = document.getElementById('previewBox');
+			const previewImage = document.getElementById('previewImage');
+			const selectImageBtn = document.getElementById('selectImageBtn');
+			const placeImageBtn = document.getElementById('placeImageBtn');
+			const widthInput = document.getElementById('widthInput');
+			const heightInput = document.getElementById('heightInput');
+			const aspectRatioCheckbox = document.getElementById('aspectRatioCheckbox');
+			const unitOptions = document.querySelectorAll('.unit-option');
+			const layerOptions = document.querySelectorAll('.layer-option');
+			const dpiOptions = document.querySelectorAll('.dpi-option');
+			const customDpiInput = document.getElementById('customDpiInput');
+
+			// 全局变量
+			let currentUnit = 'mil'; //默认单位
+			let currentDpi = 1200; //默认DPI
+			let currentLayer = 'DOC'; // 默认图层
+			let originalAspectRatio = 1;
+			let currentImage = null;
+			let base64img = null;
+			let followInterval = null;
+			let isCalculatingFromDpi = false;
+			let status = false;
+
+			// 单位转换因子 (1 inch = 25.4 mm = 1000 mil)
+			const mmToInch = 1 / 25.4;
+			const milToInch = 1 / 1000;
+
+			// 事件监听器
+			selectImageBtn.addEventListener('click', handleImageSelect);
+			placeImageBtn.addEventListener('click', handlePlaceImage);
+			aspectRatioCheckbox.addEventListener('change', toggleAspectRatio);
+
+			// 单位切换
+			unitOptions.forEach((option) => {
+				option.addEventListener('click', function () {
+					if (this.classList.contains('active')) return;
+
+					// 更新激活状态
+					unitOptions.forEach((opt) => opt.classList.remove('active'));
+					this.classList.add('active');
+
+					// 转换尺寸值
+					const oldUnit = currentUnit;
+					currentUnit = this.dataset.unit;
+
+					if (currentImage && widthInput.value && heightInput.value) {
+						if (oldUnit === 'mm' && currentUnit === 'mil') {
+							// mm 转 mil
+							widthInput.value = (parseFloat(widthInput.value) * 39.37007874015748).toFixed(2);
+							heightInput.value = (parseFloat(heightInput.value) * 39.37007874015748).toFixed(2);
+						} else if (oldUnit === 'mil' && currentUnit === 'mm') {
+							// mil 转 mm
+							widthInput.value = (parseFloat(widthInput.value) * 0.0254).toFixed(2);
+							heightInput.value = (parseFloat(heightInput.value) * 0.0254).toFixed(2);
+						}
+
+						// 重新计算DPI
+						calculateDpi();
+					}
+				});
+			});
+
+			// 图层切换
+			layerOptions.forEach((option) => {
+				option.addEventListener('click', function () {
+					if (this.classList.contains('active')) return;
+
+					// 更新激活状态
+					layerOptions.forEach((opt) => opt.classList.remove('active'));
+					this.classList.add('active');
+					// 更新当前图层
+					const oldLayer = currentLayer;
+					currentLayer = this.dataset.layer;
+				});
+			});
+
+			// DPI选项点击
+			dpiOptions.forEach((option) => {
+				option.addEventListener('click', function () {
+					// 更新激活状态
+					dpiOptions.forEach((opt) => opt.classList.remove('active'));
+					this.classList.add('active');
+
+					// 设置当前DPI
+					currentDpi = parseInt(this.dataset.dpi);
+					customDpiInput.value = currentDpi;
+
+					// 计算并更新尺寸
+					calculateDimensionsFromDpi();
+				});
+			});
+
+			// 尺寸输入变化时重新计算DPI
+			widthInput.addEventListener('input', function () {
+				if (!isCalculatingFromDpi) {
+					calculateDpi();
+					if (aspectRatioCheckbox.checked && currentImage) {
+						const width = parseFloat(this.value);
+						if (!isNaN(width)) {
+							const height = width / originalAspectRatio;
+							heightInput.value = height.toFixed(2);
+						}
+					}
+				}
+			});
+
+			// 尺寸输入变化时重新计算DPI
+			heightInput.addEventListener('input', function () {
+				if (!isCalculatingFromDpi) {
+					calculateDpi();
+					if (aspectRatioCheckbox.checked && currentImage) {
+						const height = parseFloat(this.value);
+						if (!isNaN(height)) {
+							const width = height * originalAspectRatio;
+							widthInput.value = width.toFixed(2);
+						}
+					}
+				}
+			});
+
+			// 自定义DPI输入
+			customDpiInput.addEventListener('input', function () {
+				const dpiValue = parseInt(this.value);
+				if (dpiValue > 0) {
+					currentDpi = dpiValue;
+
+					// 移除所有DPI选项的激活状态
+					dpiOptions.forEach((opt) => opt.classList.remove('active'));
+
+					// 计算并更新尺寸
+					calculateDimensionsFromDpi();
+				}
+			});
+
+			// 根据尺寸计算DPI
+			function calculateDpi() {
+				// 如果不保持横纵比，不计算DPI
+				if (!aspectRatioCheckbox.checked) return;
+				if (!currentImage || !widthInput.value || !heightInput.value) return;
+
+				const img = new Image();
+				img.onload = function () {
+					const width = parseFloat(widthInput.value);
+					const height = parseFloat(heightInput.value);
+
+					// 转换为英寸
+					let widthInch, heightInch;
+
+					if (currentUnit === 'mm') {
+						widthInch = width * mmToInch;
+						heightInch = height * mmToInch;
+					} else {
+						widthInch = width * milToInch;
+						heightInch = height * milToInch;
+					}
+
+					// 计算DPI
+					const dpiX = Math.round(img.width / widthInch);
+					const dpiY = Math.round(img.height / heightInch);
+
+					// 显示DPI（取平均值）
+					const avgDpi = Math.round((dpiX + dpiY) / 2);
+					customDpiInput.value = avgDpi;
+					currentDpi = avgDpi;
+
+					// 移除所有DPI选项的激活状态
+					dpiOptions.forEach((opt) => opt.classList.remove('active'));
+				};
+				img.src = URL.createObjectURL(currentImage);
+			}
+
+			// 根据DPI计算尺寸
+			function calculateDimensionsFromDpi() {
+				if (!currentImage || !currentDpi) return;
+
+				isCalculatingFromDpi = true;
+
+				const img = new Image();
+				img.onload = function () {
+					// 计算尺寸（英寸）
+					const widthInch = img.width / currentDpi;
+					const heightInch = img.height / currentDpi;
+
+					// 转换为当前单位
+					if (currentUnit === 'mm') {
+						widthInput.value = (widthInch * 25.4).toFixed(2);
+						heightInput.value = (heightInch * 25.4).toFixed(2);
+					} else {
+						widthInput.value = (widthInch * 1000).toFixed(2);
+						heightInput.value = (heightInch * 1000).toFixed(2);
+					}
+
+					isCalculatingFromDpi = false;
+				};
+				img.src = URL.createObjectURL(currentImage);
+			}
+
+			// 切换保持横纵比
+			function toggleAspectRatio() {
+				const isChecked = aspectRatioCheckbox.checked;
+
+				if (isChecked) {
+					// 启用自定义DPI输入框并显示
+					customDpiInput.disabled = false;
+					customDpiInput.style.display = 'block';
+					document.querySelector('.custom-dpi label').style.display = 'block';
+
+					if (currentImage) {
+						// 重新计算横纵比
+						const img = new Image();
+						img.onload = function () {
+							originalAspectRatio = img.width / img.height;
+
+							// 如果当前有尺寸值，根据横纵比重新计算
+							if (widthInput.value && heightInput.value) {
+								const width = parseFloat(widthInput.value);
+								const height = width / originalAspectRatio;
+								heightInput.value = height.toFixed(2);
+							}
+
+							// 重新计算并显示DPI
+							calculateDpi();
+						};
+						img.src = URL.createObjectURL(currentImage);
+					}
+				} else {
+					// 禁用自定义DPI输入框并隐藏
+					customDpiInput.disabled = true;
+					customDpiInput.style.display = 'none';
+					document.querySelector('.custom-dpi label').style.display = 'none';
+
+					// 清空DPI值
+					customDpiInput.value = '';
+					currentDpi = null;
+
+					// 移除所有DPI选项的激活状态
+					dpiOptions.forEach((opt) => opt.classList.remove('active'));
+				}
+			}
+
+			// 处理图像选择
+			async function handleImageSelect() {
+				status = false;
+				try {
+					// 使用 eda 文件系统打开文件选择对话框
+					const fileResult = await eda.sys_FileSystem.openReadFileDialog(['.png', '.jpg', '.jpeg', '.bmp'], false);
+
+					if (!fileResult) return;
+
+					// 由于 eda.sys_FileSystem.openReadFileDialog() 返回的是文件对象，
+					// 我们需要检查文件格式
+					const fileType = fileResult.type.toLowerCase();
+					if (!['image/png', 'image/jpeg', 'image/bmp'].includes(fileType)) {
+						alert('仅支持PNG、JPG和BMP格式的图像文件！');
+						return;
+					}
+
+					// 显示预览
+					const reader = new FileReader();
+					reader.onload = (e) => {
+						previewImage.src = e.target.result;
+						previewImage.style.display = 'block';
+						document.querySelector('.preview-placeholder').style.display = 'none';
+
+						// 存储当前图像
+						currentImage = fileResult;
+
+						// 启用放置按钮
+						placeImageBtn.disabled = false;
+
+						// 获取图像尺寸并设置默认值
+						const img = new Image();
+						img.onload = function () {
+							// 保存原始横纵比
+							originalAspectRatio = img.width / img.height;
+
+							// 设置默认尺寸（按照1200 DPI计算，以mil为单位）
+							const widthInch = img.width / 1200;
+							const heightInch = img.height / 1200;
+
+							if (currentUnit === 'mm') {
+								widthInput.value = (widthInch * 25.4).toFixed(2);
+								heightInput.value = (heightInch * 25.4).toFixed(2);
+							} else {
+								// 默认使用mil单位
+								widthInput.value = (widthInch * 1000).toFixed(2);
+								heightInput.value = (heightInch * 1000).toFixed(2);
+							}
+
+							// 设置自定义DPI输入框的默认值
+							customDpiInput.value = 1200;
+
+							// 计算并显示DPI
+							calculateDpi();
+						};
+						img.src = e.target.result;
+					};
+					reader.readAsDataURL(fileResult);
+				} catch (error) {
+					console.error('选择图像时出错:', error);
+				}
+			}
+
+			// 将文件转换为Base64
+			function convertToBase64(file) {
+				return new Promise((resolve, reject) => {
+					const reader = new FileReader();
+
+					reader.onload = () => {
+						const base64 = reader.result;
+						resolve(base64);
+					};
+
+					reader.onerror = (error) => reject(error);
+
+					// 读取文件为 Data URL（包含 base64）
+					reader.readAsDataURL(file);
+				});
+			}
+
+			//创建图像到画布
+			async function handlePlaceImage() {
+				//转base64
+				base64img = await convertToBase64(currentImage);
+				status = true;
+				let ID;
+				// 获取尺寸（转换为mil）
+				let width = parseFloat(widthInput.value);
+				let height = parseFloat(heightInput.value);
+
+				if (currentUnit === 'mm') {
+					// 转换为mil    39.37007874015748
+					width = width * 39.37007874015748;
+					height = height * 39.37007874015748;
+				}
+
+				// 图层选择逻辑
+				let LayerId;
+				switch (currentLayer) {
+					case 'TS':
+						LayerId = EPCB_LayerId.TOP_SILKSCREEN;
+						break;
+					case 'BS':
+						LayerId = EPCB_LayerId.BOTTOM_SILKSCREEN;
+						break;
+					default:
+						LayerId = EPCB_LayerId.DOCUMENT;
+						break;
+				}
+				const colorObj = eda.pcb_PrimitiveObject.create(
+					LayerId,
+					0,
+					0,
+					base64img,
+					width.toFixed(2),
+					height.toFixed(2),
+					0,
+					false,
+					'img',
+					false,
+				);
+				ID = (await colorObj).getState_PrimitiveId();
+
+				eda.sys_IFrame.hideIFrame('ImportImage'); //隐藏窗口
+
+				// 启动定时器，让图片跟随鼠标
+				followInterval = setInterval(async () => {
+					try {
+						const currentPoint = await eda.pcb_SelectControl.getCurrentMousePosition();
+						//跟随鼠标移动
+						await eda.pcb_PrimitiveObject.modify(ID, {
+							topLeftX: currentPoint.x,
+							topLeftY: currentPoint.y,
+						});
+					} catch (error) {
+						console.error('更新图像位置失败:', error);
+						clearInterval(followInterval); // 出错时清理定时器，避免内存泄漏
+					}
+				}, 10);
+			}
+
+			// 监听页面失去焦点
+			window.onblur = async function () {
+				if (status) {
+					clearInterval(followInterval);
+					followInterval = null;
+					eda.sys_IFrame.closeIFrame('ImportImage'); //关闭窗口
+				}
+			};
+
+			handleImageSelect(); // 启动时选择图片
+		</script>
+	</body>
+</html>

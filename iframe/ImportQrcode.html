@@ -1,0 +1,1129 @@
+<!doctype html>
+<html lang="zh-CN">
+	<head>
+		<meta charset="UTF-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+		<title>狼黑工具 - 二维码生成器</title>
+
+		<script src="/iframe/js/qrcode-generator.js"></script>
+		<script src="/iframe/js/jsQR.js"></script>
+
+		<style>
+			/* --- 样式保持原版设计，仅做微调 --- */
+			* {
+				margin: 0;
+				padding: 0;
+				box-sizing: border-box;
+				font-family: 'Microsoft YaHei', sans-serif;
+			}
+			body {
+				display: flex;
+				justify-content: center;
+				align-items: center;
+				background-color: #f5f5f5;
+			} /* 增加背景色区分 */
+			.container {
+				width: 100%;
+				height: 100hv;
+				background-color: white;
+				padding: 12px;
+				overflow-y: auto;
+				display: flex;
+				flex-direction: column;
+			}
+			.header {
+				display: flex;
+				justify-content: space-between;
+				padding-bottom: 15px;
+			}
+			.header p {
+				margin: 10px;
+				text-align: left;
+				font-weight: bold;
+			}
+			.import-btn {
+				padding: 10px 16px;
+				background-color: #f0f0f0;
+				border: 1px solid #ddd;
+				border-radius: 6px;
+				cursor: pointer;
+				font-size: 14px;
+				font-weight: 500;
+				transition: all 0.3s;
+			}
+			.import-btn:hover {
+				background-color: #e0e0e0;
+			}
+			.text-input {
+				width: 100%;
+				height: 88px;
+				padding: 12px;
+				border: 1px solid #ddd;
+				border-radius: 6px;
+				resize: none;
+				margin-bottom: 20px;
+				font-size: 14px;
+				text-align: left;
+			}
+			.text-input:focus {
+				border-color: #4a90e2;
+				outline: none;
+				box-shadow: 0 0 0 2px rgba(74, 144, 226, 0.2);
+			}
+			.controls {
+				display: flex;
+				margin-bottom: 10px;
+				gap: 20px;
+				height: 220px;
+			}
+			.left-controls,
+			.right-controls {
+				flex: 1;
+				padding: 15px;
+				background-color: #f9f9f9;
+				border-radius: 8px;
+				box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
+			}
+			.control-group {
+				margin-bottom: 16px;
+			}
+			.control-label {
+				display: block;
+				margin-bottom: 6px;
+				font-size: 14px;
+				color: #333;
+				font-weight: 500;
+			}
+			.slider-container {
+				display: flex;
+				align-items: center;
+				height: 14px;
+			}
+			.slider {
+				flex: 1;
+				height: 10px;
+				background: #ddd;
+				border-radius: 5px;
+				outline: none;
+			}
+			.slider::-webkit-slider-thumb {
+				-webkit-appearance: none;
+				width: 18px;
+				height: 18px;
+				border-radius: 50%;
+				background: #4a90e2;
+				cursor: pointer;
+				box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+			}
+			.slider-value {
+				width: 50px;
+				text-align: right;
+				margin-left: 10px;
+				font-size: 14px;
+				font-weight: 500;
+				color: #4a90e2;
+			}
+			.color-row {
+				display: flex;
+				gap: 12px;
+				align-items: center;
+			}
+			.color-item {
+				display: flex;
+				flex-direction: column;
+				align-items: center;
+				flex: 1;
+			}
+			.color-picker {
+				width: 100%;
+				height: 35px;
+				border: 1px solid #ddd;
+				border-radius: 6px;
+				cursor: pointer;
+			}
+			.output-toggle {
+				display: flex;
+				border: 1px solid #ddd;
+				border-radius: 6px;
+				overflow: hidden;
+				margin-top: 6px;
+			}
+			.output-option {
+				padding: 8px 16px;
+				background-color: #f0f0f0;
+				cursor: pointer;
+				font-size: 14px;
+				transition: all 0.2s;
+				flex: 1;
+				text-align: center;
+			}
+			.output-option.active {
+				background-color: #4a90e2;
+				color: white;
+			}
+			.size-control {
+				display: flex;
+				align-items: center;
+				margin-top: 8px;
+			}
+			.size-input {
+				width: 60px;
+				padding: 8px;
+				border: 1px solid #ddd;
+				border-radius: 6px;
+				margin-right: 6px;
+			}
+			.unit-toggle {
+				display: flex;
+				border: 1px solid #ddd;
+				border-radius: 6px;
+				overflow: hidden;
+			}
+			.unit-option {
+				padding: 8px 12px;
+				background-color: #f0f0f0;
+				cursor: pointer;
+				font-size: 14px;
+				transition: all 0.2s;
+				flex: 1;
+				text-align: center;
+			}
+			.unit-option.active {
+				background-color: #4a90e2;
+				color: white;
+			}
+			.info-text {
+				margin: 15px 0;
+				font-size: 14px;
+				color: #666;
+				text-align: center;
+				padding: 10px;
+				background-color: #f0f8ff;
+				border-radius: 6px;
+			}
+			.preview-container {
+				display: flex;
+				justify-content: space-between;
+				margin-bottom: 3px;
+			}
+			.preview-box {
+				width: 150px;
+				height: 150px;
+				border: 1px solid #ddd;
+				display: flex;
+				justify-content: center;
+				align-items: center;
+				background-color: #f9f9f9;
+				cursor: pointer;
+				overflow: hidden;
+				transition: all 0.3s;
+				position: relative;
+			}
+			.preview-box:hover {
+				transform: translateY(-5px);
+				box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+				border-color: #4a90e2;
+			}
+			.hidden {
+				display: none;
+			}
+			.file-input {
+				display: none;
+			}
+			.checkbox-group {
+				display: flex;
+				align-items: center;
+				margin-top: 8px;
+			}
+			.checkbox-group input {
+				margin-right: 6px;
+			}
+			.status-message {
+				padding: 10px;
+				border-radius: 6px;
+				margin-top: 10px;
+				text-align: center;
+				font-weight: 500;
+			}
+			.layer-select {
+				margin-left: 8px;
+				padding: 4px 8px;
+				border: 1px solid #ddd;
+				border-radius: 4px;
+				background-color: white;
+				font-size: 14px;
+			}
+		</style>
+	</head>
+	<body>
+		<div class="container">
+			<div class="header">
+				<p>粘贴文本内容：</p>
+				<button class="import-btn" id="import-qr-btn">从二维码导入</button>
+			</div>
+
+			<textarea class="text-input" id="text-input" placeholder="粘贴文本内容..."></textarea>
+			<input type="file" class="file-input" id="file-input" accept="image/*" />
+
+			<div class="controls">
+				<div class="left-controls">
+					<div class="control-group">
+						<label class="control-label">容错级别: <span id="error-level-value">M (15%)</span></label>
+						<div class="slider-container">
+							<input type="range" min="0" max="3" value="1" class="slider" id="error-level" />
+						</div>
+					</div>
+
+					<div class="control-group">
+						<label class="control-label">色块大小: <span id="block-size-value">32 px</span></label>
+						<div class="slider-container">
+							<input type="range" min="1" max="100" value="32" class="slider" id="block-size" />
+						</div>
+					</div>
+
+					<div class="control-group">
+						<label class="control-label">白边色块: <span id="margin-size-value">1</span></label>
+						<div class="slider-container">
+							<input type="range" min="0" max="10" value="1" class="slider" id="margin-size" />
+						</div>
+					</div>
+					<label class="control-label"><span id="qrcode-px-value"></span></label>
+				</div>
+
+				<div class="right-controls">
+					<div class="control-group">
+						<div class="size-control">
+							尺寸：
+							<input type="number" class="size-input" id="qr-size" value="25.4" min="1" step="0.1" />
+							<div class="unit-toggle">
+								<div class="unit-option active" id="unit-mm">mm</div>
+								<div class="unit-option" id="unit-mil">mil</div>
+							</div>
+						</div>
+					</div>
+
+					<div class="control-group">
+						<div class="output-toggle">
+							<div class="output-option active" id="type-image">图片</div>
+							<div class="output-option" id="type-vector">矢量</div>
+						</div>
+					</div>
+
+					<div id="image-controls">
+						<div class="control-group">
+							<div class="color-row">
+								<div class="color-item">
+									<label class="control-label">前景色</label>
+									<input type="color" class="color-picker" id="foreground-color" value="#000000" />
+								</div>
+								<div class="color-item">
+									<label class="control-label">背景色</label>
+									<input type="color" class="color-picker" id="background-color" value="#FFFFFF" />
+								</div>
+							</div>
+						</div>
+					</div>
+
+					<div id="vector-controls" class="hidden">
+						<div class="control-group">
+							<label class="control-label">矢量选项</label>
+							<div class="checkbox-group">
+								<input type="checkbox" id="invert-image" />
+								<label for="invert-image">反向图像（黑白反转）</label>
+							</div>
+						</div>
+					</div>
+				</div>
+			</div>
+
+			<div class="info-text">
+				单击二维码，放置在
+				<select id="layer-select" class="layer-select"></select>
+			</div>
+
+			<div class="preview-container">
+				<div>
+					<div class="preview-box" id="preview-1" title="左倾斜特效"><canvas id="qr-canvas-1"></canvas></div>
+				</div>
+				<div>
+					<div class="preview-box" id="preview-2" title="标准无特效"><canvas id="qr-canvas-2"></canvas></div>
+				</div>
+				<div>
+					<div class="preview-box" id="preview-3" title="右倾斜特效"><canvas id="qr-canvas-3"></canvas></div>
+				</div>
+			</div>
+
+			<div id="status-message" class="status-message hidden"></div>
+		</div>
+
+		<script>
+			/**
+			 * =================================================================
+			 * 1. 全局配置 & 常量 (USER CONFIGURATION)
+			 * =================================================================
+			 */
+			const CONFIG = {
+				DEFAULT_TEXT: '狼黑工具',
+				DEBOUNCE_DELAY: 100,
+
+				// 核心算法参数 - 经过调试的最佳平衡点，对应 V1 版本的 33 模糊度
+				// 修改这些值会影响特效二维码的圆润度和清晰度
+				PROC_CELL_SIZE: 32, // 处理时的基础分辨率
+				PROC_BLUR_DEGREE: 44, // 运动模糊程度
+				PROC_BLUR_SIGMA: 3, // 高斯模糊 Sigma 值
+				PROC_SCALE_FACTOR: 4, // 插值缩放倍率
+
+				// 特效角度
+				ANGLE_LEFT: 45,
+				ANGLE_RIGHT: 135,
+
+				// 安全边距，防止模糊时被裁切
+				SAFE_PADDING: 2,
+
+				// 尺寸转换
+				MM_TO_MIL: 39.37007874015748,
+			};
+
+			/**
+			 * =================================================================
+			 * 2. 全局状态管理 (STATE MANAGEMENT)
+			 * =================================================================
+			 */
+			const STATE = {
+				outputType: 'image', // 'image' | 'vector'
+				unit: 'mm', // 'mm' | 'mil'
+				currentLayer: 'TOP_SILKSCREEN',
+				followInterval: null, // EDA 放置时的跟随定时器
+				primitiveId: null, // EDA 中生成的图元 ID
+				lastQrPixelSize: 0, // 记录最后生成的二维码像素大小
+
+				// 图层映射表 (如果 eda 对象不存在，提供默认值)
+				layerMap: {},
+			};
+
+			// 预分配 Canvas 以提升性能
+			const MEMORY = {
+				sharedCanvas: document.createElement('canvas'),
+				sharedCtx: null,
+				storedCanvas: document.createElement('canvas'),
+				storedCtx: null,
+			};
+			// 初始化 Context
+			MEMORY.sharedCtx = MEMORY.sharedCanvas.getContext('2d', { willReadFrequently: true });
+			MEMORY.storedCtx = MEMORY.storedCanvas.getContext('2d', { willReadFrequently: true });
+
+			// DOM 元素引用缓存
+			const DOM = {
+				importQrBtn: document.getElementById('import-qr-btn'),
+				fileInput: document.getElementById('file-input'),
+				textInput: document.getElementById('text-input'),
+				errorLevelSlider: document.getElementById('error-level'),
+				errorLevelValue: document.getElementById('error-level-value'),
+				blockSizeSlider: document.getElementById('block-size'),
+				blockSizeValue: document.getElementById('block-size-value'),
+				marginSizeSlider: document.getElementById('margin-size'),
+				marginSizeValue: document.getElementById('margin-size-value'),
+				qrcodePxValue: document.getElementById('qrcode-px-value'),
+				typeImageBtn: document.getElementById('type-image'),
+				typeVectorBtn: document.getElementById('type-vector'),
+				imageControls: document.getElementById('image-controls'),
+				vectorControls: document.getElementById('vector-controls'),
+				foregroundColor: document.getElementById('foreground-color'),
+				backgroundColor: document.getElementById('background-color'),
+				invertCheckbox: document.getElementById('invert-image'),
+				qrSizeInput: document.getElementById('qr-size'),
+				unitMm: document.getElementById('unit-mm'),
+				unitMil: document.getElementById('unit-mil'),
+				canvases: [document.getElementById('qr-canvas-1'), document.getElementById('qr-canvas-2'), document.getElementById('qr-canvas-3')],
+				previews: [document.getElementById('preview-1'), document.getElementById('preview-2'), document.getElementById('preview-3')],
+				layerSelect: document.getElementById('layer-select'),
+			};
+
+			/**
+			 * =================================================================
+			 * 3. 初始化 & 事件监听 (INIT & EVENTS)
+			 * =================================================================
+			 */
+			function init() {
+				initEdaLayerMap();
+				initLayerSelector();
+				initEventListeners();
+
+				// 初始化 UI 显示
+				updateSliderDisplay();
+				updateQrCode(); // 首次生成
+			}
+
+			function initEdaLayerMap() {
+				if (typeof eda !== 'undefined') {
+					STATE.layerMap = {
+						'TOP': EPCB_LayerId.TOP,
+						'TOP_SILKSCREEN': EPCB_LayerId.TOP_SILKSCREEN,
+						'TOP_SOLDER_MASK': EPCB_LayerId.TOP_SOLDER_MASK,
+						'TOP_ASSEMBLY': EPCB_LayerId.TOP_ASSEMBLY,
+						'BOTTOM': EPCB_LayerId.BOTTOM,
+						'BOTTOM_SILKSCREEN': EPCB_LayerId.BOTTOM_SILKSCREEN,
+						'BOTTOM_SOLDER_MASK': EPCB_LayerId.BOTTOM_SOLDER_MASK,
+						'BOTTOM_ASSEMBLY': EPCB_LayerId.BOTTOM_ASSEMBLY,
+						'DOCUMENT': EPCB_LayerId.DOCUMENT,
+						'MECHANICAL': EPCB_LayerId.MECHANICAL,
+						'DRILL_DRAWING': EPCB_LayerId.DRILL_DRAWING,
+					};
+				} else {
+					// 浏览器调试模式 fallback
+					STATE.layerMap = { 'TOP_SILKSCREEN': 1 };
+				}
+			}
+
+			function initEventListeners() {
+				// 文件导入
+				DOM.importQrBtn.addEventListener('click', () => DOM.fileInput.click());
+				DOM.fileInput.addEventListener('change', handleFileSelect);
+
+				// 滑块控制
+				DOM.errorLevelSlider.addEventListener('input', () => {
+					updateSliderDisplay();
+					updateQrCode();
+				});
+				DOM.blockSizeSlider.addEventListener('input', () => {
+					updateSliderDisplay();
+					updateQrCode();
+				});
+				DOM.marginSizeSlider.addEventListener('input', () => {
+					updateSliderDisplay();
+					updateQrCode();
+				});
+
+				// 模式切换
+				DOM.typeImageBtn.addEventListener('click', () => setOutputType('image'));
+				DOM.typeVectorBtn.addEventListener('click', () => setOutputType('vector'));
+
+				// 颜色与反转
+				DOM.foregroundColor.addEventListener('input', updateQrCode);
+				DOM.backgroundColor.addEventListener('input', updateQrCode);
+				DOM.invertCheckbox.addEventListener('change', updateQrCode);
+
+				// 单位切换
+				DOM.unitMm.addEventListener('click', () => setUnit('mm'));
+				DOM.unitMil.addEventListener('click', () => setUnit('mil'));
+
+				// 点击放置
+				DOM.previews.forEach((box, index) => {
+					box.addEventListener('click', () => handlePlaceQrCode(index));
+				});
+
+				// 文本输入
+				DOM.textInput.addEventListener('input', updateQrCode);
+				DOM.qrSizeInput.addEventListener('input', updateQrCode);
+
+				// 图层选择
+				DOM.layerSelect.addEventListener('change', function () {
+					STATE.currentLayer = this.value;
+				});
+			}
+
+			/**
+			 * =================================================================
+			 * 4. UI 逻辑 (UI LOGIC)
+			 * =================================================================
+			 */
+			function updateSliderDisplay() {
+				const eclLabels = ['L (7%)', 'M (15%)', 'Q (25%)', 'H (30%)'];
+				DOM.errorLevelValue.textContent = eclLabels[parseInt(DOM.errorLevelSlider.value)];
+				DOM.blockSizeValue.textContent = `${DOM.blockSizeSlider.value} px`;
+				DOM.marginSizeValue.textContent = DOM.marginSizeSlider.value;
+			}
+
+			function setUnit(unit) {
+				STATE.unit = unit;
+				DOM.unitMm.classList.toggle('active', unit === 'mm');
+				DOM.unitMil.classList.toggle('active', unit === 'mil');
+
+				// 简单的单位转换逻辑，保持数值大概一致或转换数值
+				let val = parseFloat(DOM.qrSizeInput.value);
+				if (unit === 'mil') val = val * CONFIG.MM_TO_MIL;
+				else val = val / CONFIG.MM_TO_MIL;
+
+				// 这里为了用户体验，通常不自动转换数值，而是保持数值不变让用户重输，或者只做标记
+				// 原代码并未做数值转换，仅切换了状态。这里保持原逻辑。
+			}
+
+			function setOutputType(type) {
+				STATE.outputType = type;
+				const isImage = type === 'image';
+				DOM.typeImageBtn.classList.toggle('active', isImage);
+				DOM.typeVectorBtn.classList.toggle('active', !isImage);
+				DOM.imageControls.classList.toggle('hidden', !isImage);
+				DOM.vectorControls.classList.toggle('hidden', isImage);
+				updateLayerOptions(type);
+				updateQrCode();
+			}
+
+			const layerOptionsConfig = {
+				image: [
+					{ value: 'TOP_SILKSCREEN', text: '顶层-丝印层', default: true },
+					{ value: 'BOTTOM_SILKSCREEN', text: '底层-丝印层' },
+					{ value: 'DOCUMENT', text: '文档层' },
+				],
+				vector: [
+					{ value: 'TOP', text: '顶层' },
+					{ value: 'TOP_SILKSCREEN', text: '顶层-丝印层', default: true },
+					{ value: 'TOP_SOLDER_MASK', text: '顶层-阻焊层' },
+					{ value: 'TOP_ASSEMBLY', text: '顶层-装配层' },
+					{ value: 'BOTTOM', text: '底层' },
+					{ value: 'BOTTOM_SILKSCREEN', text: '底层-丝印层' },
+					{ value: 'BOTTOM_SOLDER_MASK', text: '底层-阻焊层' },
+					{ value: 'BOTTOM_ASSEMBLY', text: '底层-装配层' },
+					{ value: 'DOCUMENT', text: '文档层' },
+					{ value: 'MECHANICAL', text: '机械层' },
+					{ value: 'DRILL_DRAWING', text: '钻孔图层' },
+				],
+			};
+
+			function initLayerSelector() {
+				updateLayerOptions(STATE.outputType);
+			}
+
+			function updateLayerOptions(outputType) {
+				DOM.layerSelect.innerHTML = '';
+				layerOptionsConfig[outputType].forEach((opt) => {
+					const option = document.createElement('option');
+					option.value = opt.value;
+					option.textContent = opt.text;
+					if (opt.default) {
+						option.selected = true;
+						STATE.currentLayer = opt.value;
+					}
+					DOM.layerSelect.appendChild(option);
+				});
+			}
+
+			/**
+			 * =================================================================
+			 * 5. 核心：二维码生成与处理 (CORE: GENERATION & PROCESSING)
+			 * =================================================================
+			 */
+
+			// 防抖函数，避免输入时卡顿
+			const updateQrCode = debounce(function () {
+				const text = DOM.textInput.value || CONFIG.DEFAULT_TEXT;
+				const ecl = ['L', 'M', 'Q', 'H'][parseInt(DOM.errorLevelSlider.value)];
+				const cellSize = parseInt(DOM.blockSizeSlider.value);
+				const userMargin = parseInt(DOM.marginSizeSlider.value);
+
+				let fg = DOM.foregroundColor.value;
+				let bg = DOM.backgroundColor.value;
+
+				// 矢量模式下的颜色逻辑
+				if (STATE.outputType === 'vector') {
+					if (DOM.invertCheckbox.checked) {
+						fg = '#FFFFFF';
+						bg = '#000000';
+					} else {
+						fg = '#000000';
+						bg = '#FFFFFF';
+					}
+				}
+
+				// --- 1. 标准二维码 (Canvas 2 - 中间预览) ---
+				// 直接绘制，无需特效，响应最快
+				const moduleCount = generateBaseQRCode(DOM.canvases[1], text, ecl, cellSize, userMargin, fg, bg, true);
+
+				// --- 2. 特效二维码 (Canvas 1 & 3 - 左右倾斜) ---
+				// 优化策略：在一个较小的、固定的分辨率下生成基础图形并应用耗时的模糊算法，
+				// 然后再缩放到目标尺寸。这确保了算法复杂度不随用户设置的“色块大小”线性增加。
+
+				// 目标总尺寸 (用于最终合成)
+				const targetTotalSize = (moduleCount + 2 * userMargin) * cellSize;
+
+				// 在 sharedCanvas 上生成用于处理的 "源" (带安全边距)
+				generateBaseQRCode(MEMORY.sharedCanvas, text, ecl, CONFIG.PROC_CELL_SIZE, CONFIG.SAFE_PADDING, fg, bg, false);
+
+				// 批量处理并合成
+				const commonParams = {
+					srcCanvas: MEMORY.sharedCanvas,
+					moduleCount: moduleCount,
+					userMargin: userMargin,
+					targetTotalSize: targetTotalSize,
+					targetCellSize: cellSize,
+					fg: fg,
+					bg: bg,
+				};
+
+				// 左倾斜 (45度)
+				compositeAndProcess({
+					...commonParams,
+					targetCanvas: DOM.canvases[0],
+					angle: CONFIG.ANGLE_LEFT,
+				});
+
+				// 右倾斜 (135度)
+				compositeAndProcess({
+					...commonParams,
+					targetCanvas: DOM.canvases[2],
+					angle: CONFIG.ANGLE_RIGHT,
+				});
+
+				if (typeof eda !== 'undefined') eda.sys_ToastMessage.showMessage('二维码已更新', 2);
+			}, CONFIG.DEBOUNCE_DELAY);
+
+			/**
+			 * 基础二维码绘制
+			 * @param {HTMLCanvasElement} canvas 目标画布
+			 * @param {string} text 内容
+			 * @param {string} ecl 容错等级
+			 * @param {number} cellSize 单个色块像素大小
+			 * @param {number} margin 白边数量
+			 * @param {string} fg 前景色Hex
+			 * @param {string} bg 背景色Hex
+			 * @param {boolean} isPreview 是否更新UI尺寸显示
+			 */
+			function generateBaseQRCode(canvas, text, ecl, cellSize, margin, fg, bg, isPreview) {
+				try {
+					const utf8Text = unescape(encodeURIComponent(text));
+					const qr = qrcode(0, ecl);
+					qr.addData(utf8Text, 'Byte');
+					qr.make();
+
+					const qrCount = qr.getModuleCount();
+					const totalSize = (qrCount + 2 * margin) * cellSize;
+
+					// 调整画布物理尺寸
+					if (canvas.width !== totalSize) canvas.width = totalSize;
+					if (canvas.height !== totalSize) canvas.height = totalSize;
+
+					if (isPreview) {
+						STATE.lastQrPixelSize = totalSize;
+						DOM.qrcodePxValue.textContent = `二维码大小: ${totalSize} x ${totalSize} px`;
+						// CSS 样式尺寸保持固定预览大小
+						canvas.style.width = '150px';
+						canvas.style.height = '150px';
+					}
+
+					const ctx = canvas.getContext('2d', { alpha: false });
+					ctx.fillStyle = bg;
+					ctx.fillRect(0, 0, totalSize, totalSize);
+
+					ctx.fillStyle = fg;
+					ctx.beginPath();
+					for (let r = 0; r < qrCount; r++) {
+						for (let c = 0; c < qrCount; c++) {
+							if (qr.isDark(r, c)) {
+								// 优化：使用 rect 路径批量绘制比多次 fillRect 更快
+								ctx.rect((margin + c) * cellSize, (margin + r) * cellSize, cellSize, cellSize);
+							}
+						}
+					}
+					ctx.fill();
+					return qrCount;
+				} catch (err) {
+					console.error('Generate Error:', err);
+					showToast('生成失败，请检查内容', 1);
+					return 0;
+				}
+			}
+
+			/**
+			 * 复合处理管道：模糊 -> 平滑 -> 缩放 -> 二值化 -> 居中合成
+			 */
+			function compositeAndProcess(params) {
+				const { srcCanvas, targetCanvas, angle, targetTotalSize, moduleCount, userMargin, targetCellSize, fg, bg } = params;
+
+				const srcWidth = srcCanvas.width;
+				const srcHeight = srcCanvas.height;
+
+				// 1. 像素级精确运动模糊 (模拟 V1 算法)
+				const blurredCanvas = applyAccurateMotionBlur(srcCanvas, CONFIG.PROC_BLUR_DEGREE, angle);
+
+				// 2. 高斯模糊 (平滑锯齿) - 在 MEMORY.storedCanvas 上操作
+				MEMORY.storedCanvas.width = srcWidth;
+				MEMORY.storedCanvas.height = srcHeight;
+				const tempCtx = MEMORY.storedCtx;
+
+				tempCtx.clearRect(0, 0, srcWidth, srcHeight);
+				tempCtx.filter = `blur(${CONFIG.PROC_BLUR_SIGMA}px)`;
+				tempCtx.drawImage(blurredCanvas, 0, 0);
+				tempCtx.filter = 'none';
+
+				// 3. 放大缩放 (Bicubic/High Quality)
+				// 放大可以让边缘二值化时更圆润
+				const scaledSize = srcWidth * CONFIG.PROC_SCALE_FACTOR;
+				const processedCanvas = document.createElement('canvas'); // 临时画布，难以复用因为尺寸可变
+				processedCanvas.width = scaledSize;
+				processedCanvas.height = scaledSize;
+				const procCtx = processedCanvas.getContext('2d');
+				procCtx.imageSmoothingEnabled = true;
+				procCtx.imageSmoothingQuality = 'high';
+				procCtx.drawImage(MEMORY.storedCanvas, 0, 0, srcWidth, srcHeight, 0, 0, scaledSize, scaledSize);
+
+				// 4. 颜色索引/二值化 (Threshold)
+				applyIndexedColorFast(processedCanvas, fg, bg);
+
+				// 5. 将处理好的核心图像合成到最终画布上 (处理白边逻辑)
+				targetCanvas.width = targetTotalSize;
+				targetCanvas.height = targetTotalSize;
+				const ctx = targetCanvas.getContext('2d');
+
+				// 填充背景
+				ctx.fillStyle = bg;
+				ctx.fillRect(0, 0, targetTotalSize, targetTotalSize);
+
+				// 计算核心图像在目标画布上的绘制尺寸和位置
+				// 逻辑：源图中 1个block 现在是 (PROC_CELL_SIZE * scale) 像素
+				// 我们需要把它缩放到 targetCellSize 像素
+				const currentBlockPx = CONFIG.PROC_CELL_SIZE * CONFIG.PROC_SCALE_FACTOR;
+				const drawScale = targetCellSize / currentBlockPx;
+
+				const drawWidth = processedCanvas.width * drawScale;
+				const drawHeight = processedCanvas.height * drawScale;
+
+				// 居中放置
+				const destX = (targetTotalSize - drawWidth) / 2;
+				const destY = (targetTotalSize - drawHeight) / 2;
+
+				ctx.imageSmoothingEnabled = true;
+				ctx.imageSmoothingQuality = 'high';
+				ctx.drawImage(processedCanvas, destX, destY, drawWidth, drawHeight);
+
+				// UI 适配
+				targetCanvas.style.width = '150px';
+				targetCanvas.style.height = '150px';
+			}
+
+			/**
+			 * V1 版本的高质量像素模糊算法
+			 * 模拟丝印油墨在特定方向上的拖尾效果
+			 */
+			function applyAccurateMotionBlur(canvas, degree, angle) {
+				const width = canvas.width;
+				const height = canvas.height;
+				const ctx = canvas.getContext('2d');
+				const imageData = ctx.getImageData(0, 0, width, height);
+				const data = imageData.data;
+				const outputData = new Uint8ClampedArray(data.length);
+
+				const rad = (angle * Math.PI) / 180;
+				const oppositeRad = ((angle + 180) * Math.PI) / 180;
+
+				const dx = Math.cos(rad);
+				const dy = Math.sin(rad);
+				const dxOpp = Math.cos(oppositeRad);
+				const dyOpp = Math.sin(oppositeRad);
+
+				const halfDegree = Math.floor(degree / 2);
+				const w = width; // 缓存属性访问
+				const h = height;
+
+				for (let y = 0; y < h; y++) {
+					for (let x = 0; x < w; x++) {
+						let r = 0,
+							g = 0,
+							b = 0,
+							count = 0;
+
+						for (let i = -halfDegree; i <= halfDegree; i++) {
+							let sampleX, sampleY;
+
+							// 双向采样以保持图形中心位置不变
+							if (i < 0) {
+								const absI = -i;
+								sampleX = Math.round(x + dxOpp * absI);
+								sampleY = Math.round(y + dyOpp * absI);
+							} else if (i > 0) {
+								sampleX = Math.round(x + dx * i);
+								sampleY = Math.round(y + dy * i);
+							} else {
+								sampleX = x;
+								sampleY = y;
+							}
+
+							if (sampleX >= 0 && sampleX < w && sampleY >= 0 && sampleY < h) {
+								const offset = (sampleY * w + sampleX) << 2;
+								r += data[offset];
+								g += data[offset + 1];
+								b += data[offset + 2];
+								count++;
+							}
+						}
+
+						const destOffset = (y * w + x) << 2;
+						if (count > 0) {
+							outputData[destOffset] = (r / count) | 0;
+							outputData[destOffset + 1] = (g / count) | 0;
+							outputData[destOffset + 2] = (b / count) | 0;
+							outputData[destOffset + 3] = 255; // Alpha
+						} else {
+							outputData[destOffset] = data[destOffset];
+							outputData[destOffset + 1] = data[destOffset + 1];
+							outputData[destOffset + 2] = data[destOffset + 2];
+							outputData[destOffset + 3] = 255;
+						}
+					}
+				}
+
+				// 临时 Canvas 返回结果
+				const tempCanvas = document.createElement('canvas');
+				tempCanvas.width = w;
+				tempCanvas.height = h;
+				tempCanvas.getContext('2d').putImageData(new ImageData(outputData, w, h), 0, 0);
+				return tempCanvas;
+			}
+
+			/**
+			 * 快速颜色量化 (欧几里得距离)
+			 * 将模糊后的灰色像素强制归类为前景色或背景色
+			 */
+			function applyIndexedColorFast(canvas, fgHex, bgHex) {
+				const ctx = canvas.getContext('2d', { willReadFrequently: true });
+				const width = canvas.width;
+				const height = canvas.height;
+				const imageData = ctx.getImageData(0, 0, width, height);
+				const data = imageData.data;
+
+				const fg = hexToRgb(fgHex);
+				const bg = hexToRgb(bgHex);
+
+				let i = 0,
+					len = data.length;
+				let r, g, b, dr, dg, db, distFg, distBg;
+
+				for (; i < len; i += 4) {
+					r = data[i];
+					g = data[i + 1];
+					b = data[i + 2];
+
+					// 前景色距离
+					dr = r - fg.r;
+					dg = g - fg.g;
+					db = b - fg.b;
+					distFg = dr * dr + dg * dg + db * db;
+
+					// 背景色距离
+					dr = r - bg.r;
+					dg = g - bg.g;
+					db = b - bg.b;
+					distBg = dr * dr + dg * dg + db * db;
+
+					if (distFg < distBg) {
+						data[i] = fg.r;
+						data[i + 1] = fg.g;
+						data[i + 2] = fg.b;
+					} else {
+						data[i] = bg.r;
+						data[i + 1] = bg.g;
+						data[i + 2] = bg.b;
+					}
+					data[i + 3] = 255;
+				}
+				ctx.putImageData(imageData, 0, 0);
+			}
+
+			/**
+			 * =================================================================
+			 * 6. 工具与导入功能 (UTILS & IMPORT)
+			 * =================================================================
+			 */
+
+			async function handleFileSelect(e) {
+				const file = e.target.files[0];
+				if (!file) return;
+				try {
+					const imageData = await getImageDataFromFile(file);
+					const code = jsQR(imageData.data, imageData.width, imageData.height);
+					if (code) {
+						DOM.textInput.value = code.data;
+						if (typeof eda !== 'undefined') eda.sys_ToastMessage.showMessage('成功导入二维码内容', 2);
+						// showToast('成功导入二维码内容', 2);
+						updateQrCode();
+					} else {
+						if (typeof eda !== 'undefined') eda.sys_ToastMessage.showMessage('未检测到二维码，请上传有效图片', 2);
+						// showToast('未检测到二维码，请上传有效图片', 1);
+					}
+				} catch (err) {
+					console.error(err);
+					showToast('图片解析失败', 1);
+				}
+				// 清空 value 允许重复上传同一文件
+				e.target.value = '';
+			}
+
+			function getImageDataFromFile(file) {
+				return new Promise((resolve, reject) => {
+					const img = new Image();
+					img.onload = () => {
+						MEMORY.sharedCanvas.width = img.width;
+						MEMORY.sharedCanvas.height = img.height;
+						MEMORY.sharedCtx.drawImage(img, 0, 0);
+						resolve(MEMORY.sharedCtx.getImageData(0, 0, img.width, img.height));
+					};
+					img.onerror = reject;
+					img.src = URL.createObjectURL(file);
+				});
+			}
+
+			function hexToRgb(hex) {
+				// 防御性转换
+				if (!hex) return { r: 0, g: 0, b: 0 };
+				hex = hex.replace(/^#/, '');
+				if (hex.length === 3) hex = hex[0] + hex[0] + hex[1] + hex[1] + hex[2] + hex[2];
+				const num = parseInt(hex, 16);
+				return { r: (num >> 16) & 255, g: (num >> 8) & 255, b: num & 255 };
+			}
+
+			function debounce(func, wait) {
+				let timeout;
+				return function (...args) {
+					clearTimeout(timeout);
+					timeout = setTimeout(() => func.apply(this, args), wait);
+				};
+			}
+
+			function showToast(msg, type) {
+				if (typeof eda !== 'undefined' && eda.sys_ToastMessage) {
+					eda.sys_ToastMessage.showMessage(msg, type);
+				} else {
+					console.log(`[Toast Type:${type}] ${msg}`);
+					// 可选：在界面上显示非 EDA 环境的提示
+					const statusDiv = document.getElementById('status-message');
+					if (statusDiv) {
+						statusDiv.textContent = msg;
+						statusDiv.classList.remove('hidden');
+						statusDiv.style.backgroundColor = type === 1 ? '#ffdddd' : '#ddffdd';
+						setTimeout(() => statusDiv.classList.add('hidden'), 3000);
+					}
+				}
+			}
+
+			/**
+			 * =================================================================
+			 * 7. EDA 交互 (EDA INTERACTION)
+			 * =================================================================
+			 */
+
+			function getCurrentLayerId() {
+				return STATE.layerMap[STATE.currentLayer] || (typeof EPCB_LayerId !== 'undefined' ? EPCB_LayerId.TOP_SILKSCREEN : 1);
+			}
+
+			async function handlePlaceQrCode(index) {
+				const canvas = DOM.canvases[index];
+
+				// 浏览器环境：下载图片
+				if (typeof eda === 'undefined') {
+					const link = document.createElement('a');
+					link.download = `QR_${Date.now()}.png`;
+					link.href = canvas.toDataURL();
+					link.click();
+					return;
+				}
+
+				try {
+					// 清除之前的跟随状态，防止重复点击导致 Bug
+					stopFollowing();
+
+					let width = parseFloat(DOM.qrSizeInput.value);
+					let height = width;
+
+					// EDA API 通常需要以特定单位传入，这里假设输入如果是mm，内部处理可能需要转换
+					// 但根据原代码，如果输入是mm，乘了39.37，说明API需要 mil 单位
+					if (STATE.unit === 'mm') {
+						width *= CONFIG.MM_TO_MIL;
+						height *= CONFIG.MM_TO_MIL;
+					}
+
+					const layerId = getCurrentLayerId();
+					const base64 = canvas.toDataURL('image/png');
+
+					if (STATE.outputType === 'image') {
+						// 图片对象模式
+						const colorObj = eda.pcb_PrimitiveObject.create(
+							layerId,
+							0,
+							0,
+							base64,
+							width.toFixed(2),
+							height.toFixed(2),
+							0,
+							false,
+							'img',
+							false,
+						);
+						STATE.primitiveId = (await colorObj).getState_PrimitiveId();
+						startFollowing(eda.pcb_PrimitiveObject);
+					} else {
+						// 矢量对象模式 (通过 ImageToPolygon 转换)
+						const blob = await (await fetch(base64)).blob();
+						// 注意：API 调用参数需严格对应文档
+						const edaImage = await eda.pcb_MathPolygon.convertImageToComplexPolygon(
+							blob,
+							width.toFixed(2),
+							height.toFixed(2),
+							0.5,
+							0,
+							0,
+							0,
+							true,
+							false,
+						);
+						// 矢量通常是无色的 PrimitiveImage 或者 Polygon 组合
+						const noColorImg = eda.pcb_PrimitiveImage.create(
+							0,
+							0,
+							edaImage,
+							layerId,
+							width.toFixed(2),
+							height.toFixed(2),
+							0,
+							false,
+							false,
+						);
+						STATE.primitiveId = (await noColorImg).getState_PrimitiveId();
+						startFollowing(eda.pcb_PrimitiveImage);
+					}
+
+					// 放置开始后隐藏插件窗口
+					eda.sys_IFrame.hideIFrame('ImportQrcode');
+				} catch (err) {
+					console.error('Place Error:', err);
+					showToast('放置失败: ' + err.message, 1);
+					stopFollowing();
+				}
+			}
+
+			function startFollowing(primitiveModule) {
+				// 双重保险：确保只有一个 interval
+				stopFollowing();
+
+				STATE.followInterval = setInterval(async () => {
+					try {
+						// 获取当前鼠标在 PCB 画布上的坐标
+						const pt = await eda.pcb_SelectControl.getCurrentMousePosition();
+						if (!pt) return;
+
+						// 不同类型的图元修改位置参数可能不同
+						const params = primitiveModule === eda.pcb_PrimitiveObject ? { topLeftX: pt.x, topLeftY: pt.y } : { x: pt.x, y: pt.y };
+
+						await primitiveModule.modify(STATE.primitiveId, params);
+					} catch (e) {
+						// 发生错误（如图元被删除）停止跟随
+						console.warn('Follow Loop Error:', e);
+						stopFollowing();
+					}
+				}, 20); // 20ms 刷新率
+			}
+
+			function stopFollowing() {
+				if (STATE.followInterval) {
+					clearInterval(STATE.followInterval);
+					STATE.followInterval = null;
+				}
+			}
+
+			// 窗口失焦时停止跟随（可选，视需求而定，防止后台消耗资源）
+			window.onblur = () => {
+				stopFollowing();
+			};
+
+			document.addEventListener('DOMContentLoaded', init);
+		</script>
+	</body>
+</html>

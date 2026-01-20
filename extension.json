@@ -1,0 +1,278 @@
+{
+	"name": "wolfblack-tool",
+	"uuid": "345f2952d65b1a5ca2f11721b90309c9",
+	"displayName": "狼黑工具",
+	"description": "提高工作效率的实用插件合集",
+	"version": "1.13.6",
+	"publisher": "wolfblack",
+	"engines": {
+		"eda": "^2.2.45"
+	},
+	"license": "Apache-2.0",
+	"repository": {
+		"type": "github",
+		"url": "https://github.com/WOLF4096/easyeda_wolfblack_tool"
+	},
+	"categories": ["PCB", "Schematic", "Other"],
+	"keywords": ["PCB", "BOM", "原理图", "二维码", "网表", "器件", "位号", "3D模型", "导线", "线条", "焊盘", "过孔"],
+	"images": {
+		"logo": "./images/logo.png"
+	},
+	"homepage": "https://github.com/WOLF4096/easyeda_wolfblack_tool",
+	"bugs": "https://github.com/WOLF4096/easyeda_wolfblack_tool/issues",
+	"activationEvents": {},
+	"entry": "./dist/index",
+	"dependentExtensions": {},
+	"headerMenus": {
+		"home": [
+			{
+				"id": "wolfblackhome",
+				"title": "狼黑工具",
+				"menuItems": [
+					{
+						"id": "WorkingHours",
+						"title": "工作时间统计",
+						"registerFn": "WorkingHours"
+					},
+					{
+						"id": "About",
+						"title": "关于",
+						"registerFn": "About"
+					}
+				]
+			}
+		],
+		"blank": [
+			{
+				"id": "wolfblackblank",
+				"title": "狼黑工具",
+				"menuItems": [
+					{
+						"id": "WorkingHours",
+						"title": "工作时间统计",
+						"registerFn": "WorkingHours"
+					},
+					{
+						"id": "About",
+						"title": "关于",
+						"registerFn": "About"
+					}
+				]
+			}
+		],
+		"sch": [
+			{
+				"id": "wolfblacksch",
+				"title": "狼黑工具",
+				"menuItems": [
+					{
+						"id": "NetlistToSchematicid",
+						"title": "放置器件",
+						"menuItems": [
+							{
+								"id": "NetlistToSchematicPCB",
+								"title": "从PCB",
+								"registerFn": "NetlistToSchematicPCB"
+							},
+							{
+								"id": "NetlistToSchematicNET",
+								"title": "从网表文件",
+								"registerFn": "NetlistToSchematicNET"
+							}
+						]
+					},
+					{
+						"id": "AutoWirePlacerid",
+						"title": "放置导线",
+						"menuItems": [
+							{
+								"id": "AutoWirePlacerPCB",
+								"title": "从PCB",
+								"registerFn": "AutoWirePlacerPCB"
+							},
+							{
+								"id": "AutoWirePlacerNET",
+								"title": "从网表文件",
+								"registerFn": "AutoWirePlacerNET"
+							}
+						]
+					},
+					{
+						"id": "Component",
+						"title": "器件",
+						"menuItems": [
+							{
+								"id": "CodeConvert",
+								"title": "丝印代码转换",
+								"registerFn": "CodeConvert"
+							},
+							{
+								"id": "ClearEmptySupplierPropertiesSCH",
+								"title": "清空多余属性",
+								"registerFn": "ClearEmptySupplierPropertiesSCH"
+							},
+							{
+								"id": "ImportBom",
+								"title": "导入 BOM",
+								"registerFn": "ImportBom"
+							}
+						]
+					},
+					{
+						"id": "WorkingHours",
+						"title": "工作时间统计",
+						"registerFn": "WorkingHours"
+					},
+					{
+						"id": "About",
+						"title": "关于",
+						"registerFn": "About"
+					}
+				]
+			}
+		],
+		"pcb": [
+			{
+				"id": "wolfblackpcb",
+				"title": "狼黑工具",
+				"menuItems": [
+					{
+						"id": "import",
+						"title": "导入",
+						"menuItems": [
+							{
+								"id": "ImportImage",
+								"title": "图片",
+								"registerFn": "ImportImage"
+							},
+							{
+								"id": "ImportQrcode",
+								"title": "二维码",
+								"registerFn": "ImportQrcode"
+							}
+						]
+					},
+					{
+						"id": "Component",
+						"title": "器件",
+						"menuItems": [
+							{
+								"id": "CreateFootprint",
+								"title": "创建封装",
+								"registerFn": "CreateFootprint"
+							},
+							{
+								"id": "CheckDesignators",
+								"title": "位号查重",
+								"registerFn": "CheckDesignators"
+							},
+							{
+								"id": "CodeConvert",
+								"title": "丝印代码转换",
+								"registerFn": "CodeConvert"
+							},
+							{
+								"id": "ClearEmptySupplierPropertiesPCB",
+								"title": "清空多余属性",
+								"registerFn": "ClearEmptySupplierPropertiesPCB"
+							},
+							{
+								"id": "ImportBom",
+								"title": "导入 BOM",
+								"registerFn": "ImportBom"
+							},
+							{
+								"id": "ReplaceComponent",
+								"title": "批量替换器件",
+								"registerFn": "ReplaceComponent"
+							},
+							{
+								"id": "NetlistUpdate3DModels",
+								"title": "从网表恢复3D模型",
+								"registerFn": "NetlistUpdate3DModels"
+							}
+						]
+					},
+					{
+						"id": "PadViaConverter",
+						"title": "焊盘过孔转换",
+						"menuItems": [
+							{
+								"id": "PadToVia",
+								"title": "焊盘 ⇒ 过孔",
+								"registerFn": "PadToVia"
+							},
+							{
+								"id": "ViaToPad",
+								"title": "过孔 ⇒ 焊盘",
+								"registerFn": "ViaToPad"
+							},
+							{
+								"id": "PadViaToggle",
+								"title": "焊盘 ⇄ 过孔",
+								"registerFn": "PadViaToggle"
+							}
+						]
+					},
+					{
+						"id": "WireConverter",
+						"title": "线条导线转换",
+						"menuItems": [
+							{
+								"id": "PolylinetoWire",
+								"title": "线条 ⇒ 导线",
+								"registerFn": "PolylinetoWire"
+							},
+							{
+								"id": "WiretoPolyline",
+								"title": "导线 ⇒ 线条",
+								"registerFn": "WiretoPolyline"
+							},
+							{
+								"id": "WirePolylinetoggle",
+								"title": "导线 ⇄ 线条",
+								"registerFn": "WirePolylinetoggle"
+							}
+						]
+					},
+					{
+						"id": "Net",
+						"title": "网络",
+						"menuItems": [
+							{
+								"id": "ConfigurePhysicalNetsExtremespeed",
+								"title": "生成物理网络（极速）",
+								"registerFn": "ConfigurePhysicalNetsExtremespeed"
+							},
+							{
+								"id": "ConfigurePhysicalNetsTradition",
+								"title": "生成物理网络（传统）",
+								"registerFn": "ConfigurePhysicalNetsTradition"
+							},
+							{
+								"id": "ImportAltiumDesignerNetlist",
+								"title": "导入 Altium Designer 网表",
+								"registerFn": "ImportAltiumDesignerNetlist"
+							},
+							{
+								"id": "NetReplace",
+								"title": "批量修改网络",
+								"registerFn": "NetReplace"
+							}
+						]
+					},
+					{
+						"id": "WorkingHours",
+						"title": "工作时间统计",
+						"registerFn": "WorkingHours"
+					},
+					{
+						"id": "About",
+						"title": "关于",
+						"registerFn": "About"
+					}
+				]
+			}
+		]
+	}
+}

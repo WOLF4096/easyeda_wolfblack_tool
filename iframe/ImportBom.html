@@ -1,0 +1,661 @@
+<!doctype html>
+<html lang="zh-CN">
+	<head>
+		<meta charset="UTF-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+		<title>狼黑工具 - 导入BOM</title>
+		<style>
+			* {
+				margin: 0;
+				padding: 0;
+				box-sizing: border-box;
+				font-family: 'Microsoft YaHei', sans-serif;
+			}
+
+			body {
+				/* width: 1280px;
+            height: 720px; */
+				width: 100%;
+				height: 100vh;
+				overflow: hidden;
+				background-color: #f5f5f5;
+				color: #333;
+				padding: 20px;
+				position: relative;
+			}
+
+			.header {
+				display: flex;
+				justify-content: space-between;
+				align-items: center;
+				margin-bottom: 20px;
+				padding-bottom: 15px;
+				border-bottom: 1px solid #ddd;
+			}
+
+			.title {
+				font-size: 24px;
+				font-weight: bold;
+				color: #2c3e50;
+				display: flex;
+				align-items: center;
+				gap: 10px;
+			}
+
+			.version-tag {
+				font-size: 12px;
+				font-weight: normal;
+				background-color: #e0e0e0;
+				padding: 2px 6px;
+				border-radius: 4px;
+				color: #555;
+			}
+
+			.controls {
+				display: flex;
+				gap: 10px;
+			}
+
+			button {
+				padding: 8px 16px;
+				border: none;
+				border-radius: 4px;
+				cursor: pointer;
+				font-size: 14px;
+				transition: all 0.3s;
+			}
+
+			.select-all {
+				background-color: #e9ecef;
+				color: #495057;
+			}
+
+			.paste {
+				background-color: #17a2b8;
+				color: white;
+			}
+
+			.import {
+				background-color: #28a745;
+				color: white;
+			}
+
+			.import:disabled {
+				background-color: #6c757d;
+				cursor: not-allowed;
+			}
+
+			button:hover:not(:disabled) {
+				opacity: 0.9;
+				transform: translateY(-2px);
+			}
+
+			.table-container {
+				height: calc(100% - 120px);
+				overflow: auto;
+				border: 1px solid #ddd;
+				border-radius: 4px;
+				background-color: white;
+			}
+
+			table {
+				width: 100%;
+				border-collapse: collapse;
+			}
+
+			th,
+			td {
+				padding: 12px 15px;
+				text-align: left;
+				border-bottom: 1px solid #ddd;
+			}
+
+			th {
+				background-color: #f8f9fa;
+				font-weight: bold;
+				position: sticky;
+				top: 0;
+				z-index: 10;
+			}
+
+			tr:hover {
+				background-color: #f1f8ff;
+			}
+
+			.status-bar {
+				margin-top: 15px;
+				padding: 10px;
+				border-radius: 4px;
+				font-size: 14px;
+			}
+
+			.warning {
+				background-color: #fff3cd;
+				color: #856404;
+				border: 1px solid #ffeaa7;
+			}
+
+			.success {
+				background-color: #d1ecf1;
+				color: #0c5460;
+				border: 1px solid #bee5eb;
+			}
+
+			.changed {
+				color: #e74c3c;
+				font-weight: bold;
+			}
+
+			.unchanged {
+				color: #7f8c8d;
+			}
+
+			.checkbox-cell {
+				width: 40px;
+				text-align: center;
+			}
+
+			input[type='checkbox'] {
+				transform: scale(1.2);
+			}
+
+			.change-indicator {
+				font-size: 12px;
+				color: #e74c3c;
+				margin-left: 5px;
+			}
+		</style>
+	</head>
+	<body>
+		<div class="header">
+			<div class="title">
+				导入BOM
+				<span id="versionTag" class="version-tag">检测中...</span>
+			</div>
+			<div>BOM列：位号、名称、立创编号、制造商编号、制造商名称，一行一个，从Excel复制后点击粘贴-></div>
+			<div class="controls">
+				<button class="paste" id="pasteBtn">粘贴</button>
+				<button class="select-all" id="selectAll">全选</button>
+				<button class="import" id="importBtn" disabled>导入</button>
+			</div>
+		</div>
+
+		<div class="table-container">
+			<table id="bomTable">
+				<thead>
+					<tr>
+						<th class="checkbox-cell"><input type="checkbox" id="masterCheckbox" /></th>
+						<th>唯一ID</th>
+						<th>位号</th>
+						<th>名称</th>
+						<th>立创编号</th>
+						<th>制造商编号</th>
+						<th>制造商名称</th>
+					</tr>
+				</thead>
+				<tbody id="tableBody"></tbody>
+			</table>
+		</div>
+
+		<div class="status-bar" id="statusBar"></div>
+
+		<script>
+			// 全局变量
+			let jsonData = {};
+			let componentsMap = {}; // 指向实际组件列表的引用 (兼容V2/V3)
+			let tableData = [];
+			let Page;
+			let isV3 = false;
+
+			// DOM元素
+			const tableBody = document.getElementById('tableBody');
+			const statusBar = document.getElementById('statusBar');
+			const selectAllBtn = document.getElementById('selectAll');
+			const pasteBtn = document.getElementById('pasteBtn');
+			const importBtn = document.getElementById('importBtn');
+			const masterCheckbox = document.getElementById('masterCheckbox');
+			const versionTag = document.getElementById('versionTag');
+
+			// 加载BOM数据
+			async function loadBOMData() {
+				try {
+					// 转换数据格式以便表格显示
+					tableData = [];
+
+					// 使用 componentsMap 遍历，而不是直接遍历 jsonData
+					for (const [key, component] of Object.entries(componentsMap)) {
+						// 确保有 props 且不是元数据
+						if (!component || !component.props) continue;
+
+						const props = component.props;
+						tableData.push({
+							jsonKey: key, // 保存对象键，用于回写时定位 (V2是$1, V3是UUID)
+							uniqueId: props['Unique ID'], // 显示用的ID
+							designator: props.Designator || '',
+							name: props.Name || '',
+							supplierPart: props['Supplier Part'] || '',
+							manufacturerPart: props['Manufacturer Part'] || '',
+							manufacturer: props.Manufacturer || '',
+							selected: false,
+							changed: false,
+							original: {
+								designator: props.Designator || '',
+								name: props.Name || '',
+								supplierPart: props['Supplier Part'] || '',
+								manufacturerPart: props['Manufacturer Part'] || '',
+								manufacturer: props.Manufacturer || '',
+							},
+						});
+					}
+
+					renderTable();
+				} catch (error) {
+					console.error('加载BOM数据失败:', error);
+					statusBar.textContent = '加载BOM数据失败: ' + error.message;
+					statusBar.className = 'status-bar warning';
+				}
+			}
+
+			// 渲染表格
+			function renderTable() {
+				tableBody.innerHTML = '';
+
+				tableData.forEach((item, index) => {
+					const row = document.createElement('tr');
+
+					// 复选框列
+					const checkboxCell = document.createElement('td');
+					checkboxCell.className = 'checkbox-cell';
+					const checkbox = document.createElement('input');
+					checkbox.type = 'checkbox';
+					checkbox.checked = item.selected;
+					checkbox.addEventListener('change', () => {
+						item.selected = checkbox.checked;
+						updateMasterCheckbox();
+						updateSelectAllButton();
+					});
+					checkboxCell.appendChild(checkbox);
+					row.appendChild(checkboxCell);
+
+					// 唯一ID列
+					const uniqueIdCell = document.createElement('td');
+					uniqueIdCell.textContent = item.uniqueId || '空';
+					if (!item.uniqueId) uniqueIdCell.style.color = 'red';
+					row.appendChild(uniqueIdCell);
+
+					// 位号列
+					const designatorCell = document.createElement('td');
+					designatorCell.textContent = item.designator;
+					row.appendChild(designatorCell);
+
+					// 名称列
+					const nameCell = document.createElement('td');
+					if (item.changed && item.name && item.name !== item.original.name) {
+						nameCell.innerHTML = `原始值：${item.original.name}<br />修改为：${item.name}`;
+						nameCell.className = 'changed';
+					} else {
+						nameCell.textContent = item.original.name;
+					}
+					row.appendChild(nameCell);
+
+					// 立创编号列
+					const supplierPartCell = document.createElement('td');
+					if (item.changed && item.supplierPart && item.supplierPart !== item.original.supplierPart) {
+						supplierPartCell.innerHTML = `原始值：${item.original.supplierPart}<br />修改为：${item.supplierPart}`;
+						supplierPartCell.className = 'changed';
+					} else {
+						supplierPartCell.textContent = item.original.supplierPart;
+					}
+					row.appendChild(supplierPartCell);
+
+					// 制造商编号列
+					const manufacturerPartCell = document.createElement('td');
+					if (item.changed && item.manufacturerPart && item.manufacturerPart !== item.original.manufacturerPart) {
+						manufacturerPartCell.innerHTML = `原始值：${item.original.manufacturerPart}<br />修改为：${item.manufacturerPart}`;
+						manufacturerPartCell.className = 'changed';
+					} else {
+						manufacturerPartCell.textContent = item.original.manufacturerPart;
+					}
+					row.appendChild(manufacturerPartCell);
+
+					// 制造商名称列
+					const manufacturerCell = document.createElement('td');
+					if (item.changed && item.manufacturer && item.manufacturer !== item.original.manufacturer) {
+						manufacturerCell.innerHTML = `原始值：${item.original.manufacturer}<br />修改为：${item.manufacturer}`;
+						manufacturerCell.className = 'changed';
+					} else {
+						manufacturerCell.textContent = item.original.manufacturer;
+					}
+					row.appendChild(manufacturerCell);
+
+					tableBody.appendChild(row);
+				});
+			}
+
+			// 更新状态栏
+			function updateStatusBar() {
+				// 检查唯一ID是否有空值或重复
+				const uniqueIds = tableData.map((item) => item.uniqueId).filter((id) => id && id !== '');
+				const hasEmptyUniqueId = tableData.some((item) => !item.uniqueId || item.uniqueId === '');
+
+				// 检查重复 (只检查非空ID)
+				const uniqueIdsSet = new Set(uniqueIds);
+				const hasDuplicateUniqueId = uniqueIdsSet.size !== uniqueIds.length;
+
+				if (hasEmptyUniqueId || hasDuplicateUniqueId) {
+					let msg = '注意：';
+					if (hasEmptyUniqueId) msg += '存在空的唯一ID; ';
+					if (hasDuplicateUniqueId) msg += '存在重复的唯一ID; ';
+					msg += '建议先重置唯一ID，否则可能导致异常。';
+
+					statusBar.textContent = msg;
+					statusBar.className = 'status-bar warning';
+					// 兼容性策略：即便ID有问题，也允许导入，因为我们现在使用 internal Key (jsonKey) 定位
+					importBtn.disabled = false;
+				} else {
+					statusBar.textContent = `数据加载成功 (${isV3 ? 'V3模式' : 'V2模式'})，可以导入`;
+					statusBar.className = 'status-bar success';
+					importBtn.disabled = false;
+				}
+			}
+
+			// 更新全选按钮文本
+			function updateSelectAllButton() {
+				const allSelected = tableData.length > 0 && tableData.every((item) => item.selected);
+				selectAllBtn.textContent = allSelected ? '全不选' : '全选';
+			}
+
+			// 更新主复选框状态
+			function updateMasterCheckbox() {
+				const allSelected = tableData.length > 0 && tableData.every((item) => item.selected);
+				const someSelected = tableData.some((item) => item.selected);
+
+				masterCheckbox.checked = allSelected;
+				masterCheckbox.indeterminate = someSelected && !allSelected;
+			}
+
+			// 主复选框状态更新
+			masterCheckbox.addEventListener('change', function () {
+				tableData.forEach((item) => {
+					item.selected = masterCheckbox.checked;
+				});
+				renderTable();
+				updateSelectAllButton();
+			});
+
+			// 全选/取消全选
+			selectAllBtn.addEventListener('click', function () {
+				const allSelected = tableData.every((item) => item.selected);
+				tableData.forEach((item) => {
+					item.selected = !allSelected;
+				});
+				renderTable();
+				updateMasterCheckbox();
+				updateSelectAllButton();
+			});
+
+			// 粘贴功能
+			pasteBtn.addEventListener('click', async function () {
+				try {
+					// 从剪贴板获取文本
+					const clipboardText = await navigator.clipboard.readText();
+
+					// 解析CSV或TSV
+					const lines = clipboardText.trim().split('\n');
+					const pasteData = [];
+
+					// 确定分隔符和位号分隔符
+					const firstLine = lines[0];
+					let delimiter = '\t';
+					let designatorSeparator = ',';
+
+					// 检测是否为TSV格式（包含制表符且不包含逗号）
+					if (firstLine.includes('\t')) {
+						delimiter = '\t';
+						designatorSeparator = ',';
+					} else {
+						delimiter = ',';
+						designatorSeparator = '、';
+					}
+
+					console.log(`检测到格式: 分隔符=${delimiter === '\t' ? 'TSV' : 'CSV'}, 位号分隔符=${designatorSeparator}`);
+
+					// 解析每一行
+					for (let i = 0; i < lines.length; i++) {
+						const line = lines[i].trim();
+						if (!line) continue;
+
+						const parts = line.split(delimiter);
+
+						// 自动补齐字段，确保至少有5个字段
+						const paddedParts = [...parts];
+						while (paddedParts.length < 5) {
+							paddedParts.push(''); // 用空字符串补齐缺失的字段
+						}
+
+						// 如果字段超过5个，只取前5个
+						const finalParts = paddedParts.slice(0, 5);
+
+						// 处理位号：根据检测到的分隔符拆分多个位号
+						const designatorField = finalParts[0].trim();
+						let designators = [];
+
+						if (designatorField.includes(designatorSeparator)) {
+							// 包含多个位号，按分隔符拆分
+							designators = designatorField
+								.split(designatorSeparator)
+								.map((d) => d.trim())
+								.filter((d) => d);
+						} else {
+							// 单个位号
+							designators = [designatorField];
+						}
+
+						pasteData.push({
+							designators: designators, // 位号数组
+							name: finalParts[1].trim(),
+							supplierPart: finalParts[2].trim(),
+							manufacturerPart: finalParts[3].trim(),
+							manufacturer: finalParts[4].trim(),
+						});
+					}
+
+					console.log('解析后的粘贴数据:', pasteData);
+
+					// 更新表格数据
+					let updateCount = 0;
+					let matchedDesignators = new Set(); // 记录已匹配的位号
+
+					// 首先遍历粘贴数据
+					for (const pasteItem of pasteData) {
+						for (const designator of pasteItem.designators) {
+							// 在表格数据中查找匹配的位号
+							const tableItem = tableData.find((item) => item.designator === designator);
+
+							if (tableItem) {
+								// 检查是否有变更
+								const hasChanges =
+									pasteItem.name !== tableItem.original.name ||
+									pasteItem.supplierPart !== tableItem.original.supplierPart ||
+									pasteItem.manufacturerPart !== tableItem.original.manufacturerPart ||
+									pasteItem.manufacturer !== tableItem.original.manufacturer;
+
+								if (hasChanges) {
+									tableItem.name = pasteItem.name;
+									tableItem.supplierPart = pasteItem.supplierPart;
+									tableItem.manufacturerPart = pasteItem.manufacturerPart;
+									tableItem.manufacturer = pasteItem.manufacturer;
+									tableItem.changed = true;
+									tableItem.selected = true; // 自动勾选有变更的项
+									updateCount++;
+									matchedDesignators.add(designator);
+
+									console.log(`更新位号: ${designator}, 新值:`, {
+										name: pasteItem.name,
+										supplierPart: pasteItem.supplierPart,
+										manufacturerPart: pasteItem.manufacturerPart,
+										manufacturer: pasteItem.manufacturer,
+									});
+								}
+							} else {
+								console.warn(`未找到位号: ${designator}`);
+							}
+						}
+					}
+
+					// 输出未匹配的表格项
+					const unmatchedItems = tableData.filter((item) => !matchedDesignators.has(item.designator));
+					console.log(
+						'未匹配的表格项:',
+						unmatchedItems.map((item) => item.designator),
+					);
+
+					renderTable();
+					updateMasterCheckbox(); // 更新全选框状态
+					updateSelectAllButton();
+
+					if (updateCount > 0) {
+						statusBar.textContent = `成功更新了 ${updateCount} 个组件的属性 (已自动勾选)`;
+						statusBar.className = 'status-bar success';
+					} else {
+						statusBar.textContent = '没有检测到需要更新的属性';
+						statusBar.className = 'status-bar warning';
+					}
+				} catch (error) {
+					console.error('粘贴失败:', error);
+					statusBar.textContent = '粘贴失败: ' + error.message;
+					statusBar.className = 'status-bar warning';
+				}
+			});
+
+			// 导入功能
+			importBtn.addEventListener('click', async function () {
+				try {
+					// 获取选中的项目
+					const selectedItems = tableData.filter((item) => item.selected);
+
+					if (selectedItems.length === 0) {
+						statusBar.textContent = '请至少选择一个项目进行导入';
+						statusBar.className = 'status-bar warning';
+						return;
+					}
+
+					// 更新JSON数据
+					let successCount = 0;
+					selectedItems.forEach((item) => {
+						// 使用 jsonKey 在 componentsMap 中查找，比 UniqueId 更可靠
+						// 因为 item.jsonKey 是我们从 Object.entries 中直接拿到的
+						if (item.jsonKey && componentsMap[item.jsonKey]) {
+							const comp = componentsMap[item.jsonKey];
+
+							comp.props.Name = item.name || item.original.name;
+							comp.props['Supplier Part'] = item.supplierPart || item.original.supplierPart;
+							comp.props['Manufacturer Part'] = item.manufacturerPart || item.original.manufacturerPart;
+							comp.props.Manufacturer = item.manufacturer || item.original.manufacturer;
+
+							// 根据Supplier Part设置Supplier
+							if (
+								comp.props['Supplier Part'] &&
+								comp.props['Supplier Part'].trim() !== '' &&
+								comp.props['Supplier Part'].trim().toUpperCase().startsWith('C')
+							) {
+								comp.props.Supplier = 'LCSC';
+							} else {
+								comp.props.Supplier = '';
+							}
+
+							// 重置变更状态
+							item.changed = false;
+							item.original = {
+								designator: item.designator,
+								name: item.name,
+								supplierPart: item.supplierPart,
+								manufacturerPart: item.manufacturerPart,
+								manufacturer: item.manufacturer,
+							};
+							successCount++;
+						} else {
+							console.warn('找不到组件键值:', item.jsonKey);
+						}
+					});
+
+					// 将修改后的数据转换回JSON字符串
+					// 此时 componentsMap 的修改已经体现在 jsonData 中
+					const listjson = JSON.stringify(jsonData, null, 2);
+
+					// 写回JSON数据
+					console.log('写入数据到:', Page);
+					if (Page === 'PCB') {
+						await eda.pcb_Net.setNetlist('JLCEDA', listjson);
+					} else {
+						await eda.sch_Netlist.setNetlist('JLCEDA', listjson);
+					}
+
+					statusBar.textContent = `成功导入了 ${successCount} 个组件的属性`;
+					statusBar.className = 'status-bar success';
+
+					// 写回成功，刷新列表
+					setTimeout(() => {
+						loadBOMData();
+					}, 500);
+				} catch (error) {
+					console.error('导入失败:', error);
+					statusBar.textContent = '导入失败: ' + error.message;
+					statusBar.className = 'status-bar warning';
+				}
+			});
+
+			// 初始化
+			document.addEventListener('DOMContentLoaded', async function () {
+				// 版本检测
+				try {
+					if (typeof eda !== 'undefined' && eda.sys_Environment && eda.sys_Environment.getEditorCurrentVersion) {
+						const version = eda.sys_Environment.getEditorCurrentVersion();
+						console.log('当前EDA版本:', version);
+						if (version && version.toString().startsWith('3')) {
+							isV3 = true;
+							versionTag.textContent = 'V3模式';
+						} else {
+							versionTag.textContent = 'V2模式';
+						}
+					} else {
+						versionTag.textContent = 'V2模式 (默认)';
+					}
+				} catch (e) {
+					console.warn('版本检测失败', e);
+					versionTag.textContent = '模式未知';
+				}
+
+				// 获取网表
+				try {
+					let getNetlist;
+					let NetList;
+					try {
+						getNetlist = await eda.pcb_ManufactureData.getNetlistFile('JLCEDA');
+						NetList = await getNetlist.text();
+						Page = 'PCB';
+					} catch (error) {
+						getNetlist = await eda.sch_ManufactureData.getNetlistFile('JLCEDA');
+						NetList = await getNetlist.text();
+						Page = 'SCH';
+					}
+					// console.log(NetList);
+					jsonData = JSON.parse(NetList);
+
+					// 设置数据源映射
+					if (isV3 && jsonData.components) {
+						componentsMap = jsonData.components;
+					} else {
+						componentsMap = jsonData;
+					}
+
+					await loadBOMData();
+					updateStatusBar();
+				} catch (error) {
+					console.error('初始化错误', error);
+					statusBar.textContent = '初始化失败: ' + error.message;
+				}
+			});
+		</script>
+	</body>
+</html>

@@ -1,0 +1,1371 @@
+<!doctype html>
+<html lang="zh-CN">
+	<head>
+		<meta charset="UTF-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+		<title>狼黑工具 - 工作时间统计</title>
+		<script src="/iframe/js/echarts.min.js"></script>
+		<style>
+			/* === 基础布局 === */
+			body {
+				/* width: 540px;
+            height: 680px; */
+				width: 100%;
+				height: 100vh;
+				background-color: #1e1e1e;
+				color: #ccc;
+				font-family: Consolas, 'Microsoft YaHei', sans-serif;
+				margin: 0;
+				padding: 15px;
+				box-sizing: border-box;
+				overflow: hidden;
+				display: flex;
+				flex-direction: column;
+				gap: 10px;
+			}
+			.header {
+				display: flex;
+				justify-content: space-between;
+				align-items: center;
+				padding-bottom: 5px;
+				border-bottom: 1px solid #333;
+				height: 25px;
+				flex-shrink: 0;
+			}
+			.main-title {
+				font-size: 16px;
+				font-weight: bold;
+				color: #fff;
+				border-left: 4px solid #00d000;
+				padding-left: 10px;
+			}
+			.today-stats {
+				font-size: 12px;
+				color: #aaa;
+			}
+			.highlight {
+				color: #00d000;
+				font-weight: bold;
+				margin: 0 2px;
+			}
+
+			/* 导航栏 */
+			.nav-tabs {
+				display: flex;
+				background: #2b2b2b;
+				border-radius: 6px;
+				padding: 3px;
+				gap: 5px;
+				flex-shrink: 0;
+			}
+			.nav-item {
+				flex: 1;
+				text-align: center;
+				padding: 6px 0;
+				font-size: 13px;
+				color: #888;
+				cursor: pointer;
+				border-radius: 4px;
+				transition: all 0.2s;
+				user-select: none;
+			}
+			.nav-item:hover {
+				background: #333;
+				color: #eee;
+			}
+			.nav-item.active {
+				background: #444;
+				color: #00d000;
+				font-weight: bold;
+			}
+
+			/* 视图容器 */
+			.view-container {
+				flex: 1;
+				display: flex;
+				flex-direction: column;
+				gap: 10px;
+				min-height: 0;
+				position: relative;
+			}
+			.view-container.hidden {
+				display: none;
+			}
+			.chart-card {
+				background: #2b2b2b;
+				border-radius: 6px;
+				padding: 10px;
+				box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+				display: flex;
+				flex-direction: column;
+				overflow: hidden;
+			}
+
+			/* 高度分配 */
+			.h-40 {
+				height: 40%;
+				flex-shrink: 0;
+			}
+			.h-60 {
+				flex: 1;
+			}
+			.rank-list-card {
+				flex: 1;
+				min-height: 0;
+				display: flex;
+				flex-direction: column;
+			}
+			.rank-history-card {
+				height: 35%;
+				flex-shrink: 0;
+			}
+
+			/* 滚动条 */
+			.scroll-wrapper {
+				flex: 1;
+				overflow-y: auto;
+				overflow-x: hidden;
+				margin-right: -5px;
+				padding-right: 5px;
+			}
+			.scroll-wrapper::-webkit-scrollbar {
+				width: 4px;
+			}
+			.scroll-wrapper::-webkit-scrollbar-thumb {
+				background: #444;
+				border-radius: 2px;
+			}
+			.scroll-wrapper::-webkit-scrollbar-track {
+				background: transparent;
+			}
+
+			/* 图表头部 */
+			.chart-header-row {
+				display: flex;
+				justify-content: space-between;
+				align-items: center;
+				margin-bottom: 5px;
+				height: 24px;
+				flex-shrink: 0;
+			}
+			.chart-title {
+				font-size: 12px;
+				color: #888;
+				display: flex;
+				align-items: center;
+				white-space: nowrap;
+				overflow: hidden;
+				text-overflow: ellipsis;
+			}
+			.summary-info {
+				margin-left: 10px;
+				font-size: 11px;
+				color: #666;
+				font-family: Consolas, monospace;
+			}
+			.sum-val {
+				color: #ccc;
+				margin: 0 2px;
+			}
+			.chart-box {
+				flex: 1;
+				width: 100%;
+				min-height: 0;
+			}
+
+			/* 按钮组 */
+			.btn-group {
+				display: flex;
+				background: #1e1e1e;
+				border-radius: 4px;
+				padding: 2px;
+				gap: 2px;
+			}
+			.filter-btn {
+				background: transparent;
+				border: none;
+				color: #666;
+				font-size: 10px;
+				padding: 2px 8px;
+				cursor: pointer;
+				border-radius: 3px;
+				font-family: inherit;
+			}
+			.filter-btn:hover {
+				color: #ccc;
+			}
+			.filter-btn.active {
+				background: #333;
+				color: #00d000;
+				font-weight: bold;
+			}
+
+			/* === 提醒页面样式优化 === */
+			.reminder-list {
+				display: flex;
+				flex-direction: column;
+				gap: 5px;
+			}
+			.reminder-item {
+				display: flex;
+				justify-content: space-between;
+				align-items: center;
+				background: #333;
+				padding: 10px;
+				border-radius: 4px;
+				font-size: 14px;
+				border: 1px solid transparent;
+				transition: all 0.2s;
+			}
+			.reminder-item:hover {
+				background: #3c3c3c;
+			}
+
+			.reminder-content {
+				flex: 1;
+				margin-left: 10px;
+				margin-right: 10px;
+				color: #eee;
+				overflow: hidden;
+				text-overflow: ellipsis;
+				white-space: nowrap;
+			}
+
+			/* 行内按钮组 */
+			.item-actions {
+				display: flex;
+				gap: 5px;
+			}
+			.small-btn {
+				font-size: 12px;
+				padding: 2px 6px;
+				border-radius: 2px;
+				border: none;
+				cursor: pointer;
+				background: #444;
+				color: #bbb;
+			}
+			.small-btn:hover {
+				background: #555;
+				color: #fff;
+			}
+			.small-btn.del:hover {
+				background: #550000;
+				color: #ff6666;
+			}
+
+			.input-row {
+				display: flex;
+				gap: 5px;
+				margin-top: 10px;
+				align-items: center;
+			}
+			.dark-input {
+				background: #1e1e1e;
+				border: 1px solid #444;
+				color: #ccc;
+				padding: 5px;
+				border-radius: 3px;
+				font-family: inherit;
+				font-size: 12px;
+				height: 28px;
+				box-sizing: border-box;
+			}
+			.dark-input:focus {
+				outline: none;
+				border-color: #00d000;
+			}
+
+			.action-btn {
+				background: #444;
+				border: none;
+				color: #ccc;
+				padding: 0 15px;
+				height: 28px;
+				border-radius: 3px;
+				cursor: pointer;
+				font-size: 12px;
+				transition: background 0.2s;
+				white-space: nowrap;
+			}
+			.action-btn:hover {
+				background: #555;
+				color: #fff;
+			}
+			.action-btn.primary {
+				background: #006600;
+				color: #fff;
+			}
+			.action-btn.primary:hover {
+				background: #008800;
+			}
+			.action-btn.save {
+				background: #006600;
+				color: #fff;
+			}
+			.action-btn.save:hover {
+				background: #008800;
+			}
+
+			/* 加载遮罩 */
+			#loading-mask {
+				position: absolute;
+				top: 0;
+				left: 0;
+				width: 100%;
+				height: 100%;
+				background: rgba(30, 30, 30, 0.9);
+				z-index: 999;
+				display: flex;
+				justify-content: center;
+				align-items: center;
+				color: #00d000;
+			}
+		</style>
+	</head>
+	<body>
+		<div id="loading-mask">正在读取历史数据...</div>
+
+		<div class="header">
+			<div class="main-title">工作时间统计</div>
+			<div class="today-stats" id="headerStatsArea">
+				<span id="headerScope">今日已工作</span>
+				<span id="headerVal" class="highlight">0时0分</span>
+			</div>
+		</div>
+
+		<div class="nav-tabs">
+			<div class="nav-item active" onclick="switchTab('total')">总趋势</div>
+			<div class="nav-item" onclick="switchTab('project')">当前工程</div>
+			<div class="nav-item" onclick="switchTab('rank')">排行榜</div>
+			<div class="nav-item" onclick="switchTab('reminder')">消息提醒</div>
+		</div>
+
+		<div id="view-dashboard" class="view-container">
+			<div class="chart-card h-40">
+				<div class="chart-header-row">
+					<span class="chart-title">
+						<span id="trendTitle">历史趋势</span>
+						<span class="summary-info" id="trendSummary"></span>
+					</span>
+					<div class="btn-group" id="dateRangeGroup">
+						<button class="filter-btn active" onclick="updateDashboardRange(7, this)">近7天</button>
+						<button class="filter-btn" onclick="updateDashboardRange(30, this)">近30天</button>
+						<button class="filter-btn" onclick="updateDashboardRange(0, this)">全部</button>
+					</div>
+				</div>
+				<div id="dailyChart" class="chart-box"></div>
+			</div>
+
+			<div class="chart-card h-60">
+				<div class="chart-header-row">
+					<span class="chart-title">
+						<span id="detailTitle" style="color: #00d000">详情</span>
+						<span class="summary-info" id="detailSummary"></span>
+					</span>
+					<div class="btn-group" id="precisionGroup">
+						<button class="filter-btn" onclick="updateDetailPrecision(15, this)">15分</button>
+						<button class="filter-btn" onclick="updateDetailPrecision(30, this)">30分</button>
+						<button class="filter-btn active" onclick="updateDetailPrecision(60, this)">1小时</button>
+					</div>
+				</div>
+				<div id="hourlyChart" class="chart-box"></div>
+			</div>
+		</div>
+
+		<div id="view-rank" class="view-container hidden">
+			<div class="chart-card rank-list-card">
+				<div class="chart-header-row">
+					<span class="chart-title">工程耗时排行 (右侧X可删除数据)</span>
+				</div>
+				<div class="scroll-wrapper">
+					<div id="rankChart" style="width: 100%"></div>
+				</div>
+			</div>
+
+			<div class="chart-card rank-history-card">
+				<div class="chart-header-row">
+					<span class="chart-title">
+						<span
+							id="rankHistoryTitle"
+							style="
+								color: #00d000;
+								max-width: 150px;
+								overflow: hidden;
+								text-overflow: ellipsis;
+								display: inline-block;
+								vertical-align: bottom;
+							"
+							>选中工程</span
+						>
+						<span id="rankHistorySummary" class="summary-info"></span>
+					</span>
+				</div>
+				<div id="rankHistoryChart" class="chart-box"></div>
+			</div>
+		</div>
+
+		<div id="view-reminder" class="view-container hidden">
+			<div class="chart-card" style="flex: 1">
+				<div class="chart-header-row">
+					<span class="chart-title" style="color: #00d000">消息提醒设置</span>
+					<span class="summary-info">当今日工作满指定时间触发</span>
+				</div>
+
+				<div class="scroll-wrapper" style="background: #222; border-radius: 4px; padding: 5px; margin-bottom: 10px">
+					<div id="reminderListContainer" class="reminder-list"></div>
+				</div>
+
+				<div style="border-top: 1px solid #333; padding-top: 10px; margin-top: auto">
+					<div style="font-size: 12px; color: #888; margin-bottom: 5px">添加提醒规则，添加/删除后都需要点击保存</div>
+					<div class="input-row">
+						<input id="remindMinInput" type="number" class="dark-input" style="width: 70px" placeholder="分钟" />
+						<input id="remindMsgInput" type="text" class="dark-input" style="flex: 1" placeholder="提醒内容 (例如: 休息一下)" />
+						<button class="action-btn primary" onclick="ReminderApp.add()">新增</button>
+						<button class="action-btn save" onclick="ReminderApp.save()">保存</button>
+					</div>
+				</div>
+			</div>
+		</div>
+
+		<script>
+			// ==========================================
+			// 0. 工具函数 (格式化)
+			// ==========================================
+
+			function formatTimeCN(hoursFloat) {
+				if (typeof hoursFloat !== 'number') hoursFloat = parseFloat(hoursFloat);
+				if (isNaN(hoursFloat)) return '0时0分';
+				const totalMin = Math.round(hoursFloat * 60);
+				const h = Math.floor(totalMin / 60);
+				const m = totalMin % 60;
+				return `${h}时${m}分`;
+			}
+
+			function formatTimeHHMM(hoursFloat) {
+				if (typeof hoursFloat !== 'number') hoursFloat = parseFloat(hoursFloat);
+				if (isNaN(hoursFloat)) return '00:00';
+				const totalMin = Math.round(hoursFloat * 60);
+				const h = Math.floor(totalMin / 60);
+				const m = totalMin % 60;
+				const hStr = h.toString().padStart(2, '0');
+				const mStr = m.toString().padStart(2, '0');
+				return `${hStr}:${mStr}`;
+			}
+
+			function sanitizeSlotData(rawW, rawI) {
+				let w = Number(rawW) || 0;
+				let i = Number(rawI) || 0;
+				const MAX_SEC = 900;
+
+				if (w > MAX_SEC) {
+					w = MAX_SEC;
+					i = 0;
+				} else if (w + i > MAX_SEC) {
+					i = MAX_SEC - w;
+					if (i < 0) i = 0;
+				}
+				return [w, i];
+			}
+
+			// ==========================================
+			// 1. 数据结构与加载器
+			// ==========================================
+			const MAX_SCAN_DAYS = 365;
+			let CURRENT_UUID = null;
+			let CURRENT_NAME = '未命名工程';
+
+			const DB = {
+				dates: [],
+				datesRaw: [],
+				rawDailyData: {},
+				projects: {},
+				total: { work: [], idle: [] },
+				rankData: [],
+			};
+
+			const StorageLoader = {
+				generateKeys: (days) => {
+					const keys = [];
+					const displayDates = [];
+					for (let i = days - 1; i >= 0; i--) {
+						const d = new Date();
+						d.setDate(d.getDate() - i);
+						const Y = d.getFullYear();
+						const M = (d.getMonth() + 1).toString().padStart(2, '0');
+						const D = d.getDate().toString().padStart(2, '0');
+						keys.push(`STATS_${Y}_${M}_${D}`);
+						displayDates.push(`${Y}/${M}/${D}`);
+					}
+					return { keys, displayDates };
+				},
+
+				loadAll: async () => {
+					try {
+						const info = await eda.dmt_Project.getCurrentProjectInfo();
+						if (info) {
+							CURRENT_UUID = info.uuid;
+							CURRENT_NAME = info.friendlyName || '未命名工程';
+						}
+					} catch (e) {
+						console.log('未获取到当前工程');
+					}
+
+					const { keys, displayDates } = StorageLoader.generateKeys(MAX_SCAN_DAYS);
+					const promises = keys.map((key) => eda.sys_Storage.getExtensionUserConfig(key));
+					const results = await Promise.all(promises);
+
+					let startIndex = -1;
+					for (let i = 0; i < results.length; i++) {
+						if (results[i]) {
+							startIndex = i;
+							break;
+						}
+					}
+					if (startIndex === -1) startIndex = results.length - 1;
+
+					const validLen = results.length - startIndex;
+					DB.dates = displayDates.slice(startIndex);
+					DB.datesRaw = keys.slice(startIndex);
+					const validResults = results.slice(startIndex);
+
+					validResults.forEach((jsonStr, index) => {
+						const dayData = jsonStr ? JSON.parse(jsonStr) : { meta: {}, slots: {} };
+						const dateKey = DB.datesRaw[index];
+						DB.rawDailyData[dateKey] = dayData;
+
+						let dayTotalWork = 0;
+						let dayTotalIdle = 0;
+						const dailyProjectSum = {};
+
+						for (const slotIdx in dayData.slots) {
+							const slotObj = dayData.slots[slotIdx];
+							let slotPhysicalWork = 0;
+							let slotPhysicalIdle = 0;
+
+							for (const uuid in slotObj) {
+								const [rawW, rawI] = slotObj[uuid];
+								slotPhysicalWork += Number(rawW) || 0;
+								slotPhysicalIdle += Number(rawI) || 0;
+
+								const [pW, pI] = sanitizeSlotData(rawW, rawI);
+
+								if (!dailyProjectSum[uuid]) {
+									dailyProjectSum[uuid] = { w: 0, i: 0, name: dayData.meta[uuid] || '未知' };
+								}
+								dailyProjectSum[uuid].w += pW;
+								dailyProjectSum[uuid].i += pI;
+							}
+
+							const [finalSlotW, finalSlotI] = sanitizeSlotData(slotPhysicalWork, slotPhysicalIdle);
+							dayTotalWork += finalSlotW;
+							dayTotalIdle += finalSlotI;
+						}
+
+						DB.total.work.push(Number((dayTotalWork / 3600).toFixed(2)));
+						DB.total.idle.push(Number((dayTotalIdle / 3600).toFixed(2)));
+
+						for (const uuid in dailyProjectSum) {
+							if (!DB.projects[uuid]) {
+								DB.projects[uuid] = {
+									name: dailyProjectSum[uuid].name,
+									work: new Array(validLen).fill(0),
+									idle: new Array(validLen).fill(0),
+								};
+							}
+							DB.projects[uuid].work[index] = Number((dailyProjectSum[uuid].w / 3600).toFixed(2));
+							DB.projects[uuid].idle[index] = Number((dailyProjectSum[uuid].i / 3600).toFixed(2));
+							if (dailyProjectSum[uuid].name) DB.projects[uuid].name = dailyProjectSum[uuid].name;
+						}
+					});
+
+					DB.rankData = Object.keys(DB.projects)
+						.map((uuid) => {
+							const p = DB.projects[uuid];
+							const totalSec = p.work.reduce((a, b) => a + b, 0);
+							return {
+								name: p.name,
+								uuid: uuid,
+								value: Number(totalSec.toFixed(2)),
+							};
+						})
+						.sort((a, b) => b.value - a.value);
+
+					if (CURRENT_UUID && !DB.projects[CURRENT_UUID]) {
+						DB.projects[CURRENT_UUID] = {
+							name: CURRENT_NAME,
+							work: new Array(validLen).fill(0),
+							idle: new Array(validLen).fill(0),
+						};
+					}
+				},
+			};
+
+			// === 2. 状态 ===
+			const state = {
+				activeTab: 'total',
+				dashDateRange: 7,
+				dashPrecision: 60,
+				dashSelectedDateIdx: -1,
+				dashDataSource: DB.total,
+				rankSelectedUuid: null,
+			};
+
+			// === 3. 图表实例 ===
+			const charts = {
+				daily: echarts.init(document.getElementById('dailyChart'), 'dark'),
+				hourly: echarts.init(document.getElementById('hourlyChart'), 'dark'),
+				rank: echarts.init(document.getElementById('rankChart'), 'dark'),
+				rankHistory: echarts.init(document.getElementById('rankHistoryChart'), 'dark'),
+			};
+
+			// === 4. 辅助函数 ===
+			function sumArray(arr) {
+				if (!arr || arr.length === 0) return 0;
+				return arr.reduce((a, b) => a + b, 0);
+			}
+
+			function formatTimeRange(startStr, minutesToAdd) {
+				if (!startStr.includes(':')) return startStr;
+				const [hStr, mStr] = startStr.split(':');
+				const totalStart = parseInt(hStr, 10) * 60 + parseInt(mStr, 10);
+				const totalEnd = totalStart + minutesToAdd;
+				const endH = Math.floor(totalEnd / 60) % 24;
+				const endM = totalEnd % 60;
+				const format = (val) => val.toString().padStart(2, '0');
+				return `${startStr}~${format(endH)}:${format(endM)}`;
+			}
+
+			function updateTrendSummary(actualCount, wData, iData, label) {
+				const wSum = sumArray(wData);
+				const iSum = sumArray(iData);
+				document.getElementById('trendSummary').innerHTML =
+					`${label}: 工作<span class="sum-val">${formatTimeCN(wSum)}</span> 休息<span class="sum-val">${formatTimeCN(iSum)}</span>`;
+			}
+
+			function updateDetailSummary(wTotalMin, iTotalMin) {
+				const wH = wTotalMin / 60;
+				const iH = iTotalMin / 60;
+				document.getElementById('detailSummary').innerHTML =
+					`工作<span class="sum-val">${formatTimeCN(wH)}</span> 休息<span class="sum-val">${formatTimeCN(iH)}</span>`;
+			}
+
+			// === 5. 渲染 Dashboard ===
+			function renderDashboard() {
+				const days = state.dashDateRange;
+				let startIdx = 0;
+
+				if (days > 0) {
+					if (days < DB.dates.length) {
+						startIdx = DB.dates.length - days;
+					}
+				} else {
+					if (state.activeTab === 'project') {
+						const pData = state.dashDataSource;
+						let firstActiveIdx = -1;
+						for (let k = 0; k < pData.work.length; k++) {
+							if (pData.work[k] > 0 || pData.idle[k] > 0) {
+								firstActiveIdx = k;
+								break;
+							}
+						}
+						if (firstActiveIdx !== -1) {
+							startIdx = firstActiveIdx;
+						} else {
+							startIdx = DB.dates.length - 1;
+						}
+					} else {
+						startIdx = 0;
+					}
+				}
+
+				let xData = DB.dates.slice(startIdx);
+				let wData = state.dashDataSource.work.slice(startIdx);
+				let iData = state.dashDataSource.idle.slice(startIdx);
+
+				const actualCount = xData.length;
+				let rangeLabel = days === 0 ? `全部${actualCount}天` : `近${days}天`;
+
+				if (xData.length < 7 && xData.length > 0) {
+					const padCount = 7 - xData.length;
+					const firstDateStr = xData[0];
+					const firstDate = new Date(firstDateStr);
+
+					for (let k = 1; k <= padCount; k++) {
+						const d = new Date(firstDate);
+						d.setDate(d.getDate() - k);
+						const Y = d.getFullYear();
+						const M = (d.getMonth() + 1).toString().padStart(2, '0');
+						const D = d.getDate().toString().padStart(2, '0');
+
+						xData.unshift(`${Y}/${M}/${D}`);
+						wData.unshift(0);
+						iData.unshift(0);
+					}
+				} else if (xData.length === 0) {
+					for (let k = 6; k >= 0; k--) {
+						const d = new Date();
+						d.setDate(d.getDate() - k);
+						const Y = d.getFullYear();
+						const M = (d.getMonth() + 1).toString().padStart(2, '0');
+						const D = d.getDate().toString().padStart(2, '0');
+						xData.push(`${Y}/${M}/${D}`);
+						wData.push(0);
+						iData.push(0);
+					}
+				}
+
+				updateTrendSummary(actualCount, wData, iData, rangeLabel);
+
+				let title = state.activeTab === 'total' ? '总趋势' : CURRENT_NAME;
+				if (title.length > 20) title = title.substring(0, 19) + '...';
+				document.getElementById('trendTitle').innerText = title;
+
+				let maxDailyTotal = 0;
+				for (let i = 0; i < wData.length; i++) {
+					const sum = (Number(wData[i]) || 0) + (Number(iData[i]) || 0);
+					if (sum > maxDailyTotal) maxDailyTotal = sum;
+				}
+
+				const dailyOption = getLineOption(xData, wData, iData, null);
+
+				if (maxDailyTotal > 23) {
+					dailyOption.yAxis.max = 24;
+					dailyOption.yAxis.interval = 4;
+				} else {
+					delete dailyOption.yAxis.max;
+					delete dailyOption.yAxis.interval;
+				}
+
+				charts.daily.setOption(dailyOption, true);
+				renderHourlyChart();
+			}
+
+			function renderHourlyChart() {
+				if (state.dashSelectedDateIdx < 0 || state.dashSelectedDateIdx >= DB.dates.length) {
+					state.dashSelectedDateIdx = DB.dates.length - 1;
+				}
+
+				const rawKey = DB.datesRaw[state.dashSelectedDateIdx];
+				if (!rawKey) {
+					charts.hourly.clear();
+					return;
+				}
+
+				const dateDisplay = DB.dates[state.dashSelectedDateIdx] || '无数据';
+				document.getElementById('detailTitle').innerText = dateDisplay;
+
+				const dayData = DB.rawDailyData[rawKey] || { slots: {} };
+				const precision = state.dashPrecision;
+				const slotsPerPoint = precision / 15;
+				const totalPoints = (24 * 60) / precision;
+
+				const xData = [],
+					wData = [],
+					iData = [];
+				let totalW = 0,
+					totalI = 0;
+				const targetUuid = state.activeTab === 'project' ? CURRENT_UUID : null;
+
+				for (let i = 0; i < totalPoints; i++) {
+					const startMin = i * precision;
+					const h = Math.floor(startMin / 60)
+						.toString()
+						.padStart(2, '0');
+					const m = (startMin % 60).toString().padStart(2, '0');
+					xData.push(`${h}:${m}`);
+
+					let pointW = 0,
+						pointI = 0;
+					for (let k = 0; k < slotsPerPoint; k++) {
+						const slotIdx = i * slotsPerPoint + k;
+						const slotContent = dayData.slots[slotIdx.toString()];
+
+						if (slotContent) {
+							let slotRawW = 0;
+							let slotRawI = 0;
+
+							for (const uuid in slotContent) {
+								if (!targetUuid || uuid === targetUuid) {
+									const [rawW, rawI] = slotContent[uuid];
+									slotRawW += Number(rawW) || 0;
+									slotRawI += Number(rawI) || 0;
+								}
+							}
+
+							const [sw, si] = sanitizeSlotData(slotRawW, slotRawI);
+
+							pointW += sw;
+							pointI += si;
+						}
+					}
+					wData.push(pointW / 3600);
+					iData.push(pointI / 3600);
+					totalW += pointW;
+					totalI += pointI;
+				}
+
+				updateDetailSummary(totalW / 60, totalI / 60);
+				charts.hourly.setOption(getLineOption(xData, wData, iData, precision));
+			}
+
+			// === 6. 渲染 Rank (排行榜) - 修改版：增加双 Y 轴支持删除 ===
+			function renderRankView() {
+				const data = DB.rankData;
+				const barHeight = 35;
+				const totalHeight = data.length * barHeight + 40;
+
+				const rankDiv = document.getElementById('rankChart');
+				rankDiv.style.height = `${totalHeight}px`;
+				charts.rank.resize();
+
+				const option = {
+					animation: false,
+					backgroundColor: 'transparent',
+					tooltip: {
+						trigger: 'axis',
+						axisPointer: { type: 'shadow' },
+						confine: true,
+						formatter: function (params) {
+							// 过滤掉我们添加的 "删除按钮" 系列的 tooltip
+							const item = params.find((p) => p.seriesType === 'bar');
+							if (!item) return '';
+							return `<div style="max-width:200px;word-wrap:break-word;"><b>${item.name}</b><br/>总耗时: ${formatTimeCN(item.value)}</div>`;
+						},
+					},
+					// 增加 right 边距，为删除按钮留空间
+					grid: { top: 10, bottom: 10, right: 40, left: 220 },
+					xAxis: { type: 'value', splitLine: { show: false }, axisLabel: { show: false } },
+					yAxis: [
+						// 左侧 Y 轴：显示工程名称 (保持原样)
+						{
+							type: 'category',
+							data: data.map((d) => d.name),
+							inverse: true,
+							axisLine: { show: false },
+							axisTick: { show: false },
+							triggerEvent: true,
+							axisLabel: {
+								color: '#ccc',
+								align: 'left',
+								margin: 210,
+								fontSize: 12,
+								formatter: function (value, index) {
+									let name = value;
+									if (name.length > 20) name = name.substring(0, 19) + '...';
+									return `${index + 1}. ${name}`;
+								},
+							},
+						},
+						// 右侧 Y 轴：显示 X 按钮
+						{
+							type: 'category',
+							position: 'right',
+							data: data.map(() => '×'), // 所有行都显示 X
+							inverse: true,
+							axisLine: { show: false },
+							axisTick: { show: false },
+							triggerEvent: true, // 允许点击
+							axisLabel: {
+								color: '#3c3c3c',
+								fontSize: 18,
+								fontWeight: 'bold',
+								margin: 10,
+								// ECharts 坐标轴标签本身不支持 cursor pointer，但视觉上红色 X 足够明显
+							},
+						},
+					],
+					series: [
+						{
+							type: 'bar',
+							barWidth: 18,
+							// 对应左侧 Y 轴
+							yAxisIndex: 0,
+							data: data.map((d) => ({ value: d.value, uuid: d.uuid })),
+							itemStyle: { color: '#00D000', borderRadius: 4 },
+							showBackground: true,
+							backgroundStyle: { color: 'rgba(255,255,255,0.05)', borderRadius: 4 },
+							label: {
+								show: true,
+								position: 'right',
+								color: '#00D000',
+								fontWeight: 'bold',
+								formatter: function (p) {
+									return formatTimeHHMM(p.value);
+								},
+							},
+						},
+					],
+				};
+				charts.rank.setOption(option);
+
+				if (!state.rankSelectedUuid && data.length > 0) {
+					// 如果当前选中的不在列表里（比如刚删除了），默认选第一个
+					if (!data.find((d) => d.uuid === state.rankSelectedUuid)) {
+						state.rankSelectedUuid = data[0].uuid;
+					}
+				}
+
+				if (state.rankSelectedUuid) {
+					const item = data.find((d) => d.uuid === state.rankSelectedUuid);
+					if (item) {
+						renderRankHistory(item.uuid, item.name);
+					} else {
+						// 兜底：如果列表为空
+						document.getElementById('rankHistoryTitle').innerText = '无数据';
+						document.getElementById('rankHistorySummary').innerText = '';
+						charts.rankHistory.clear();
+					}
+				} else {
+					// 列表为空
+					document.getElementById('rankHistoryTitle').innerText = '无数据';
+					document.getElementById('rankHistorySummary').innerText = '';
+					charts.rankHistory.clear();
+				}
+			}
+
+			function renderRankHistory(uuid, name) {
+				const dispName = name.length > 20 ? name.substring(0, 19) + '...' : name;
+				const titleEl = document.getElementById('rankHistoryTitle');
+				titleEl.innerText = dispName;
+				titleEl.title = name;
+
+				const pData = DB.projects[uuid];
+				if (!pData) return;
+
+				let startIdx = 0;
+				for (let k = 0; k < pData.work.length; k++) {
+					if (pData.work[k] > 0 || pData.idle[k] > 0) {
+						startIdx = k;
+						break;
+					}
+				}
+				if (startIdx === 0 && pData.work[0] === 0 && pData.idle[0] === 0) {
+					const lastActive = pData.work.length - 7;
+					if (startIdx < lastActive && sumArray(pData.work) === 0 && sumArray(pData.idle) === 0) {
+						startIdx = lastActive > 0 ? lastActive : 0;
+					}
+				}
+
+				const wTotal = sumArray(pData.work);
+				const iTotal = sumArray(pData.idle);
+				document.getElementById('rankHistorySummary').innerHTML =
+					`工作<span class="sum-val">${formatTimeCN(wTotal)}</span> 休息<span class="sum-val">${formatTimeCN(iTotal)}</span>`;
+
+				let xH = DB.dates.slice(startIdx);
+				let wH = pData.work.slice(startIdx);
+				let iH = pData.idle.slice(startIdx);
+
+				if (xH.length < 7 && xH.length > 0) {
+					const padCount = 7 - xH.length;
+					const firstDate = new Date(xH[0]);
+					for (let k = 1; k <= padCount; k++) {
+						const d = new Date(firstDate);
+						d.setDate(d.getDate() - k);
+						const Y = d.getFullYear();
+						const M = (d.getMonth() + 1).toString().padStart(2, '0');
+						const D = d.getDate().toString().padStart(2, '0');
+						xH.unshift(`${Y}/${M}/${D}`);
+						wH.unshift(0);
+						iH.unshift(0);
+					}
+				}
+
+				let maxDailyTotal = 0;
+				for (let i = 0; i < wH.length; i++) {
+					const sum = (Number(wH[i]) || 0) + (Number(iH[i]) || 0);
+					if (sum > maxDailyTotal) maxDailyTotal = sum;
+				}
+
+				const option = getLineOption(xH, wH, iH, null);
+
+				if (maxDailyTotal > 23) {
+					option.yAxis.max = 24;
+					option.yAxis.interval = 4;
+				} else {
+					option.yAxis.max = null;
+					option.yAxis.interval = null;
+				}
+
+				charts.rankHistory.setOption(option, true);
+			}
+
+			function getLineOption(xData, wData, iData, timePrecision) {
+				return {
+					animation: false,
+					backgroundColor: 'transparent',
+					tooltip: {
+						trigger: 'axis',
+						axisPointer: { type: 'line' },
+						backgroundColor: 'rgba(0,0,0,0.9)',
+						borderColor: '#333',
+						textStyle: { color: '#eee', fontSize: 12 },
+						formatter: (params) => {
+							let header = params[0].name;
+							if (timePrecision) header = formatTimeRange(header, timePrecision);
+							let html = `<div style="border-bottom:1px solid #555;margin-bottom:3px;">${header}</div>`;
+							params.forEach((item) => {
+								html += `${item.marker} ${item.seriesName}: ${formatTimeCN(item.value)}<br/>`;
+							});
+							return html;
+						},
+					},
+					legend: { data: ['工作', '休息'], right: 0, top: 0, itemWidth: 10, itemHeight: 10, textStyle: { fontSize: 10, color: '#aaa' } },
+					grid: { left: 5, right: 15, top: 30, bottom: 20, containLabel: true },
+					xAxis: {
+						type: 'category',
+						boundaryGap: false,
+						data: xData,
+						axisLabel: {
+							interval: 'auto',
+							fontSize: 10,
+							color: '#666',
+							formatter: function (value) {
+								if (value.length === 10 && value.indexOf('/') > -1) {
+									return value.substring(5);
+								}
+								return value;
+							},
+						},
+					},
+					yAxis: {
+						nameTextStyle: { align: 'left', padding: [0, 0, 0, 5], color: '#666', fontSize: 10 },
+						splitLine: { lineStyle: { color: '#333' } },
+						axisLabel: {
+							formatter: function (val) {
+								return formatTimeHHMM(val);
+							},
+						},
+					},
+					series: [
+						{
+							name: '工作',
+							type: 'line',
+							stack: 'T',
+							smooth: true,
+							showSymbol: false,
+							areaStyle: { opacity: 0.5 },
+							itemStyle: { color: '#00D000' },
+							data: wData,
+						},
+						{
+							name: '休息',
+							type: 'line',
+							stack: 'T',
+							smooth: true,
+							showSymbol: false,
+							areaStyle: { opacity: 0.5 },
+							itemStyle: { color: '#FF9800' },
+							data: iData,
+						},
+					],
+				};
+			}
+
+			// ==========================================
+			// 消息提醒应用逻辑 (不变)
+			// ==========================================
+			const ReminderApp = {
+				KEY: 'USER_CONFIG_REMINDERS',
+				data: [],
+				init: async function () {
+					try {
+						const str = await eda.sys_Storage.getExtensionUserConfig(this.KEY);
+						if (str) this.data = JSON.parse(str);
+					} catch (e) {
+						console.log('Init Reminder Error', e);
+					}
+					this.render();
+				},
+				render: function () {
+					const container = document.getElementById('reminderListContainer');
+					container.innerHTML = '';
+					if (this.data.length === 0) {
+						container.innerHTML = '<div style="text-align:center; color:#666; padding:20px;">暂无提醒规则</div>';
+						return;
+					}
+					this.data.forEach((item, idx) => {
+						const div = document.createElement('div');
+						div.className = 'reminder-item';
+						div.innerHTML = `
+                        <span style="color:#00D000; font-weight:bold; width:60px;">${item.m}分钟</span>
+                        <span class="reminder-content">${item.msg}</span>
+                        <div class="item-actions">
+                            <button class="small-btn" onclick="ReminderApp.preview(${idx})">预览</button>
+                            <button class="small-btn del" onclick="ReminderApp.remove(${idx})">删除</button>
+                        </div>
+                    `;
+						container.appendChild(div);
+					});
+				},
+				add: function () {
+					const mInput = document.getElementById('remindMinInput');
+					const msgInput = document.getElementById('remindMsgInput');
+					const m = parseInt(mInput.value);
+					const msg = msgInput.value.trim();
+					if (!m || m <= 0) {
+						eda.sys_Message.showToastMessage('请输入有效的分钟数', 'error');
+						return;
+					}
+					if (!msg) {
+						eda.sys_Message.showToastMessage('请输入提醒内容', 'error');
+						return;
+					}
+					this.data.push({ m, msg });
+					this.data.sort((a, b) => a.m - b.m);
+					mInput.value = '';
+					msgInput.value = '';
+					this.render();
+				},
+				remove: function (index) {
+					this.data.splice(index, 1);
+					this.render();
+				},
+				save: async function () {
+					try {
+						await eda.sys_Storage.setExtensionUserConfig(this.KEY, JSON.stringify(this.data));
+						eda.sys_Message.showToastMessage('已保存所有提醒规则', 'success');
+					} catch (e) {
+						eda.sys_Message.showToastMessage('保存失败:' + e.message, 'error');
+					}
+				},
+				preview: function (index) {
+					if (this.data[index]) {
+						eda.sys_Message.showToastMessage(this.data[index].msg, 'info');
+					}
+				},
+			};
+
+			// ==========================================
+			// 9. 交互与初始化
+			// ==========================================
+			function switchTab(tab) {
+				state.activeTab = tab;
+				document.querySelectorAll('.nav-item').forEach((e) => e.classList.remove('active'));
+				const tabs = document.querySelectorAll('.nav-item');
+
+				const headerArea = document.getElementById('headerStatsArea');
+				let hTextPrefix = '';
+				let hValue = 0;
+
+				if (tab === 'total') {
+					tabs[0].classList.add('active');
+					hTextPrefix = '今日已工作 ';
+					if (DB.total.work.length > 0) hValue = DB.total.work.at(-1);
+				} else if (tab === 'project') {
+					tabs[1].classList.add('active');
+					hTextPrefix = '当前工程今日耗时 ';
+					if (DB.projects[CURRENT_UUID] && DB.projects[CURRENT_UUID].work.length > 0) {
+						hValue = DB.projects[CURRENT_UUID].work.at(-1);
+					}
+				} else if (tab === 'rank') {
+					tabs[2].classList.add('active');
+					hTextPrefix = `在${DB.dates.length}天里你工作了 `;
+					hValue = sumArray(DB.total.work);
+				} else if (tab === 'reminder') {
+					tabs[3].classList.add('active');
+					hTextPrefix = '今日已工作 ';
+					if (DB.total.work.length > 0) hValue = DB.total.work.at(-1);
+				}
+
+				headerArea.innerHTML = `<span id="headerScope">${hTextPrefix}</span><span id="headerVal" class="highlight">${formatTimeCN(hValue)}</span>`;
+
+				const views = {
+					'total': document.getElementById('view-dashboard'),
+					'project': document.getElementById('view-dashboard'),
+					'rank': document.getElementById('view-rank'),
+					'reminder': document.getElementById('view-reminder'),
+				};
+
+				Object.values(views).forEach((el) => el.classList.add('hidden'));
+
+				if (tab === 'rank') {
+					views['rank'].classList.remove('hidden');
+					renderRankView();
+					setTimeout(() => {
+						charts.rank.resize();
+						charts.rankHistory.resize();
+					}, 10);
+				} else if (tab === 'reminder') {
+					views['reminder'].classList.remove('hidden');
+					ReminderApp.render();
+				} else {
+					views['total'].classList.remove('hidden');
+					state.dashDataSource = tab === 'total' ? DB.total : DB.projects[CURRENT_UUID];
+					renderDashboard();
+				}
+			}
+
+			window.updateDashboardRange = (days, btn) => {
+				toggleBtn(btn, '#dateRangeGroup');
+				state.dashDateRange = days;
+				renderDashboard();
+			};
+
+			window.updateDetailPrecision = (mins, btn) => {
+				toggleBtn(btn, '#precisionGroup');
+				state.dashPrecision = mins;
+				renderHourlyChart();
+			};
+
+			function toggleBtn(btn, selector) {
+				document.querySelectorAll(`${selector} .filter-btn`).forEach((b) => b.classList.remove('active'));
+				btn.classList.add('active');
+			}
+
+			charts.daily.getZr().on('click', (params) => {
+				const point = [params.offsetX, params.offsetY];
+				if (charts.daily.containPixel('grid', point)) {
+					const idx = charts.daily.convertFromPixel({ seriesIndex: 0 }, point)[0];
+					const xData = charts.daily.getOption().xAxis[0].data;
+					if (xData[idx]) {
+						const dateStr = xData[idx];
+						const globalIdx = DB.dates.indexOf(dateStr);
+						if (globalIdx !== -1) {
+							state.dashSelectedDateIdx = globalIdx;
+							renderHourlyChart();
+						}
+					}
+				}
+			});
+
+			// === 修正后的点击事件：支持点击右侧X ===
+			charts.rank.on('click', function (params) {
+				// 如果点击的是 Y 轴 (triggerEvent: true)
+				if (params.componentType === 'yAxis') {
+					const index = params.dataIndex; // 行号
+					const item = DB.rankData[index]; // 对应的数据
+					if (!item) return;
+
+					// 判断点击的是左边(名字)还是右边(X)
+					// params.yAxisIndex 为 0 是左边，1 是右边
+					if (params.yAxisIndex === 1) {
+						// 点击了删除按钮
+						confirmDeleteProject(item.uuid, item.name);
+					} else {
+						// 点击了左侧名字，执行选中
+						handleRankClick(item.name, item.uuid);
+					}
+				}
+				// 如果点击的是柱子本身
+				else if (params.componentType === 'series') {
+					handleRankClick(params.name, params.data ? params.data.uuid : null);
+				}
+			});
+
+			function handleRankClick(name, uuid) {
+				if (!uuid) return;
+				state.rankSelectedUuid = uuid;
+				renderRankHistory(uuid, name);
+			}
+
+			// === 新增：删除确认逻辑 ===
+			function confirmDeleteProject(uuid, name) {
+				eda.sys_Dialog.showConfirmationMessage(
+					`确认删除 “${name}” 的全部时间数据？\n(此操作不可恢复)`,
+					'删除时间数据',
+					'确认删除',
+					'取消',
+					async (mainButtonClicked) => {
+						if (mainButtonClicked) {
+							await deleteProjectData(uuid);
+						} else {
+							eda.sys_Message.showToastMessage('已取消', 'info');
+						}
+					},
+				);
+			}
+
+			// === 修改：执行删除并使用“软刷新”代替 reload ===
+			async function deleteProjectData(uuid) {
+				const mask = document.getElementById('loading-mask');
+				mask.style.display = 'flex';
+				mask.innerText = '正在删除数据...';
+
+				try {
+					// 1. 遍历所有已经加载到内存的历史数据日期
+					for (const dateKey of DB.datesRaw) {
+						const dayData = DB.rawDailyData[dateKey];
+						if (!dayData) continue;
+
+						let isModified = false;
+
+						// A. 清除 slots 中的数据
+						for (const slotId in dayData.slots) {
+							const slotObj = dayData.slots[slotId];
+							if (slotObj && slotObj[uuid]) {
+								delete slotObj[uuid];
+								isModified = true;
+								if (Object.keys(slotObj).length === 0) {
+									delete dayData.slots[slotId];
+								}
+							}
+						}
+
+						// B. 清除 meta 中的名字
+						if (dayData.meta && dayData.meta[uuid]) {
+							delete dayData.meta[uuid];
+							isModified = true;
+						}
+
+						// C. 如果有修改，写入存储
+						if (isModified) {
+							await eda.sys_Storage.setExtensionUserConfig(dateKey, JSON.stringify(dayData));
+						}
+					}
+
+					eda.sys_Message.showToastMessage('删除成功，正在刷新...', 'success');
+
+					// === 软刷新逻辑：清空内存，重新加载，不刷新页面 ===
+
+					// 1. 清空 DB
+					DB.dates = [];
+					DB.datesRaw = [];
+					DB.rawDailyData = {};
+					DB.projects = {};
+					DB.total = { work: [], idle: [] };
+					DB.rankData = [];
+
+					// 2. 如果删除的是当前选中的工程，重置选中状态
+					if (state.rankSelectedUuid === uuid) {
+						state.rankSelectedUuid = null;
+					}
+
+					// 3. 重新加载数据
+					await StorageLoader.loadAll();
+
+					// 4. 刷新当前视图
+					if (state.activeTab === 'rank') {
+						renderRankView();
+					} else {
+						switchTab(state.activeTab);
+					}
+
+					// 5. 隐藏遮罩
+					mask.style.display = 'none';
+				} catch (e) {
+					console.error(e);
+					mask.innerText = '删除出错: ' + e.message;
+					mask.onclick = () => (mask.style.display = 'none');
+				}
+			}
+
+			window.addEventListener('resize', () => Object.values(charts).forEach((c) => c.resize()));
+
+			(async function init() {
+				try {
+					await StorageLoader.loadAll();
+					await ReminderApp.init();
+
+					state.dashSelectedDateIdx = DB.dates.length - 1;
+
+					document.getElementById('loading-mask').style.display = 'none';
+					switchTab('total');
+				} catch (e) {
+					document.getElementById('loading-mask').innerText = '数据读取失败: ' + e.message;
+					console.error(e);
+				}
+			})();
+		</script>
+	</body>
+</html>

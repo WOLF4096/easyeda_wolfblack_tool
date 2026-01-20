@@ -1,0 +1,1460 @@
+<!doctype html>
+<html lang="zh-CN">
+	<head>
+		<meta charset="UTF-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+		<title>狼黑工具 - 生成物理网络 (传统)</title>
+		<style>
+			:root {
+				/* 配色系统 */
+				--bg-app: #1e1e1e;
+				--bg-panel: #252526;
+				--bg-header: #2d2d2d;
+				--bg-hover: #2a2d2e;
+				--bg-active: #37373d;
+
+				--border: #3e3e42;
+				--accent: #007acc;
+				--accent-hover: #1f8ad2;
+
+				--text-main: #cccccc;
+				--text-bright: #ffffff;
+				--text-dim: #858585;
+
+				--status-success: #4ec9b0;
+				--status-error: #f44747;
+				--status-warn: #dcdcaa;
+			}
+
+			* {
+				box-sizing: border-box;
+			}
+
+			html,
+			body {
+				height: 100%;
+				margin: 0;
+				padding: 0;
+				width: 100%;
+				font-family: 'Segoe UI', Consolas, 'Courier New', monospace;
+				background-color: var(--bg-app);
+				color: var(--text-main);
+				font-size: 13px;
+				overflow: hidden;
+			}
+
+			.app-container {
+				display: flex;
+				flex-direction: column;
+				height: 100vh;
+				width: 100vw;
+				overflow: hidden;
+			}
+
+			/* Header */
+			header {
+				height: 40px;
+				background-color: var(--bg-header);
+				border-bottom: 1px solid var(--border);
+				display: flex;
+				align-items: center;
+				justify-content: space-between;
+				padding: 0 12px;
+				flex-shrink: 0;
+			}
+			.header-title {
+				font-weight: 600;
+				color: var(--text-bright);
+			}
+
+			.btn {
+				background-color: var(--accent);
+				color: #fff;
+				border: none;
+				padding: 4px 12px;
+				border-radius: 2px;
+				cursor: pointer;
+				font-size: 12px;
+				min-width: 80px;
+				outline: none;
+			}
+			.btn:hover:not(:disabled) {
+				background-color: var(--accent-hover);
+			}
+			.btn:disabled {
+				background-color: #3a3a3a;
+				color: #666;
+				cursor: not-allowed;
+			}
+			.btn.btn-secondary {
+				background-color: transparent;
+				border: 1px solid var(--border);
+				color: var(--text-main);
+			}
+			.btn.btn-secondary:hover:not(:disabled) {
+				background-color: rgba(255, 255, 255, 0.05);
+			}
+
+			/* Table */
+			.table-wrapper {
+				flex: 1;
+				display: flex;
+				flex-direction: column;
+				overflow: hidden;
+				position: relative;
+			}
+			.grid-row-layout {
+				display: grid;
+				grid-template-columns: 140px 80px 1fr 1fr 60px;
+				gap: 8px;
+				align-items: center;
+				padding: 0 10px;
+			}
+			.grid-header {
+				height: 30px;
+				background-color: var(--bg-panel);
+				border-bottom: 1px solid var(--border);
+				font-weight: bold;
+				color: var(--text-bright);
+				font-size: 12px;
+				flex-shrink: 0;
+			}
+			.grid-body {
+				flex: 1;
+				overflow-y: overlay;
+				overflow-x: hidden;
+				padding-bottom: 2px;
+			}
+			.row-item {
+				height: 28px;
+				border-bottom: 1px solid #2d2d2d;
+				font-size: 12px;
+				cursor: default;
+				transition: background 0.1s;
+			}
+			.row-item:hover {
+				background-color: var(--bg-hover);
+			}
+			.row-item.active {
+				background-color: var(--bg-active);
+				border-left: 2px solid var(--accent);
+				padding-left: 8px;
+			}
+			.cell-truncate {
+				white-space: nowrap;
+				overflow: hidden;
+				text-overflow: ellipsis;
+			}
+
+			.st-pending {
+				color: var(--text-dim);
+			}
+			.st-done {
+				color: var(--status-success);
+			}
+			.st-err {
+				color: var(--status-error);
+			}
+			.new-net {
+				color: var(--status-warn);
+			}
+
+			/* Footer */
+			footer {
+				height: 26px;
+				background-color: var(--bg-header);
+				border-top: 1px solid var(--border);
+				position: relative;
+				flex-shrink: 0;
+				overflow: hidden;
+			}
+			.progress-track {
+				position: absolute;
+				top: 0;
+				left: 0;
+				width: 100%;
+				height: 100%;
+				z-index: 0;
+			}
+			.progress-fill {
+				height: 100%;
+				width: 0%;
+				background-color: var(--accent);
+				opacity: 0.3;
+				transition: width 0.1s linear;
+			}
+			.footer-info {
+				position: relative;
+				z-index: 1;
+				display: flex;
+				align-items: center;
+				justify-content: space-between;
+				width: 100%;
+				height: 100%;
+				padding: 0 10px;
+				font-size: 11px;
+				color: var(--text-dim);
+				text-shadow: 0 0 2px rgba(0, 0, 0, 0.5);
+			}
+
+			/* Scrollbar */
+			::-webkit-scrollbar {
+				width: 8px;
+			}
+			::-webkit-scrollbar-track {
+				background: transparent;
+			}
+			::-webkit-scrollbar-thumb {
+				background: #424242;
+				border-radius: 4px;
+				border: 2px solid var(--bg-app);
+			}
+			::-webkit-scrollbar-thumb:hover {
+				background: #4f4f4f;
+			}
+
+			/* Loading */
+			#loading-mask {
+				position: absolute;
+				top: 40px;
+				left: 0;
+				right: 0;
+				bottom: 0;
+				background: rgba(30, 30, 30, 0.85);
+				display: none;
+				flex-direction: column;
+				justify-content: center;
+				align-items: center;
+				z-index: 99;
+				backdrop-filter: blur(2px);
+			}
+			.spinner {
+				width: 24px;
+				height: 24px;
+				border: 2px solid transparent;
+				border-top-color: var(--accent);
+				border-right-color: var(--accent);
+				border-radius: 50%;
+				animation: spin 0.8s linear infinite;
+				margin-bottom: 10px;
+			}
+			@keyframes spin {
+				to {
+					transform: rotate(360deg);
+				}
+			}
+			.empty-state {
+				height: 100%;
+				display: flex;
+				flex-direction: column;
+				align-items: center;
+				justify-content: center;
+				color: var(--text-dim);
+				gap: 10px;
+			}
+		</style>
+	</head>
+	<body>
+		<div class="app-container">
+			<header>
+				<div class="header-title">当前操作不可撤销，注意备份</div>
+				<button id="btn-action" class="btn" onclick="handleBtnClick()">初始化...</button>
+			</header>
+
+			<div class="table-wrapper">
+				<div class="grid-header grid-row-layout">
+					<div>图元ID</div>
+					<div>类型</div>
+					<div>旧网络</div>
+					<div>新网络</div>
+					<div>状态</div>
+				</div>
+
+				<div class="grid-body" id="result-list"></div>
+
+				<div id="loading-mask">
+					<div class="spinner"></div>
+					<div id="loading-text" style="color: var(--text-main)">分析中...</div>
+				</div>
+			</div>
+
+			<footer>
+				<div class="progress-track">
+					<div class="progress-fill" id="progress-bar"></div>
+				</div>
+				<div class="footer-info">
+					<span id="status-left">就绪</span>
+					<span id="status-right">-- / --</span>
+				</div>
+			</footer>
+		</div>
+
+		<script>
+			// ================= 全局状态 =================
+			let g_pendingOperations = [];
+			let g_isAnalyzing = false;
+			let g_isExecuting = false;
+
+			// ##########################################################################
+			// ##########################  ALGORITHM CORE START  ########################
+			// ##########################################################################
+
+			class UnionFind {
+				constructor() {
+					this.parent = {};
+				}
+				find(id) {
+					if (this.parent[id] === undefined) this.parent[id] = id;
+					if (this.parent[id] !== id) this.parent[id] = this.find(this.parent[id]);
+					return this.parent[id];
+				}
+				union(id1, id2) {
+					let root1 = this.find(id1);
+					let root2 = this.find(id2);
+					if (root1 !== root2) this.parent[root1] = root2;
+				}
+			}
+
+			// --- 几何计算 (High Precision) ---
+
+			function distToSegmentSquared(px, py, x1, y1, x2, y2) {
+				let l2 = (x2 - x1) ** 2 + (y2 - y1) ** 2;
+				if (l2 === 0) return (px - x1) ** 2 + (py - y1) ** 2;
+				let t = ((px - x1) * (x2 - x1) + (py - y1) * (y2 - y1)) / l2;
+				t = Math.max(0, Math.min(1, t));
+				return (px - (x1 + t * (x2 - x1))) ** 2 + (py - (y1 + t * (y2 - y1))) ** 2;
+			}
+
+			function isTwoLinesTouching(l1, l2) {
+				let threshold = l1.w / 2 + l2.w / 2;
+				let distSqLimit = threshold * threshold;
+
+				if (distToSegmentSquared(l1.x1, l1.y1, l2.x1, l2.y1, l2.x2, l2.y2) <= distSqLimit) return true;
+				if (distToSegmentSquared(l1.x2, l1.y2, l2.x1, l2.y1, l2.x2, l2.y2) <= distSqLimit) return true;
+				if (distToSegmentSquared(l2.x1, l2.y1, l1.x1, l1.y1, l1.x2, l1.y2) <= distSqLimit) return true;
+				if (distToSegmentSquared(l2.x2, l2.y2, l1.x1, l1.y1, l1.x2, l1.y2) <= distSqLimit) return true;
+
+				return segmentsIntersect(l1.x1, l1.y1, l1.x2, l1.y2, l2.x1, l2.y1, l2.x2, l2.y2);
+			}
+
+			function segmentsIntersect(a, b, c, d, p, q, r, s) {
+				function crossProduct(x1, y1, x2, y2, x3, y3) {
+					return (x2 - x1) * (y3 - y1) - (y2 - y1) * (x3 - x1);
+				}
+				let d1 = crossProduct(p, q, r, s, a, b);
+				let d2 = crossProduct(p, q, r, s, c, d);
+				let d3 = crossProduct(a, b, c, d, p, q);
+				let d4 = crossProduct(a, b, c, d, r, s);
+				return ((d1 > 0 && d2 < 0) || (d1 < 0 && d2 > 0)) && ((d3 > 0 && d4 < 0) || (d3 < 0 && d4 > 0));
+			}
+
+			function isLineIntersectRect(x1, y1, x2, y2, rect) {
+				let left = rect.x - rect.w / 2;
+				let right = rect.x + rect.w / 2;
+				let top = rect.y - rect.h / 2;
+				let bottom = rect.y + rect.h / 2;
+
+				if (isPointInRect(x1, y1, rect) || isPointInRect(x2, y2, rect)) return true;
+
+				return (
+					segmentsIntersect(x1, y1, x2, y2, left, top, right, top) ||
+					segmentsIntersect(x1, y1, x2, y2, left, bottom, right, bottom) ||
+					segmentsIntersect(x1, y1, x2, y2, left, top, left, bottom) ||
+					segmentsIntersect(x1, y1, x2, y2, right, top, right, bottom)
+				);
+			}
+
+			function isPointInRect(x, y, rect) {
+				return Math.abs(x - rect.x) <= rect.w / 2 && Math.abs(y - rect.y) <= rect.h / 2;
+			}
+
+			// --- 高级几何算法 (处理复杂多边形) ---
+
+			function getPolyVertices(shapeData) {
+				let vertices = [];
+				function traverse(node) {
+					if (!Array.isArray(node)) return;
+					let numbers = node.filter((n) => typeof n === 'number');
+					if (numbers.length >= 4 && numbers.length % 2 === 0) {
+						for (let i = 0; i < numbers.length; i += 2) {
+							vertices.push({ x: numbers[i], y: numbers[i + 1] });
+						}
+					} else {
+						node.forEach((sub) => Array.isArray(sub) && traverse(sub));
+					}
+				}
+				traverse(shapeData);
+				return vertices;
+			}
+
+			function lineIntersect(x1, y1, x2, y2, x3, y3, x4, y4) {
+				let denom = (y4 - y3) * (x2 - x1) - (x4 - x3) * (y2 - y1);
+				if (denom === 0) return false;
+				let ua = ((x4 - x3) * (y1 - y3) - (y4 - y3) * (x1 - x3)) / denom;
+				let ub = ((x2 - x1) * (y1 - y3) - (y2 - y1) * (x1 - x3)) / denom;
+				return ua >= 0 && ua <= 1 && ub >= 0 && ub <= 1;
+			}
+
+			function isPointInPoly(px, py, vertices) {
+				let inside = false;
+				for (let i = 0, j = vertices.length - 1; i < vertices.length; j = i++) {
+					let xi = vertices[i].x,
+						yi = vertices[i].y;
+					let xj = vertices[j].x,
+						yj = vertices[j].y;
+
+					let intersect = yi > py !== yj > py && px < ((xj - xi) * (py - yi)) / (yj - yi) + xi;
+					if (intersect) inside = !inside;
+				}
+				return inside;
+			}
+
+			function getRotatedRectVertices(x, y, w, h, rotation, radius = 0, segments = 6) {
+				const rad = (rotation || 0) * (Math.PI / 180);
+				const cos = Math.cos(rad);
+				const sin = Math.sin(rad);
+				const maxRadius = Math.min(w, h) / 2;
+				const r = Math.max(0, Math.min(radius || 0, maxRadius));
+				let offsets = [];
+
+				if (r <= 0) {
+					offsets = [
+						{ dx: 0, dy: 0 },
+						{ dx: w, dy: 0 },
+						{ dx: w, dy: -h },
+						{ dx: 0, dy: -h },
+					];
+				} else {
+					function addArcPoints(cx, cy, startAngle, endAngle) {
+						const step = (endAngle - startAngle) / segments;
+						for (let i = 0; i <= segments; i++) {
+							const theta = startAngle + step * i;
+							offsets.push({ dx: cx + r * Math.cos(theta), dy: cy + r * Math.sin(theta) });
+						}
+					}
+					addArcPoints(w - r, -r, Math.PI / 2, 0);
+					addArcPoints(w - r, -h + r, 0, -Math.PI / 2);
+					addArcPoints(r, -h + r, -Math.PI / 2, -Math.PI);
+					addArcPoints(r, -r, Math.PI, Math.PI / 2);
+				}
+				return offsets.map((p) => ({
+					x: x + (p.dx * cos - p.dy * sin),
+					y: y + (p.dx * sin + p.dy * cos),
+				}));
+			}
+
+			function getEdges(shape) {
+				let lines = [];
+				if (shape.shape === 'POLY' || shape.vertices) {
+					let v = shape.vertices;
+					for (let i = 0; i < v.length; i++) {
+						let p1 = v[i];
+						let p2 = v[(i + 1) % v.length];
+						lines.push([p1.x, p1.y, p2.x, p2.y]);
+					}
+				} else if (shape.shape === 'line') {
+					lines.push([shape.x1, shape.y1, shape.x2, shape.y2]);
+				} else {
+					// RECT
+					let hw = shape.w / 2,
+						hh = shape.h / 2;
+					let l = shape.x - hw,
+						r = shape.x + hw,
+						t = shape.y - hh,
+						b = shape.y + hh;
+					lines.push([l, t, r, t], [r, t, r, b], [r, b, l, b], [l, b, l, t]);
+				}
+				return lines;
+			}
+
+			// --- 连接性检测逻辑 ---
+
+			function areLayersConnected(a, b) {
+				const LAYER_MULTI = 12;
+				const getLayerIds = (obj) => {
+					if (obj.blindLayers && obj.blindLayers.length > 0) return obj.blindLayers;
+					if (obj.layer === LAYER_MULTI) return 'ALL';
+					return [obj.layer];
+				};
+				const layersA = getLayerIds(a);
+				const layersB = getLayerIds(b);
+				if (layersA === 'ALL' || layersB === 'ALL') return true;
+				for (let i = 0; i < layersA.length; i++) {
+					if (layersB.indexOf(layersA[i]) !== -1) return true;
+				}
+				return false;
+			}
+
+			function checkConnectivityHighPrecision(a, b) {
+				if (!areLayersConnected(a, b)) return false;
+
+				// === 处理复杂多边形/旋转矩形 (POLY) ===
+				if (a.shape === 'POLY' || b.shape === 'POLY') {
+					let polyA = a.shape === 'POLY' ? a : b;
+					let other = a.shape === 'POLY' ? b : a;
+
+					// 1. 边缘线段交叉
+					let linesA = getEdges(polyA);
+					let linesB = getEdges(other);
+					for (let la of linesA) {
+						for (let lb of linesB) {
+							if (lineIntersect(la[0], la[1], la[2], la[3], lb[0], lb[1], lb[2], lb[3])) return true;
+						}
+					}
+
+					// 2. 包含关系
+					if (isPointInPoly(other.x, other.y, polyA.vertices)) return true;
+					if (other.vertices) {
+						for (let v of other.vertices) if (isPointInPoly(v.x, v.y, polyA.vertices)) return true;
+					} else if (other.shape === 'line') {
+						if (isPointInPoly(other.x1, other.y1, polyA.vertices)) return true;
+						if (isPointInPoly(other.x2, other.y2, polyA.vertices)) return true;
+					}
+
+					if (other.vertices) {
+						for (let v of polyA.vertices) if (isPointInPoly(v.x, v.y, other.vertices)) return true;
+					} else if (other.shape === 'RECT') {
+						for (let v of polyA.vertices) if (isPointInRect(v.x, v.y, other)) return true;
+					}
+					return false;
+				}
+
+				// === 简单图形检测 ===
+				if ('line' === a.shape && 'line' === b.shape) return isTwoLinesTouching(a, b);
+				let n = null,
+					r = null;
+				'line' === a.shape ? ((n = a), (r = b)) : 'line' === b.shape && ((n = b), (r = a));
+				if (n && r) {
+					if ('ROUND' === r.shape) {
+						let e = distToSegmentSquared(r.x, r.y, n.x1, n.y1, n.x2, n.y2),
+							t = r.r + n.w / 2;
+						return e <= t * t;
+					}
+					if ('RECT' === r.shape) {
+						let e = n.w / 2 + 0.1,
+							t = { x: r.x, y: r.y, w: r.w + 2 * e, h: r.h + 2 * e };
+						return isLineIntersectRect(n.x1, n.y1, n.x2, n.y2, t);
+					}
+				}
+				if ('ROUND' === a.shape && 'ROUND' === b.shape) {
+					let n = (a.x - b.x) ** 2 + (a.y - b.y) ** 2;
+					return n < (a.r + b.r) ** 2;
+				}
+				let i = a.w,
+					o = a.h,
+					s = b.w,
+					l = b.h;
+				return Math.abs(a.x - b.x) < (i + s) / 2 && Math.abs(a.y - b.y) < (o + l) / 2;
+			}
+
+			// ---------------------------------------------------------
+			// 模块 2：辅助与层解析 (Stack & Parsing Helpers)
+			// ---------------------------------------------------------
+
+			function getStackIds(innerLayerIds) {
+				const LAYER_TOP = 1,
+					LAYER_BOTTOM = 2;
+				innerLayerIds.sort((a, b) => a - b);
+				let uniqueLayers = [...new Set(innerLayerIds)];
+				return [LAYER_TOP, ...uniqueLayers, LAYER_BOTTOM];
+			}
+
+			function getRealLayerIdsFromRange(rangeStr, stackIds) {
+				if (!rangeStr || rangeStr === '') return null;
+				let parts = rangeStr.split('-');
+				if (parts.length !== 2) return null;
+				let startIdx = parseInt(parts[0]);
+				let endIdx = parseInt(parts[1]);
+				if (startIdx < 1) startIdx = 1;
+				if (endIdx > stackIds.length) endIdx = stackIds.length;
+				let resultIds = [];
+				for (let i = startIdx; i <= endIdx; i++) {
+					let realId = stackIds[i - 1];
+					if (realId !== undefined) resultIds.push(realId);
+				}
+				return resultIds;
+			}
+
+			async function fetchAllPads() {
+				let resultPads = [];
+				try {
+					let allPads = await eda.pcb_PrimitivePad.getAll();
+					allPads.forEach((pad) => {
+						let w = 10,
+							h = 10;
+						let shapeType = 'RECT';
+						if (pad.pad && pad.pad.length > 1) {
+							shapeType = pad.pad[0];
+							w = Number(pad.pad[1]);
+							h = Number(pad.pad[2] || w);
+						}
+
+						let rawHole = pad.hole && pad.hole.length > 1 ? Number(pad.hole[1]) : 0;
+						let realHoleSize = rawHole * 10;
+
+						let algoShape = 'RECT';
+						let radius = 0;
+						if (shapeType === 'ROUND' || (shapeType === 'ELLIPSE' && Math.abs(w - h) < 0.1)) {
+							algoShape = 'ROUND';
+							radius = w / 2;
+						} else {
+							algoShape = 'RECT';
+							let rot = Math.abs(Number(pad.rotation || 0)) % 180;
+							if (Math.abs(rot - 90) < 1.0) {
+								let temp = w;
+								w = h;
+								h = temp;
+							} else if (rot > 1.0 && rot < 89.0) {
+								let minSide = Math.min(w, h);
+								w = minSide;
+								h = minSide;
+							}
+						}
+
+						resultPads.push({
+							id: pad.primitiveId,
+							type: 'PAD',
+							net: pad.net,
+							layer: pad.layer,
+							shape: algoShape,
+							x: Number(pad.x),
+							y: Number(pad.y),
+							w: w,
+							h: h,
+							r: radius,
+							holeSize: realHoleSize,
+						});
+					});
+				} catch (e) {
+					console.error('获取焊盘数据失败:', e);
+				}
+				return resultPads;
+			}
+
+			// ---------------------------------------------------------
+			// 模块 3：V2/V3 解析逻辑 (Parsing Logic)
+			// ---------------------------------------------------------
+
+			// 解析 V2 (数组格式)
+			function parseV2Primitives(lines, allUsedNetNames) {
+				const primitives = [];
+				const innerLayerIds = [];
+				const LAYER_MULTI = 12;
+
+				lines.forEach((line) => {
+					if (!line.trim() || !line.startsWith('[')) return;
+					try {
+						let item = JSON.parse(line.replace(/^\s*/, ''));
+						let type = item[0];
+						if (item[3] && typeof item[3] === 'string' && item[3] !== '') allUsedNetNames.add(item[3]);
+
+						if (type === 'LAYER') {
+							let lid = Number(item[1]),
+								status = Number(item[4]);
+							if (lid >= 15 && lid <= 46 && status === 3) innerLayerIds.push(lid);
+						} else if (type === 'LINE') {
+							primitives.push({
+								id: item[1],
+								type: 'LINE',
+								net: item[3],
+								layer: item[4],
+								shape: 'line',
+								x1: Number(item[5]),
+								y1: Number(item[6]),
+								x2: Number(item[7]),
+								y2: Number(item[8]),
+								w: Number(item[9]),
+							});
+						} else if (type === 'VIA') {
+							let dia = Number(item[8]);
+							primitives.push({
+								id: item[1],
+								type: 'VIA',
+								net: item[3],
+								layer: LAYER_MULTI,
+								_rawRange: item[4],
+								shape: 'ROUND',
+								x: Number(item[5]),
+								y: Number(item[6]),
+								w: dia,
+								h: dia,
+								r: dia / 2,
+							});
+						} else if (type === 'ARC') {
+							primitives.push({
+								id: item[1],
+								type: 'ARC',
+								net: item[3],
+								layer: item[4],
+								shape: 'line',
+								x1: Number(item[5]),
+								y1: Number(item[6]),
+								x2: Number(item[7]),
+								y2: Number(item[8]),
+								w: Number(item[9]),
+							});
+							// 删除了 type === "POUR" 的判断，并简化了 shapeData 获取逻辑（因为 FILL/POLY 都在索引 7）
+						} else if (type === 'FILL' || type === 'POLY') {
+							let shapeData = item[7];
+
+							while (Array.isArray(shapeData) && shapeData.length > 0 && Array.isArray(shapeData[0])) {
+								if (shapeData[0][0] === 'R' || typeof shapeData[0][0] === 'number') break;
+								shapeData = shapeData[0];
+							}
+							let vertices = [];
+							let isValidShape = false;
+							let rectData = null;
+
+							if (Array.isArray(shapeData) && shapeData.length > 0) {
+								if (Array.isArray(shapeData[0]) && shapeData[0][0] === 'R') rectData = shapeData[0];
+								else if (shapeData[0] === 'R') rectData = shapeData;
+							}
+
+							if (rectData) {
+								let rx = Number(rectData[1]),
+									ry = Number(rectData[2]),
+									rw = Number(rectData[3]),
+									rh = Number(rectData[4]),
+									rot = Number(rectData[5] || 0),
+									radius = Number(rectData[6] || 0);
+								vertices = getRotatedRectVertices(rx, ry, rw, rh, rot, radius);
+								isValidShape = true;
+							} else {
+								vertices = getPolyVertices(shapeData);
+								if (vertices.length > 2) isValidShape = true;
+							}
+
+							if (isValidShape) {
+								let minX = Infinity,
+									maxX = -Infinity,
+									minY = Infinity,
+									maxY = -Infinity;
+								vertices.forEach((v) => {
+									if (v.x < minX) minX = v.x;
+									if (v.x > maxX) maxX = v.x;
+									if (v.y < minY) minY = v.y;
+									if (v.y > maxY) maxY = v.y;
+								});
+								primitives.push({
+									id: item[1],
+									type: type,
+									net: item[3],
+									layer: item[4],
+									shape: 'POLY',
+									vertices: vertices,
+									x: (minX + maxX) / 2,
+									y: (minY + maxY) / 2,
+									w: maxX - minX,
+									h: maxY - minY,
+								});
+							}
+						}
+					} catch (e) {}
+				});
+				return { primitives, innerLayerIds };
+			}
+
+			// 解析 V3 (对象/管道格式)
+			function parseV3Primitives(lines, allUsedNetNames) {
+				const primitives = [];
+				const innerLayerIds = [];
+				const LAYER_MULTI = 12;
+
+				// V3 ID 标准化辅助函数
+				function getNormId(val) {
+					if (Array.isArray(val) && val.length > 0) return val[0];
+					if (typeof val === 'string') {
+						if (val.startsWith('[')) {
+							try {
+								let arr = JSON.parse(val);
+								if (Array.isArray(arr) && arr.length > 0) return arr[0];
+							} catch (e) {}
+						}
+						return val;
+					}
+					return val;
+				}
+
+				function parseV3LineObjects(line) {
+					if (!line.trim()) return [];
+					if (line.trim().startsWith('[')) {
+						try {
+							return [JSON.parse(line.replace(/^\s*/, ''))];
+						} catch (e) {
+							return [];
+						}
+					}
+					if (line.trim().startsWith('{')) {
+						let results = [];
+						let cleanLine = line.trim();
+						if (cleanLine.endsWith('|')) cleanLine = cleanLine.slice(0, -1);
+						let parts = cleanLine.split('||');
+						parts.forEach((part) => {
+							try {
+								if (part.trim()) results.push(JSON.parse(part));
+							} catch (e) {}
+						});
+						return results;
+					}
+					return [];
+				}
+
+				lines.forEach((line) => {
+					let objects = parseV3LineObjects(line);
+					if (objects.length === 0) return;
+					let mergedItem = {};
+					let isV3Array = false;
+					if (Array.isArray(objects[0])) {
+						mergedItem = objects[0];
+						isV3Array = true;
+					} else {
+						objects.forEach((obj) => {
+							Object.assign(mergedItem, obj);
+						});
+					}
+
+					let type = isV3Array ? mergedItem[0] : mergedItem.type;
+
+					// --- 1. LAYER 解析 ---
+					if (type === 'LAYER') {
+						let lid = -1;
+						let isUsed = false;
+						if (isV3Array) {
+							lid = Number(mergedItem[1]);
+							isUsed = Number(mergedItem[4]) > 0;
+						} else {
+							if (mergedItem.layerId !== undefined) lid = mergedItem.layerId;
+							else {
+								try {
+									let idArr = typeof mergedItem.id === 'string' ? JSON.parse(mergedItem.id) : mergedItem.id;
+									if (Array.isArray(idArr)) lid = idArr[1];
+								} catch (e) {}
+							}
+							isUsed = mergedItem.use === true;
+						}
+						if (lid >= 15 && lid <= 46 && isUsed && !innerLayerIds.includes(lid)) innerLayerIds.push(lid);
+					}
+
+					// --- 2. NetName 收集 ---
+					let netName = '';
+					if (!isV3Array) {
+						if (mergedItem.netName) netName = mergedItem.netName;
+					} else {
+						if (mergedItem[3] && typeof mergedItem[3] === 'string') netName = mergedItem[3];
+					}
+					if (netName) allUsedNetNames.add(netName);
+
+					try {
+						// --- 3. 图元解析 (修复：优先使用 id 而非 ticket) ---
+						if (type === 'LINE') {
+							if (!isV3Array) {
+								// [关键修复] 优先使用 id (GUID字符串)，否则 API 无法识别
+								let safeId = getNormId(mergedItem.id || mergedItem.ticket);
+								primitives.push({
+									id: safeId,
+									type: 'LINE',
+									net: mergedItem.netName,
+									layer: mergedItem.layerId,
+									shape: 'line',
+									x1: mergedItem.startX,
+									y1: mergedItem.startY,
+									x2: mergedItem.endX,
+									y2: mergedItem.endY,
+									w: mergedItem.width,
+								});
+							} else {
+								primitives.push({
+									id: getNormId(mergedItem[1]),
+									type: 'LINE',
+									net: mergedItem[3],
+									layer: mergedItem[4],
+									shape: 'line',
+									x1: Number(mergedItem[5]),
+									y1: Number(mergedItem[6]),
+									x2: Number(mergedItem[7]),
+									y2: Number(mergedItem[8]),
+									w: Number(mergedItem[9]),
+								});
+							}
+						} else if (type === 'VIA') {
+							let dia, x, y, net, viaRangeStr;
+							if (!isV3Array) {
+								dia = mergedItem.viaDiameter;
+								x = mergedItem.centerX;
+								y = mergedItem.centerY;
+								net = mergedItem.netName;
+								viaRangeStr = mergedItem.ruleName;
+							} else {
+								dia = Number(mergedItem[8]);
+								viaRangeStr = mergedItem[4];
+								x = Number(mergedItem[5]);
+								y = Number(mergedItem[6]);
+								net = mergedItem[3];
+							}
+
+							// [关键修复] 优先使用 id
+							let safeId = !isV3Array ? getNormId(mergedItem.id || mergedItem.ticket) : getNormId(mergedItem[1]);
+							primitives.push({
+								id: safeId,
+								type: 'VIA',
+								net: net,
+								layer: LAYER_MULTI,
+								_rawRange: viaRangeStr,
+								shape: 'ROUND',
+								x: x,
+								y: y,
+								w: dia,
+								h: dia,
+								r: dia / 2,
+							});
+						} else if (type === 'ARC') {
+							if (!isV3Array) {
+								// [关键修复] 优先使用 id
+								let safeId = getNormId(mergedItem.id || mergedItem.ticket);
+								primitives.push({
+									id: safeId,
+									type: 'ARC',
+									net: mergedItem.netName,
+									layer: mergedItem.layerId,
+									shape: 'line',
+									x1: mergedItem.startX,
+									y1: mergedItem.startY,
+									x2: mergedItem.endX,
+									y2: mergedItem.endY,
+									w: mergedItem.width,
+								});
+							} else {
+								primitives.push({
+									id: getNormId(mergedItem[1]),
+									type: 'ARC',
+									net: mergedItem[3],
+									layer: mergedItem[4],
+									shape: 'line',
+									x1: Number(mergedItem[5]),
+									y1: Number(mergedItem[6]),
+									x2: Number(mergedItem[7]),
+									y2: Number(mergedItem[8]),
+									w: Number(mergedItem[9]),
+								});
+							}
+						}
+						// --- 4. 面状图形解析 (FILL, POLY, REGION...) ---
+						// 1. 在判断条件中移除 type === "POUR"
+						if (type === 'FILL' || type === 'REGION' || type === 'POLY' || type === 'COPPER_AREA') {
+							// V3 高级多边形/区域解析逻辑
+							// 1. 过滤板框 (BOARD_OUTLINE)
+							if (type === 'POLY') {
+								// V3 对象格式检查
+								if (!isV3Array && mergedItem.polyType === 'BOARD_OUTLINE') return;
+							}
+
+							// 2. 过滤 FILL 层的 layerId 12 (通常是多层或机械层)
+							if (type === 'FILL') {
+								// 兼容数组格式和对象格式获取 LayerID
+								let checkLayerId = isV3Array ? Number(mergedItem[4]) : mergedItem.layerId;
+								if (checkLayerId === 12) return;
+							}
+							let shapeData = null;
+
+							if (isV3Array) {
+								// 2. 在数据获取逻辑中移除 POUR 的判断，保留 COPPER_AREA
+								shapeData = type === 'COPPER_AREA' ? mergedItem[8] : mergedItem[7];
+							} else {
+								if (mergedItem.path) shapeData = mergedItem.path;
+								else if (mergedItem.points) shapeData = mergedItem.points;
+								else if (mergedItem.width && mergedItem.height && mergedItem.x !== undefined) {
+									shapeData = [
+										'R',
+										mergedItem.x,
+										mergedItem.y,
+										mergedItem.width,
+										mergedItem.height,
+										mergedItem.rotation || 0,
+										mergedItem.cornerRadius || 0,
+									];
+								}
+							}
+
+							let safeCounter = 0;
+							while (Array.isArray(shapeData) && shapeData.length > 0 && Array.isArray(shapeData[0])) {
+								if (shapeData[0][0] === 'R' || typeof shapeData[0][0] === 'number') break;
+								shapeData = shapeData[0];
+								safeCounter++;
+								if (safeCounter > 5) break;
+							}
+
+							let vertices = [];
+							let isValidShape = false;
+							let rectData = null;
+
+							if (Array.isArray(shapeData) && shapeData.length > 0) {
+								if (Array.isArray(shapeData[0]) && shapeData[0][0] === 'R') rectData = shapeData[0];
+								else if (shapeData[0] === 'R') rectData = shapeData;
+							}
+
+							if (rectData) {
+								let rx = Number(rectData[1]),
+									ry = Number(rectData[2]),
+									rw = Number(rectData[3]),
+									rh = Number(rectData[4]),
+									rot = Number(rectData[5] || 0),
+									radius = Number(rectData[6] || 0);
+								vertices = getRotatedRectVertices(rx, ry, rw, rh, rot, radius);
+								isValidShape = true;
+							} else if (shapeData) {
+								vertices = getPolyVertices(shapeData);
+								if (vertices.length > 2) isValidShape = true;
+							}
+
+							if (isValidShape) {
+								let minX = Infinity,
+									maxX = -Infinity,
+									minY = Infinity,
+									maxY = -Infinity;
+								vertices.forEach((v) => {
+									if (v.x < minX) minX = v.x;
+									if (v.x > maxX) maxX = v.x;
+									if (v.y < minY) minY = v.y;
+									if (v.y > maxY) maxY = v.y;
+								});
+
+								let layerId = isV3Array ? mergedItem[4] : mergedItem.layerId;
+								let netName = isV3Array ? mergedItem[3] : mergedItem.netName || '';
+								// [关键修复] 优先使用 id
+								let safeId = !isV3Array ? getNormId(mergedItem.id || mergedItem.ticket) : getNormId(mergedItem[1]);
+
+								primitives.push({
+									id: safeId,
+									type: type,
+									net: netName,
+									layer: layerId,
+									shape: 'POLY',
+									vertices: vertices,
+									x: (minX + maxX) / 2,
+									y: (minY + maxY) / 2,
+									w: maxX - minX,
+									h: maxY - minY,
+								});
+							}
+						} else if (type === 'PAD_NET') {
+							// V3 修复核心：解析 PAD_NET 的特殊 ID 格式 ["PAD_NET", CompID, Pin, Suffix]
+							if (!isV3Array) {
+								let idRaw = mergedItem.id;
+								// 检测是否为字符串化的数组
+								if (typeof idRaw === 'string' && idRaw.startsWith('[')) {
+									try {
+										let idParts = JSON.parse(idRaw);
+										// 确保格式符合预期: [type, compId, pinNum, suffix]
+										if (Array.isArray(idParts) && idParts.length >= 4) {
+											let compId = idParts[1]; // 例如 "84926b40acad0680"
+											let pinNum = idParts[2]; // 例如 "1"
+											let padSuffix = idParts[3]; // 例如 "e3"
+
+											// 【关键逻辑】构建物理焊盘的唯一ID = 元件ID + 后缀
+											let physicalPadId = compId + padSuffix;
+
+											// 建立映射关系：物理ID -> (元件ID, 引脚号)
+											padIdToPinInfo[physicalPadId] = { compId: compId, pin: pinNum };
+										}
+									} catch (e) {
+										console.error('PAD_NET 解析错误:', e);
+									}
+								}
+							} else {
+								// V2/V3 数组格式兼容 (旧版逻辑保持不变)
+								let compId = mergedItem[1];
+								let pinNum = mergedItem[2];
+								let padSuffix = mergedItem[4];
+								padIdToPinInfo[compId + padSuffix] = { compId: compId, pin: pinNum };
+							}
+						}
+					} catch (e) {}
+				});
+				return { primitives, innerLayerIds };
+			}
+
+			// ---------------------------------------------------------
+			// 模块 4：主控制逻辑 (Main Logic)
+			// ---------------------------------------------------------
+
+			async function analyzePcb() {
+				try {
+					// 0. 版本检测
+					let editorVersion = '2.2.45'; // 默认值
+					try {
+						// 正确赋值给 editorVersion
+						editorVersion = eda.sys_Environment.getEditorCurrentVersion() || '2.2.45';
+
+						if (editorVersion && editorVersion.trim().startsWith('3.')) {
+							document.querySelector('.header-title').innerText = '当前操作不可撤销，注意备份，V3版本暂不支持修改焊盘';
+						}
+					} catch (e) {}
+					console.log(`[系统] 检测到编辑器版本: ${editorVersion}`);
+
+					// 1. 获取源码与Pad
+					let rawSource = await eda.sys_FileManager.getDocumentSource();
+					if (typeof rawSource !== 'string') throw new Error('源码获取失败');
+
+					let allPads = await fetchAllPads();
+					let allUsedNetNames = new Set();
+					allPads.forEach((p) => {
+						if (p.net) allUsedNetNames.add(p.net);
+					});
+
+					// 2. 解析
+					const lines = rawSource.split('\n');
+					let parseResult;
+					if (editorVersion.trim().startsWith('3.')) {
+						parseResult = parseV3Primitives(lines, allUsedNetNames);
+					} else {
+						parseResult = parseV2Primitives(lines, allUsedNetNames);
+					}
+					let primitives = parseResult.primitives;
+					let innerLayerIds = parseResult.innerLayerIds;
+
+					// 3. 处理过孔盲埋孔层信息
+					const stackIds = getStackIds(innerLayerIds);
+					primitives.forEach((p) => {
+						if (p.type === 'VIA' && p._rawRange) {
+							p.blindLayers = getRealLayerIdsFromRange(p._rawRange, stackIds);
+						}
+					});
+
+					// 4. 合并所有图元
+					const allPrimitives = primitives.concat(allPads);
+
+					// 5. 核心计算 (Grid + UnionFind)
+					let uf = new UnionFind();
+					const GRID_SIZE = 150;
+					let grid = {};
+
+					allPrimitives.forEach((prim) => {
+						let minX,
+							maxX,
+							minY,
+							maxY,
+							padding = 10;
+						if (prim.shape === 'line') {
+							let r = prim.w / 2;
+							minX = Math.min(prim.x1, prim.x2) - r;
+							maxX = Math.max(prim.x1, prim.x2) + r;
+							minY = Math.min(prim.y1, prim.y2) - r;
+							maxY = Math.max(prim.y1, prim.y2) + r;
+						} else {
+							let halfW = prim.w / 2,
+								halfH = prim.h / 2;
+							minX = prim.x - halfW;
+							maxX = prim.x + halfW;
+							minY = prim.y - halfH;
+							maxY = prim.y + halfH;
+						}
+						minX -= padding;
+						maxX += padding;
+						minY -= padding;
+						maxY += padding;
+						let startX = Math.floor(minX / GRID_SIZE),
+							endX = Math.floor(maxX / GRID_SIZE);
+						let startY = Math.floor(minY / GRID_SIZE),
+							endY = Math.floor(maxY / GRID_SIZE);
+						for (let x = startX; x <= endX; x++) {
+							for (let y = startY; y <= endY; y++) {
+								let key = `${x},${y}`;
+								if (!grid[key]) grid[key] = [];
+								grid[key].push(prim);
+							}
+						}
+					});
+
+					let processedPairs = new Set();
+					for (let key in grid) {
+						let cellItems = grid[key];
+						if (cellItems.length < 2) continue;
+						for (let i = 0; i < cellItems.length; i++) {
+							for (let j = i + 1; j < cellItems.length; j++) {
+								let a = cellItems[i];
+								let b = cellItems[j];
+								let pairId = a.id < b.id ? `${a.id}|${b.id}` : `${b.id}|${a.id}`;
+								if (processedPairs.has(pairId)) continue;
+								processedPairs.add(pairId);
+
+								if (checkConnectivityHighPrecision(a, b)) {
+									uf.union(a.id, b.id);
+								}
+							}
+						}
+					}
+
+					// 6. 生成操作列表
+					let clusters = {};
+					allPrimitives.forEach((p) => {
+						let root = uf.find(p.id);
+						if (!clusters[root]) clusters[root] = [];
+						clusters[root].push(p);
+					});
+
+					let operations = [];
+					let netCounter = 1;
+
+					for (const rootId of Object.keys(clusters)) {
+						let group = clusters[rootId];
+						if (group.length <= 1) continue;
+
+						let existingNets = new Set();
+						group.forEach((p) => {
+							if (p.net && p.net !== '' && p.net !== 'null' && p.net !== 'undefined') {
+								existingNets.add(p.net);
+							}
+						});
+
+						let finalNetName = '';
+						if (existingNets.size > 0) {
+							let sortedNets = Array.from(existingNets);
+							const isGenericNet = (name) => /^NET\d+$/i.test(name);
+							sortedNets.sort((a, b) => {
+								let aGen = isGenericNet(a);
+								let bGen = isGenericNet(b);
+								if (!aGen && bGen) return -1;
+								if (aGen && !bGen) return 1;
+								if (a.length !== b.length) return a.length - b.length;
+								return a.localeCompare(b);
+							});
+							finalNetName = sortedNets[0];
+						} else {
+							while (true) {
+								let candidate = 'NET' + netCounter;
+								if (!allUsedNetNames.has(candidate)) {
+									finalNetName = candidate;
+									allUsedNetNames.add(finalNetName);
+									break;
+								}
+								netCounter++;
+							}
+						}
+
+						group.forEach((item) => {
+							if (item.net !== finalNetName) {
+								operations.push({
+									id: item.id,
+									type: item.type,
+									oldNet: item.net,
+									newNet: finalNetName,
+									holeSize: item.holeSize,
+									status: 'pending',
+								});
+							}
+						});
+					}
+					return operations;
+				} catch (e) {
+					console.error(e);
+					return [];
+				}
+			}
+
+			// ##########################################################################
+			// ##########################   ALGORITHM CORE END   ########################
+			// ##########################################################################
+
+			// ================= 3. UI 交互逻辑 =================
+
+			async function init() {
+				if (g_isExecuting) return;
+
+				g_isAnalyzing = true;
+				setLoading(true, '分析物理拓扑...');
+
+				setTimeout(async () => {
+					g_pendingOperations = await analyzePcb();
+					g_pendingOperations.sort((a, b) => (a.oldNet || '').localeCompare(b.oldNet || '') || a.newNet.localeCompare(b.newNet));
+
+					renderTable();
+					updateFooterStatus(0, g_pendingOperations.length);
+					setLoading(false);
+					g_isAnalyzing = false;
+
+					const btn = document.getElementById('btn-action');
+					if (g_pendingOperations.length === 0) {
+						btn.innerText = '刷新';
+						btn.classList.add('btn-secondary');
+					} else {
+						btn.innerText = '执行';
+						btn.classList.remove('btn-secondary');
+					}
+				}, 50);
+			}
+
+			function setLoading(isLoading, text) {
+				const mask = document.getElementById('loading-mask');
+				const loadText = document.getElementById('loading-text');
+				const btn = document.getElementById('btn-action');
+
+				if (isLoading) {
+					mask.style.display = 'flex';
+					loadText.innerText = text;
+					btn.disabled = true;
+				} else {
+					mask.style.display = 'none';
+					btn.disabled = false;
+				}
+			}
+
+			function handleBtnClick() {
+				const btn = document.getElementById('btn-action');
+				if (g_pendingOperations.length === 0 || btn.innerText.includes('刷新') || btn.innerText.includes('重新')) {
+					init();
+				} else {
+					executeChanges();
+				}
+			}
+
+			function renderTable() {
+				const container = document.getElementById('result-list');
+				container.innerHTML = '';
+
+				if (g_pendingOperations.length === 0) {
+					container.innerHTML = `
+                <div class="empty-state">
+                    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#444" stroke-width="2">
+                        <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+                        <polyline points="22 4 12 14.01 9 11.01"></polyline>
+                    </svg>
+                    <div>网络拓扑连接完整</div>
+                </div>`;
+					return;
+				}
+
+				g_pendingOperations.forEach((op, index) => {
+					const row = document.createElement('div');
+					row.className = 'row-item grid-row-layout';
+					row.id = `row-${index}`;
+					let displayOldNet = op.oldNet && op.oldNet !== 'null' && op.oldNet !== '' ? op.oldNet : "<span style='color:#555'>-</span>";
+
+					row.innerHTML = `
+                <div class="cell-truncate" title="${op.id}">${op.id}</div>
+                <div class="cell-truncate">${op.type}</div>
+                <div class="cell-truncate" title="${displayOldNet}">${displayOldNet}</div>
+                <div class="cell-truncate new-net" title="${op.newNet}">${op.newNet}</div>
+                <div class="st-pending" id="status-${index}">待处理</div>
+            `;
+					container.appendChild(row);
+				});
+			}
+
+			function updateFooterStatus(current, total) {
+				const bar = document.getElementById('progress-bar');
+				const leftTxt = document.getElementById('status-left');
+				const rightTxt = document.getElementById('status-right');
+
+				if (total === 0) {
+					bar.style.width = '0%';
+					leftTxt.innerText = '暂无操作';
+					rightTxt.innerText = '-- / --';
+					return;
+				}
+				const percentage = Math.min(100, Math.round((current / total) * 100));
+				bar.style.width = `${percentage}%`;
+
+				if (current === 0) leftTxt.innerText = `发现 ${total} 个图元待设置网络`;
+				else if (current === total) leftTxt.innerText = '执行完毕';
+				else leftTxt.innerText = '正在执行...';
+
+				rightTxt.innerText = `${current} / ${total}`;
+			}
+
+			async function executeChanges() {
+				if (g_isAnalyzing || g_pendingOperations.length === 0) return;
+
+				// 版本检测
+				editorVersion = eda.sys_Environment.getEditorCurrentVersion() || '2.2.45';
+
+				g_isExecuting = true;
+				const btn = document.getElementById('btn-action');
+				btn.disabled = true;
+				btn.innerText = '处理中...';
+
+				const total = g_pendingOperations.length;
+				const CHUNK_SIZE = 5;
+
+				for (let i = 0; i < total; i++) {
+					let op = g_pendingOperations[i];
+					let success = false;
+					try {
+						let props = { net: op.newNet };
+						if (op.type === 'PAD' && op.holeSize > 0) {
+							props.hole = ['ROUND', op.holeSize / 2, op.holeSize / 2];
+						}
+						success = true;
+						switch (op.type) {
+							case 'PAD': //  V3存在BUG，跳过焊盘
+								if (editorVersion.trim().startsWith('2.')) {
+									eda.pcb_PrimitivePad.modify(op.id, props);
+								} else {
+									success = false;
+								}
+								break;
+							case 'VIA':
+								eda.pcb_PrimitiveVia.modify(op.id, props);
+								break;
+							case 'LINE':
+								eda.pcb_PrimitiveLine.modify(op.id, props);
+								break;
+							case 'ARC':
+								eda.pcb_PrimitiveArc.modify(op.id, props);
+								break;
+							case 'FILL':
+								eda.pcb_PrimitiveFill.modify(op.id, props);
+								break;
+							case 'POLY':
+								eda.pcb_PrimitivePolyline.modify(op.id, props);
+								break;
+							case 'POUR':
+								eda.pcb_PrimitivePour.modify(op.id, props);
+								break;
+
+							case 'REGION':
+								eda.pcb_PrimitiveFill.modify(op.id, props);
+								break;
+							case 'COPPER_AREA':
+								eda.pcb_PrimitivePour.modify(op.id, props);
+								break;
+						}
+					} catch (e) {
+						success = false;
+						console.error(e);
+					}
+
+					let statusDiv = document.getElementById(`status-${i}`);
+					let rowDiv = document.getElementById(`row-${i}`);
+
+					if (statusDiv) {
+						statusDiv.innerText = success ? '完成' : '错误';
+						statusDiv.className = success ? 'st-done' : 'st-err';
+					}
+					if (rowDiv) {
+						rowDiv.classList.add('active');
+						if (i > 0) document.getElementById(`row-${i - 1}`).classList.remove('active');
+					}
+
+					updateFooterStatus(i + 1, total);
+					if (i % CHUNK_SIZE === 0 || i === total - 1) {
+						if (rowDiv) rowDiv.scrollIntoView({ block: 'center', behavior: 'auto' });
+						await new Promise((resolve) => setTimeout(resolve, 0));
+					}
+				}
+
+				try {
+					eda.sys_Window.redraw();
+				} catch (e) {}
+				g_isExecuting = false;
+
+				btn.disabled = false;
+				btn.innerText = '刷新';
+				btn.classList.add('btn-secondary');
+				const lastRow = document.getElementById(`row-${total - 1}`);
+				if (lastRow) lastRow.classList.remove('active');
+			}
+
+			window.onload = init;
+		</script>
+	</body>
+</html>

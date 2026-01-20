@@ -1,0 +1,434 @@
+<!doctype html>
+<html lang="zh-CN">
+	<head>
+		<meta charset="UTF-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+		<title>狼黑工具 - 批量修改网络 & 引脚查询</title>
+		<style>
+			* {
+				box-sizing: border-box;
+				margin: 0;
+				padding: 0;
+				font-family: Arial, sans-serif;
+			}
+
+			body {
+				background-color: #f0f2f5;
+				display: flex;
+				justify-content: center;
+				align-items: center;
+				min-height: 100vh;
+				padding: 0px;
+			}
+
+			.container {
+				width: 100%;
+				height: 100vh;
+				/* width: 470px;
+            height: 640px; */
+				background-color: white;
+				border-radius: 0px;
+				display: flex;
+				flex-direction: column;
+				box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+				overflow: hidden;
+			}
+
+			.header {
+				display: flex;
+				justify-content: space-between;
+				align-items: center;
+				background-color: #2c3e50;
+				color: white;
+				padding: 12px 16px;
+			}
+
+			h1 {
+				font-size: 16px;
+				font-weight: 600;
+			}
+
+			.execute-btn {
+				background-color: #3498db;
+				color: white;
+				border: none;
+				padding: 6px 14px;
+				border-radius: 4px;
+				cursor: pointer;
+				font-size: 13px;
+				font-weight: 500;
+				transition: background-color 0.2s;
+			}
+
+			.execute-btn:hover {
+				background-color: #2980b9;
+			}
+
+			.execute-btn:disabled {
+				background-color: #95a5a6;
+				cursor: not-allowed;
+			}
+
+			.content {
+				flex: 1;
+				display: flex;
+				flex-direction: column;
+				padding: 16px;
+				overflow: hidden;
+			}
+
+			.input-section {
+				margin-bottom: 12px;
+				flex-shrink: 0;
+			}
+
+			label {
+				display: block;
+				margin-bottom: 6px;
+				font-size: 13px;
+				color: #2c3e50;
+				font-weight: 500;
+			}
+
+			textarea {
+				width: 100%;
+				padding: 10px;
+				border: 1px solid #dcdfe6;
+				border-radius: 4px;
+				resize: none;
+				font-size: 13px;
+				line-height: 1.4;
+				transition: border-color 0.2s;
+			}
+
+			/* 移除了单选框，适当增加输入框高度利用空间 */
+			#csvInput {
+				height: 150px;
+			}
+
+			textarea:focus,
+			input[type='text']:focus {
+				outline: none;
+				border-color: #3498db;
+			}
+
+			.result-section {
+				flex: 1;
+				display: flex;
+				flex-direction: column;
+				min-height: 0;
+			}
+
+			.search-section {
+				margin-bottom: 10px;
+				display: flex;
+				align-items: center;
+				gap: 10px;
+				background-color: #f8f9fa;
+				padding: 8px;
+				border-radius: 4px;
+				border: 1px solid #e4e7ed;
+			}
+
+			.search-input {
+				flex: 1;
+				padding: 6px 10px;
+				border: 1px solid #dcdfe6;
+				border-radius: 4px;
+				font-size: 13px;
+			}
+
+			.result-textarea {
+				flex: 1;
+				background-color: #f8f9fa;
+			}
+
+			.status {
+				margin-top: 10px;
+				padding: 8px 10px;
+				border-radius: 4px;
+				font-size: 13px;
+				display: none;
+				flex-shrink: 0;
+			}
+
+			.status.success {
+				background-color: #d4edda;
+				color: #155724;
+				border: 1px solid #c3e6cb;
+				display: block;
+			}
+
+			.status.error {
+				background-color: #f8d7da;
+				color: #721c24;
+				border: 1px solid #f5c6cb;
+				display: block;
+			}
+
+			.status.info {
+				background-color: #e1f5fe;
+				color: #0277bd;
+				border: 1px solid #b3e5fc;
+				display: block;
+			}
+
+			.version-info {
+				font-size: 11px;
+				color: #bdc3c7;
+				margin-left: 10px;
+				font-weight: normal;
+			}
+		</style>
+	</head>
+	<body>
+		<div class="container">
+			<div class="header">
+				<h1>网络修改 & 查询工具 <span id="verLabel" class="version-info"></span></h1>
+				<button id="executeBtn" class="execute-btn">执行替换</button>
+			</div>
+			<div class="content">
+				<div class="input-section">
+					<label for="csvInput">替换规则，从 Excel 复制粘贴：</label>
+					<textarea id="csvInput" placeholder="旧网络名称    新网络名称&#10;(直接从Excel复制粘贴)"></textarea>
+				</div>
+
+				<div class="result-section">
+					<div class="search-section">
+						<label for="designatorInput" style="margin-bottom: 0">查询引脚：</label>
+						<input type="text" id="designatorInput" class="search-input" placeholder="输入位号 (如 U1)" />
+					</div>
+
+					<label for="resultOutput">输出结果：</label>
+					<textarea
+						id="resultOutput"
+						class="result-textarea"
+						readonly
+						placeholder="在此输入位号查看引脚网络，或点击执行查看替换结果..."
+					></textarea>
+					<div id="status" class="status"></div>
+				</div>
+			</div>
+		</div>
+		<script>
+			const resultOutput = document.getElementById('resultOutput');
+			const executeBtn = document.getElementById('executeBtn');
+			const csvInput = document.getElementById('csvInput');
+			const designatorInput = document.getElementById('designatorInput');
+			const status = document.getElementById('status');
+			const verLabel = document.getElementById('verLabel');
+
+			let cachedNetlistData = null;
+			let isV3 = false;
+
+			// 初始化：获取网表并存储
+			async function initNetlistData() {
+				try {
+					status.className = 'status';
+					if (typeof eda !== 'undefined' && eda.pcb_Net && eda.pcb_Net.getNetlist) {
+						try {
+							const version = eda.sys_Environment.getEditorCurrentVersion();
+							isV3 = version && version.toString().startsWith('3');
+							verLabel.textContent = isV3 ? '(V3模式)' : '(V2模式)';
+						} catch (e) {
+							verLabel.textContent = '(V2模式)';
+						}
+
+						// const rawData = await eda.pcb_Net.getNetlist('JLCEDA');
+						const getNetlistFile = await eda.pcb_ManufactureData.getNetlistFile();
+						const rawData = await getNetlistFile.text();
+						cachedNetlistData = JSON.parse(rawData);
+
+						status.textContent = '✅ 网表已加载，可直接输入位号查询或粘贴数据替换。';
+						status.className = 'status info';
+						console.log('网表已缓存', isV3 ? 'V3' : 'V2');
+					} else {
+						status.textContent = '⚠️ 未检测到EDA环境，请在嘉立创EDA中运行。';
+						status.className = 'status error';
+					}
+				} catch (error) {
+					console.error('初始化网表失败:', error);
+					status.textContent = '❌ 初始化失败: ' + error.message;
+					status.className = 'status error';
+				}
+			}
+
+			// --- 功能1：实时查询器件引脚 ---
+			designatorInput.addEventListener('input', function () {
+				const query = this.value.trim().toUpperCase();
+
+				if (!query) return;
+
+				if (!cachedNetlistData) {
+					resultOutput.value = '错误：网表数据未加载，请重新打开插件。';
+					return;
+				}
+
+				let foundComponent = null;
+				let outputLines = [];
+
+				// 查找组件
+				if (isV3) {
+					if (cachedNetlistData.components) {
+						for (const key in cachedNetlistData.components) {
+							const comp = cachedNetlistData.components[key];
+							if (comp.props && comp.props.Designator && comp.props.Designator.toUpperCase() === query) {
+								foundComponent = comp;
+								break;
+							}
+						}
+					}
+				} else {
+					for (const key in cachedNetlistData) {
+						const comp = cachedNetlistData[key];
+						if (comp.props && comp.props.Designator && comp.props.Designator.toUpperCase() === query) {
+							foundComponent = comp;
+							break;
+						}
+					}
+				}
+
+				// 格式化输出
+				if (foundComponent) {
+					// outputLines.push(`器件: ${foundComponent.props.Designator}`); // 可选是否保留标题行
+					// outputLines.push("引脚\t网络");
+
+					// 按照要求，不需要过多标题，直接输出数据以便复制
+					if (isV3) {
+						if (foundComponent.pinInfoMap) {
+							const pinKeys = Object.keys(foundComponent.pinInfoMap).sort((a, b) => {
+								return isNaN(a) || isNaN(b) ? a.localeCompare(b) : parseInt(a) - parseInt(b);
+							});
+
+							for (const pinKey of pinKeys) {
+								const info = foundComponent.pinInfoMap[pinKey];
+								// 修改：空网络返回 ""
+								const netName = info.net || '';
+								outputLines.push(`${pinKey}\t${netName}`);
+							}
+						}
+					} else {
+						if (foundComponent.pins) {
+							const pinKeys = Object.keys(foundComponent.pins).sort((a, b) => {
+								return isNaN(a) || isNaN(b) ? a.localeCompare(b) : parseInt(a) - parseInt(b);
+							});
+
+							for (const pinKey of pinKeys) {
+								// 修改：空网络返回 ""
+								const netName = foundComponent.pins[pinKey] || '';
+								outputLines.push(`${pinKey}\t${netName}`);
+							}
+						}
+					}
+					resultOutput.value = outputLines.join('\n');
+				} else {
+					resultOutput.value = `未找到位号为 "${query}" 的器件。`;
+				}
+			});
+
+			// --- 功能2：批量替换执行 ---
+			executeBtn.addEventListener('click', async function () {
+				executeBtn.disabled = true;
+				executeBtn.textContent = '处理中...';
+				resultOutput.value = '';
+				status.className = 'status';
+
+				try {
+					const content = csvInput.value.trim();
+					if (!content) throw new Error('请从 Excel 复制粘贴替换规则');
+
+					// const netdataRaw = await eda.pcb_Net.getNetlist('JLCEDA');
+					const getNetlistFile = await eda.pcb_ManufactureData.getNetlistFile();
+					const netdataRaw = await getNetlistFile.text();
+					let jsonData = JSON.parse(netdataRaw);
+					cachedNetlistData = jsonData;
+
+					// 强制使用制表符分隔
+					const separator = '\t';
+					const lines = content.split('\n');
+					const replaceRules = [];
+
+					for (const line of lines) {
+						const trimmedLine = line.trim();
+						if (trimmedLine) {
+							const parts = trimmedLine.split(separator).map((item) => item.trim());
+							if (parts.length >= 2) {
+								const oldName = parts[0];
+								const newName = parts[1];
+								if (oldName && newName) replaceRules.push({ oldName, newName });
+							}
+						}
+					}
+
+					if (replaceRules.length === 0) throw new Error('未找到有效的替换规则 (请确保使用Tab分隔)');
+
+					resultOutput.value += `找到 ${replaceRules.length} 条替换规则\n\n`;
+
+					const replaceMap = new Map();
+					for (const rule of replaceRules) replaceMap.set(rule.oldName, rule.newName);
+
+					let totalReplacements = 0;
+
+					if (isV3) {
+						if (jsonData.components) {
+							for (const componentKey in jsonData.components) {
+								const component = jsonData.components[componentKey];
+								const designator = component.props ? component.props.Designator : componentKey;
+
+								if (component.pinInfoMap) {
+									for (const pinKey in component.pinInfoMap) {
+										const pinInfo = component.pinInfoMap[pinKey];
+										if (pinInfo && pinInfo.net && replaceMap.has(pinInfo.net)) {
+											const newNet = replaceMap.get(pinInfo.net);
+											resultOutput.value += `替换: ${designator}.${pinKey} [${pinInfo.net} -> ${newNet}]\n`;
+											pinInfo.net = newNet;
+											totalReplacements++;
+										}
+									}
+								}
+							}
+						}
+					} else {
+						for (const componentKey in jsonData) {
+							const component = jsonData[componentKey];
+							if (component.pins) {
+								const designator = component.props ? component.props.Designator : 'Unknown';
+								for (const pinKey in component.pins) {
+									const currentNet = component.pins[pinKey];
+									if (currentNet && replaceMap.has(currentNet)) {
+										const newNet = replaceMap.get(currentNet);
+										resultOutput.value += `替换: ${designator}.${pinKey} [${currentNet} -> ${newNet}]\n`;
+										component.pins[pinKey] = newNet;
+										totalReplacements++;
+									}
+								}
+							}
+						}
+					}
+
+					resultOutput.value += `\n完成 ${totalReplacements} 次替换`;
+
+					const updatedJsonString = JSON.stringify(jsonData, null, 2);
+					await eda.pcb_Net.setNetlist('JLCEDA', updatedJsonString);
+
+					cachedNetlistData = jsonData;
+
+					status.textContent = `✅ 成功替换 ${totalReplacements} 处`;
+					status.className = 'status success';
+				} catch (error) {
+					console.error('Error:', error);
+					status.textContent = `❌ 出错: ${error.message}`;
+					status.className = 'status error';
+					resultOutput.value += `\n错误: ${error.message}`;
+				} finally {
+					executeBtn.disabled = false;
+					executeBtn.textContent = '执行替换';
+				}
+			});
+
+			document.addEventListener('DOMContentLoaded', function () {
+				setTimeout(initNetlistData, 500);
+			});
+		</script>
+	</body>
+</html>
