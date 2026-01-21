@@ -8,3 +8,4 @@
 debug.log
 .edaignore
 npm run build.cmd
+.prettierrc.js
