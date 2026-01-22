@@ -194,6 +194,56 @@ if (!globalThis[INIT_FLAG_KEY]) {
 	globalThis[INIT_FLAG_KEY] = true;
 }
 
+
+// 注册快捷键
+
+
+	// 检测版本
+	let editorVersion = '2.2.x';
+	try {
+		editorVersion = eda.sys_Environment.getEditorCurrentVersion() || '2.2.x';
+	} catch (e) {}
+	console.log(`[系统] 检测到编辑器版本: ${editorVersion}`);
+
+	// 判断逻辑：如果版本号以 "3." 开头，使用V3引擎；否则使用V2引擎
+	if (editorVersion.trim().startsWith('3.')) {
+		// 导入图片
+		eda.sys_ShortcutKey.unregisterShortcutKey(['Ctrl+Shift+C']);
+		eda.sys_ShortcutKey.registerShortcutKey(
+			['Ctrl+Shift+C'],'导入图片',
+			() => ImportImage(),[4],[1, 2, 3, 4, 5]
+		);
+		// 位号查重
+		eda.sys_ShortcutKey.unregisterShortcutKey(['Ctrl+Alt+W']);
+		eda.sys_ShortcutKey.registerShortcutKey(
+			['Ctrl+Alt+W'],'位号查重',
+			() => CheckDesignators(),[4],[1, 2, 3, 4, 5]
+		);
+		// 导线 ⇄ 线条
+		eda.sys_ShortcutKey.unregisterShortcutKey(['Ctrl+Shift+X']);
+		eda.sys_ShortcutKey.registerShortcutKey(
+			['Ctrl+Shift+X'],'导线 ⇄ 线条',
+			() => WirePolylinetoggle(),[4, 5],[1, 2, 3, 4, 5]
+		);
+		// 焊盘 ⇄ 过孔
+		eda.sys_ShortcutKey.unregisterShortcutKey(['Ctrl+Shift+G']);
+		eda.sys_ShortcutKey.registerShortcutKey(
+			['Ctrl+Shift+G'],'焊盘 ⇄ 过孔',
+			() => PadViaToggle(),[4, 5],[1, 2, 3, 4, 5]
+		);
+	} else {
+		// V2版本注册快捷键功能异常
+		// 创建封装
+		// eda.sys_ShortcutKey.unregisterShortcutKey(['Ctrl+Shift+F']);
+		// eda.sys_ShortcutKey.registerShortcutKey(
+		// 	['Ctrl+Shift+F'],'创建封装',
+		// 	() => CreateFootprint(),[4],[1, 2, 3, 4, 5]
+		// );
+	}
+
+
+
+
 // 测试 ============================================================================
 
 // 测试 - 导出工程资料
@@ -217,3 +267,4 @@ if (!globalThis[INIT_FLAG_KEY]) {
 // 								"title": "Gerber",
 // 								"registerFn": "ImportGerber"
 // 							}
+
