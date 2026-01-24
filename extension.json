@@ -3,7 +3,7 @@
 	"uuid": "345f2952d65b1a5ca2f11721b90309c9",
 	"displayName": "狼黑工具",
 	"description": "提高工作效率的实用插件合集",
-	"version": "1.13.7",
+	"version": "1.13.9",
 	"publisher": "wolfblack",
 	"engines": {
 		"eda": "^2.2.45"

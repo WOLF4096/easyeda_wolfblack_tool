@@ -48,6 +48,8 @@ class PerformanceMonitor {
 
 // 创建全局性能监控实例
 const perfMonitor = new PerformanceMonitor();
+// 获取客户端版本
+let currentVersion = eda.sys_Environment.getEditorCurrentVersion();
 
 // 放置导线主功能
 export async function placeWires(importMethod) {
@@ -55,8 +57,8 @@ export async function placeWires(importMethod) {
 	try {
 		// 版本检测日志
 		try {
-			if (typeof eda !== 'undefined' && eda.sys_Environment && eda.sys_Environment.getEditorCurrentVersion) {
-				console.log('当前EDA版本:', eda.sys_Environment.getEditorCurrentVersion());
+			if (typeof eda !== 'undefined' && currentVersion) {
+				console.log('当前EDA版本:', currentVersion);
 			}
 		} catch (e) {
 			console.log('版本检测跳过');
@@ -240,7 +242,6 @@ async function getSelectedComponent() {
 	try {
 		let primitives;
 		// 1. 版本检测
-		const currentVersion = eda.sys_Environment.getEditorCurrentVersion();
 		if (currentVersion && currentVersion.startsWith('2.2.45')) {
 			primitives = await eda.sch_SelectControl.getSelectedPrimitives();
 		} else {
@@ -628,36 +629,36 @@ async function drawSingleWire(pinInfo, netName) {
 	const { x, y, angle } = pinInfo;
 	// console.log(x, y, angle);
 	let startX, startY, endX, endY;
-
+	startX = x;
+	startY = y;
+	
 	switch (angle) {
 		case 0:
-			startX = x;
-			startY = y;
 			endX = startX + WIRE_LENGTH;
 			endY = startY;
 			break;
 		case 90:
-			startX = x;
-			startY = y;
 			endX = startX;
-			endY = startY - WIRE_LENGTH;
+			if (currentVersion === '3.2.80') {
+				endY = startY + WIRE_LENGTH;
+			}else{
+				endY = startY - WIRE_LENGTH;
+			}
 			break;
 		case 180:
-			startX = x;
-			startY = y;
 			endX = startX - WIRE_LENGTH;
 			endY = startY;
 			break;
 		case 270:
-			startX = x;
-			startY = y;
 			endX = startX;
-			endY = startY + WIRE_LENGTH;
+			if (currentVersion === '3.2.80') {
+				endY = startY - WIRE_LENGTH;
+			}else{
+				endY = startY + WIRE_LENGTH;
+			}
 			break;
 		default:
 			// 默认向右
-			startX = x;
-			startY = y;
 			endX = startX + WIRE_LENGTH;
 			endY = startY;
 			console.warn(`未知的角度 ${angle}，使用默认方向`);

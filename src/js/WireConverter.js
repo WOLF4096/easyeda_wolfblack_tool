@@ -1,3 +1,4 @@
+/* eslint-disable complexity */
 /**
  * 导线(Primitive Line/Arc) 与 线条(Polyline)/区域(Region) 互转工具 v2.3 (Arc修正版)
  * * 功能说明：
@@ -124,7 +125,16 @@ export const WireConverter = {
 		const arr = polyItem.polygon.polygon;
 		const net = polyItem.net || '';
 		const layer = polyItem.layer;
-		const width = polyItem.lineWidth * 10;
+		let width;
+
+		// 版本检测
+		const currentVersion = eda.sys_Environment.getEditorCurrentVersion();
+		if (currentVersion && !currentVersion.startsWith('3.2.80')) {
+			width = polyItem.lineWidth * 10;
+		}else{
+			width = polyItem.lineWidth;
+		}
+		console.log(width);
 
 		if (!arr || arr.length < 2 || typeof arr[0] !== 'number') return;
 
