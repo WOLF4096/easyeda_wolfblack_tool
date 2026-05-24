@@ -3,7 +3,7 @@
 	"uuid": "345f2952d65b1a5ca2f11721b90309c9",
 	"displayName": "狼黑工具",
 	"description": "提高工作效率的实用插件合集",
-	"version": "1.13.9",
+	"version": "1.14.22",
 	"publisher": "wolfblack",
 	"engines": {
 		"eda": "^2.2.45"
@@ -14,7 +14,7 @@
 		"url": "https://github.com/WOLF4096/easyeda_wolfblack_tool"
 	},
 	"categories": ["PCB", "Schematic", "Other"],
-	"keywords": ["PCB", "BOM", "原理图", "二维码", "网表", "器件", "位号", "3D模型", "导线", "线条", "焊盘", "过孔"],
+	"keywords": ["PCB", "BOM", "原理图", "二维码", "网表", "器件", "位号", "3D模型", "导线", "线条", "焊盘", "过孔", "图片"],
 	"images": {
 		"logo": "./images/logo.png"
 	},
@@ -66,50 +66,31 @@
 				"title": "狼黑工具",
 				"menuItems": [
 					{
-						"id": "NetlistToSchematicid",
-						"title": "放置器件",
-						"menuItems": [
-							{
-								"id": "NetlistToSchematicPCB",
-								"title": "从PCB",
-								"registerFn": "NetlistToSchematicPCB"
-							},
-							{
-								"id": "NetlistToSchematicNET",
-								"title": "从网表文件",
-								"registerFn": "NetlistToSchematicNET"
-							}
-						]
-					},
-					{
-						"id": "AutoWirePlacerid",
-						"title": "放置导线",
-						"menuItems": [
-							{
-								"id": "AutoWirePlacerPCB",
-								"title": "从PCB",
-								"registerFn": "AutoWirePlacerPCB"
-							},
-							{
-								"id": "AutoWirePlacerNET",
-								"title": "从网表文件",
-								"registerFn": "AutoWirePlacerNET"
-							}
-						]
-					},
-					{
+						"id": "PcbToSch",
+						"title": "从PCB转原理图",
+						"registerFn": "PcbToSch"
+					},{
+						"id": "AutoWirePlacerPCB",
+						"title": "从PCB创建导线",
+						"registerFn": "AutoWirePlacerPCB"
+					},{
 						"id": "Component",
 						"title": "器件",
 						"menuItems": [
 							{
+								"id": "RefreshNetlist",
+								"title": "刷新网表",
+								"registerFn": "RefreshNetlist"
+							},
+							{
+								"id": "ClearEmptySupplierProperties",
+								"title": "清空多余属性",
+								"registerFn": "ClearEmptySupplierProperties"
+							},
+							{
 								"id": "CodeConvert",
 								"title": "丝印代码转换",
 								"registerFn": "CodeConvert"
-							},
-							{
-								"id": "ClearEmptySupplierPropertiesSCH",
-								"title": "清空多余属性",
-								"registerFn": "ClearEmptySupplierPropertiesSCH"
 							},
 							{
 								"id": "ImportBom",
@@ -167,14 +148,19 @@
 								"registerFn": "CheckDesignators"
 							},
 							{
+								"id": "RefreshNetlist",
+								"title": "刷新网表",
+								"registerFn": "RefreshNetlist"
+							},
+							{
+								"id": "ClearEmptySupplierProperties",
+								"title": "清空多余属性",
+								"registerFn": "ClearEmptySupplierProperties"
+							},
+							{
 								"id": "CodeConvert",
 								"title": "丝印代码转换",
 								"registerFn": "CodeConvert"
-							},
-							{
-								"id": "ClearEmptySupplierPropertiesPCB",
-								"title": "清空多余属性",
-								"registerFn": "ClearEmptySupplierPropertiesPCB"
 							},
 							{
 								"id": "ImportBom",
@@ -188,50 +174,34 @@
 							},
 							{
 								"id": "NetlistUpdate3DModels",
-								"title": "从网表恢复3D模型",
+								"title": "模型批量更新",
 								"registerFn": "NetlistUpdate3DModels"
 							}
 						]
 					},
 					{
-						"id": "PadViaConverter",
-						"title": "焊盘过孔转换",
+						"id": "Converter",
+						"title": "转换",
 						"menuItems": [
-							{
-								"id": "PadToVia",
-								"title": "焊盘 ⇒ 过孔",
-								"registerFn": "PadToVia"
-							},
-							{
-								"id": "ViaToPad",
-								"title": "过孔 ⇒ 焊盘",
-								"registerFn": "ViaToPad"
-							},
 							{
 								"id": "PadViaToggle",
 								"title": "焊盘 ⇄ 过孔",
 								"registerFn": "PadViaToggle"
-							}
-						]
-					},
-					{
-						"id": "WireConverter",
-						"title": "线条导线转换",
-						"menuItems": [
-							{
-								"id": "PolylinetoWire",
-								"title": "线条 ⇒ 导线",
-								"registerFn": "PolylinetoWire"
-							},
-							{
-								"id": "WiretoPolyline",
-								"title": "导线 ⇒ 线条",
-								"registerFn": "WiretoPolyline"
 							},
 							{
 								"id": "WirePolylinetoggle",
 								"title": "导线 ⇄ 线条",
 								"registerFn": "WirePolylinetoggle"
+							},
+							{
+								"id": "RegionImageConverter",
+								"title": "填充 ⇄ 图片",
+								"registerFn": "RegionImageConverter"
+							},
+							{
+								"id": "APITest",
+								"title": "基准测试",
+								"registerFn": "APITest"
 							}
 						]
 					},
@@ -240,24 +210,24 @@
 						"title": "网络",
 						"menuItems": [
 							{
-								"id": "ConfigurePhysicalNetsExtremespeed",
-								"title": "生成物理网络（极速）",
-								"registerFn": "ConfigurePhysicalNetsExtremespeed"
+								"id": "GenerateNet",
+								"title": "生成物理网络",
+								"registerFn": "GenerateNet"
 							},
 							{
-								"id": "ConfigurePhysicalNetsTradition",
-								"title": "生成物理网络（传统）",
-								"registerFn": "ConfigurePhysicalNetsTradition"
+								"id": "InADNetlist",
+								"title": "导入 AD 网表",
+								"registerFn": "InADNetlist"
 							},
 							{
-								"id": "ImportAltiumDesignerNetlist",
-								"title": "导入 Altium Designer 网表",
-								"registerFn": "ImportAltiumDesignerNetlist"
+								"id": "OutPinNet",
+								"title": "导出引脚网络",
+								"registerFn": "OutPinNet"
 							},
 							{
-								"id": "NetReplace",
+								"id": "ModifyNet",
 								"title": "批量修改网络",
-								"registerFn": "NetReplace"
+								"registerFn": "ModifyNet"
 							}
 						]
 					},

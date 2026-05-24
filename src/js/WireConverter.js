@@ -1,337 +1,325 @@
 /* eslint-disable complexity */
 /**
- * 导线(Primitive Line/Arc) 与 线条(Polyline)/区域(Region) 互转工具 v2.3 (Arc修正版)
+ * 导线(Primitive Line/Arc) 与 线条(Polyline)/区域(Region) 互转工具 (Refactored)
+ * * 核心机制：抛弃硬编码版本判断，通过读取本地存储的 API 校准数据，动态处理坐标系/线宽的缩放。
  * * 功能说明：
  * 1. toWire(): 将选中的 Polyline/Region 转为 Line/Arc (导线)
  * 2. toPolyline(): 将选中的 Line/Arc 转为 Polyline (线条)
  * 3. toggle(): 智能判断，互相转换
- * * * 更新说明：
- * - [v2.3] 修复 Arc 转 Polyline 被错误放大的问题：仅对 Line 应用 x10 缩放，Arc 保持原值
- * - [v2.2] 支持 v2.2.45.x 版本 Line 坐标及线宽 x10 修正
- * - 增加对 Region (圆形、矩形、圆角矩形) 转导线的支持
- * */
+ */
+
+// 默认 API 配置兜底（防止解析失败导致崩溃）
+const DEFAULT_API_CONFIG = {
+    "创建折线": { "坐标": 1, "线宽": 1 },
+    "创建直线": { "坐标": 1, "线宽": 1 },
+    "创建弧线": { "坐标": 1, "线宽": 1, "圆弧角度": 1 },
+    "获取折线": { "坐标": 1, "线宽": 1 },
+    "获取直线": { "坐标": 1, "线宽": 1 },
+    "获取弧线": { "坐标": 1, "线宽": 1, "圆弧角度": 1 }
+};
 
 export const WireConverter = {
-	/**
-	 * 入口 1: 转为导线 (Polyline/Region -> Line/Arc)
-	 */
-	toWire: async function () {
-		const primitives = await eda.pcb_SelectControl.getAllSelectedPrimitives();
-		console.log('Basic Primitives:', primitives);
-		if (!primitives || primitives.length === 0) return;
+    // ================= 公开入口 =================
 
-		// 获取 Region 的详细信息以提取 Net 属性
-		const detailedPrimitives = await eda.pcb_SelectControl.getSelectedPrimitives();
-		const netMap = this._buildNetMap(detailedPrimitives);
+    async toWire() {
+        await this._process(1);
+    },
 
-		// eda.sys_Log.add("开始转换 轮廓对象 ⇒ 导线");
+    async toPolyline() {
+        await this._process(2);
+    },
 
-		for (let item of primitives) {
-			if (item.primitiveType === 'Polyline' && item.polygon && item.polygon.polygon) {
-				await this._convertPolyToWire(item);
-			} else if (item.primitiveType === 'Region' && item.complexPolygon && item.complexPolygon.polygon) {
-				const externalNet = netMap[item.primitiveId];
-				await this._convertRegionToWire(item, externalNet);
-			}
-		}
-		// eda.sys_Log.add("转换完成");
-		// eda.sys_PanelControl.openBottomPanel("log");
-	},
+    async toggle() {
+        await this._process(3);
+    },
 
-	/**
-	 * 入口 2: 转为线条 (Line/Arc -> Polyline)
-	 */
-	toPolyline: async function () {
-		const primitives = await eda.pcb_SelectControl.getAllSelectedPrimitives();
-		console.log(primitives);
-		if (!primitives || primitives.length === 0) return;
+    // ================= 内部调度与通用逻辑 =================
 
-		// eda.sys_Log.add("开始转换 导线 ⇒ 轮廓对象");
+    /**
+     * 核心调度器
+     * @param {number} mode 1: 转导线, 2: 转线条, 3: 互相转换
+     */
+    async _process(mode) {
+        try {
+            const primitives = await eda.pcb_SelectControl.getAllSelectedPrimitives();
+            if (!primitives || primitives.length === 0) return;
 
-		for (let item of primitives) {
-			if (item.primitiveType === 'Line' || item.primitiveType === 'Arc') {
-				await this._convertWireToPoly(item);
-			}
-		}
-		// eda.sys_Log.add("转换完成");
-		// eda.sys_PanelControl.openBottomPanel("log");
-	},
+            // 获取带详细属性的图元，用于提取 Region 的 Net
+            const detailedPrimitives = await eda.pcb_SelectControl.getSelectedPrimitives();
+            const netMap = this._buildNetMap(detailedPrimitives);
+            const api = await this._getApiConfig();
 
-	/**
-	 * 入口 3: 互相转换 (自动识别类型)
-	 */
-	toggle: async function () {
-		const primitives = await eda.pcb_SelectControl.getAllSelectedPrimitives();
-		console.log(primitives);
-		if (!primitives || primitives.length === 0) return;
+            for (const item of primitives) {
+                if (item.primitiveType === 'Polyline' && item.polygon?.polygon) {
+                    if (mode === 1 || mode === 3) await this._convertPolyToWire(item, api);
+                } else if (item.primitiveType === 'Region' && item.complexPolygon?.polygon) {
+                    if (mode === 1 || mode === 3) await this._convertRegionToWire(item, netMap[item.primitiveId], api);
+                } else if (item.primitiveType === 'Line' || item.primitiveType === 'Arc') {
+                    if (mode === 2 || mode === 3) await this._convertWireToPoly(item, api);
+                }
+            }
+        } catch (error) {
+            console.error('导线互转出错:', error);
+        }
+    },
 
-		const detailedPrimitives = await eda.pcb_SelectControl.getSelectedPrimitives();
-		const netMap = this._buildNetMap(detailedPrimitives);
+    /**
+     * 安全获取 API 配置
+     */
+    async _getApiConfig() {
+        let api = DEFAULT_API_CONFIG;
+        const rawData = await eda.sys_Storage.getExtensionUserConfig('APITest');
+        if (rawData) {
+            try {
+                api = JSON.parse(rawData);
+            } catch (e) {
+                console.warn('API 校准数据解析失败，将使用默认比例 1:1', e);
+            }
+        }
+        return api;
+    },
 
-		// eda.sys_Log.add("开始转换 导线 ⇄ 线条");
+    /**
+     * 通用倍率提取辅助函数
+     * @returns {number} src倍率 * target倍率
+     */
+    _getScale(api, srcKey, targetKey, prop) {
+        const srcScale = api[srcKey]?.[prop] ?? 1;
+        const targetScale = api[targetKey]?.[prop] ?? 1;
+        return srcScale * targetScale;
+    },
 
-		for (let item of primitives) {
-			if (item.primitiveType === 'Polyline') {
-				await this._convertPolyToWire(item);
-			} else if (item.primitiveType === 'Region') {
-				const externalNet = netMap[item.primitiveId];
-				await this._convertRegionToWire(item, externalNet);
-			} else if (item.primitiveType === 'Line' || item.primitiveType === 'Arc') {
-				await this._convertWireToPoly(item);
-			}
-		}
-		// eda.sys_Log.add("转换完成");
-		// eda.sys_PanelControl.openBottomPanel("log");
-	},
+    /**
+     * 构建图元ID到Net的映射表
+     */
+    _buildNetMap(detailedPrimitives) {
+        const map = {};
+        if (Array.isArray(detailedPrimitives)) {
+            detailedPrimitives.forEach(p => {
+                if (p.globalIndex) map[p.globalIndex] = p.net || '';
+            });
+        }
+        return map;
+    },
 
-	// ================= 内部逻辑方法 =================
+    /**
+     * 检查是否在铜层
+     */
+    _checkCopperLayer(layer, primitiveId) {
+        const isCopper = (layer === 1 || layer === 2) || (layer >= 15 && layer <= 46);
+        if (!isCopper) {
+            eda.sys_Log.add(`当前图元 ${primitiveId} 不在铜层，不可转为导线`, 'warn');
+            eda.sys_PanelControl.openBottomPanel('log');
+        }
+        return isCopper;
+    },
 
-	/**
-	 * 辅助方法：构建 globalIndex 到 Net 的映射表
-	 */
-	_buildNetMap: function (detailedPrimitives) {
-		const map = {};
-		if (detailedPrimitives && Array.isArray(detailedPrimitives)) {
-			detailedPrimitives.forEach((p) => {
-				if (p.globalIndex) {
-					map[p.globalIndex] = p.net || '';
-				}
-			});
-		}
-		return map;
-	},
+    // ================= 核心转换逻辑 =================
 
-	/**
-	 * 辅助方法：检查铜层
-	 */
-	_checkCopperLayer: function (layer, primitiveId) {
-		const isTopOrBottom = layer === 1 || layer === 2;
-		const isInnerLayer = layer >= 15 && layer <= 46;
+    /**
+     * 线条 (Polyline) ⇒ 导线 (Line/Arc)
+     */
+    async _convertPolyToWire(polyItem, api) {
+        if (!this._checkCopperLayer(polyItem.layer, polyItem.primitiveId)) return;
 
-		if (!isTopOrBottom && !isInnerLayer) {
-			eda.sys_Log.add(`当前图元 ${primitiveId} 不在铜层，不可转为导线`, 'warn');
-			eda.sys_PanelControl.openBottomPanel('log');
-			return false;
-		}
-		return true;
-	},
+        const arr = polyItem.polygon.polygon;
+        if (!arr || arr.length < 2 || typeof arr[0] !== 'number') return;
 
-	/**
-	 * 核心逻辑 1：将 Polyline 拆解并创建对应的 Line/Arc
-	 */
-	_convertPolyToWire: async function (polyItem) {
-		if (!this._checkCopperLayer(polyItem.layer, polyItem.primitiveId)) return;
+        // 提取统一的缩放倍率 (假设折线与直线的坐标系倍率一致)
+        const coordScale = this._getScale(api, '获取折线', '创建直线', '坐标');
+        const widthScale = this._getScale(api, '获取折线', '创建直线', '线宽');
+        const angleScale = api["创建弧线"]?.["圆弧角度"] ?? 1;
 
-		const arr = polyItem.polygon.polygon;
-		const net = polyItem.net || '';
-		const layer = polyItem.layer;
-		let width;
+        const net = polyItem.net || '';
+        const layer = polyItem.layer;
+        const targetWidth = polyItem.lineWidth * widthScale;
 
-		// 版本检测
-		const currentVersion = eda.sys_Environment.getEditorCurrentVersion();
-		if (currentVersion && !currentVersion.startsWith('3.2.80')) {
-			width = polyItem.lineWidth * 10;
-		}else{
-			width = polyItem.lineWidth;
-		}
-		console.log(width);
+        await eda.pcb_PrimitivePolyline.delete(polyItem.primitiveId);
 
-		if (!arr || arr.length < 2 || typeof arr[0] !== 'number') return;
+        let startX = arr[0] * coordScale;
+        let startY = arr[1] * coordScale;
+        let currentMode = 'L';
+        let i = 2;
 
-		let startX = arr[0];
-		let startY = arr[1];
-		let currentMode = 'L';
-		let i = 2;
+        while (i < arr.length) {
+            const val = arr[i];
+            if (typeof val === 'string') {
+                currentMode = val;
+                i++;
+                continue;
+            }
 
-		await eda.pcb_PrimitivePolyline.delete(polyItem.primitiveId);
+            if (currentMode === 'L') {
+                const endX = arr[i] * coordScale;
+                const endY = arr[i + 1] * coordScale;
+                await eda.pcb_PrimitiveLine.create(net, layer, startX, startY, endX, endY, targetWidth, false);
+                startX = endX;
+                startY = endY;
+                i += 2;
+            } else if (currentMode === 'ARC' || currentMode === 'CARC') {
+                const angle = arr[i] * angleScale;
+                const endX = arr[i + 1] * coordScale;
+                const endY = arr[i + 2] * coordScale;
+                await eda.pcb_PrimitiveArc.create(net, layer, startX, startY, endX, endY, angle, targetWidth, 1, false);
+                startX = endX;
+                startY = endY;
+                i += 3;
+            } else {
+                i++;
+            }
+        }
+    },
 
-		while (i < arr.length) {
-			const val = arr[i];
+    /**
+     * 区域 (Region) ⇒ 导线 (Line/Arc)
+     */
+    async _convertRegionToWire(regionItem, overrideNet, api) {
+        if (!this._checkCopperLayer(regionItem.layer, regionItem.primitiveId)) return;
 
-			if (typeof val === 'string') {
-				currentMode = val;
-				i++;
-				continue;
-			}
+        const arr = regionItem.complexPolygon.polygon;
+        if (!arr || arr.length === 0) return;
 
-			if (currentMode === 'L') {
-				const endX = arr[i];
-				const endY = arr[i + 1];
-				await eda.pcb_PrimitiveLine.create(net, layer, startX, startY, endX, endY, width, false);
-				startX = endX;
-				startY = endY;
-				i += 2;
-			} else if (currentMode === 'ARC' || currentMode === 'CARC') {
-				const angle = arr[i];
-				const endX = arr[i + 1];
-				const endY = arr[i + 2];
-				await eda.pcb_PrimitiveArc.create(net, layer, startX, startY, endX, endY, angle, width, 1, false);
-				startX = endX;
-				startY = endY;
-				i += 3;
-			} else {
-				i++;
-			}
-		}
-	},
+        // 获取折线 (作为 Region 的兜底) 到 创建直线的比例
+        const coordScale = this._getScale(api, '获取折线', '创建直线', '坐标');
+        const widthScale = this._getScale(api, '获取折线', '创建直线', '线宽');
+        const angleScale = api["创建弧线"]?.["圆弧角度"] ?? 1;
 
-	/**
-	 * 核心逻辑 2：将 Region (Circle/Rect/Polygon) 拆解为 Line/Arc
-	 */
-	_convertRegionToWire: async function (regionItem, overrideNet) {
-		if (!this._checkCopperLayer(regionItem.layer, regionItem.primitiveId)) return;
+        const net = overrideNet ?? regionItem.net ?? '';
+        const layer = regionItem.layer;
+        const targetWidth = regionItem.lineWidth * widthScale;
+        const firstVal = arr[0];
 
-		const arr = regionItem.complexPolygon.polygon;
-		const net = overrideNet !== undefined && overrideNet !== null ? overrideNet : regionItem.net || '';
-		const layer = regionItem.layer;
-		const width = regionItem.lineWidth * 10;
+        try {
+            await eda.pcb_PrimitivePolyline.delete(regionItem.primitiveId);
+        } catch (e) {
+            console.warn('删除原Region图元失败:', e);
+        }
 
-		if (!arr || arr.length === 0) return;
-		const firstVal = arr[0];
+        // --- 场景 A: 通用多边形 ---
+        if (typeof firstVal === 'number') {
+            if (arr.length < 2) return;
+            let startX = arr[0] * coordScale;
+            let startY = arr[1] * coordScale;
+            let currentMode = 'L';
+            let i = 2;
 
-		try {
-			await eda.pcb_PrimitivePolyline.delete(regionItem.primitiveId);
-		} catch (e) {
-			console.warn(e);
-		}
+            while (i < arr.length) {
+                const val = arr[i];
+                if (typeof val === 'string') {
+                    currentMode = val;
+                    i++;
+                    continue;
+                }
+                if (currentMode === 'L') {
+                    const endX = arr[i] * coordScale;
+                    const endY = arr[i + 1] * coordScale;
+                    await eda.pcb_PrimitiveLine.create(net, layer, startX, startY, endX, endY, targetWidth, false);
+                    startX = endX;
+                    startY = endY;
+                    i += 2;
+                } else if (currentMode === 'ARC' || currentMode === 'CARC') {
+                    const angle = arr[i] * angleScale;
+                    const endX = arr[i + 1] * coordScale;
+                    const endY = arr[i + 2] * coordScale;
+                    await eda.pcb_PrimitiveArc.create(net, layer, startX, startY, endX, endY, angle, targetWidth, 1, false);
+                    startX = endX;
+                    startY = endY;
+                    i += 3;
+                } else {
+                    i++;
+                }
+            }
+            return;
+        }
 
-		// 情况 A: 通用多边形
-		if (typeof firstVal === 'number') {
-			if (arr.length < 2) return;
-			let startX = arr[0];
-			let startY = arr[1];
-			let currentMode = 'L';
-			let i = 2;
+        // --- 场景 B: 特殊形状 (圆形/圆角矩形) ---
+        const type = firstVal;
+        if (type === 'CIRCLE') {
+            const cx = arr[1] * coordScale;
+            const cy = arr[2] * coordScale;
+            const r = arr[3] * coordScale;
+            await eda.pcb_PrimitiveArc.create(net, layer, cx - r, cy, cx + r, cy, 180, targetWidth, 1, false);
+            await eda.pcb_PrimitiveArc.create(net, layer, cx + r, cy, cx - r, cy, 180, targetWidth, 1, false);
+        } 
+        else if (type === 'R') {
+            const x = arr[1] * coordScale;
+            const y = arr[2] * coordScale;
+            const w = arr[3] * coordScale;
+            const h = arr[4] * coordScale;
+            const rot = arr[5] || 0; // 旋转角度不应用坐标倍率
+            let r = (arr[6] || 0) * coordScale;
+            
+            const h_vector = -h;
+            const minSideHalf = Math.min(w, Math.abs(h_vector)) / 2;
+            if (r > minSideHalf) r = minSideHalf;
 
-			while (i < arr.length) {
-				const val = arr[i];
-				if (typeof val === 'string') {
-					currentMode = val;
-					i++;
-					continue;
-				}
-				if (currentMode === 'L') {
-					const endX = arr[i];
-					const endY = arr[i + 1];
-					await eda.pcb_PrimitiveLine.create(net, layer, startX, startY, endX, endY, width, false);
-					startX = endX;
-					startY = endY;
-					i += 2;
-				} else if (currentMode === 'ARC' || currentMode === 'CARC') {
-					const angle = arr[i];
-					const endX = arr[i + 1];
-					const endY = arr[i + 2];
-					await eda.pcb_PrimitiveArc.create(net, layer, startX, startY, endX, endY, angle, width, 1, false);
-					startX = endX;
-					startY = endY;
-					i += 3;
-				} else {
-					i++;
-				}
-			}
-			return;
-		}
+            const cx = x;
+            const cy = y;
+            const rad = rot * (Math.PI / 180);
+            const cos = Math.cos(rad);
+            const sin = Math.sin(rad);
 
-		// 情况 B: 特殊形状
-		const type = firstVal;
-		if (type === 'CIRCLE') {
-			const cx = arr[1];
-			const cy = arr[2];
-			const r = arr[3];
-			await eda.pcb_PrimitiveArc.create(net, layer, cx - r, cy, cx + r, cy, 180, width, 1, false);
-			await eda.pcb_PrimitiveArc.create(net, layer, cx + r, cy, cx - r, cy, 180, width, 1, false);
-		} else if (type === 'R') {
-			const x = arr[1];
-			const y = arr[2];
-			const w = arr[3];
-			const h = arr[4];
-			const rot = arr[5] || 0;
-			let r = arr[6] || 0;
-			const h_vector = -h;
-			const minSideHalf = Math.min(w, Math.abs(h_vector)) / 2;
-			if (r > minSideHalf) r = minSideHalf;
-			const cx = x;
-			const cy = y;
-			const rad = rot * (Math.PI / 180);
-			const cos = Math.cos(rad);
-			const sin = Math.sin(rad);
-			const rotatePoint = (px, py) => {
-				const dx = px - cx;
-				const dy = py - cy;
-				return { x: cx + (dx * cos - dy * sin), y: cy + (dx * sin + dy * cos) };
-			};
-			const p1_start = rotatePoint(x + r, y);
-			const p1_end = rotatePoint(x + w - r, y);
-			const p2_start = p1_end;
-			const p2_end = rotatePoint(x + w, y - r);
-			const p3_start = p2_end;
-			const p3_end = rotatePoint(x + w, y + h_vector + r);
-			const p4_start = p3_end;
-			const p4_end = rotatePoint(x + w - r, y + h_vector);
-			const p5_start = p4_end;
-			const p5_end = rotatePoint(x + r, y + h_vector);
-			const p6_start = p5_end;
-			const p6_end = rotatePoint(x, y + h_vector + r);
-			const p7_start = p6_end;
-			const p7_end = rotatePoint(x, y - r);
-			const p8_start = p7_end;
-			const p8_end = p1_start;
+            const rotatePoint = (px, py) => {
+                const dx = px - cx;
+                const dy = py - cy;
+                return { x: cx + (dx * cos - dy * sin), y: cy + (dx * sin + dy * cos) };
+            };
 
-			if (w > 2 * r) await eda.pcb_PrimitiveLine.create(net, layer, p1_start.x, p1_start.y, p1_end.x, p1_end.y, width, false);
-			if (r > 0) await eda.pcb_PrimitiveArc.create(net, layer, p2_start.x, p2_start.y, p2_end.x, p2_end.y, -90, width, 1, false);
-			if (Math.abs(h_vector) > 2 * r) await eda.pcb_PrimitiveLine.create(net, layer, p3_start.x, p3_start.y, p3_end.x, p3_end.y, width, false);
-			if (r > 0) await eda.pcb_PrimitiveArc.create(net, layer, p4_start.x, p4_start.y, p4_end.x, p4_end.y, -90, width, 1, false);
-			if (w > 2 * r) await eda.pcb_PrimitiveLine.create(net, layer, p5_start.x, p5_start.y, p5_end.x, p5_end.y, width, false);
-			if (r > 0) await eda.pcb_PrimitiveArc.create(net, layer, p6_start.x, p6_start.y, p6_end.x, p6_end.y, -90, width, 1, false);
-			if (Math.abs(h_vector) > 2 * r) await eda.pcb_PrimitiveLine.create(net, layer, p7_start.x, p7_start.y, p7_end.x, p7_end.y, width, false);
-			if (r > 0) await eda.pcb_PrimitiveArc.create(net, layer, p8_start.x, p8_start.y, p8_end.x, p8_end.y, -90, width, 1, false);
-		}
-	},
+            const p1_start = rotatePoint(x + r, y);
+            const p1_end   = rotatePoint(x + w - r, y);
+            const p2_end   = rotatePoint(x + w, y - r);
+            const p3_end   = rotatePoint(x + w, y + h_vector + r);
+            const p4_end   = rotatePoint(x + w - r, y + h_vector);
+            const p5_end   = rotatePoint(x + r, y + h_vector);
+            const p6_end   = rotatePoint(x, y + h_vector + r);
+            const p7_end   = rotatePoint(x, y - r);
 
-	/**
-	 * 核心逻辑 3：将 Line/Arc 转换为 Polyline
-	 * * 更新 [v2.3]：修复 Arc 被放大的问题。现在仅当图元为 Line 且版本为 2.2.45.x 时才执行 x10
-	 */
-	_convertWireToPoly: async function (wireItem) {
-		let polygonArr = [];
+            if (w > 2 * r) await eda.pcb_PrimitiveLine.create(net, layer, p1_start.x, p1_start.y, p1_end.x, p1_end.y, targetWidth, false);
+            if (r > 0)     await eda.pcb_PrimitiveArc.create(net, layer, p1_end.x, p1_end.y, p2_end.x, p2_end.y, -90, targetWidth, 1, false);
+            if (Math.abs(h_vector) > 2 * r) await eda.pcb_PrimitiveLine.create(net, layer, p2_end.x, p2_end.y, p3_end.x, p3_end.y, targetWidth, false);
+            if (r > 0)     await eda.pcb_PrimitiveArc.create(net, layer, p3_end.x, p3_end.y, p4_end.x, p4_end.y, -90, targetWidth, 1, false);
+            if (w > 2 * r) await eda.pcb_PrimitiveLine.create(net, layer, p4_end.x, p4_end.y, p5_end.x, p5_end.y, targetWidth, false);
+            if (r > 0)     await eda.pcb_PrimitiveArc.create(net, layer, p5_end.x, p5_end.y, p6_end.x, p6_end.y, -90, targetWidth, 1, false);
+            if (Math.abs(h_vector) > 2 * r) await eda.pcb_PrimitiveLine.create(net, layer, p6_end.x, p6_end.y, p7_end.x, p7_end.y, targetWidth, false);
+            if (r > 0)     await eda.pcb_PrimitiveArc.create(net, layer, p7_end.x, p7_end.y, p1_start.x, p1_start.y, -90, targetWidth, 1, false);
+        }
+    },
 
-		// 1. 版本检测
-		const currentVersion = eda.sys_Environment.getEditorCurrentVersion();
-		const isVersion2245 = currentVersion && currentVersion.startsWith('2.2.45');
+    /**
+     * 导线 (Line/Arc) ⇒ 线条 (Polyline)
+     */
+    async _convertWireToPoly(wireItem, api) {
+        const isLine = wireItem.primitiveType === 'Line';
+        const sourceKey = isLine ? '获取直线' : '获取弧线';
 
-		// 2. 设定缩放系数
-		// 仅当版本匹配 AND 图元类型是 Line 时，才应用 x10
-		let scale = 1;
-		if (isVersion2245 && wireItem.primitiveType === 'Line') {
-			scale = 10;
-			console.log(`检测到版本 ${currentVersion} 且图元为 Line，应用 10x 缩放修正`);
-		}
+        // 动态读取缩放倍率
+        const coordScale = this._getScale(api, sourceKey, '创建折线', '坐标');
+        const widthScale = this._getScale(api, sourceKey, '创建折线', '线宽');
+        const angleScale = api["获取弧线"]?.["圆弧角度"] ?? 1; // 仅弧线应用
 
-		// 3. 计算参数 (对 Arc 而言 scale 始终为 1)
-		const startX = wireItem.startX * scale;
-		const startY = wireItem.startY * scale;
-		const endX = wireItem.endX * scale;
-		const endY = wireItem.endY * scale;
-		const width = wireItem.lineWidth * scale;
+        const startX = wireItem.startX * coordScale;
+        const startY = wireItem.startY * coordScale;
+        const endX = wireItem.endX * coordScale;
+        const endY = wireItem.endY * coordScale;
+        const targetWidth = wireItem.lineWidth * widthScale;
 
-		// 4. 删除原图元
-		if (wireItem.primitiveType === 'Line') {
-			await eda.pcb_PrimitiveLine.delete(wireItem.primitiveId);
-		} else {
-			await eda.pcb_PrimitiveArc.delete(wireItem.primitiveId);
-		}
+        // 删除旧图元
+        if (isLine) {
+            await eda.pcb_PrimitiveLine.delete(wireItem.primitiveId);
+        } else {
+            await eda.pcb_PrimitiveArc.delete(wireItem.primitiveId);
+        }
 
-		// 5. 构建 Polygon 数据
-		if (wireItem.primitiveType === 'Line') {
-			polygonArr = [startX, startY, 'L', endX, endY];
-		} else if (wireItem.primitiveType === 'Arc') {
-			// Arc 保持原样逻辑 (注意：arcAngle 本身不涉及单位长度，无需缩放)
-			polygonArr = [startX, startY, 'ARC', wireItem.arcAngle, endX, endY];
-		}
+        // 构建数据并生成 Polyline
+        let polygonArr = [];
+        if (isLine) {
+            polygonArr = [startX, startY, 'L', endX, endY];
+        } else {
+            const angle = wireItem.arcAngle * angleScale;
+            polygonArr = [startX, startY, 'ARC', angle, endX, endY];
+        }
 
-		const polyObj = eda.pcb_MathPolygon.createPolygon(polygonArr);
-
-		// 6. 创建 Polyline
-		await eda.pcb_PrimitivePolyline.create(wireItem.net || '', wireItem.layer, polyObj, width, false);
-	},
+        const polyObj = eda.pcb_MathPolygon.createPolygon(polygonArr);
+        await eda.pcb_PrimitivePolyline.create(wireItem.net || '', wireItem.layer, polyObj, targetWidth, false);
+    }
 };

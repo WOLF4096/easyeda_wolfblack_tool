@@ -1,0 +1,714 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>狼黑工具 - API 基准测试</title>
+    <style>
+        :root {
+            --bg: #1e1e1e;           /* VSCode 编辑器主背景 */
+            --card: #252526;         /* VSCode 面板/侧边栏背景 */
+            --border: #3c3c3c;       /* VSCode 边框及分割线 */
+            --text: #cccccc;         /* VSCode 默认正文颜色 */
+            --dim: #858585;          /* VSCode 暗色文本/注释 */
+            --primary: #007acc;      /* VSCode 经典蓝色激活态 */
+            --primary-hover: #0098ff;
+            --success: #89d185;      /* VSCode 成功/字符串颜色 */
+            --warn: #cca700;         /* VSCode 警告黄色 */
+            --error: #f48771;        /* VSCode 错误红色 */
+            --input: #3c3c3c;        /* VSCode 输入框背景 */
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            background: var(--bg); color: var(--text); font-size: 14px;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            height: 100vh; display: flex; flex-direction: column; overflow: hidden;
+        }
+        /* 头部布局 */
+        .header {
+            padding: 10px 15px; background: var(--card);
+            display: flex; justify-content: space-between; align-items: center; flex-shrink: 0;
+        }
+        .header-info { display: flex; align-items: baseline; gap: 10px; }
+        .version-tag { font-size: 12px; background: #333333; padding: 2px 6px; border-radius: 2px; }
+        .btn-group { display: flex; gap: 5px; }
+        .btn {
+            border: 1px solid transparent; 
+            background: #3a3d41; 
+            color: #ffffff;
+            padding: 5px 12px; border-radius: 2px; 
+            cursor: pointer; transition: 0.1s;
+        }
+        .btn:hover { background: #4d5054; }
+        .btn-primary { background: var(--primary); color: white; border: none; }
+        .btn-primary:hover { background: var(--primary-hover); }
+        
+        /* 列表区域 */
+        .container { flex: 1; overflow-y: auto; padding: 10px; }
+        .card {
+            background: var(--card);
+            border-radius: 0px; /* VSCode 风格通常比较方正 */
+            margin-bottom: 8px;
+        }
+        .card-header {
+            padding: 8px 12px; display: flex; justify-content: space-between; 
+            align-items: center; cursor: pointer; user-select: none;
+        }
+        .card-header:hover { background: #2a2d2e; } /* VSCode 列表悬停色 */
+        .card-tag { font-size: 10px; padding: 1px 5px; border-radius: 2px; background: #333333; margin-right: 8px; }
+        .status-label { font-weight: bold; }
+        
+        .card-content { padding: 10px; border-top: 1px solid var(--border); display: block; }
+        .collapsed .card-content { display: none; }
+
+        /* 表格布局 */
+        table { width: 100%; border-collapse: collapse; }
+        th { text-align: left; color: var(--dim); padding-bottom: 5px; font-weight: normal; text-align: center;}
+        td { padding: 6px 4px; vertical-align: middle; width: 77px; text-align: center;}
+        .val-input {
+            width: 100%; background: var(--input); border: 1px solid transparent; text-align: center;
+            color: var(--text); padding: 5px 8px; border-radius: 2px; 
+            font-family: "Consolas", "Courier New", monospace; font-size: 14px;
+            transition: border 0.1s; outline: none;
+        }
+        .val-input:focus { border: 1px solid var(--primary); } /* VSCode 的蓝色聚焦边框 */
+        .val-input[readonly] { border-color: transparent; background: transparent; color: var(--success); }
+        
+        .row-status { width: 100px; font-size: 14px; text-align: center; font-weight: bold; }
+        .pass { color: var(--success); }
+        .fail { color: var(--error); }
+
+		
+		/* ================= 滚动条全局美化 ================= */
+        /* 支持 Chrome, Edge, Safari 等 Webkit 内核浏览器 */
+        
+        /* 滚动条整体宽度/高度 */
+        ::-webkit-scrollbar {
+            width: 12px;  /* 垂直滚动条的宽度 */
+            height: 12px; /* 水平滚动条的高度 */
+        }
+
+        /* 滚动条轨道（背景） */
+        ::-webkit-scrollbar-track {
+            background: transparent; /* 轨道背景透明 */
+        }
+
+        /* 滚动条滑块（拖动的部分） */
+        ::-webkit-scrollbar-thumb {
+            background-color: #424242; 
+            border-radius: 0px;        /* 去除圆角，更加极客 */
+            border: 2px solid var(--bg); /* 使用正确的背景变量隔离 */
+        }
+        ::-webkit-scrollbar-thumb:hover { background-color: #4f4f4f; }
+
+        /* 滚动条两端的按钮（上下/左右箭头），这里将其隐藏 */
+        ::-webkit-scrollbar-button {
+            display: none;
+        }
+
+        /* 支持 Firefox 浏览器 */
+        * {
+            scrollbar-width: thin; /* 变细 */
+            scrollbar-color: #424242 transparent; /* 滑块颜色 轨道颜色 */
+        }
+
+    </style>
+</head>
+<body>
+
+<div class="header">
+    <div class="header-info">
+        <strong style="color: var(--primary)">API 基准测试</strong>
+        <span class="version-tag" id="ver-info">当前EDA版本: 获取中...</span>
+    </div>
+    <div class="btn-group">
+        <button class="btn" onclick="executeBatch('create')">创建</button>
+        <button class="btn" onclick="executeBatch('get')">获取</button>
+        <button class="btn" onclick="autoCalibrateAll()">校准</button>
+        <button class="btn" onclick="saveParams()">保存</button>
+    </div>
+</div>
+
+<div class="container" id="main-list"></div>
+
+<script>
+    // 1. 原始测试源码数据集 (常量)
+    const RAW_SOURCE = {
+        "Via": ["VIA","e1",0,"","",105,110,12,24,0,10,5,0,[]],
+        "Pad": ["PAD","e2",0,"",12,"1",50,110,0,["ROUND",12,12],["ELLIPSE",24,24],[],0,0,0,1,0,10,5,0,0,0,null,null,null,null,[]],
+        "Line": ["LINE","e3",0,"",1,57,75,87,75,10,0],
+        "Arc": ["ARC","e4",0,"",1,45,75,45,55,180,10,0],
+        "Polyline": ["POLY","e5",0,"",1,10,[57,54,"L",87,54],0]
+    };
+
+    // 2. 测试项目定义 (10项)
+    const PROJECTS = [
+        { id: 'create_via', type: 'Via', act: 'create', name: '创建过孔', params: ['坐标', '内径', '外径', '阻焊'] },
+        { id: 'create_pad', type: 'Pad', act: 'create', name: '创建焊盘', params: ['坐标', '内径', '外径', '阻焊'] },
+        { id: 'create_poly', type: 'Polyline', act: 'create', name: '创建折线', params: ['坐标', '线宽'] },
+        { id: 'create_line', type: 'Line', act: 'create', name: '创建直线', params: ['坐标', '线宽'] },
+        { id: 'create_arc', type: 'Arc', act: 'create', name: '创建弧线', params: ['坐标', '线宽', '圆弧角度'] },
+        { id: 'get_via', type: 'Via', act: 'get', name: '获取过孔', params: ['坐标', '内径', '外径', '阻焊'] },
+        { id: 'get_pad', type: 'Pad', act: 'get', name: '获取焊盘', params: ['坐标', '内径', '外径', '阻焊'] },
+        { id: 'get_poly', type: 'Polyline', act: 'get', name: '获取折线', params: ['坐标', '线宽'] },
+        { id: 'get_line', type: 'Line', act: 'get', name: '获取直线', params: ['坐标', '线宽'] },
+        { id: 'get_arc', type: 'Arc', act: 'get', name: '获取弧线', params: ['坐标', '线宽', '圆弧角度'] }
+    ];
+
+    // 初始化加载
+    window.onload = async () => {
+        if(window.eda) {
+            const v = await eda.sys_Environment.getEditorCurrentVersion();
+            document.getElementById('ver-info').innerText = `当前EDA版本: ${v}`;
+        }
+        render(); // 必须先渲染DOM，生成输入框
+        
+        // [新增] 启动时自动读取并填充保存的参数
+        await loadSavedParams();
+    };
+
+	// [新增] 从存储中读取配置并恢复到界面的校准输入框中
+    async function loadSavedParams() {
+        if (!window.eda) return;
+        try {
+            const str = await eda.sys_Storage.getExtensionUserConfig('APITest');
+            if (!str) return; // 如果是首次使用，没有存储过数据，直接跳过
+            
+            const config = JSON.parse(str);
+            
+            PROJECTS.forEach(p => {
+                const savedObj = config[p.name]; // 按照保存时的项目名称作为 key 查找
+                if (savedObj) {
+                    p.params.forEach((paramName, i) => {
+                        const savedVal = savedObj[paramName];
+                        const calInput = document.getElementById(`cal_${p.id}_${i}`);
+                        
+                        if (calInput && savedVal !== undefined) {
+                            // 因为保存时没有校准的参数默认转成了 1
+                            // 所以这里如果是 1，就不填入界面（保持空，界面看着更清爽）
+                            if (savedVal !== 1) {
+                                // 统一加上 * 号，符合界面的乘法语意，例如 "*0.5", "*10"
+                                calInput.value = `*${savedVal}`; 
+                            } else {
+                                calInput.value = "";
+                            }
+                        }
+                    });
+                }
+            });
+            console.log("持久化校准参数加载成功！", config);
+        } catch (e) {
+            console.error("加载校准参数失败，可能数据格式有误:", e);
+        }
+    }
+
+    function render() {
+        const list = document.getElementById('main-list');
+        list.innerHTML = PROJECTS.map(p => {
+            const defaults = getDefaults(p.type);
+            return `
+            <div class="card collapsed" id="card_${p.id}">
+                <div class="card-header" onclick="toggle('${p.id}')">
+                    <div><strong>${p.name}</strong></div>
+                    <span id="stat_${p.id}" class="status-label">待测试</span>
+                </div>
+                <div class="card-content">
+                    <table>
+                        <thead><tr><th>参数</th><th>初始</th><th>实际</th><th>校准</th><th>状态</th></tr></thead>
+                        <tbody>
+                            ${p.params.map((name, i) => `
+                                <tr>
+                                    <td style="color:var(--dim)">${name}</td>
+                                    <td><input class="val-input" id="set_${p.id}_${i}" value="${defaults[i] || ''}"></td>
+                                    <td><input class="val-input" id="act_${p.id}_${i}" readonly></td>
+                                    <td><input class="val-input" id="cal_${p.id}_${i}" placeholder="*1"></td>
+                                    <td class="row-status" id="res_${p.id}_${i}">-</td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                </div>
+            </div>`;
+        }).join('');
+    }
+
+    // ================= 核心工具函数 =================
+
+    function getDefaults(type) {
+        const d = RAW_SOURCE[type];
+        if(!d) return [];
+        switch(type) {
+            case 'Via': return [`${d[5]},${d[6]}`, d[7], d[8], d[10]];
+            case 'Pad': return [`${d[6]},${d[7]}`, d[9][1], d[10][1], d[17]];
+            case 'Line': return [`${d[5]},${d[6]}`, d[9]];
+            case 'Arc': return [`${d[5]},${d[6]}`, d[10], d[9]];
+            case 'Polyline': return [`${d[6][0]},${d[6][1]}`, d[5]];
+        }
+    }
+
+    function applyCal(val, cal) {
+        let v = parseFloat(val);
+        if(isNaN(v) || !cal) return val;
+        const op = cal.charAt(0);
+        const num = parseFloat(cal.substring(1));
+        if(isNaN(num)) return v;
+        if(op === '*') return v * num;
+        if(op === '/') return v / num;
+        if(op === '+') return v + num;
+        if(op === '-') return v - num;
+        return v;
+    }
+
+    async function getLineFromSource(id) {
+        const code = await eda.sys_FileManager.getDocumentSource();
+        const lines = code.split('\n');
+        for(let l of lines) {
+            if(l.includes(`"${id}"`)) return JSON.parse(l.trim().replace(/,$/, ''));
+        }
+        return null;
+    }
+
+    // ================= 业务逻辑 =================
+
+	async function runGetTest(p, apiObj) {
+        // [修改] 直接调用统一函数提取底层源码数据作为测试的"初始值"
+        const setVals = await getUnifiedSourceCode(apiObj.primitiveId, p.type);
+        setVals.forEach((v, i) => document.getElementById(`set_${p.id}_${i}`).value = v);
+        
+        // API 返回为实际值 (保留之前的 extractFromAPI 调用)
+        const actuals = extractFromAPI(p.type, apiObj);
+        fillAndVerify(p, actuals);
+    }
+
+    async function executeBatch(action) {
+        if(action === 'get') {
+            const sels = await eda.pcb_SelectControl.getAllSelectedPrimitives();
+            if(!sels || sels.length === 0) return eda.sys_Message.showToastMessage('请先选中画布上的元素', 'info');
+            
+            for(let p of PROJECTS.filter(i => i.act === 'get')) {
+                const target = sels.find(s => s.primitiveType === p.type);
+                if(target) await runGetTest(p, target);
+            }
+        } else {
+            for(let p of PROJECTS.filter(i => i.act === 'create')) {
+                await runCreateTest(p);
+            }
+        }
+    }
+
+    async function runCreateTest(p) {
+        const getV = (idx) => document.getElementById(`set_${p.id}_${idx}`).value;
+        const getC = (idx) => document.getElementById(`cal_${p.id}_${idx}`).value;
+        
+        // 坐标处理
+        const [x, y] = getV(0).split(',');
+        const fx = applyCal(x, getC(0));
+        const fy = applyCal(y, getC(0));
+
+        let resId = "";
+        // 根据类型调用真实 API
+        if(p.type === 'Via') {
+            const innerDia = Number(applyCal(getV(1), getC(1)));
+            const outerDia = Number(applyCal(getV(2), getC(2)));
+            const solderMask = Number(applyCal(getV(3), getC(3)));
+			// console.log(solderMask);
+            const r = await eda.pcb_PrimitiveVia.create(
+                "",                // [0] net
+                Number(fx),        // [1] x: 签名要求 number
+                Number(fy),        // [2] y: 签名要求 number
+                innerDia,          // [3] holeDiameter
+                outerDia,          // [4] diameter
+                0,                 // [5] viaType: 默认0为普通通孔
+                null,              // [6] designRuleBlindViaName
+                {                  // [7] solderMaskExpansion: 传入阻焊扩展对象
+                    "topSolderMask": solderMask,
+                    "bottomSolderMask": solderMask,
+                    "topPasteMask": 0,
+                    "bottomPasteMask": 0
+                }
+            );
+            resId = r.primitiveId;
+
+        } else if(p.type === 'Pad') {
+            const innerDia = Number(applyCal(getV(1), getC(1)));
+            const outerDia = Number(applyCal(getV(2), getC(2)));
+            const solderMask = Number(applyCal(getV(3), getC(3)));
+			// console.log(solderMask);
+            const r = await eda.pcb_PrimitivePad.create(
+                12,                             // [0] layer
+                "1",                            // [1] padNumber
+                Number(fx),                     // [2] x
+                Number(fy),                     // [3] y
+                0,                              // [4] rotation
+                ["ELLIPSE", outerDia, outerDia],// [5] pad
+                "",                             // [6] net
+                ["ROUND", innerDia, innerDia],  // [7] hole
+                0,                              // [8] holeOffsetX
+                0,                              // [9] holeOffsetY
+                0,                              // [10] holeRotation
+                true,                           // [11] metallization
+                0,                              // [12] padType
+                [],                             // [13] specialPad
+                {                               // [14] solderMaskAndPasteMaskExpansion
+                    "topSolderMask": solderMask,
+                    "bottomSolderMask": solderMask,
+                    "topPasteMask": solderMask,
+                    "bottomPasteMask": solderMask
+                }
+            );
+            resId = r.primitiveId;
+        } else if(p.type === 'Line') {
+            const r = await eda.pcb_PrimitiveLine.create("", 1, Number(fx), Number(fy), Number(fx)+30, Number(fy), Number(applyCal(getV(1), getC(1))));
+            resId = r.primitiveId;
+        } else if(p.type === 'Arc') {
+            const r = await eda.pcb_PrimitiveArc.create("", 1, Number(fx), Number(fy), Number(fx), Number(fy)-20, Number(applyCal(getV(2), getC(2))), Number(applyCal(getV(1), getC(1))));
+            resId = r.primitiveId;
+        } else if(p.type === 'Polyline') {
+            const poly = eda.pcb_MathPolygon.createPolygon([Number(fx), Number(fy), "L", Number(fx)+30, Number(fy)]);
+            const r = await eda.pcb_PrimitivePolyline.create("", 1, poly, Number(applyCal(getV(1), getC(1))));
+            resId = r.primitiveId;
+        }
+
+        if(resId) {
+            // [修改] 直接调用统一函数获取实际写入源码的格式化数据
+            const actuals = await getUnifiedSourceCode(resId, p.type);
+            fillAndVerify(p, actuals);
+        }
+    }
+
+	// [新增] 统一源码获取与解析函数 (自动兼容 V2 / V3)
+    async function getUnifiedSourceCode(id, type) {
+        const code = await eda.sys_FileManager.getDocumentSource();
+        const lines = code.split('\n');
+
+        let rawV2 = null;
+        let rawV3 = null;
+
+        // 1. 遍历源码，智能匹配 V2 或 V3
+        for (let l of lines) {
+            let str = l.trim();
+            if (!str) continue;
+
+            // 识别 V3 格式: 包含 || 分隔符，且匹配 id
+            if (str.includes('||') && str.includes(`"id":"${id}"`)) {
+                const parts = str.split('||');
+                try {
+                    rawV3 = JSON.parse(parts[1].replace(/\|$/, '')); // 移除末尾的 | 并解析数据体
+                    break;
+                } catch(e) { console.error("V3 解析错误", e); }
+            }
+            // 识别 V2 格式: 数组格式，且匹配 id
+            else if (str.startsWith('[') && str.includes(`"${id}"`)) {
+                try {
+                    rawV2 = JSON.parse(str.replace(/,$/, ''));
+                    break;
+                } catch(e) { console.error("V2 解析错误", e); }
+            }
+        }
+
+        // 如果都没找到，返回空数组
+        if (!rawV2 && !rawV3) return [];
+
+        // 2. 映射为标准化对象
+        // val1: 内径/线宽 | val2: 外径/角度 | val3: 顶层阻焊
+        let std = { x: 0, y: 0, val1: 0, val2: 0, val3: '0' }; 
+
+        if (rawV3) {
+            // ---- V3 映射逻辑 ----
+            switch (type) {
+                case 'Via':
+                    std.x = rawV3.centerX; std.y = rawV3.centerY;
+                    std.val1 = rawV3.holeDiameter; std.val2 = rawV3.viaDiameter;
+                    std.val3 = rawV3.topSolderExpansion === null ? 'null' : (rawV3.topSolderExpansion ?? '0');
+                    break;
+                case 'Pad':
+                    std.x = rawV3.centerX; std.y = rawV3.centerY;
+                    std.val1 = rawV3.hole?.width; std.val2 = rawV3.defaultPad?.width;
+                    std.val3 = rawV3.topSolderExpansion === null ? 'null' : (rawV3.topSolderExpansion ?? '0');
+                    break;
+                case 'Line':
+                    std.x = rawV3.startX; std.y = rawV3.startY;
+                    std.val1 = rawV3.width;
+                    break;
+                case 'Arc':
+                    std.x = rawV3.startX; std.y = rawV3.startY;
+                    std.val1 = rawV3.width; std.val2 = rawV3.angle;
+                    break;
+                case 'Polyline':
+                    std.x = rawV3.path?.[0]; std.y = rawV3.path?.[1];
+                    std.val1 = rawV3.width;
+                    break;
+            }
+        } else if (rawV2) {
+            // ---- V2 映射逻辑 ----
+            const d = rawV2;
+            switch (type) {
+                case 'Via':
+                    std.x = d[5]; std.y = d[6];
+                    std.val1 = d[7]; std.val2 = d[8];
+                    std.val3 = d[10] === null ? 'null' : (d[10] ?? '0');
+                    break;
+                case 'Pad':
+                    std.x = d[6]; std.y = d[7];
+                    std.val1 = d[9]?.[1]; std.val2 = d[10]?.[1];
+                    std.val3 = d[17] === null ? 'null' : (d[17] ?? '0');
+                    break;
+                case 'Line':
+                    std.x = d[5]; std.y = d[6];
+                    std.val1 = d[9];
+                    break;
+                case 'Arc':
+                    std.x = d[5]; std.y = d[6];
+                    std.val1 = d[10]; std.val2 = d[9]; 
+                    break;
+                case 'Polyline':
+                    std.x = d[6]?.[0]; std.y = d[6]?.[1];
+                    std.val1 = d[5];
+                    break;
+            }
+        }
+
+        // 3. 返回统一数组格式，供 UI 和校验模块直接使用
+        if (type === 'Via' || type === 'Pad') {
+            return [`${std.x},${std.y}`, std.val1, std.val2, String(std.val3)];
+        } else if (type === 'Arc') {
+            return [`${std.x},${std.y}`, std.val1, std.val2];
+        } else {
+            // Line, Polyline
+            return [`${std.x},${std.y}`, std.val1];
+        }
+    }
+
+
+    function extractFromAPI(type, s) {
+        switch(type) {
+            case 'Via': 
+                let viaSolder = '0';
+                if (s.solderMaskExpansion === null) {
+                    viaSolder = 'null';
+                } else if (s.solderMaskExpansion !== undefined) {
+                    viaSolder = typeof s.solderMaskExpansion === 'object' ? 
+                        (s.solderMaskExpansion.topSolderMask === null ? 'null' : (s.solderMaskExpansion.topSolderMask ?? '0')) : s.solderMaskExpansion;
+                }
+                return [`${s.x},${s.y}`, s.holeDiameter, s.diameter, String(viaSolder)];
+
+            case 'Pad': 
+                let padSolder = '0';
+                if (s.solderMaskAndPasteMaskExpansion === null) {
+                    padSolder = 'null';
+                } else if (s.solderMaskAndPasteMaskExpansion !== undefined) {
+                    padSolder = typeof s.solderMaskAndPasteMaskExpansion === 'object' ? 
+                        (s.solderMaskAndPasteMaskExpansion.topSolderMask === null ? 'null' : (s.solderMaskAndPasteMaskExpansion.topSolderMask ?? '0')) : s.solderMaskAndPasteMaskExpansion;
+                }
+                return [`${s.x},${s.y}`, s.hole?.[1], s.pad?.[1], String(padSolder)];
+
+            case 'Line': return [`${s.startX.toFixed(2)},${s.startY.toFixed(2)}`, s.lineWidth];
+            case 'Arc': return [`${s.startX},${s.startY}`, s.lineWidth, s.arcAngle];
+            case 'Polyline': return [`${s.polygon.polygon[0]},${s.polygon.polygon[1]}`, s.lineWidth];
+        }
+    }
+
+    // [修改] 核心校验逻辑：修复 Create 模式在自动校准后 UI 状态不刷新的问题
+    function fillAndVerify(p, actuals) {
+        let allPass = true;
+        let anyCal = false;
+
+        actuals.forEach((val, i) => {
+            const actEl = document.getElementById(`act_${p.id}_${i}`);
+            const setVal = document.getElementById(`set_${p.id}_${i}`).value;
+            const calVal = document.getElementById(`cal_${p.id}_${i}`).value;
+            const resEl = document.getElementById(`res_${p.id}_${i}`);
+            
+            // UI界面：实际值框始终显示真实的API返回/源码原始值
+            actEl.value = val;
+            if(calVal) anyCal = true;
+
+            let isPass = false;
+
+            if (p.act === 'get') {
+                // 【获取】模式：验证 (实际值 * 校准值) 是否等于 设定值
+                const finalActual = applyCalStr(val, calVal);
+                isPass = compare(setVal, finalActual);
+            } else {
+                // 【创建】模式：支持两种合法情况
+                // 1. 真实验证：刚执行完 Batch Create，API 已经应用了预补偿，返回的 val 直接等于 setVal
+                // 2. 静态推演：刚点击 Auto Calibrate，val 还是旧错误数据。验证 (旧的val * 算出的校准值) 是否等于 setVal
+                isPass = compare(setVal, val) || (calVal && compare(setVal, applyCalStr(val, calVal)));
+            }
+
+            // 更新单行状态灯
+            resEl.innerText = isPass ? "通过测试" : "数据异常";
+            resEl.className = "row-status " + (isPass ? "pass" : "fail");
+            if(!isPass) allPass = false;
+        });
+
+        // 更新卡片全局状态
+        const stat = document.getElementById(`stat_${p.id}`);
+        const card = document.getElementById(`card_${p.id}`);
+        if(!allPass) {
+            stat.innerText = "错误"; 
+            stat.style.color = "var(--error)";
+            card.classList.remove('collapsed');
+        } else {
+            stat.innerText = anyCal ? "已校准" : "通过";
+            stat.style.color = anyCal ? "var(--warn)" : "var(--success)";
+            card.classList.add('collapsed');
+        }
+    }
+
+	// [新增] 支持对包含逗号的字符串（如坐标 "10,20"）统一应用校准公式
+    function applyCalStr(valStr, calStr) {
+        if(!calStr) return valStr;
+        const s = String(valStr);
+        if(s.includes(',')) {
+            const parts = s.split(',');
+            const cx = applyCal(parts[0], calStr);
+            const cy = applyCal(parts[1], calStr);
+            // 限制小数位数避免浮点精度显示问题
+            const fmt = (v) => Number.isInteger(v) ? v : parseFloat(v.toFixed(4));
+            return `${fmt(cx)},${fmt(cy)}`;
+        }
+        return applyCal(valStr, calStr);
+    }
+
+    // [修改] 增强比对函数，支持字符串坐标（容许0.05误差）
+    function compare(a, b) {
+        const strA = String(a);
+        const strB = String(b);
+        if(strA.includes(',') || strB.includes(',')) {
+            const partsA = strA.split(',');
+            const partsB = strB.split(',');
+            if (partsA.length !== partsB.length) return false;
+            return partsA.every((pa, i) => Math.abs(parseFloat(pa) - parseFloat(partsB[i])) < 0.05);
+        }
+        return Math.abs(parseFloat(a) - parseFloat(b)) < 0.05;
+    }
+
+    // [修改] 自动校准逻辑：修复 Create 模式下已存在校准值时的推导错误
+    function autoCalibrateAll() {
+        PROJECTS.forEach(p => {
+            p.params.forEach((_, i) => {
+                const setStr = document.getElementById(`set_${p.id}_${i}`).value;
+                const actStr = document.getElementById(`act_${p.id}_${i}`).value;
+                const calInput = document.getElementById(`cal_${p.id}_${i}`);
+                
+                let set = parseFloat(setStr);
+                let act = parseFloat(actStr);
+                let currentCal = calInput.value; // 获取当前输入框里已经填写的校准值（如 "*2"）
+
+                // 如果是坐标(带有逗号)，智能选取非0的一维来算比例
+                if (String(setStr).includes(',')) {
+                    const sParts = String(setStr).split(',');
+                    const aParts = String(actStr).split(',');
+                    const aX = parseFloat(aParts[0]);
+                    if (aX !== 0 && !isNaN(aX)) {
+                        set = parseFloat(sParts[0]); act = aX;
+                    } else {
+                        set = parseFloat(sParts[1]); act = parseFloat(aParts[1]);
+                    }
+                }
+
+                if(!isNaN(set) && !isNaN(act) && act !== 0) {
+                    let ratio;
+                    
+                    if (p.act === 'get') {
+                        // Get 模式：只看结果，寻找将 act 变为 set 的乘数
+                        ratio = set / act;
+                    } else {
+                        // Create 模式：修复核心！
+                        // 实际传给 API 的值 fx = applyCal(set, currentCal)
+                        // 我们需要的正确校准倍率 = fx / act
+                        const fx = applyCal(set, currentCal);
+                        ratio = fx / act;
+                    }
+                    
+                    // 优化：去除无用的小数点后缀
+                    const formatNum = (num) => parseFloat(num.toFixed(3));
+                    
+                    // 容差 0.001，防止浮点误差
+                    if (Math.abs(ratio - 1) > 0.001) {
+                        calInput.value = ratio > 1 ? `*${formatNum(ratio)}` : `/${formatNum(1/ratio)}`;
+                    } else {
+                        // 如果 ratio 等于 1，说明 API 是 1:1 毫无偏差的。
+                        // 为了保持界面干净并和你之前写的 loadSavedParams 逻辑统一，这里填入空字符串。
+                        // (在 applyCal 函数中，空字符串的数学意义完全等同于 "*1")
+                        calInput.value = ''; 
+                    }
+                }
+            });
+            validateManual(p.id); // 填完系数后触发一次单项验证刷新UI
+        });
+    }
+
+    function validateManual(id) {
+        const p = PROJECTS.find(i => i.id === id);
+        const acts = p.params.map((_, i) => document.getElementById(`act_${id}_${i}`).value);
+        if(acts[0]) fillAndVerify(p, acts);
+    }
+
+    // [修改] 导出生产环境可用的纯乘数 JSON 配置
+    async function saveParams() {
+        const config = {};
+
+        // 内部工具：将输入框的字符串转为纯粹的乘数类型 (Number)
+        const convertToMultiplier = (str) => {
+            if (!str || str.trim() === "") return 1; // 为空则默认乘数为 1
+            
+            const op = str.charAt(0);
+            const num = parseFloat(str.substring(1));
+
+            // 处理乘法
+            if (op === '*' && !isNaN(num)) {
+                return parseFloat(num.toFixed(6)); // 限制6位小数避免浮点精度溢出
+            }
+            // 处理除法，转为倒数乘数
+            if (op === '/' && !isNaN(num) && num !== 0) {
+                return parseFloat((1 / num).toFixed(6));
+            }
+            // 兼容用户没有写符号，直接填入纯数字(例如"0.5")的情况
+            const pureNum = parseFloat(str);
+            if (!isNaN(pureNum) && op !== '+' && op !== '-') {
+                return parseFloat(pureNum.toFixed(6));
+            }
+
+            return 1; // 无法识别的非法字符，兜底返回 1
+        };
+
+        PROJECTS.forEach(p => {
+            const paramsObj = {};
+            
+            p.params.forEach((paramName, i) => {
+                const valStr = document.getElementById(`cal_${p.id}_${i}`).value;
+                // 全部转换为纯数字乘数
+                paramsObj[paramName] = convertToMultiplier(valStr); 
+            });
+            
+            // 取消了过滤条件，强制保留所有项目，方便后续代码直接映射
+            config[p.name] = {
+                // "测试名称": p.name,
+                ...paramsObj
+            };
+        });
+
+		// 保存数据
+		try {
+			const save = await eda.sys_Storage.setExtensionUserConfig('APITest',JSON.stringify(config));// 持久化存储
+			if(save){
+				eda.sys_Message.showToastMessage('保存成功', 'success');
+			}else{
+				eda.sys_Message.showToastMessage('保存失败', 'error');
+			}
+			const str = await eda.sys_Storage.getExtensionUserConfig('APITest');//读取数据
+			console.log(JSON.parse(str));
+		} catch (error) {
+			eda.sys_Message.showToastMessage('保存失败', 'error');
+			if (error.includes("Cannot create property")) {
+				eda.sys_Message.showToastMessage('EDA底层数据写入异常，无法保存，建议重启EDA', 'error');
+			}
+		}
+    }
+
+    function toggle(id) { document.getElementById(`card_${id}`).classList.toggle('collapsed'); }
+</script>
+</body>
+</html>

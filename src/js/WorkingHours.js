@@ -81,7 +81,19 @@ export function WorkingHours() {
 					// 切换日期文件逻辑
 					if (targetKey !== currentKey) {
 						if (currentKey && currentData && isDirty) {
-							await eda.sys_Storage.setExtensionUserConfig(currentKey, JSON.stringify(currentData));
+							try {
+								const save = await eda.sys_Storage.setExtensionUserConfig(currentKey, JSON.stringify(currentData));// 持久化存储
+								if(save){
+									// eda.sys_Message.showToastMessage('保存成功', 'success');
+								}else{
+									// eda.sys_Message.showToastMessage('保存失败', 'error');
+								}
+							} catch (error) {
+								eda.sys_Message.showToastMessage('保存失败', 'error');
+								if (error.includes("Cannot create property")) {
+									eda.sys_Message.showToastMessage('EDA底层数据写入异常，无法保存，建议重启EDA', 'error');
+								}
+							}
 						}
 						let raw = await eda.sys_Storage.getExtensionUserConfig(targetKey);
 						currentData = raw ? JSON.parse(raw) : { meta: {}, slots: {} };
@@ -158,7 +170,21 @@ export function WorkingHours() {
 
 				// 保存最后持有的数据
 				if (currentKey && currentData && isDirty) {
-					await eda.sys_Storage.setExtensionUserConfig(currentKey, JSON.stringify(currentData));
+					// console.log(currentKey, JSON.stringify(currentData));
+					// 在特定版本EDA会出现BUG，表现为无法保存，系API变更导致
+					try {
+						const save = await eda.sys_Storage.setExtensionUserConfig(currentKey, JSON.stringify(currentData));// 持久化存储
+						if(save){
+							// eda.sys_Message.showToastMessage('保存成功', 'success');
+						}else{
+							// eda.sys_Message.showToastMessage('保存失败', 'error');
+						}
+					} catch (error) {
+						eda.sys_Message.showToastMessage('保存失败', 'error');
+						if (error.includes("Cannot create property")) {
+							eda.sys_Message.showToastMessage('EDA底层数据写入异常，无法保存，建议重启EDA', 'error');
+						}
+					}
 				}
 			} catch (e) {
 				console.error('[工作时间统计] 存储失败:', e);

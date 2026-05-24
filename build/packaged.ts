@@ -82,9 +82,21 @@ function main() {
 		zip.file(file, fs.createReadStream(__dirname + '/../' + file));
 	}
 
-	zip.generateNodeStream({ type: 'nodebuffer', streamFiles: true }).pipe(
+	// zip.generateNodeStream({ type: 'nodebuffer', streamFiles: true }).pipe(
+	// 	fs.createWriteStream(__dirname + '/dist/' + extensionConfig.name + '_v' + extensionConfig.version + '.eext'),
+	// );
+	
+	zip.generateNodeStream({ 
+		type: 'nodebuffer', 
+		streamFiles: true,
+		compression: 'DEFLATE', // 开启压缩
+		compressionOptions: {
+			level: 9 // 压缩等级：1 (速度最快) 到 9 (压缩率最高)
+		}
+	}).pipe(
 		fs.createWriteStream(__dirname + '/dist/' + extensionConfig.name + '_v' + extensionConfig.version + '.eext'),
 	);
+
 }
 
 main();

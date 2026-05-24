@@ -5,144 +5,210 @@
 		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
 		<title>狼黑工具 - 丝印代码转换</title>
 		<style>
+			/* 基础重置 + 纯正 VS Code Dark+ 核心色调 */
+			:root {
+				--vscode-bg: #1e1e1e;
+				--vscode-panel: #252526;
+				--vscode-border: #3c3c3c;
+				--vscode-focus-border: #007fd4;
+				--vscode-text-main: #cccccc;
+				--vscode-text-muted: #969696;
+				--vscode-blue: #0e639c;
+				--vscode-blue-hover: #1177bb;
+				--vscode-list-hover: #2a2d2e;
+				--vscode-success: #89d185; 
+				--vscode-error: #f14c4c;
+				--vscode-info: #3794ff;
+			}
+
 			* {
 				margin: 0;
 				padding: 0;
 				box-sizing: border-box;
-				font-family: 'Microsoft YaHei', sans-serif;
+				/* 标准的 VS Code 字体栈 */
+				font-family: -apple-system, BlinkMacSystemFont, "Segoe WPC", "Segoe UI", "HelveticaNeue-Light", system-ui, "Ubuntu", "Droid Sans", sans-serif;
 			}
 
 			body {
-				/* width: 720px;
-            height: 640px; */
 				width: 100%;
 				height: 100vh;
-				padding: 0px 15px 15px 15px;
-				background-color: #f5f5f5;
+				padding: 0;
+				background-color: var(--vscode-bg);
+				color: var(--vscode-text-main);
+				display: flex;
+				flex-direction: column;
+				overflow: hidden;
 			}
 
+			/* 紧凑型布局 */
 			.container {
 				width: 100%;
 				height: 100%;
 				display: flex;
 				flex-direction: column;
+				padding: 10px 14px;
 			}
 
+			/* 顶部区域 - 极简标题栏 */
 			.header {
 				display: flex;
 				justify-content: space-between;
 				align-items: center;
-				padding: 10px 0;
-				border-bottom: 1px solid #ddd;
-				margin-bottom: 15px;
+				padding-bottom: 8px;
+				margin-bottom: 8px;
+				border-bottom: 1px solid var(--vscode-border);
 			}
 
 			.title {
-				font-size: 20px;
-				font-weight: bold;
-				color: #333;
+				font-size: 12px;
+				font-weight: 600;
+				color: var(--vscode-text-main);
 				display: flex;
 				align-items: center;
-				gap: 10px;
+				gap: 8px;
 			}
 
 			.version-tag {
-				font-size: 12px;
-				font-weight: normal;
-				background-color: #e0e0e0;
-				padding: 2px 6px;
-				border-radius: 4px;
-				color: #555;
+				font-size: 11px;
+				background-color: #4d4d4d40;
+				border: 1px solid var(--vscode-border);
+				padding: 1px 4px;
+				border-radius: 3px;
+				color: var(--vscode-text-muted);
+				font-family: Consolas, "Courier New", monospace;
 			}
 
 			.controls {
 				display: flex;
 				align-items: center;
-				gap: 15px;
+				gap: 12px;
+				font-size: 12px;
 			}
 
 			.select-all {
 				display: flex;
 				align-items: center;
-				gap: 5px;
+				gap: 4px;
+				cursor: pointer;
+				user-select: none;
 			}
 
-			.execute-btn {
-				padding: 8px 16px;
-				background-color: #4caf50;
-				color: white;
-				border: none;
-				border-radius: 4px;
+			input[type="checkbox"] {
+				accent-color: var(--vscode-focus-border);
 				cursor: pointer;
-				font-size: 14px;
+				width: 14px;
+				height: 14px;
+				margin: 0;
+				border-radius: 2px;
+			}
+
+			/* 原生 VS Code 按钮样式 */
+			.execute-btn {
+				padding: 4px 12px;
+				background-color: var(--vscode-blue);
+				color: #ffffff;
+				border: none;
+				border-radius: 2px;
+				cursor: pointer;
+				font-size: 12px;
+				font-weight: 500;
+				transition: background 0.1s;
 			}
 
 			.execute-btn:hover {
-				background-color: #45a049;
+				background-color: var(--vscode-blue-hover);
 			}
 
 			.execute-btn:disabled {
-				background-color: #cccccc;
+				background-color: #4d4d4d;
+				color: #a6a6a6;
 				cursor: not-allowed;
 			}
 
+			/* 表格容器 */
 			.table-container {
 				flex: 1;
 				overflow: auto;
-				border: 1px solid #ddd;
-				border-radius: 4px;
-				background-color: white;
+				/* background-color: var(--vscode-bg); */
+				/* border: 1px solid var(--vscode-border); */
 			}
 
 			table {
 				width: 100%;
 				border-collapse: collapse;
+				font-size: 12px;
 			}
 
-			th,
-			td {
-				padding: 10px;
+			th, td {
+				padding: 4px; /* 紧凑排列 */
 				text-align: left;
-				border-bottom: 1px solid #ddd;
+				border-bottom: 1px solid var(--vscode-border);
 			}
 
 			th {
-				background-color: #f2f2f2;
-				font-weight: bold;
+				background-color: var(--vscode-panel);
+				font-weight: 600;
+				color: var(--vscode-text-main);
 				position: sticky;
 				top: 0;
+				z-index: 10;
+				box-shadow: 0 1px 0 var(--vscode-border);
+				border-bottom: none;
 			}
 
-			tr:hover {
-				background-color: #f9f9f9;
+			td {
+				font-family: Consolas, "Courier New", monospace;
+				color: #d4d4d4;
+				font-size: 14px;
+			}
+
+			tr:hover td {
+				background-color: var(--vscode-list-hover);
+			}
+
+			td:last-child {
+				color: #ce9178; /* 还原 VS Code 字符串橙色 */
 			}
 
 			.checkbox-cell {
 				text-align: center;
-				width: 40px;
+				width: 20px;
 			}
 
+			/* 状态栏提示 - 类似 VS Code 底部状态栏或 Output 通知 */
 			.status {
-				margin-top: 10px;
-				padding: 8px;
-				border-radius: 4px;
-				text-align: center;
-				font-size: 14px;
+				margin-top: 8px;
+				padding: 6px 10px;
+				font-size: 12px;
+				background-color: var(--vscode-panel);
+				border: 1px solid var(--vscode-border);
+				display: none; 
+			}
+			
+			.status:not(:empty) {
+				display: block;
 			}
 
-			.status.success {
-				background-color: #dff0d8;
-				color: #3c763d;
-			}
+			.status.success { border-left: 3px solid var(--vscode-success); }
+			.status.error { border-left: 3px solid var(--vscode-error); }
+			.status.info { border-left: 3px solid var(--vscode-info); }
 
-			.status.error {
-				background-color: #f2dede;
-				color: #a94442;
+			/* 滚动条美化 - 完全匹配 VS Code 悬浮风格 */
+			::-webkit-scrollbar {
+				width: 10px;
+				height: 10px;
 			}
-
-			.status.info {
-				background-color: #d9edf7;
-				color: #31708f;
+			::-webkit-scrollbar-track {
+				background: transparent;
+			}
+			::-webkit-scrollbar-thumb {
+				background-color: rgba(121, 121, 121, 0.4);
+			}
+			::-webkit-scrollbar-thumb:hover {
+				background-color: rgba(100, 100, 100, 0.7);
+			}
+			::-webkit-scrollbar-corner {
+				background: transparent;
 			}
 		</style>
 	</head>
@@ -152,11 +218,11 @@
 				<div class="title">
 					丝印代码转换工具
 					<span id="versionTag" class="version-tag">检测中...</span>
+					只处理位号以C、R、L开头的元件
 				</div>
-				只处理位号以C、R、L开头的元件
 				<div class="controls">
 					<div class="select-all">
-						<input type="checkbox" id="selectAll" style="transform: scale(1.5)" />
+						<input type="checkbox" id="selectAll" style="transform: scale(1)" />
 						<label for="selectAll">全选</label>
 					</div>
 					<button id="executeBtn" class="execute-btn">执行</button>
@@ -167,9 +233,9 @@
 				<table id="componentsTable">
 					<thead>
 						<tr>
-							<th style="width: 50px; z-index: 1" class="checkbox-cell">修改</th>
-							<th style="width: 100px">唯一ID</th>
+							<th style="width: 30px;" class="checkbox-cell">修改</th>
 							<th style="width: 80px">位号</th>
+							<th style="width: 80px">封装</th>
 							<th style="width: 80px">代码/名称</th>
 							<th style="width: 80px">转换值</th>
 						</tr>
@@ -183,6 +249,7 @@
 
 		<script>
 			let componentsData = [];
+			let groupedComponentsData = [];
 			let jsonData = null;
 			let componentsMap = null; // 指向实际的组件对象集合（V2指向根，V3指向components属性）
 			let Page;
@@ -306,39 +373,103 @@
 			function processComponentsData() {
 				componentsData = [];
 
-				// 使用 componentsMap 替代 jsonData 进行遍历
 				for (const key in componentsMap) {
 					const component = componentsMap[key];
 
-					// 确保有 props 属性 (防止读取到元数据)
 					if (!component.props) continue;
 
 					const designator = component.props.Designator;
 					const name = component.props.Name;
 					const uniqueId = component.props['Unique ID'];
+					const footprint = component.props.FootprintName || ''; // 新增获取封装
 
-					// 只处理位号以C、R、L开头的组件
-					if (designator && /^[CRL]/i.test(designator) && !/(?:[MK]?Ω|[PNU]?F|[UM]?H|F)/i.test(name)) {
-						const convertedValue = convertCodeToValue(name, designator[0]);
+					// 增强位号识别：严格匹配 R/C/L 开头且紧接着是数字的元件（防止匹配 LED、CON 等）
+					if (designator && /^[RCL]\d+/i.test(designator) && !/(?:[MK]?Ω|[PNU]?F|[UM]?H|F)/i.test(name)) {
+						const compType = designator[0].toUpperCase();
+						// 拿到转换对象，包含展示文本(text)和实际数值(raw)
+						const result = convertCodeToValue(name, compType);
+						const convertedValue = result.text;
+						const rawValue = result.raw;
 
-						// 判断是否成功转换：如果返回值与原值不同且不是null，则认为转换成功
 						const isConverted = convertedValue !== name && convertedValue !== null;
 
 						componentsData.push({
 							uniqueId: uniqueId,
 							designator: designator,
+							footprint: footprint, // <--- 新增这行
+							compType: compType, // 增加类型字段用于排序
+							rawValue: rawValue, // 增加实际数值字段用于排序
 							name: name,
-							value: convertedValue, // 直接使用转换后的值（可能是原值）
-							shouldModify: isConverted, // 只有成功转换时才勾选
-							modified: isConverted && uniqueId && uniqueId !== '', // 成功转换且有唯一ID才默认勾选
+							value: convertedValue,
+							shouldModify: isConverted,
+							modified: isConverted && uniqueId && uniqueId !== '',
 						});
 					}
 				}
 			}
 
-			// 根据位号开头处理
+			// 将相同代码、相同转换值且【相同封装】的数据折叠分组，并进行排序
+			function groupComponents() {
+				groupedComponentsData = [];
+				const groupedMap = {};
+				const uniqueIdCount = {};
+
+				componentsData.forEach((component) => {
+					if (component.uniqueId && component.uniqueId !== '') {
+						uniqueIdCount[component.uniqueId] = (uniqueIdCount[component.uniqueId] || 0) + 1;
+					}
+				});
+
+				componentsData.forEach((component) => {
+					// 【核心修改】：将 footprint 加入分组唯一键，确保不同封装必定独立成行
+					const key = component.name + '|' + component.value + '|' + component.footprint;
+
+					if (!groupedMap[key]) {
+						groupedMap[key] = {
+							uniqueIds: [],
+							designators: [],
+							footprint: component.footprint, // 同组内的封装是唯一的，直接存字符串即可
+							compType: component.compType, 
+							rawValue: component.rawValue, 
+							name: component.name,
+							value: component.value,
+							shouldModify: component.shouldModify,
+							modified: component.modified,
+							hasError: false
+						};
+						groupedComponentsData.push(groupedMap[key]);
+					}
+
+					const isDuplicate = component.uniqueId && component.uniqueId !== '' && uniqueIdCount[component.uniqueId] > 1;
+					const isEmpty = !component.uniqueId || component.uniqueId === '';
+
+					if (isDuplicate || isEmpty) {
+						groupedMap[key].hasError = true;
+						groupedMap[key].modified = false;
+					}
+
+					groupedMap[key].uniqueIds.push(component.uniqueId || '空');
+					groupedMap[key].designators.push(component.designator);
+					// 注意：这里不再需要 push footprint 到数组了
+				});
+
+				// 排序功能保持不变
+				const typeOrder = { 'R': 1, 'C': 2, 'L': 3 };
+
+				groupedComponentsData.sort((a, b) => {
+					const typeA = typeOrder[a.compType] || 99;
+					const typeB = typeOrder[b.compType] || 99;
+
+					if (typeA !== typeB) {
+						return typeA - typeB;
+					}
+					return a.rawValue - b.rawValue;
+				});
+			}
+
+			// 根据位号开头处理 (现返回对象 { text: '转换后文本', raw: 实际数值 })
 			function convertCodeToValue(code, type) {
-				if (!code || !type) return null;
+				if (!code || !type) return { text: null, raw: Number.MAX_VALUE };
 
 				const strCode = code.toString().toUpperCase();
 
@@ -350,44 +481,34 @@
 					case 'L':
 						return convertInductor(strCode);
 					default:
-						return code;
+						return { text: code, raw: Number.MAX_VALUE };
 				}
 			}
 
 			// 电阻转换数值
 			function convertResistor(code) {
-				// E96系列电阻处理 (3位代码：2位数字 + 1位字母)
 				if (code.length === 3 && /^\d{2}[A-Z]$/.test(code)) {
 					const digits = code.substring(0, 2);
 					const multiplierChar = code.substring(2, 3);
-
 					if (E96_VALUES[digits] && E96_MULTIPLIERS[multiplierChar]) {
 						const value = E96_VALUES[digits] * E96_MULTIPLIERS[multiplierChar];
-						return formatValue(value, 'R');
+						return { text: formatValue(value, 'R'), raw: value };
 					}
 				}
 
-				// 处理带单位字符的表示法 (如 4R7, 2K2, 0R5, R01)
 				if (/^[0-9.]*[RKM][0-9.]*$/.test(code)) {
 					const value = parseResistorWithUnit(code);
 					if (value !== null) {
-						return formatValue(value, 'R');
+						return { text: formatValue(value, 'R'), raw: value };
 					}
 				}
 
-				// 纯数字处理
 				let numericValue;
 				if (/^\d+$/.test(code)) {
 					if (code.length === 3) {
-						// 3位数字：前2位有效数字，第3位是0的个数
-						const firstTwo = code.substring(0, 2);
-						const zeros = parseInt(code.substring(2, 3));
-						numericValue = parseInt(firstTwo) * Math.pow(10, zeros);
+						numericValue = parseInt(code.substring(0, 2)) * Math.pow(10, parseInt(code.substring(2, 3)));
 					} else if (code.length === 4) {
-						// 4位数字：前3位有效数字，第4位是0的个数 (如 1002 = 100 * 10^2 = 10K)
-						const firstThree = code.substring(0, 3);
-						const zeros = parseInt(code.substring(3, 4));
-						numericValue = parseInt(firstThree) * Math.pow(10, zeros);
+						numericValue = parseInt(code.substring(0, 3)) * Math.pow(10, parseInt(code.substring(3, 4)));
 					} else {
 						numericValue = parseFloat(code);
 					}
@@ -395,24 +516,18 @@
 					numericValue = parseFloat(code);
 				}
 
-				if (isNaN(numericValue)) return code;
-				return formatValue(numericValue, 'R');
+				if (isNaN(numericValue) || numericValue === null) return { text: code, raw: Number.MAX_VALUE };
+				return { text: formatValue(numericValue, 'R'), raw: numericValue };
 			}
 
 			// 电容转换数值
 			function convertCapacitor(code) {
 				let numericValue;
-
-				// 处理带单位字符的表示法
 				if (/^[0-9.]*[PNUM][0-9.]*[F]?$/.test(code)) {
 					numericValue = parseCapacitorWithUnit(code);
 				} else if (/^\d+$/.test(code)) {
-					// 纯数字处理
 					if (code.length === 3) {
-						// 3位数字：前2位有效数字，第3位是0的个数（单位pF）
-						const firstTwo = code.substring(0, 2);
-						const zeros = parseInt(code.substring(2, 3));
-						numericValue = parseInt(firstTwo) * Math.pow(10, zeros);
+						numericValue = parseInt(code.substring(0, 2)) * Math.pow(10, parseInt(code.substring(2, 3)));
 					} else {
 						numericValue = parseFloat(code);
 					}
@@ -420,24 +535,18 @@
 					numericValue = parseFloat(code);
 				}
 
-				if (isNaN(numericValue)) return code;
-				return formatValue(numericValue, 'C');
+				if (isNaN(numericValue) || numericValue === null) return { text: code, raw: Number.MAX_VALUE };
+				return { text: formatValue(numericValue, 'C'), raw: numericValue };
 			}
 
 			// 电感转换数值
 			function convertInductor(code) {
 				let numericValue;
-
-				// 处理带单位字符的表示法
 				if (/^[0-9.]*[RNUMH][0-9.]*[H]?$/.test(code)) {
 					numericValue = parseInductorWithUnit(code);
 				} else if (/^\d+$/.test(code)) {
-					// 纯数字处理
 					if (code.length === 3) {
-						// 3位数字：前2位有效数字，第3位是0的个数（单位uH）
-						const firstTwo = code.substring(0, 2);
-						const zeros = parseInt(code.substring(2, 3));
-						numericValue = parseInt(firstTwo) * Math.pow(10, zeros);
+						numericValue = parseInt(code.substring(0, 2)) * Math.pow(10, parseInt(code.substring(2, 3)));
 					} else {
 						numericValue = parseFloat(code);
 					}
@@ -445,9 +554,10 @@
 					numericValue = parseFloat(code);
 				}
 
-				if (isNaN(numericValue)) return code;
-				return formatValue(numericValue, 'L');
+				if (isNaN(numericValue) || numericValue === null) return { text: code, raw: Number.MAX_VALUE };
+				return { text: formatValue(numericValue, 'L'), raw: numericValue };
 			}
+
 
 			// 带单位的电阻解析
 			function parseResistorWithUnit(code) {
@@ -610,7 +720,7 @@
 					'R': [
 						{ unit: 'mΩ', factor: 0.001 },
 						{ unit: 'Ω', factor: 1 },
-						{ unit: 'KΩ', factor: 1000 },
+						{ unit: 'kΩ', factor: 1000 },
 						{ unit: 'MΩ', factor: 1000000 },
 					],
 					'C': [
@@ -650,20 +760,12 @@
 				return displayValue + bestUnit.unit;
 			}
 
-			// 渲染表格
+			// 渲染表格 (改为渲染折叠后的数据)
 			function renderTable() {
 				const tableBody = document.getElementById('tableBody');
 				tableBody.innerHTML = '';
 
-				// 检测重复的唯一ID
-				const uniqueIdCount = {};
-				componentsData.forEach((component) => {
-					if (component.uniqueId && component.uniqueId !== '') {
-						uniqueIdCount[component.uniqueId] = (uniqueIdCount[component.uniqueId] || 0) + 1;
-					}
-				});
-
-				componentsData.forEach((component, index) => {
+				groupedComponentsData.forEach((group, index) => {
 					const row = document.createElement('tr');
 
 					// 修改复选框
@@ -672,60 +774,68 @@
 					const modifyCheckbox = document.createElement('input');
 					modifyCheckbox.type = 'checkbox';
 
-					// 检查是否有重复的唯一ID
-					const hasDuplicateUniqueId = component.uniqueId && component.uniqueId !== '' && uniqueIdCount[component.uniqueId] > 1;
-
-					// 如果有重复值，不勾选
-					if (hasDuplicateUniqueId) {
-						modifyCheckbox.checked = false;
-					} else {
-						modifyCheckbox.checked = component.modified && component.uniqueId && component.uniqueId !== '';
-						modifyCheckbox.disabled = !component.uniqueId || component.uniqueId === '';
-					}
-
+					modifyCheckbox.checked = group.modified;
+					modifyCheckbox.disabled = group.hasError; // 有错误禁用
 					modifyCheckbox.dataset.index = index;
-					modifyCheckbox.style.transform = 'scale(1.5)';
+					modifyCheckbox.style.transform = 'scale(1)';
 					modifyCheckbox.addEventListener('change', function () {
-						if (component.uniqueId && component.uniqueId !== '' && !hasDuplicateUniqueId) {
-							componentsData[index].modified = this.checked;
+						if (!group.hasError) {
+							groupedComponentsData[index].modified = this.checked;
 						}
 						updateSelectAllCheckbox();
 					});
 					modifyCell.appendChild(modifyCheckbox);
 					row.appendChild(modifyCell);
 
-					// 唯一ID
-					const uniqueIdCell = document.createElement('td');
-					uniqueIdCell.textContent = component.uniqueId || '空';
+					// 唯一ID (合并显示)
+					// const uniqueIdCell = document.createElement('td');
+					// const uniqueIdStr = group.uniqueIds.join(',');
+					// uniqueIdCell.textContent = uniqueIdStr;
+					// uniqueIdCell.title = uniqueIdStr; // 鼠标悬浮显示完整内容
+					// // 样式：防止太长撑爆表格，单行省略
+					// uniqueIdCell.style.maxWidth = '120px';
+					// uniqueIdCell.style.overflow = 'hidden';
+					// uniqueIdCell.style.textOverflow = 'ellipsis';
+					// uniqueIdCell.style.whiteSpace = 'nowrap';
 
-					// 设置唯一ID单元格样式
-					if (!component.uniqueId || component.uniqueId === '') {
-						// 空值：红色加粗
-						uniqueIdCell.style.color = 'red';
-						uniqueIdCell.style.fontWeight = 'bold';
-					} else if (hasDuplicateUniqueId) {
-						// 重复值：红色加粗
-						uniqueIdCell.style.color = 'red';
-						uniqueIdCell.style.fontWeight = 'bold';
-						uniqueIdCell.title = '重复的唯一ID'; // 添加提示
-					}
+					// if (group.hasError) {
+					// 	uniqueIdCell.style.color = 'red';
+					// 	uniqueIdCell.style.fontWeight = 'bold';
+					// 	uniqueIdCell.title = '此项包含空或重复的唯一ID: ' + uniqueIdStr;
+					// }
+					// row.appendChild(uniqueIdCell);
 
-					row.appendChild(uniqueIdCell);
-
-					// 位号
+					// 位号 (合并显示)
 					const designatorCell = document.createElement('td');
-					designatorCell.textContent = component.designator;
+					const desStr = group.designators.join(',');
+					designatorCell.textContent = desStr;
+					designatorCell.title = desStr;
+					designatorCell.style.maxWidth = '150px';
+					designatorCell.style.overflow = 'hidden';
+					designatorCell.style.textOverflow = 'ellipsis';
+					designatorCell.style.whiteSpace = 'nowrap';
 					row.appendChild(designatorCell);
+
+					// --- 封装 (单独显示) ---
+                    const footprintCell = document.createElement('td');
+                    const footStr = group.footprint || '-'; 
+                    footprintCell.textContent = footStr;
+                    footprintCell.title = footStr;
+                    footprintCell.style.maxWidth = '150px';
+                    footprintCell.style.overflow = 'hidden';
+                    footprintCell.style.textOverflow = 'ellipsis';
+                    footprintCell.style.whiteSpace = 'nowrap';
+                    row.appendChild(footprintCell);
 
 					// 代码/名称
 					const nameCell = document.createElement('td');
-					nameCell.textContent = component.name;
+					nameCell.textContent = group.name;
 					row.appendChild(nameCell);
 
-					// 值
+					// 转换值
 					const valueCell = document.createElement('td');
-					valueCell.textContent = component.value;
-					if (component.shouldModify) {
+					valueCell.textContent = group.value;
+					if (group.shouldModify) {
 						valueCell.style.color = '#4CAF50';
 						valueCell.style.fontWeight = 'bold';
 					}
@@ -740,9 +850,9 @@
 			// 全选/取消全选
 			function toggleSelectAll() {
 				const selectAll = document.getElementById('selectAll').checked;
-				componentsData.forEach((component) => {
-					if (component.shouldModify) {
-						component.modified = selectAll;
+				groupedComponentsData.forEach((group) => {
+					if (group.shouldModify && !group.hasError) {
+						group.modified = selectAll;
 					}
 				});
 				renderTable();
@@ -751,13 +861,19 @@
 			// 更新全选复选框状态
 			function updateSelectAllCheckbox() {
 				const selectAllCheckbox = document.getElementById('selectAll');
-				const modifiableComponents = componentsData.filter((c) => c.shouldModify);
-				const selectedComponents = modifiableComponents.filter((c) => c.modified);
+				const modifiableGroups = groupedComponentsData.filter((g) => g.shouldModify && !g.hasError);
+				const selectedGroups = modifiableGroups.filter((g) => g.modified);
 
-				if (selectedComponents.length === 0) {
+				if (modifiableGroups.length === 0) {
 					selectAllCheckbox.checked = false;
 					selectAllCheckbox.indeterminate = false;
-				} else if (selectedComponents.length === modifiableComponents.length) {
+					return;
+				}
+
+				if (selectedGroups.length === 0) {
+					selectAllCheckbox.checked = false;
+					selectAllCheckbox.indeterminate = false;
+				} else if (selectedGroups.length === modifiableGroups.length) {
 					selectAllCheckbox.checked = true;
 					selectAllCheckbox.indeterminate = false;
 				} else {
@@ -766,43 +882,40 @@
 				}
 			}
 
-			// 执行转换
+			// 执行转换 (适配折叠后的数据)
 			async function executeConversion() {
 				try {
 					let modifiedCount = 0;
 
-					// 使用 componentsMap 遍历查找并更新
-					for (const component of componentsData) {
-						if (component.modified && component.shouldModify) {
-							// 在映射表中查找对应组件
-							for (const key in componentsMap) {
-								const mapComponent = componentsMap[key];
-								if (mapComponent && mapComponent.props && mapComponent.props['Unique ID'] === component.uniqueId) {
-									// 更新Name和Value字段
-									mapComponent.props.Name = component.value;
-									mapComponent.props.Value = component.value;
-									modifiedCount++;
-									break;
+					// 遍历折叠后的数据组
+					for (const group of groupedComponentsData) {
+						if (group.modified && group.shouldModify && !group.hasError) {
+							// 遍历该组内的所有唯一ID，执行批量修改
+							for (const uId of group.uniqueIds) {
+								if (!uId || uId === '空') continue;
+
+								for (const key in componentsMap) {
+									const mapComponent = componentsMap[key];
+									if (mapComponent && mapComponent.props && mapComponent.props['Unique ID'] === uId) {
+										mapComponent.props.Name = group.value;
+										mapComponent.props.Value = group.value;
+										modifiedCount++;
+										break;
+									}
 								}
 							}
 						}
 					}
 
-					// 注意：由于 componentsMap 是引用 jsonData 的一部分（或全部），
-					// 修改 componentsMap 会自动更新 jsonData。
-					// 所以这里直接 stringify jsonData 即可。
-
 					const listjson = JSON.stringify(jsonData);
 
-					console.log(Page);
 					if (Page === 'PCB') {
 						await eda.pcb_Net.setNetlist('JLCEDA', listjson);
 					} else {
 						await eda.sch_Netlist.setNetlist('JLCEDA', listjson);
 					}
 
-					// showStatus(`成功转换并更新了 ${modifiedCount} 个组件的值`, "success");
-					eda.sys_IFrame.closeIFrame('CodeConvert'); //关闭窗口
+					eda.sys_IFrame.closeIFrame('CodeConvert');
 				} catch (error) {
 					console.error('执行转换失败:', error);
 					showStatus('转换失败: ' + error.message, 'error');
@@ -832,7 +945,7 @@
 							verTag.textContent = 'V2模式';
 						}
 					} else {
-						verTag.textContent = 'V2模式 (默认)';
+						verTag.textContent = 'V2模式';
 					}
 				} catch (e) {
 					console.warn('版本检测失败，默认使用V2模式', e);
@@ -851,8 +964,8 @@
 						NetList = await getNetlist.text();
 						Page = 'SCH';
 					}
-					// console.log(NetList);
 					jsonData = JSON.parse(NetList);
+					console.log(jsonData);
 
 					// 关键点：确定组件数据源
 					if (isV3 && jsonData.components) {
@@ -892,6 +1005,7 @@
 
 					// 处理数据并显示表格
 					processComponentsData();
+					groupComponents();
 					renderTable();
 
 					// 绑定事件
@@ -900,8 +1014,10 @@
 
 					if (hasEmptyUniqueId) {
 						showStatus('部分元件的唯一ID为空/重复，可以在菜单栏-设计-重置唯一ID，否则会出现异常', 'error');
+						document.getElementById('executeBtn').disabled = true; // <--- 新增：存在异常时禁用按钮
 					} else {
-						showStatus(`数据加载成功 (${isV3 ? 'V3' : 'V2'})，请仔细检查后，选择要转换的组件`, 'info');
+						showStatus(`数据加载成功，请仔细检查后，选择要转换的元件`, 'info');
+						document.getElementById('executeBtn').disabled = false; // <--- 确保正常时按钮可用
 					}
 				} catch (error) {
 					console.error('初始化失败:', error);

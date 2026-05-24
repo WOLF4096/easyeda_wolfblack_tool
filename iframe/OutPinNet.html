@@ -1,0 +1,568 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>狼黑工具 - 导出引脚网络工具</title>
+	<style>
+		/* 基础重置 + 全屏自适应 - VSCode Dark+ 风格 */
+		* {
+			margin: 0;
+			padding: 0;
+			box-sizing: border-box;
+			/* 使用 VSCode 默认 UI 字体栈 */
+			font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
+		}
+		html, body {
+			height: 100%;
+			background-color: #1e1e1e; /* VSCode Editor Background */
+		}
+
+		/* 主容器 */
+		.app-window {
+			width: 100%;
+			height: 100%;
+			background-color: #1e1e1e;
+			display: flex;
+			flex-direction: column;
+			overflow: hidden;
+			color: #cccccc; /* VSCode Default Foreground */
+		}
+
+		/* 顶部工具栏 - 紧凑一行 */
+		.toolbar {
+			padding: 8px 12px;         
+			background: #252526;       /* VSCode Side Bar/Panel Background */
+			border-bottom: 1px solid #333333; /* VSCode Border */
+			display: flex;
+			align-items: center;
+			gap: 12px;
+			flex-shrink: 0;
+			flex-wrap: nowrap;
+		}
+
+		/* 下拉菜单卡片 */
+		.select-group {
+			display: flex;
+			align-items: center;
+			gap: 6px;
+			/* VSCode Input/Dropdown Background */
+			background: #3c3c3c;
+			padding: 4px 8px;
+			border-radius: 2px;
+			border: 1px solid transparent;
+			white-space: nowrap;
+			min-width: 0;
+		}
+		.select-group:focus-within {
+			border-color: #007fd4; /* VSCode Focus Border */
+		}
+		.select-group label {
+			font-size: 12px;
+			color: #cccccc;
+		}
+		.select-group select {
+			border: none;
+			background: transparent;
+			font-size: 13px;
+			color: #cccccc;
+			outline: none;
+			cursor: pointer;
+			padding-right: 4px;
+		}
+		.select-group select option {
+			background: #252526; /* VSCode Dropdown List Background */
+			color: #cccccc;
+		}
+		/* 为属性下拉框单独设置固定宽度和文字裁断 */
+		#propSelect {
+			width: 120px; /* 你可以根据界面需求调整这个固定宽度 */
+			white-space: nowrap;
+			overflow: hidden;
+			text-overflow: ellipsis;
+		}
+
+		.btn-group {
+			display: flex;
+			gap: 8px;
+			margin-left: auto;
+			flex-shrink: 0;
+		}
+		.btn {
+			background: #3a3d41; /* VSCode Secondary Button Background */
+			border: 1px solid transparent;
+			padding: 4px 12px;
+			border-radius: 2px;
+			font-size: 12px;
+			color: #ffffff;
+			display: inline-flex;
+			align-items: center;
+			gap: 6px;
+			cursor: pointer;
+			transition: background 0.1s;
+			white-space: nowrap;
+		}
+		.btn:hover {
+			background: #45494e; /* VSCode Secondary Button Hover */
+		}
+		.btn-primary {
+			background: #0e639c; /* VSCode Primary Button Background */
+			color: #ffffff;
+		}
+		.btn-primary:hover {
+			background: #1177bb; /* VSCode Primary Button Hover */
+		}
+
+		/* 表格容器 */
+		.table-container {
+			flex: 1;
+			overflow: auto;
+			background: #1e1e1e;
+			scrollbar-width: thin;
+			scrollbar-color: #424242 transparent; /* VSCode Scrollbar */
+		}
+		.table-container::-webkit-scrollbar {
+			width: 10px;
+			height: 10px;
+		}
+		.table-container::-webkit-scrollbar-track {
+			background: transparent;
+		}
+		.table-container::-webkit-scrollbar-thumb {
+			background: #424242;
+			border: 1px solid #1e1e1e; /* 留出间隙感 */
+		}
+		.table-container::-webkit-scrollbar-thumb:hover {
+			background: #4f4f4f;
+		}
+		.table-container::-webkit-scrollbar-corner {
+			background: #1e1e1e;
+		}
+
+		.net-table {
+			border-collapse: collapse;
+			min-width: 100%;
+			white-space: nowrap;
+			font-size: 13px;
+			background: #1e1e1e;
+			color: #d4d4d4;
+			font-family: Consolas, "Courier New", monospace; /* 表格数据采用等宽字体，更符合代码感 */
+		}
+
+		.net-table th,
+		.net-table td {
+			padding: 6px 12px; /* 进一步收紧内边距，提高信息密度 */
+			text-align: left;
+			border-bottom: 1px solid #2b2b2b;
+			border-right: 1px solid #2b2b2b;
+		}
+
+		.net-table thead th {
+			background-color: #252526;
+			font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+			font-weight: normal;
+			font-size: 12px;
+			color: #cccccc;
+			border-bottom: 1px solid #333333;
+			position: sticky;
+			top: 0;
+			z-index: 10;
+			box-shadow: 0 1px 0 #333333; /* 增强粘性表头的边界感 */
+		}
+
+		/* 第一列（位号）粘性 */
+		.net-table tbody td:first-child {
+			max-width: 128px;
+			overflow: hidden;
+			text-overflow: ellipsis;
+			white-space: nowrap;
+			background-color: #252526;
+			color: #4ec9b0; /* VSCode Type/Class Color (青色) */
+			border-right: 1px solid #333333;
+			position: sticky;
+			left: 0;
+			z-index: 5;
+		}
+		.net-table thead th:first-child {
+			width: 100px;
+			max-width: 100px;
+			overflow: hidden;
+			text-overflow: ellipsis;
+			white-space: nowrap;
+			position: sticky;
+			left: 0;
+			background: #252526;
+			z-index: 20;
+			border-right: 1px solid #333333;
+		}
+
+		/* 悬停高亮当前行 */
+		.net-table tbody tr:hover td {
+			background-color: #2a2d2e; /* VSCode List Hover Background */
+		}
+		/* 覆盖悬停时的第一列粘性背景色，使其与行保持一致 */
+		.net-table tbody tr:hover td:first-child {
+			background-color: #2a2d2e;
+		}
+
+		.loading-message {
+			padding: 40px;
+			text-align: center;
+			color: #858585; /* VSCode comment color */
+			font-style: italic;
+			background: transparent;
+		}
+	</style>
+</head>
+<body>
+<div class="app-window">
+    <!-- 顶部工具栏 -->
+    <div class="toolbar">
+        <div class="select-group">
+            <!-- <label>类型</label> -->
+            <select id="typeSelect">
+                <option value="FootprintName"selected>封装</option>
+                <option value="DeviceName">器件</option>
+            </select>
+        </div>
+
+        <div class="select-group">
+            <!-- <label>属性</label> -->
+            <select id="propSelect">
+                <option value="ALL">所有</option>
+            </select>
+        </div>
+
+        <div class="btn-group">
+            <button class="btn" id="exportPinNetBtn" title="导出当前视图为CSV">导出引脚网络</button>
+            <button class="btn btn-primary" id="exportAllNetBtn" title="导出全部网络列表">导出全部网络</button>
+        </div>
+    </div>
+
+    <!-- 表格区域 -->
+    <div class="table-container" id="tableContainer">
+        <table class="net-table" id="netTable">
+            <!-- 动态渲染 -->
+        </table>
+    </div>
+</div>
+<script>
+    // ---------- 全局变量 ----------
+    let allComponents = [];              // 存储所有器件（扁平化）
+    let sortedPins = [];                 // 所有出现的引脚编号（排序后）
+    // let netlistData = null;
+
+    // DOM 元素
+    const typeSelect = document.getElementById('typeSelect');
+    const propSelect = document.getElementById('propSelect');
+    const tableContainer = document.getElementById('tableContainer');
+    const netTable = document.getElementById('netTable');
+    const exportPinNetBtn = document.getElementById('exportPinNetBtn');
+    const exportAllNetBtn = document.getElementById('exportAllNetBtn');
+
+    // ---------- 工具函数：从原始数据构建 allComponents 和 sortedPins ----------
+	function buildComponents(componentsDict) {
+		const components = [];
+		const pinSet = new Set();
+
+		Object.values(componentsDict).forEach(item => {
+			const props = item.props || {};
+			let pins = {};
+
+			// 优先使用 pinInfoMap (新格式)
+			if (item.pinInfoMap) {
+				Object.entries(item.pinInfoMap).forEach(([pin, pinInfo]) => {
+					const net = pinInfo.net || '';
+					pins[pin] = net;
+					pinSet.add(pin);
+				});
+			} else if (item.pins) {
+				// 旧格式
+				Object.entries(item.pins).forEach(([pin, net]) => {
+					pins[pin] = net || '';
+					pinSet.add(pin);
+				});
+			}
+			// 若无任何引脚信息，pins 保持空对象
+
+			const comp = {
+				...props,
+				pins: pins   // 统一为 { pinNumber: net } 格式
+			};
+			components.push(comp);
+		});
+
+		const sorted = Array.from(pinSet).sort((a, b) => parseInt(a) - parseInt(b));
+		return { components, sortedPins: sorted };
+	}
+
+    // 获取属性下拉的唯一值
+    function getUniquePropValues(typeKey) {
+        const values = allComponents.map(comp => comp[typeKey]).filter(Boolean);
+        return [...new Set(values)].sort();
+    }
+
+    // 填充属性下拉
+    function populatePropSelect() {
+        const typeKey = typeSelect.value;
+        const uniqueVals = getUniquePropValues(typeKey);
+        const currentVal = propSelect.value;
+
+        propSelect.innerHTML = '';
+        const allOption = document.createElement('option');
+        allOption.value = 'ALL';
+        allOption.textContent = '所有';
+        allOption.title = '所有'; // <--- 新增：悬浮提示
+        propSelect.appendChild(allOption);
+
+        uniqueVals.forEach(val => {
+            const option = document.createElement('option');
+            option.value = val;
+            option.textContent = val;
+            option.title = val; // <--- 新增：悬浮提示
+            propSelect.appendChild(option);
+        });
+
+        if (currentVal && uniqueVals.includes(currentVal)) {
+            propSelect.value = currentVal;
+        } else {
+            propSelect.value = 'ALL';
+        }
+        
+        // <--- 新增：初始化时同步 select 自身的 title
+        propSelect.title = propSelect.value === 'ALL' ? '所有' : propSelect.value;
+    }
+
+    // 渲染表格 (左上角显示属性名: DeviceName / FootprintName)
+	function renderTable() {
+		const typeKey = typeSelect.value;          // "DeviceName" 或 "FootprintName"
+		const filterValue = propSelect.value;      // "ALL" 或 具体名称
+
+        // <--- 新增：每次切换属性时，更新下拉框自身的悬浮提示文本
+        propSelect.title = filterValue === 'ALL' ? '所有' : filterValue;
+
+		let filtered = allComponents;
+		if (filterValue !== 'ALL') {
+			filtered = allComponents.filter(comp => comp[typeKey] === filterValue);
+		}
+
+		// 按位号排序
+		filtered.sort((a, b) => a.Designator?.localeCompare(b.Designator, undefined, { numeric: true }) || 0);
+
+		// 计算当前筛选结果中实际出现的引脚编号（去重、排序）
+		const currentPinSet = new Set();
+		filtered.forEach(comp => {
+			Object.keys(comp.pins).forEach(pin => currentPinSet.add(pin));
+		});
+		const currentPins = Array.from(currentPinSet).sort((a, b) => parseInt(a) - parseInt(b));
+
+		// 左上角显示内容：属性值（如 C0603）或“所有器件/所有封装”
+		let cornerDisplay;
+		if (filterValue === 'ALL') {
+			cornerDisplay = typeKey === 'DeviceName' ? '所有器件' : '所有封装';
+		} else {
+			cornerDisplay = filterValue;
+		}
+
+		// 构建表头
+		let thead = '<thead><tr>';
+		thead += `<th>${cornerDisplay}</th>`;
+		currentPins.forEach(pin => {
+			thead += `<th>${pin}</th>`;
+		});
+		thead += '</tr></thead>';
+
+		// 构建表格体
+		let tbody = '<tbody>';
+		if (filtered.length === 0) {
+			tbody += `<tr><td colspan="${currentPins.length + 1}" style="text-align:center; padding:40px; color:#7a8aa5;">暂无匹配器件</td></tr>`;
+		} else {
+			filtered.forEach(comp => {
+				tbody += '<tr>';
+				tbody += `<td>${comp.Designator || '?'}</td>`;
+				currentPins.forEach(pin => {
+					const net = comp.pins[pin] || '';
+					tbody += `<td>${net}</td>`;
+				});
+				tbody += '</tr>';
+			});
+		}
+		tbody += '</tbody>';
+
+		netTable.innerHTML = thead + tbody;
+	}
+
+    // ---------- 导出引脚网络为CSV (格式: 第一行: 属性名,引脚1,引脚2,...  后续行: 位号,网络,...) ----------
+	function exportPinNetAsCSV() {
+		const typeKey = typeSelect.value;
+		const filterValue = propSelect.value;
+
+		let filtered = allComponents;
+		if (filterValue !== 'ALL') {
+			filtered = allComponents.filter(comp => comp[typeKey] === filterValue);
+		}
+		filtered.sort((a, b) => a.Designator?.localeCompare(b.Designator, undefined, { numeric: true }) || 0);
+
+		// 计算当前筛选结果的引脚集合
+		const currentPinSet = new Set();
+		filtered.forEach(comp => {
+			Object.keys(comp.pins).forEach(pin => currentPinSet.add(pin));
+		});
+		const currentPins = Array.from(currentPinSet).sort((a, b) => parseInt(a) - parseInt(b));
+
+		const rows = [];
+		// 标题行：第一列使用属性名（如 FootprintName），后面是引脚编号
+		let cornerDisplay;
+		if (filterValue === 'ALL') {
+			cornerDisplay = typeKey === 'DeviceName' ? '所有器件' : '所有封装';
+		} else {
+			cornerDisplay = filterValue;
+		}
+		const header = [cornerDisplay, ...currentPins];
+		rows.push(header.join(','));
+
+		// 数据行
+		filtered.forEach(comp => {
+			const row = [comp.Designator || ''];
+			currentPins.forEach(pin => {
+				row.push(comp.pins[pin] || '');
+			});
+			rows.push(row.join(','));
+		});
+
+		const csvContent = rows.join('\n');
+		const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
+		const url = URL.createObjectURL(blob);
+		const a = document.createElement('a');
+		a.href = url;
+		a.download = `${filterValue}.csv`;
+		a.click();
+		URL.revokeObjectURL(url);
+	}
+
+    // 导出全部网络为TXT (每行一个网络名, 去重, 排序)
+    function exportAllNetsAsTxt() {
+        // 收集所有非空网络名
+        const netSet = new Set();
+        allComponents.forEach(comp => {
+            Object.values(comp.pins).forEach(net => {
+                if (net && typeof net === 'string' && net.trim() !== '') {
+                    netSet.add(net.trim());
+                }
+            });
+        });
+
+        const sortedNets = Array.from(netSet).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+        const content = sortedNets.join('\n');
+        const blob = new Blob([content], { type: 'text/plain;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'all_networks.txt';
+        a.click();
+        URL.revokeObjectURL(url);
+    }
+	// 导出全部网络为 CSV (每行一个网络名)
+	function exportAllNetsAsCSV() {
+		const netSet = new Set();
+		allComponents.forEach(comp => {
+			Object.values(comp.pins).forEach(net => {
+				if (net && typeof net === 'string' && net.trim() !== '') {
+					netSet.add(net.trim());
+				}
+			});
+		});
+
+		const sortedNets = Array.from(netSet).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+		const content = sortedNets.join('\n');
+		// 添加 BOM 以便 Excel 正确打开 UTF-8 文件
+		const blob = new Blob(['\uFEFF' + content], { type: 'text/csv;charset=utf-8;' });
+		const url = URL.createObjectURL(blob);
+		const a = document.createElement('a');
+		a.href = url;
+		a.download = 'all_networks.csv';   // 后缀改为 .csv
+		a.click();
+		URL.revokeObjectURL(url);
+	}
+
+    // ---------- 初始化: 获取数据并渲染 ----------
+    async function initApp() {
+        // 显示加载中
+        netTable.innerHTML = `<div class="loading-message">加载网表中...</div>`;
+		
+		let getNetlistFile = '';
+		try {
+			getNetlistFile = await eda.pcb_ManufactureData.getNetlistFile();
+		} catch (error) {}
+		// 如果 pcb 返回空或出错，则尝试 sch
+		if (!getNetlistFile) {
+			getNetlistFile = await eda.sch_ManufactureData.getNetlistFile();
+		}
+		// console.log(getNetlistFile);
+		const netdataRaw = await getNetlistFile.text();
+		let jsonData = JSON.parse(netdataRaw);
+
+		try {
+			// 兼容新格式：如果有 components 字段则使用它，否则使用整个 jsonData
+			const componentsDict = jsonData.components || jsonData;
+
+			// 构建组件列表和引脚
+			const { components, sortedPins: pins } = buildComponents(componentsDict);
+            allComponents = components;
+            sortedPins = pins;
+
+            // 填充下拉
+            populatePropSelect();
+
+            // 渲染表格
+            renderTable();
+
+            // 添加事件监听 (确保只绑定一次)
+            typeSelect.removeEventListener('change', typeChangeHandler);
+            propSelect.removeEventListener('change', renderTable);
+            typeSelect.addEventListener('change', typeChangeHandler);
+            propSelect.addEventListener('change', renderTable);
+
+            // shift+滚轮横向滚动
+            tableContainer.addEventListener('wheel', (e) => {
+                if (e.shiftKey) {
+                    e.preventDefault();
+                    tableContainer.scrollLeft += e.deltaY;
+                }
+            }, { passive: false });
+
+        } catch (error) {
+            netTable.innerHTML = `<div class="loading-message" style="color:#b33;">加载失败: ${error.message}</div>`;
+            console.error(error);
+        }
+    }
+
+    // 类型改变时的处理：重新填充属性下拉，再渲染
+    function typeChangeHandler() {
+        populatePropSelect();
+        renderTable();
+    }
+
+    // 绑定导出按钮
+    exportPinNetBtn.addEventListener('click', () => {
+        if (allComponents.length === 0) {
+            alert('网表尚未加载');
+            return;
+        }
+        exportPinNetAsCSV();
+    });
+
+    exportAllNetBtn.addEventListener('click', () => {
+        if (allComponents.length === 0) {
+            alert('网表尚未加载');
+            return;
+        }
+        exportAllNetsAsCSV();
+    });
+
+    // 启动
+    initApp();
+
+</script>
+</body>
+</html>

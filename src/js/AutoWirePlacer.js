@@ -1,5 +1,5 @@
 //
-// 此代码已更新以兼容 V2 和 V3 版本
+// 此代码已兼容 V2 和 V3 版本
 //
 // 导线长度
 const WIRE_LENGTH = 40;
@@ -105,23 +105,37 @@ export async function placeWires(importMethod) {
 
 		const allResults = [];
 
+		// ---- 替换开始：使用源码构建的方式批量写入 ----
+		
+		// 获取当前原理图的完整源码
+		eda.sys_Message.showToastMessage('正在构建导线网络...', 2);
+		let documentSource = await eda.sys_FileManager.getDocumentSource();
+		if (!documentSource) {
+			throw new Error('无法获取原理图源码');
+		}
+
+		// 解析当前的最大 ID
+		const { maxId, maxTicket } = getMaxIdFromSource(documentSource);
+		let idCounter = { val: maxId + 1 };
+		let ticketCounter = { val: maxTicket + 1 };   // 新增 ticket 计数器
+		
+		let allSourceLines = [];
+
 		// 4. 对每个器件分别处理引脚数据
 		for (const selectedComponent of componentsArray) {
 			const { componentIds, uniqueId, designator } = selectedComponent;
 
-			// 处理网表数据（每个器件单独处理）
+			// 处理网表数据
 			const processedData = processNetlistData(componentIds, uniqueId, designator, formattedSchematicNetlist, pcbNetlist);
 
-			if (processedData.length === 0) {
-				// console.log(`器件 ${designator} 没有需要放置导线的引脚`);
-				continue;
-			}
+			if (processedData.length === 0) continue;
 
-			// 绘制导线（每个器件单独处理）
-			const drawResults = await drawWiresForPins(processedData);
+			// 生成导线源码片段
+			const { results: drawResults, sourceLines } = await drawWiresForPins(processedData, idCounter, ticketCounter);
+			
+			// 收集要写入的源码
+			allSourceLines.push(...sourceLines);
 
-			// 统计这个器件的导线数量
-			const successCount = drawResults.filter((r) => r.success).length;
 			drawResults.forEach((result) => {
 				perfMonitor.addWire(result.success);
 			});
@@ -135,6 +149,38 @@ export async function placeWires(importMethod) {
 				totalCount: drawResults.length,
 			});
 		}
+
+		// 5. 批量写入源码
+		if (allSourceLines.length > 0) {
+			if (currentVersion.startsWith('2.')) {
+				// V2 修复 header 中的 maxId
+				documentSource = documentSource.replace(/"maxId":\d+/, `"maxId":${idCounter.val}`);
+				// 拼接新的图元
+				documentSource += '\n' + allSourceLines.join('\n');
+			} else {
+				// V3 拼接处理
+				// 1. 确保原源码末尾有 "|"（如果非空且不以|结尾）
+				if (documentSource.length > 0 && !documentSource.endsWith('|')) {
+					documentSource += '|';
+				}
+				// 2. 确保末尾有换行符，以便拼接新行
+				if (!documentSource.endsWith('\n')) {
+					documentSource += '\n';
+				}
+				// 3. 拼接新生成的导线行（每行已自带末尾的 "|"）
+				documentSource += allSourceLines.join('\n');
+				// 4. 移除整个文档末尾多余的 "|"（保持最后一行不以 "|" 结尾）
+				if (documentSource.endsWith('|')) {
+					documentSource = documentSource.slice(0, -1);
+				}
+			}
+
+			// 写入回编辑器
+			// console.log(documentSource);
+			await eda.sys_FileManager.setDocumentSource(documentSource);
+		}
+		
+		// ---- 替换结束 ----
 
 		// 5. 汇总结果
 		const performanceStats = perfMonitor.end();
@@ -534,7 +580,7 @@ async function getMultiplePinPositions(pinsData) {
 	for (const [componentId, pins] of Object.entries(componentPinsMap)) {
 		try {
 			const pinsData = await eda.sch_PrimitiveComponent.getAllPinsByPrimitiveId(componentId);
-
+			// console.log(pinsData);
 			for (const pinNumber of pins) {
 				const pinInfo = pinsData.find((pin) => pin.pinNumber === pinNumber);
 				if (pinInfo) {
@@ -563,120 +609,129 @@ async function getMultiplePinPositions(pinsData) {
 	return positions;
 }
 
-// 为引脚绘制导线
-async function drawWiresForPins(pinsData) {
+// 为引脚生成导线源码
+async function drawWiresForPins(pinsData, idCounter, ticketCounter) {
 	const results = [];
+	const sourceLines = [];
 
-	// 先批量获取所有引脚的位置信息，提高效率
+	// 获取所有引脚的位置信息
 	const pinPositions = await getMultiplePinPositions(pinsData);
 
 	for (const pinData of pinsData) {
 		try {
 			const { componentId, pin, netName } = pinData;
-
-			// 从预获取的位置信息中查找
 			const pinInfo = pinPositions[`${componentId}_${pin}`];
 
 			if (!pinInfo) {
-				eda.sys_Log.add(`未找到引脚 ${pin} 的位置信息`, 'warn');
-				eda.sys_PanelControl.openBottomPanel('log');
 				console.warn(`未找到引脚 ${pin} 的位置信息`);
-				results.push({
-					componentId: componentId,
-					pin: pin,
-					netName: netName,
-					success: false,
-					error: '未找到引脚位置',
-				});
+				results.push({ componentId, pin, netName, success: false });
 				continue;
 			}
 
-			// 绘制导线
-			const drawResult = await drawSingleWire(pinInfo, netName);
+			// 生成当前引脚的源码片段
+			// console.log(pinInfo, netName, idCounter);
+			const wireLines = generateWireSource(pinInfo, netName, idCounter, ticketCounter);
+			sourceLines.push(...wireLines);
 
 			results.push({
 				componentId: componentId,
 				pin: pin,
 				netName: netName,
-				pinName: pinInfo.pinName,
-				success: !!drawResult,
-				wireId: drawResult?.primitiveId,
-				coordinates: {
-					start: { x: pinInfo.x, y: pinInfo.y },
-					angle: pinInfo.angle,
-				},
+				success: true
 			});
-
-			// 添加短暂延迟，避免操作过快
-			// await delay(100);
 		} catch (error) {
-			console.error(`为引脚 ${pinData.pin} 绘制导线失败:`, error);
-			results.push({
-				componentId: pinData.componentId,
-				pin: pinData.pin,
-				netName: pinData.netName,
-				success: false,
-				error: error.message,
-			});
+			results.push({ componentId: pinData.componentId, pin: pinData.pin, netName: pinData.netName, success: false });
 		}
 	}
-
-	return results;
+	// console.log(sourceLines);
+	return { results, sourceLines };
 }
 
-// 绘制单根导线
-async function drawSingleWire(pinInfo, netName) {
+// 弃用 API 绘制，改为生成单根导线的源码片段
+function generateWireSource(pinInfo, netName, idCounter, ticketCounter) {
 	const { x, y, angle } = pinInfo;
-	// console.log(x, y, angle);
-	let startX, startY, endX, endY;
-	startX = x;
-	startY = y;
-	
+	let startX = x;
+	// let startY = y;
+	let startY = -y;// API获取的坐标Y值与源码相反
+	let endX, endY, netT;
+	let y1 = currentVersion.startsWith('2.') ? 1 : -1;
+
 	switch (angle) {
 		case 0:
 			endX = startX + WIRE_LENGTH;
 			endY = startY;
+			netT = 0;
 			break;
 		case 90:
 			endX = startX;
-			if (currentVersion === '3.2.80') {
-				endY = startY + WIRE_LENGTH;
-			}else{
-				endY = startY - WIRE_LENGTH;
-			}
+			endY = startY + WIRE_LENGTH * y1;
+			netT = 90;
 			break;
 		case 180:
 			endX = startX - WIRE_LENGTH;
 			endY = startY;
+			netT = 0;
 			break;
 		case 270:
 			endX = startX;
-			if (currentVersion === '3.2.80') {
-				endY = startY - WIRE_LENGTH;
-			}else{
-				endY = startY + WIRE_LENGTH;
-			}
+			endY = startY - WIRE_LENGTH * y1;
+			netT = 90;
 			break;
 		default:
-			// 默认向右
 			endX = startX + WIRE_LENGTH;
 			endY = startY;
-			console.warn(`未知的角度 ${angle}，使用默认方向`);
+			netT = 0;
 	}
 
-	try {
-		const result = await eda.sch_PrimitiveWire.create([startX, startY, endX, endY], netName);
-		// console.log("导线绘制成功:", result);
-		return result;
-	} catch (error) {
-		eda.sys_Log.add('绘制导线失败', 'error');
-		console.log([startX, startY, endX, endY], netName);
-		eda.sys_PanelControl.openBottomPanel('log');
-		throw error;
-	}
+	const centerX = (startX + endX) / 2;
+	const centerY = (startY + endY) / 2;
+	const lines = [];
+
+	if (currentVersion.startsWith('2.')) {
+		// V2 源码格式
+		const wireId = 'e' + idCounter.val++;
+		const attrId = 'e' + idCounter.val++;
+		lines.push(`["WIRE","${wireId}",[[${startX},${startY},${endX},${endY}]],"st1",0]`);
+		lines.push(`["ATTR","${attrId}","${wireId}","NET","${netName}",0,1,${centerX},${centerY},${netT},"st2",0]`);
+	} else {
+		// V3 源码格式
+        const wireId = 'e' + idCounter.val++;
+        lines.push(`{"type":"WIRE","ticket":${ticketCounter.val++},"id":"${wireId}"}||{"zIndex":1}|`);
+        lines.push(`{"type":"LINE","ticket":${ticketCounter.val++},"id":"e${idCounter.val++}"}||{"lineGroup":"${wireId}","startX":${startX},"startY":${startY},"endX":${endX},"endY":${endY}}|`);
+        lines.push(`{"type":"ATTR","ticket":${ticketCounter.val++},"id":"e${idCounter.val++}"}||{"parentId":"${wireId}","key":"NET","value":"${netName}","x":${centerX},"y":${centerY},"rotation":${netT},"keyVisible":false,"valueVisible":true}|`);
+    }
+
+	return lines;
 }
 
 // 延迟函数
 function delay(ms) {
 	return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
+ * 从原理图源码中提取最大图元ID（e数字）和最大ticket（V3专用）
+ * @param {string} source - 原理图完整源码
+ * @returns {{ maxId: number, maxTicket: number }}
+ */
+function getMaxIdFromSource(source) {
+    let maxId = 0;
+    let maxTicket = 0;
+
+    // 1. 提取所有 "e数字" 中的数字（V2/V3 通用）
+    const idRegex = /"e(\d+)"/g;
+    let match;
+    while ((match = idRegex.exec(source)) !== null) {
+        const val = parseInt(match[1], 10);
+        if (val > maxId) maxId = val;
+    }
+
+    // 2. 提取所有 "ticket":数字 中的数字（仅 V3 存在，V2 无此字段）
+    const ticketRegex = /"ticket":(\d+)/g;
+    while ((match = ticketRegex.exec(source)) !== null) {
+        const val = parseInt(match[1], 10);
+        if (val > maxTicket) maxTicket = val;
+    }
+
+    return { maxId, maxTicket };
 }

@@ -5,409 +5,402 @@
 		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
 		<title>狼黑工具 - 导入图片</title>
 		<style>
-			/* 定义全局变量：默认亮色模式 */
+			/* ================= VSCode Dark+ 核心色调与重置 ================= */
 			:root {
-				--bg-color: #ffffff;
-				--text-primary: #2c3e50;
-				--text-secondary: #7f8c8d;
-				--text-label: #34495e;
-				--border-color: #eaeaea;
-				--border-color-strong: #bdc3c7;
-				--input-bg: #ffffff;
-				--input-border: #dce4ec;
-				--box-bg: #f8f9fa;
-				--box-hover-bg: #e9f7fe;
-				--primary-color: #3498db;
-				--primary-hover: #2980b9;
-				--icon-filter: none; /* 图标滤镜 */
-			}
-
-			/* 暗色模式适配 */
-			@media (prefers-color-scheme: dark) {
-				:root {
-					--bg-color: #2b2b2b; /* 深灰背景 */
-					--text-primary: #e0e0e0; /* 亮灰文字 */
-					--text-secondary: #a0a0a0;
-					--text-label: #cccccc;
-					--border-color: #444444;
-					--border-color-strong: #555555;
-					--input-bg: #383838;
-					--input-border: #555555;
-					--box-bg: #333333;
-					--box-hover-bg: #404040;
-					--icon-filter: invert(0.8); /* 反转黑色图标为浅色 */
-				}
+				--vscode-bg: #1e1e1e;
+				--vscode-panel: #252526;
+				--vscode-border: #333333;
+				--vscode-input-bg: #3c3c3c;
+				--vscode-focus-border: #007fd4;
+				--vscode-text-main: #cccccc;
+				--vscode-text-muted: #858585;
+				--vscode-blue: #0e639c;
+				--vscode-blue-hover: #1177bb;
+				--vscode-button-sec: #3a3d41;
+				--vscode-button-sec-hover: #45494e;
+				--vscode-list-hover: #2a2d2e;
 			}
 
 			* {
 				margin: 0;
 				padding: 0;
 				box-sizing: border-box;
-				font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+				font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
 			}
 
 			body {
-				/* 使用变量设置背景和文字颜色 */
-				background-color: var(--bg-color);
-				color: var(--text-primary);
+				background-color: var(--vscode-bg);
+				color: var(--vscode-text-main);
+				height: 100vh;
+				overflow: hidden;
 			}
 
+			/* 布局 */
 			.container {
 				width: 100%;
-				height: 100vh;
+				height: 100%;
 				display: flex;
 			}
 
 			.preview-section {
 				flex: 1;
-				padding: 20px;
-				border-right: 1px solid var(--border-color); /* 变量 */
+				padding: 16px;
+				border-right: 1px solid var(--vscode-border);
 				display: flex;
 				flex-direction: column;
-			}
-
-			.preview-title {
-				font-size: 18px;
-				font-weight: 600;
-				color: var(--text-primary); /* 变量 */
-				margin-bottom: 15px;
-				display: flex;
-				align-items: center;
-			}
-
-			.preview-title i {
-				margin-right: 8px;
-				color: var(--primary-color);
-			}
-
-			.preview-box {
-				flex: 1;
-				border: 2px dashed var(--border-color-strong); /* 变量 */
-				border-radius: 8px;
-				display: flex;
-				justify-content: center;
-				align-items: center;
-				overflow: hidden;
-				background-color: var(--box-bg); /* 变量 */
-				transition: all 0.3s ease;
-			}
-
-			.preview-box:hover {
-				border-color: var(--primary-color);
-			}
-
-			.preview-box img {
-				max-width: 100%;
-				max-height: 100%;
-				object-fit: contain;
-				display: none;
-			}
-
-			.preview-placeholder {
-				text-align: center;
-				color: var(--text-secondary); /* 变量 */
-			}
-
-			.preview-placeholder i {
-				font-size: 48px;
-				margin-bottom: 15px;
-				color: var(--border-color-strong); /* 变量 */
-			}
-
-			.preview-placeholder p {
-				font-size: 16px;
+				background-color: var(--vscode-bg);
 			}
 
 			.control-section {
-				width: 320px;
-				padding: 20px;
+				width: 340px;
+				padding: 12px;
 				display: flex;
 				flex-direction: column;
+				background-color: var(--vscode-panel);
+				overflow-y: auto;
 			}
 
+			/* 标题 */
+			.preview-title, .section-title {
+				font-size: 12px;
+				text-transform: uppercase;
+				letter-spacing: 0.5px;
+				color: #ffffff;
+				margin-bottom: 12px;
+				display: flex;
+				align-items: center;
+			}
+			.section-title {
+				padding-bottom: 6px;
+				border-bottom: 1px solid var(--vscode-border);
+				margin-top: 20px;
+			}
+
+			/* 按钮 */
 			.button-group {
 				display: flex;
-				gap: 12px;
-				margin-bottom: 17px;
+				gap: 8px;
+				margin-bottom: 12px;
 			}
 
 			.btn {
 				flex: 1;
-				padding: 12px 16px;
-				border: none;
-				border-radius: 6px;
-				font-weight: 600;
+				padding: 6px 12px;
+				border: 1px solid transparent;
+				border-radius: 2px;
+				font-size: 12px;
 				cursor: pointer;
-				transition: all 0.3s ease;
 				display: flex;
 				align-items: center;
 				justify-content: center;
-				gap: 8px;
-				color: white; /* 按钮文字始终为白色 */
-			}
-
-			.btn-primary {
-				background-color: var(--primary-color);
-			}
-
-			.btn-primary:hover {
-				background-color: var(--primary-hover);
-				transform: translateY(-2px);
-				box-shadow: 0 4px 8px rgba(52, 152, 219, 0.3);
-			}
-
-			.btn-secondary {
-				background-color: #2ecc71;
-			}
-
-			.btn-secondary:hover {
-				background-color: #27ae60;
-				transform: translateY(-2px);
-				box-shadow: 0 4px 8px rgba(46, 204, 113, 0.3);
+				gap: 6px;
+				transition: background 0.1s;
 			}
 
 			.btn:disabled {
-				background-color: var(--border-color-strong); /* 变量 */
+				background-color: #4d4d4d !important;
+				color: #a6a6a6 !important;
 				cursor: not-allowed;
-				transform: none;
-				box-shadow: none;
-				opacity: 0.7;
-			}
-
-			.section-title {
-				font-size: 16px;
-				font-weight: 600;
-				color: var(--text-primary); /* 变量 */
-				margin-bottom: 15px;
-				padding-bottom: 8px;
-				border-bottom: 1px solid var(--border-color); /* 变量 */
-			}
-
-			.input-group {
-				display: flex;
-				margin-bottom: 20px;
-				gap: 20px;
-			}
-
-			.input-column {
+				opacity: 1;
 				width: 100%;
 			}
 
-			.input-row {
-				display: flex;
-				margin-bottom: 12px;
-				align-items: center;
+			.btn-primary {
+				background-color: var(--vscode-blue);
+				color: #ffffff;
+				width: 100%;
+			}
+			.btn-primary:hover:not(:disabled) {
+				background-color: var(--vscode-blue-hover);
 			}
 
+			.btn-secondary {
+				background-color: var(--vscode-button-sec);
+				color: #ffffff;
+				width: 100%;
+			}
+			.btn-secondary:hover:not(:disabled) {
+				background-color: var(--vscode-button-sec-hover);
+			}
+
+			/* 输入框 */
+			.input-group {
+				display: flex;
+				gap: 16px;
+				margin-bottom: 12px;
+			}
+			.input-column { flex: 1; }
+
+			.input-row {
+				display: flex;
+				align-items: center;
+				margin-bottom: 12px;
+				gap: 8px;
+			}
 			.input-row label {
 				width: 40px;
-				font-size: 14px;
-				color: var(--text-label); /* 变量 */
+				font-size: 12px;
+				color: var(--vscode-text-main);
 			}
 
 			.input-field {
 				flex: 1;
-				padding: 8px;
-				border: 1px solid var(--input-border); /* 变量 */
-				border-radius: 4px;
-				font-size: 14px;
-				transition: border 0.3s;
-				width: 50%;
-				background-color: var(--input-bg); /* 变量 */
-				color: var(--text-primary); /* 变量 */
-			}
-
-			.input-field:focus {
-				border-color: var(--primary-color);
-				outline: none;
-				box-shadow: 0 0 0 2px rgba(52, 152, 219, 0.2);
-			}
-
-			.input-field:disabled {
-				background-color: var(--box-bg); /* 变量 */
-				color: var(--text-secondary);
-				cursor: not-allowed;
-			}
-
-			.unit-selector,
-			.layer-selector {
-				display: flex;
-				margin-top: 10px;
-				border: 1px solid var(--input-border); /* 变量 */
-				border-radius: 4px;
-				overflow: hidden;
+				padding: 4px 6px;
+				background-color: var(--vscode-input-bg);
+				border: 1px solid transparent;
+				border-radius: 2px;
+				font-size: 12px;
+				color: #b5cea8; /* VSCode 数字浅绿色 */
+				font-family: Consolas, "Courier New", monospace;
 				width: 100%;
 			}
-
-			.unit-option,
-			.layer-option {
-				flex: 1;
-				padding: 10px 12px;
-				background-color: var(--box-bg); /* 变量 */
-				color: var(--text-primary); /* 变量 */
-				font-size: 14px;
-				cursor: pointer;
-				transition: background-color 0.2s;
-				text-align: center;
-				border-right: 1px solid var(--input-border);
+			.input-field:focus {
+				border-color: var(--vscode-focus-border);
+				outline: none;
 			}
-			
-			.unit-option:last-child,
-			.layer-option:last-child {
-				border-right: none;
+			.input-field:disabled {
+				opacity: 0.5;
 			}
 
-			.unit-option.active,
-			.layer-option.active {
-				background-color: var(--primary-color);
-				color: white;
-			}
-			
-			/* 增加hover态，在暗色模式下更明显 */
-			.unit-option:not(.active):hover,
-			.layer-option:not(.active):hover {
-				background-color: var(--box-hover-bg);
-			}
-
+			/* 宽高比 & 切片复选框 */
 			.aspect-ratio {
 				display: flex;
 				align-items: center;
-				margin-top: 10px;
-				margin-bottom: 15px;
+				margin-top: 8px;
+				gap: 6px;
 			}
-
 			.aspect-ratio label {
-				font-size: 14px;
-				color: var(--text-label); /* 变量 */
-				margin-left: 8px;
+				font-size: 12px;
 				cursor: pointer;
 			}
-
 			.checkbox {
-				width: 18px;
-				height: 18px;
+				width: 14px;
+				height: 14px;
+				accent-color: var(--vscode-focus-border);
 				cursor: pointer;
-				accent-color: var(--primary-color); /* 现代浏览器支持自定义复选框颜色 */
+				margin: 0;
 			}
 
-			.dpi-options {
+			/* 选项卡 (分段控制器) */
+			.unit-selector, .layer-selector {
 				display: flex;
-				flex-direction: column;
-				gap: 8px;
-				margin-bottom: 15px;
+				/* border: 1px solid var(--vscode-border); */
+				/* border-radius: 2px; */
+				overflow: hidden;
+				margin-top: 6px;
+				margin-bottom: 8px;
 			}
-
-			.dpi-option {
-				padding: 7px;
-				background-color: var(--box-bg); /* 变量 */
-				color: var(--text-primary); /* 变量 */
-				border: 1px solid var(--input-border); /* 变量 */
-				border-radius: 4px;
+			.unit-option, .layer-option {
+				flex: 1;
+				padding: 4px 0;
+				background-color: var(--vscode-input-bg);
+				color: var(--vscode-text-muted);
+				font-size: 12px;
 				text-align: center;
 				cursor: pointer;
-				transition: all 0.2s;
+				border-right: 1px solid var(--vscode-border);
+				margin-bottom: 10px;
+			}
+			.unit-option:last-child, .layer-option:last-child {
+				border-right: none;
+			}
+			.unit-option.active, .layer-option.active {
+				background-color: var(--vscode-blue);
+				color: #ffffff;
 			}
 
-			.dpi-option:hover {
-				background-color: var(--box-hover-bg); /* 变量 */
-				border-color: var(--primary-color);
+			/* DPI 区域 */
+			.dpi-section {
+				width: 150px;
 			}
-
-			.dpi-option.active {
-				background-color: var(--primary-color);
-				color: white;
-				border-color: var(--primary-hover);
-			}
-
 			.custom-dpi {
+				margin-top: 8px;
+			}
+			.custom-dpi .input-field {
+				width: 100%;
+			}
+			
+			.dpi-control-wrapper {
+				display: flex;
+				gap: 12px;
+				align-items: stretch;
+				height: 130px;
+			}
+			
+			.dpi-values-list {
+				display: flex;
+				flex-direction: column;
+				justify-content: space-between;
+				flex: 1;
+			}
+
+			.dpi-value-item {
+				font-size: 12px;
+				color: var(--vscode-text-muted);
+				cursor: pointer;
+				font-family: Consolas, "Courier New", monospace;
+				padding: 2px 4px;
+				border-radius: 2px;
+				border: 1px solid transparent;
+			}
+			.dpi-value-item:hover {
+				background-color: var(--vscode-list-hover);
+			}
+			.dpi-value-item.active {
+				color: #4ec9b0; /* VSCode 类型高亮青色 */
+				background-color: rgba(78, 201, 176, 0.1);
+				border-color: rgba(78, 201, 176, 0.3);
+			}
+
+			/* 垂直滑块 */
+			.slider-container {
+				display: flex;
+				justify-content: center;
+				align-items: center;
+			}
+			.vertical-slider {
+				-webkit-appearance: slider-vertical;
+				width: 6px;
+				height: 100%;
+				background: var(--vscode-input-bg);
+				border-radius: 3px;
+				outline: none;
+			}
+			.vertical-slider::-webkit-slider-thumb {
+				-webkit-appearance: none;
+				width: 14px;
+				height: 14px;
+				background: var(--vscode-blue);
+				border-radius: 2px;
+				cursor: pointer;
+			}
+
+			/* 预览区 */
+			.preview-box {
+				flex: 1;
+				border: 1px dashed var(--vscode-border);
+				border-radius: 2px;
+				display: flex;
+				justify-content: center;
+				align-items: center;
+				overflow: hidden;
+				background-color: var(--vscode-bg);
+				transition: border 0.2s;
+			}
+			.preview-box:hover {
+				border-color: var(--vscode-focus-border);
+			}
+			.preview-box img {
+				max-width: 100%;
+				max-height: 100%;
+				object-fit: contain;
+			}
+			.preview-placeholder {
+				text-align: center;
+				color: var(--vscode-text-muted);
+				font-size: 13px;
+			}
+			.preview-placeholder .icon {
+				width: 32px;
+				height: 32px;
+				margin-bottom: 8px;
+			}
+
+			/* 网格预览 */
+			.grid-preview {
+				width: 100%;
+				height: 100%;
+				display: grid;
+				gap: 4px;
+				background-color: var(--vscode-bg);
+				padding: 8px;
+				overflow: auto;
+				align-content: start;
+			}
+			.grid-item {
+				background-color: var(--vscode-input-bg);
+				border-radius: 2px;
+				border: 1px solid transparent;
 				display: flex;
 				align-items: center;
-				margin-top: 10px;
+				justify-content: center;
+				aspect-ratio: 1 / 1;
+			}
+			.grid-item img {
+				width: 100%;
+				height: 100%;
+				object-fit: fill;
 			}
 
-			.custom-dpi label {
-				width: 50px;
-				font-size: 14px;
-				color: var(--text-label); /* 变量 */
-			}
-
-			.info-text {
-				margin-top: auto;
-				padding: 15px;
-				background-color: var(--box-bg); /* 变量 */
-				border-radius: 6px;
-				font-size: 14px;
-				color: var(--text-secondary); /* 变量 */
-				line-height: 1.5;
-			}
-
-			.info-text strong {
-				color: var(--text-primary); /* 变量 */
-			}
-
+			/* SVG 图标：提亮为淡灰色 (#cccccc) 并移除了滤镜倒置 */
 			.icon {
 				display: inline-block;
-				width: 20px;
-				height: 20px;
+				width: 14px;
+				height: 14px;
 				background-size: contain;
 				background-repeat: no-repeat;
 			}
-
-			/* 特别处理：左上角的 "图像预览" 图标原本是深色的，在暗色背景下看不清。
-			使用 CSS filter 在暗色模式下将其反转为亮色。
-			*/
-			.icon-image {
-				background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="%23333"><path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z"/></svg>');
-				filter: var(--icon-filter); 
-			}
-
-			.icon-upload {
-				background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="white"><path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM14 13v4h-4v-4H7l5-5 5 5h-3z"/></svg>');
-			}
-
 			.icon-export {
-				background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="white"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>');
+				background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="%23cccccc"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>');
 			}
+			.icon-image {
+				background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="%23cccccc"><path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z"/></svg>');
+			}
+			.icon-upload{
+				background-image:url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="white"><path d="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM14 13v4h-4v-4H7l5-5 5 5h-3z"/></svg>')
+			}
+			
+
+			/* 说明文本 */
+			.info-text {
+				margin-top: auto;
+				font-size: 12px;
+				color: var(--vscode-text-muted);
+				line-height: 1.6;
+				padding: 10px;
+				background-color: var(--vscode-bg);
+				border: 1px solid var(--vscode-border);
+				border-radius: 2px;
+			}
+			.info-text strong {
+				color: var(--vscode-text-main);
+			}
+
+			/* 滚动条 */
+			::-webkit-scrollbar { width: 10px; height: 10px; }
+			::-webkit-scrollbar-track { background: transparent; }
+			::-webkit-scrollbar-thumb { background: #424242; border: 1px solid var(--vscode-panel); }
+			::-webkit-scrollbar-thumb:hover { background: #4f4f4f; }
 		</style>
 	</head>
 	<body>
 		<div class="container">
-			<!-- 左侧图像预览区域 -->
 			<div class="preview-section">
 				<div class="preview-title">
-					<i class="icon icon-image"></i>
-					图像预览
+					<i class="icon icon-image"></i>图像预览
 				</div>
 				<div class="preview-box" id="previewBox">
 					<div class="preview-placeholder">
 						<i class="icon icon-image"></i>
 						<p>请选择图像文件</p>
 					</div>
-					<img id="previewImage" alt="预览图像" />
+					<img id="previewImage" alt="预览图像" style="display: none;" />
+					<div id="gridPreview" class="grid-preview" style="display: none;"></div>
 				</div>
 			</div>
-			<!-- 右侧功能区域 -->
 			<div class="control-section">
-				<div class="button-group">
-					<button class="btn btn-primary" id="selectImageBtn">
-						<i class="icon icon-upload"></i>
-						选择/更换图像
-					</button>
-				</div>
-				<div class="button-group">
-					<button class="btn btn-secondary" id="placeImageBtn" disabled>
-						<i class="icon icon-export"></i>
-						放置到画布上
-					</button>
-				</div>
 				<div class="input-group">
 					<div class="input-column">
+						<button class="btn btn-primary" id="selectImageBtn">
+							<i class="icon icon-upload"></i>
+							选择/更换图像
+						</button>
 						<div class="section-title">图像尺寸设置</div>
 						<div class="unit-selector">
 							<div class="unit-option" data-unit="mm">mm</div>
 							<div class="unit-option active" data-unit="mil">mil</div>
 						</div>
-						<br />
+						<!-- <br /> -->
 						<div class="input-row">
 							<label>宽度:</label>
 							<input type="number" class="input-field" id="widthInput" min="0" step="0.1" />
@@ -420,22 +413,35 @@
 							<input type="checkbox" class="checkbox" id="aspectRatioCheckbox" checked />
 							<label for="aspectRatioCheckbox">保持横纵比</label>
 						</div>
+						<div class="aspect-ratio">
+							<input type="checkbox" class="checkbox" id="sliceimport" />
+							<label for="sliceimport">启用切片导入</label>
+						</div>
 					</div>
-					<div class="input-column">
+					<div class="dpi-section">
+						<button class="btn btn-secondary" id="placeImageBtn" disabled>
+							<i class="icon icon-export"></i>
+							放置到画布上
+						</button>
 						<div class="section-title">DPI快速选择</div>
-						<div class="dpi-options">
-							<div class="dpi-option" data-dpi="300">300 DPI</div>
-							<div class="dpi-option" data-dpi="600">600 DPI</div>
-							<div class="dpi-option" data-dpi="1200">1200 DPI</div>
-							<div class="dpi-option" data-dpi="2400">2400 DPI</div>
+						<div class="dpi-control-wrapper">
+							<div class="slider-container">
+								<input type="range" id="dpiSlider" class="vertical-slider" min="0" max="5" step="1" value="2">
+							</div>
+							<div class="dpi-values-list" id="dpiValuesList">
+								<div class="dpi-value-item" data-dpi="300">300 DPI</div>
+								<div class="dpi-value-item" data-dpi="600">600 DPI</div>
+								<div class="dpi-value-item" data-dpi="900">900 DPI</div>
+								<div class="dpi-value-item" data-dpi="1200">1200 DPI</div>
+								<div class="dpi-value-item" data-dpi="2400">2400 DPI</div>
+								<div class="dpi-value-item" data-dpi="4800">4800 DPI</div>
+							</div>
 						</div>
 						<div class="custom-dpi">
-							<label>自定义</label>
-							<input type="number" class="input-field" id="customDpiInput" min="1" placeholder="DPI值" />
+							<input type="number" class="input-field" id="customDpiInput" min="1" placeholder="自定义 DPI 值" />
 						</div>
 					</div>
 				</div>
-				<!-- 在 .input-group 后新增一个独立区块 -->
 				<div class="input-column">
 					<div class="section-title">放置图层</div>
 					<div class="layer-selector">
@@ -447,71 +453,759 @@
 				</div>
 				<div class="info-text">
 					<strong>使用说明：</strong><br />
-					1. 仅支持PNG/JPG/BMP格式<br />
-					2. 图像分辨率不能超过16384px<br />
-					3. 放置大图会卡，属于正常现象
+					1. 支持多选图片一次性导入，仅支持PNG/JPG/BMP格式<br />
+					2. 图像分辨率较大 或 超过16384px，建议使用切片导入<br />
+					3. 导入图片会占用大量显存，显存不够可能会无法打开
 				</div>
 			</div>
 		</div>
 		<script>
-			// DOM元素
-			const previewBox = document.getElementById('previewBox');
-			const previewImage = document.getElementById('previewImage');
-			const selectImageBtn = document.getElementById('selectImageBtn');
-			const placeImageBtn = document.getElementById('placeImageBtn');
+			// ======================== 配置常量 ========================
+			const CONFIG = {
+				TILE_SIZE: 1800,                // 切片像素尺寸（正方形）
+				JPEG_QUALITY: 0.8,              // JPEG 压缩质量 (0-1)
+				DPI_PRESETS: [300, 600, 900, 1200, 2400, 4800],
+				MM_TO_MIL: 39.37007874015748,
+				MIL_TO_MM: 0.0254,
+				MOUSE_FOLLOW_INTERVAL_MS: 50    // 鼠标跟随刷新间隔(ms)
+			};
+
+			// ======================== DOM 元素引用 ========================
+			const dpiSlider = document.getElementById('dpiSlider');
 			const widthInput = document.getElementById('widthInput');
 			const heightInput = document.getElementById('heightInput');
-			const aspectRatioCheckbox = document.getElementById('aspectRatioCheckbox');
 			const unitOptions = document.querySelectorAll('.unit-option');
+			const placeImageBtn = document.getElementById('placeImageBtn');
 			const layerOptions = document.querySelectorAll('.layer-option');
-			const dpiOptions = document.querySelectorAll('.dpi-option');
+			const selectImageBtn = document.getElementById('selectImageBtn');
 			const customDpiInput = document.getElementById('customDpiInput');
+			const dpiValueItems = document.querySelectorAll('.dpi-value-item');
+			const sliceimportCheckbox = document.getElementById('sliceimport');
+			const aspectRatioCheckbox = document.getElementById('aspectRatioCheckbox');
 
-			// 全局变量
-			let currentUnit = 'mil'; //默认单位
-			let currentDpi = 1200; //默认DPI
-			let currentLayer = 'DOC'; // 默认图层
-			let originalAspectRatio = 1;
-			let currentImage = null;
-			let base64img = null;
-			let followInterval = null;
+
+			// ======================== 全局变量 ========================
+			// 单位与尺寸
+			let currentUnit = 'mil';            // 当前单位 'mm' 或 'mil'
+			let currentDpi = 1200;              // 当前DPI值
+			let currentLayer = 'DOC';           // 当前图层 'TS','BS','DOC'
+			let originalAspectRatio = 1;        // 当前图片宽高比
+			let originalImageWidth = 0;			// 当前图片原始宽
+			let originalImageHeight = 0; 		// 当前图片原始高
+			
+			// 图片数据
+			let currentImage = null;             // 当前用于尺寸计算的图片File对象
+			let imagesArray = [];                // 所有选中的File对象
+			let objectUrls = [];                 // 网格预览用的objectURLs，用于释放内存
+			
+			// 放置流程控制
+			let isPlacingActive = false;          // 是否正在放置过程中
+			let isProcessing = false;             // 是否正在处理图片（防止重复点击）
+			let currentPlacedId = null;           // 当前正在跟随鼠标的图元ID
+			let followInterval = null;            // 鼠标跟随定时器ID
+			let lastPlacedX = 0;				  // 记录最后放置的X坐标（mil）
+			let lastPlacedY = 0; 				  // 记录最后放置的Y坐标（mil）
+			
+			// 切片相关
+			let isSliceEnabled = false;            // 切片开关状态
+			let createdPrimitives = [];            // 存储已创建的图元 { primitiveId, imgIndex }
+			
+			// DPI计算防递归标志
 			let isCalculatingFromDpi = false;
+			// 窗口状态标志（未使用，保留原逻辑）
 			let status = false;
+			let specialLayoutMap = null;      // 存储每个文件索引对应的列和行号
+			let useSpecialLayout = false;     // 是否启用特殊布局
 
-			// 单位转换因子 (1 inch = 25.4 mm = 1000 mil)
-			const mmToInch = 1 / 25.4;
-			const milToInch = 1 / 1000;
+			// ======================== 辅助函数 ========================
+			
+			/** 显示消息提示 */
+			function showMessage(msg, type = "info") {
+				eda.sys_Message.showToastMessage(msg, type);
+			}
 
-			// 事件监听器
-			selectImageBtn.addEventListener('click', handleImageSelect);
-			placeImageBtn.addEventListener('click', handlePlaceImage);
-			aspectRatioCheckbox.addEventListener('change', toggleAspectRatio);
+			/** 计算网格大小（用于预览和自动布局） */
+			function getGridSize(count) {
+				return Math.ceil(Math.sqrt(count));
+			}
+
+			/** 释放所有预览用的 ObjectURL，防止内存泄漏 */
+			function revokeAllObjectUrls() {
+				objectUrls.forEach(url => URL.revokeObjectURL(url));
+				objectUrls = [];
+			}
+
+			/** 渲染图片网格预览 */
+			function renderGrid(files, twoColumns = false) {
+				const gridContainer = document.getElementById('gridPreview');
+				gridContainer.innerHTML = '';
+				if (!files.length) {
+					gridContainer.style.display = 'none';
+					return;
+				}
+				const count = files.length;
+				gridContainer.style.display = 'grid';
+				if (twoColumns) {
+					gridContainer.style.gridTemplateColumns = `repeat(2, minmax(0, 1fr))`;
+				} else {
+					const gridSize = getGridSize(count);
+					gridContainer.style.gridTemplateColumns = `repeat(${gridSize}, minmax(0, 1fr))`;
+				}
+				files.forEach((file) => {
+					const url = URL.createObjectURL(file);
+					objectUrls.push(url);
+					const itemDiv = document.createElement('div');
+					itemDiv.className = 'grid-item';
+					const img = document.createElement('img');
+					img.src = url;
+					img.alt = file.name;
+					img.onerror = () => console.error(`图片加载失败: ${file.name}`);
+					itemDiv.appendChild(img);
+					gridContainer.appendChild(itemDiv);
+				});
+			}
+
+			/** 更新所有预览网格项的宽高比（使用当前图片比例） */
+			function updateGridItemAspectRatio(aspectRatio) {
+				const gridItems = document.querySelectorAll('.grid-item');
+				gridItems.forEach(item => {
+					item.style.aspectRatio = aspectRatio;
+				});
+			}
+
+			/** 加载图片到编辑区，用于尺寸计算和DPI同步 */
+			function loadImageToCurrent(file) {
+				if (!file) return;
+				currentImage = file;
+				const img = new Image();
+				const url = URL.createObjectURL(file);
+				img.onload = function () {
+					URL.revokeObjectURL(url);
+					originalImageWidth = img.width;
+					originalImageHeight = img.height;
+					originalAspectRatio = originalImageWidth / originalImageHeight;
+					updateGridItemAspectRatio(originalAspectRatio);
+					
+					const dpi = currentDpi || 1200;
+					const widthInch = originalImageWidth / dpi;
+					const heightInch = originalImageHeight / dpi;
+					if (currentUnit === 'mm') {
+						widthInput.value = (widthInch * 25.4).toFixed(2);
+						heightInput.value = (heightInch * 25.4).toFixed(2);
+					} else {
+						widthInput.value = (widthInch * 1000).toFixed(2);
+						heightInput.value = (heightInch * 1000).toFixed(2);
+					}
+					customDpiInput.value = dpi;
+					currentDpi = dpi;
+					syncDpiUi(dpi);
+					if (aspectRatioCheckbox.checked) {
+						const width = parseFloat(widthInput.value);
+						if (!isNaN(width)) {
+							const height = width / originalAspectRatio;
+							heightInput.value = height.toFixed(2);
+						}
+					}
+					placeImageBtn.disabled = false;
+				};
+				img.onerror = () => {
+					URL.revokeObjectURL(url);
+					console.error('无法加载图片获取尺寸');
+				};
+				img.src = url;
+			}
+
+			/** 根据当前宽高和图片原始像素计算DPI（保持横纵比开启时调用） */
+			function calculateDpi() {
+				if (!aspectRatioCheckbox.checked) return;
+				if (!currentImage || !widthInput.value || !heightInput.value) return;
+				const img = new Image();
+				img.onload = function () {
+					const width = parseFloat(widthInput.value);
+					const height = parseFloat(heightInput.value);
+					let widthInch, heightInch;
+					if (currentUnit === 'mm') {
+						widthInch = width * (1 / 25.4);
+						heightInch = height * (1 / 25.4);
+					} else {
+						widthInch = width * (1 / 1000);
+						heightInch = height * (1 / 1000);
+					}
+					const dpiX = Math.round(img.width / widthInch);
+					const dpiY = Math.round(img.height / heightInch);
+					const avgDpi = Math.round((dpiX + dpiY) / 2);
+					customDpiInput.value = avgDpi;
+					currentDpi = avgDpi;
+					syncDpiUi(avgDpi);
+				};
+				img.src = URL.createObjectURL(currentImage);
+			}
+
+			/** 根据DPI计算并更新宽度/高度输入框的值 */
+			function calculateDimensionsFromDpi() {
+				if (!currentImage || !currentDpi) return;
+				isCalculatingFromDpi = true;
+				const img = new Image();
+				img.onload = function () {
+					const widthInch = img.width / currentDpi;
+					const heightInch = img.height / currentDpi;
+					if (currentUnit === 'mm') {
+						widthInput.value = (widthInch * 25.4).toFixed(2);
+						heightInput.value = (heightInch * 25.4).toFixed(2);
+					} else {
+						widthInput.value = (widthInch * 1000).toFixed(2);
+						heightInput.value = (heightInch * 1000).toFixed(2);
+					}
+					isCalculatingFromDpi = false;
+					if (currentDpi) syncDpiUi(currentDpi);
+				};
+				img.src = URL.createObjectURL(currentImage);
+			}
+
+			/** 同步DPI控件（滑块高亮、自定义输入框） */
+			function syncDpiUi(dpiValue) {
+				const index = CONFIG.DPI_PRESETS.indexOf(dpiValue);
+				if (index !== -1) {
+					const sliderValue = 5 - index;  // 滑块最大值5，最小值0
+					dpiSlider.value = sliderValue;
+					dpiValueItems.forEach((item, i) => {
+						if (i === index) item.classList.add('active');
+						else item.classList.remove('active');
+					});
+				} else {
+					dpiValueItems.forEach(item => item.classList.remove('active'));
+				}
+				customDpiInput.value = dpiValue;
+			}
+
+			/** 设置DPI并重新计算尺寸 */
+			function setCurrentDpiAndRecalc(dpi) {
+				if (!currentImage || !aspectRatioCheckbox.checked) return;
+				currentDpi = dpi;
+				syncDpiUi(currentDpi);
+				calculateDimensionsFromDpi();
+			}
+
+			/** 将File对象转为Base64字符串 */
+			function convertToBase64(file) {
+				return new Promise((resolve, reject) => {
+					const reader = new FileReader();
+					reader.onload = () => resolve(reader.result);
+					reader.onerror = error => reject(error);
+					reader.readAsDataURL(file);
+				});
+			}
+
+			/** 获取当前图层对应的PCB图层ID */
+			function getCurrentLayerId() {
+				switch (currentLayer) {
+					case 'TS': return EPCB_LayerId.TOP_SILKSCREEN;
+					case 'BS': return EPCB_LayerId.BOTTOM_SILKSCREEN;
+					default: return EPCB_LayerId.DOCUMENT;
+				}
+			}
+
+			/** 获取当前放置尺寸（mil单位） */
+			function getCurrentPlaceSize() {
+				let width = parseFloat(widthInput.value);
+				let height = parseFloat(heightInput.value);
+				if (isNaN(width)) width = 0;
+				if (isNaN(height)) height = 0;
+				if (currentUnit === 'mm') {
+					width = width * CONFIG.MM_TO_MIL;
+					height = height * CONFIG.MM_TO_MIL;
+				}
+				return { width, height };
+			}
+
+			/** 停止鼠标跟随定时器 */
+			function stopFollowing() {
+				if (followInterval) {
+					clearInterval(followInterval);
+					followInterval = null;
+				}
+			}
+
+			// ======================== 切片核心函数 ========================
+			
+			/**
+			 * 从原图中裁剪一块区域，转为 JPEG base64
+			 * @param {HTMLImageElement} img - 原图对象
+			 * @param {number} sx - 起始X（像素）
+			 * @param {number} sy - 起始Y（像素）
+			 * @param {number} sw - 宽度（像素）
+			 * @param {number} sh - 高度（像素）
+			 * @returns {Promise<string>} base64 数据
+			 */
+			function cropImageToBase64(img, sx, sy, sw, sh) {
+				return new Promise((resolve, reject) => {
+					const canvas = document.createElement('canvas');
+					canvas.width = sw;
+					canvas.height = sh;
+					const ctx = canvas.getContext('2d');
+					ctx.drawImage(img, sx, sy, sw, sh, 0, 0, sw, sh);
+					canvas.toBlob(blob => {
+						const reader = new FileReader();
+						reader.onloadend = () => resolve(reader.result);
+						reader.onerror = reject;
+						reader.readAsDataURL(blob);
+					}, 'image/jpeg', CONFIG.JPEG_QUALITY);
+				});
+			}
+
+			/**
+			 * 对单张图片生成 tiles（切片或整图）
+			 * @param {File} file - 图片文件
+			 * @param {number} pcbWidth - 用户在PCB上设置的宽度（mil）
+			 * @param {number} pcbHeight - 用户在PCB上设置的高度（mil）
+			 * @returns {Promise<Array>} tiles数组，每个元素包含 { base64, relX, relY, width, height }
+			 */
+			async function generateTilesForFile(file, pcbWidth, pcbHeight) {
+				// 加载原图
+				const img = await new Promise((resolve, reject) => {
+					const image = new Image();
+					image.onload = () => resolve(image);
+					image.onerror = reject;
+					image.src = URL.createObjectURL(file);
+				});
+				const pxWidth = img.width;
+				const pxHeight = img.height;
+				
+				if (!isSliceEnabled) {
+					// 不切片：整张图作为一个 tile
+					const base64 = await convertToBase64(file);
+					URL.revokeObjectURL(img.src);
+					return [{
+						base64: base64,
+						relX: 0,
+						relY: 0,
+						width: pcbWidth,
+						height: pcbHeight
+					}];
+				}
+				
+				// 切片模式：计算行列数，并行生成所有 tiles
+				const cols = Math.ceil(pxWidth / CONFIG.TILE_SIZE);
+				const rows = Math.ceil(pxHeight / CONFIG.TILE_SIZE);
+				const tilePromises = [];
+				
+				for (let row = 0; row < rows; row++) {
+					for (let col = 0; col < cols; col++) {
+						const sx = col * CONFIG.TILE_SIZE;
+						const sy = row * CONFIG.TILE_SIZE;
+						const sw = Math.min(CONFIG.TILE_SIZE, pxWidth - sx);
+						const sh = Math.min(CONFIG.TILE_SIZE, pxHeight - sy);
+						tilePromises.push(
+							cropImageToBase64(img, sx, sy, sw, sh).then(base64 => ({
+								base64,
+								relX: (sx / pxWidth) * pcbWidth,
+								relY: (sy / pxHeight) * pcbHeight,
+								width: (sw / pxWidth) * pcbWidth,
+								height: (sh / pxHeight) * pcbHeight
+							}))
+						);
+					}
+				}
+				
+				const tiles = await Promise.all(tilePromises);
+				URL.revokeObjectURL(img.src);
+				return tiles;
+			}
+
+			/**
+			 * 预处理所有图片，生成完整的 tiles 列表
+			 * @param {Array} files - 图片文件数组
+			 * @param {number} pcbWidth - 统一PCB宽度（mil）
+			 * @param {number} pcbHeight - 统一PCB高度（mil）
+			 * @returns {Promise<Object>} { tilesList, totalImages }
+			 */
+			async function prepareAllTiles(files, pcbWidth, pcbHeight) {
+				const allTiles = [];
+				for (let idx = 0; idx < files.length; idx++) {
+					const file = files[idx];
+					// 如果 file 有 originalIndex 属性则使用它，否则使用 idx
+					const originalIdx = file.originalIndex !== undefined ? file.originalIndex : idx;
+					const tiles = await generateTilesForFile(file, pcbWidth, pcbHeight);
+					tiles.forEach(tile => {
+						allTiles.push({
+							...tile,
+							imgIndex: originalIdx
+						});
+					});
+				}
+				return { tilesList: allTiles, totalImages: files.length };
+			}
+
+			// ======================== PCB 放置相关函数 ========================
+			
+			/**
+			 * 放置单个 tile（跟随鼠标）
+			 * @param {Object} tile - { base64, relX, relY, width, height, imgIndex }
+			 * @param {number} imgIndex - 所属原图索引
+			 */
+			async function startPlaceTile(tile, imgIndex) {
+				try {
+					const layerId = getCurrentLayerId();
+					const colorObj = await eda.pcb_PrimitiveObject.create(
+						layerId, 0, 0, tile.base64,
+						tile.width.toFixed(2), tile.height.toFixed(2), 0, false, 'img', false
+					);
+					const primitiveId = colorObj.getState_PrimitiveId();
+					currentPlacedId = primitiveId;
+					
+					// 记录图元信息（用于后续组合）
+					createdPrimitives.push({ primitiveId: primitiveId, imgIndex: imgIndex });
+					
+					stopFollowing();
+					// 启动鼠标跟随，每隔固定时间更新图元位置
+					followInterval = setInterval(async () => {
+						try {
+							const currentPoint = await eda.pcb_SelectControl.getCurrentMousePosition();
+							await eda.pcb_PrimitiveObject.modify(currentPlacedId, {
+								topLeftX: currentPoint.x,
+								topLeftY: currentPoint.y,
+							});
+							lastPlacedX = currentPoint.x;
+							lastPlacedY = currentPoint.y;
+						} catch (error) {
+							console.error('更新 tile 位置失败:', error);
+							stopFollowing();
+						}
+					}, CONFIG.MOUSE_FOLLOW_INTERVAL_MS);
+					return true;
+				} catch (err) {
+					console.error('放置 tile 失败:', err);
+					showMessage('放置失败，请重试', "error");
+					return false;
+				}
+			}
+
+			/** 完成当前图片放置，并自动放置剩余所有 tile */
+			async function finishCurrentPlaceAndContinue() {
+				stopFollowing();
+				if (!currentPlacedId) {
+					cleanUpAndClose();
+					return;
+				}
+
+				const firstTile = window.pendingTiles[0];
+				const mouseX = lastPlacedX;
+				const mouseY = lastPlacedY;
+
+				// 计算第一张原图左上角在 PCB 上的坐标（Y轴翻转适配 PCB 坐标系）
+				const originX = mouseX - firstTile.relX;
+				const originY = mouseY + firstTile.relY;
+
+				const totalImages = window.totalImagesCount;
+				const { width: imgWidth, height: imgHeight } = getCurrentPlaceSize();
+				let originCoords = [];
+
+				if (useSpecialLayout && specialLayoutMap) {
+					// 特殊布局：根据映射计算每张图片的原点坐标
+					const indexToCoord = new Array(totalImages);
+					for (let i = 0; i < totalImages; i++) {
+						const pos = specialLayoutMap.get(i);
+						if (pos) {
+							const x = originX + (pos.col === 'right' ? imgWidth : 0);
+							const y = originY - pos.row * imgHeight;
+							indexToCoord[i] = { x, y };
+						} else {
+							// 理论上不会发生，若发生则放在原点
+							indexToCoord[i] = { x: originX, y: originY };
+						}
+					}
+					originCoords = indexToCoord;
+				} else {
+					// 原网格布局（正方形网格，间距取长边）
+					const gridSize = Math.ceil(Math.sqrt(totalImages));
+					const side = Math.max(imgWidth, imgHeight);
+					for (let idx = 0; idx < totalImages; idx++) {
+						const row = Math.floor(idx / gridSize);
+						const col = idx % gridSize;
+						const x = originX + col * side;
+						const y = originY - row * side;
+						originCoords.push({ x, y });
+					}
+				}
+
+				// 批量创建剩余的所有 tile（跳过第一个）
+				const layerId = getCurrentLayerId();
+				for (let i = 1; i < window.pendingTiles.length; i++) {
+					const tile = window.pendingTiles[i];
+					const imgOrigin = originCoords[tile.imgIndex];
+					const absX = imgOrigin.x + tile.relX;
+					const absY = imgOrigin.y - tile.relY;
+					try {
+						const colorObj = await eda.pcb_PrimitiveObject.create(
+							layerId, absX, absY, tile.base64,
+							tile.width.toFixed(2), tile.height.toFixed(2), 0, false, 'img', false
+						);
+						const primitiveId = colorObj.getState_PrimitiveId();
+						createdPrimitives.push({ primitiveId: primitiveId, imgIndex: tile.imgIndex });
+					} catch (err) {
+						console.error(`创建 tile 失败 (imgIndex=${tile.imgIndex}):`, err);
+					}
+				}
+
+				cleanUpAndClose();
+			}
+						/** 清理资源并关闭插件窗口 */
+			function cleanUpAndClose() {
+				currentPlacedId = null;
+				isPlacingActive = false;
+				window.pendingTiles = null;
+				window.totalImagesCount = 0;
+				createdPrimitives = [];
+				specialLayoutMap = null;      // 新增
+				useSpecialLayout = false;     // 新增
+				enableUiAfterPlace(true);
+				eda.sys_IFrame.closeIFrame('ImportImage');
+			}
+
+			/** 启用/禁用放置过程中的UI控件 */
+			function enableUiAfterPlace(enable) {
+				// selectImageBtn.disabled = !enable;
+				// placeImageBtn.disabled = !enable;
+				if (enable && imagesArray.length === 0) {
+					placeImageBtn.disabled = true;
+				}
+			}
+
+			// ======================== 主入口：开始放置 ========================
+			
+			async function handlePlaceImage() {
+				// 防止重复点击或处理中
+				if (isPlacingActive) {
+					showMessage('正在放置中，请先完成当前操作', "warn");
+					return;
+				}
+				if (isProcessing) {
+					showMessage('正在处理图片，请稍候...', "warn");
+					return;
+				}
+				if (!imagesArray.length) {
+					showMessage('请先选择图片', "error");
+					return;
+				}
+				const { width, height } = getCurrentPlaceSize();
+				if (width <= 0 || height <= 0) {
+					showMessage('请输入有效的宽度和高度', "error");
+					return;
+				}
+				
+				// 读取切片开关状态
+				isSliceEnabled = sliceimportCheckbox.checked;
+				isProcessing = true;
+				showMessage('正在处理图片，请稍候...', "info");
+				
+				let tilesData;
+				try {
+					tilesData = await prepareAllTiles(imagesArray, width, height);
+				} catch (err) {
+					console.error('图片处理失败:', err);
+					showMessage('图片处理失败，请重试', "error");
+					isProcessing = false;
+					return;
+				}
+				
+				// 保存到全局变量供放置流程使用
+				window.pendingTiles = tilesData.tilesList;
+				window.totalImagesCount = tilesData.totalImages;
+				
+				isPlacingActive = true;
+				enableUiAfterPlace(false);
+				isProcessing = false;
+				eda.sys_IFrame.hideIFrame('ImportImage');  // 隐藏插件窗口，等待用户点击画布
+				
+				// 开始放置第一个 tile
+				const firstTile = window.pendingTiles[0];
+				await startPlaceTile(firstTile, firstTile.imgIndex);
+			}
+
+			// ======================== 选择图片 ========================
+			async function handleImageSelect() {
+				if (isPlacingActive) {
+					showMessage('请先完成当前图片放置', "warn");
+					return;
+				}
+				createdPrimitives = [];
+				stopFollowing();
+				try {
+					const files = await new Promise((resolve) => {
+						const input = document.createElement('input');
+						input.type = 'file';
+						input.multiple = true;
+						input.accept = '.png,.jpg,.jpeg,.bmp';
+						input.onchange = () => resolve(Array.from(input.files));
+						input.click();
+					});
+					if (!files.length) return;
+
+					const validTypes = ['image/png', 'image/jpeg', 'image/bmp'];
+					const invalidFiles = files.filter(f => !validTypes.includes(f.type.toLowerCase()));
+					if (invalidFiles.length) {
+						showMessage('仅支持 PNG、JPG、JPEG、BMP 格式', "error");
+						return;
+					}
+
+					revokeAllObjectUrls();
+
+					// ---------- 增强版文件名解析与别名处理 ----------
+					const pattern = /^(T|B|L)(\d+|S).*\.(png|jpg|jpeg|bmp)$/i;
+					const aliasPattern = /^(TOP|BOT).*\.(png|jpg|jpeg|bmp)$/i;
+
+					// 第一步：解析所有文件，收集信息
+					const parsed = files.map((file, idx) => {
+						const name = file.name;
+						let match = name.match(pattern);
+						if (match) {
+							const prefix = match[1].toUpperCase();
+							const suffix = match[2].toUpperCase();
+							return { idx, type: 'normal', prefix, suffix, valid: true };
+						}
+						match = name.match(aliasPattern);
+						if (match) {
+							const alias = match[1].toUpperCase(); // TOP 或 BOT
+							return { idx, type: 'alias', alias, valid: true };
+						}
+						return { idx, valid: false };
+					});
+
+					const allValid = parsed.every(p => p.valid);
+					let layoutMap = null;
+					let canUseSpecial = false;
+					let orderedFiles = files; // 默认保持原顺序
+
+					if (allValid) {
+						// 收集所有 L 数字，用于计算 BOT 对应的最大 L 编号
+						const lNumbers = parsed
+							.filter(p => p.type === 'normal' && p.prefix === 'L' && p.suffix !== 'S')
+							.map(p => parseInt(p.suffix, 10))
+							.filter(num => !isNaN(num));
+						const maxL = lNumbers.length > 0 ? Math.max(...lNumbers) : 1;
+
+						// 第二步：将别名转换为等效的 normal 条目
+						const tempItems = parsed.map(p => {
+							if (p.type === 'normal') {
+								return { idx: p.idx, prefix: p.prefix, suffix: p.suffix };
+							} else {
+								if (p.alias === 'TOP') {
+									return { idx: p.idx, prefix: 'L', suffix: '1' };
+								} else {
+									return { idx: p.idx, prefix: 'L', suffix: String(maxL) };
+								}
+							}
+						});
+
+						// 分组
+						const tGroup = tempItems.filter(p => p.prefix === 'T' && p.suffix !== 'S');
+						const bGroup = tempItems.filter(p => p.prefix === 'B' && p.suffix !== 'S');
+						const lGroup = tempItems.filter(p => p.prefix === 'L');
+						const tsFile = tempItems.find(p => p.prefix === 'T' && p.suffix === 'S');
+						const bsFile = tempItems.find(p => p.prefix === 'B' && p.suffix === 'S');
+
+						// 排序：T、B 降序，L 升序
+						tGroup.sort((a, b) => parseInt(b.suffix) - parseInt(a.suffix));
+						bGroup.sort((a, b) => parseInt(b.suffix) - parseInt(a.suffix));
+						lGroup.sort((a, b) => parseInt(a.suffix) - parseInt(b.suffix));
+
+						const lCount = lGroup.length;
+						const lValid = (lCount === 0) || (lCount >= 2 && lCount % 2 === 0);
+
+						if (lValid) {
+							// 构建左右列顺序（从上到下）
+							const leftOrder = [...tGroup];
+							if (tsFile) leftOrder.push(tsFile);
+							let leftL = [], rightL = [];
+							if (lCount > 0) {
+								const half = lCount / 2;
+								leftL = lGroup.slice(0, half);
+								rightL = lGroup.slice(half).reverse(); // 右列 L 降序
+							}
+							leftOrder.push(...leftL);
+
+							const rightOrder = [...bGroup];
+							if (bsFile) rightOrder.push(bsFile);
+							rightOrder.push(...rightL);
+
+							// 按行优先顺序构建有序文件数组（用于预览网格）
+							const maxRows = Math.max(leftOrder.length, rightOrder.length);
+							const newOrderedFiles = [];
+							const newMap = new Map();
+
+							for (let row = 0; row < maxRows; row++) {
+								// 左列
+								if (row < leftOrder.length) {
+									const item = leftOrder[row];
+									const file = files[item.idx];
+									const newIdx = newOrderedFiles.length;
+									newOrderedFiles.push(file);
+									newMap.set(newIdx, { col: 'left', row });
+								}
+								// 右列
+								if (row < rightOrder.length) {
+									const item = rightOrder[row];
+									const file = files[item.idx];
+									const newIdx = newOrderedFiles.length;
+									newOrderedFiles.push(file);
+									newMap.set(newIdx, { col: 'right', row });
+								}
+							}
+
+							orderedFiles = newOrderedFiles;
+							layoutMap = newMap;
+							canUseSpecial = true;
+						}
+					}
+
+					// 保存布局信息
+					specialLayoutMap = layoutMap;
+					useSpecialLayout = canUseSpecial;
+					imagesArray = orderedFiles; // 更新为有序数组
+
+					// 渲染预览网格（若为特殊布局则显示两列）
+					renderGrid(imagesArray, useSpecialLayout);
+					document.querySelector('.preview-placeholder').style.display = 'none';
+					document.getElementById('previewImage').style.display = 'none';
+
+					// 加载第一张图片用于尺寸计算
+					loadImageToCurrent(imagesArray[0]);
+
+					isPlacingActive = false;
+					enableUiAfterPlace(true);
+				} catch (error) {
+					console.error('选择图像时出错:', error);
+				}
+			}
+
+			// ======================== 事件绑定与初始化 ========================
+			
+			// 窗口失去焦点时，认为当前图片已放置完成（用户点击了画布）
+			window.onblur = async function () {
+				if (isPlacingActive && followInterval) {
+					await finishCurrentPlaceAndContinue();
+				} else if (!isPlacingActive && status) {
+					if (followInterval) clearInterval(followInterval);
+					eda.sys_IFrame.closeIFrame('ImportImage');
+				}
+			};
 
 			// 单位切换
 			unitOptions.forEach((option) => {
 				option.addEventListener('click', function () {
 					if (this.classList.contains('active')) return;
-
-					// 更新激活状态
-					unitOptions.forEach((opt) => opt.classList.remove('active'));
+					unitOptions.forEach(opt => opt.classList.remove('active'));
 					this.classList.add('active');
-
-					// 转换尺寸值
 					const oldUnit = currentUnit;
 					currentUnit = this.dataset.unit;
-
 					if (currentImage && widthInput.value && heightInput.value) {
 						if (oldUnit === 'mm' && currentUnit === 'mil') {
-							// mm 转 mil
-							widthInput.value = (parseFloat(widthInput.value) * 39.37007874015748).toFixed(2);
-							heightInput.value = (parseFloat(heightInput.value) * 39.37007874015748).toFixed(2);
+							widthInput.value = (parseFloat(widthInput.value) * CONFIG.MM_TO_MIL).toFixed(2);
+							heightInput.value = (parseFloat(heightInput.value) * CONFIG.MM_TO_MIL).toFixed(2);
 						} else if (oldUnit === 'mil' && currentUnit === 'mm') {
-							// mil 转 mm
-							widthInput.value = (parseFloat(widthInput.value) * 0.0254).toFixed(2);
-							heightInput.value = (parseFloat(heightInput.value) * 0.0254).toFixed(2);
+							widthInput.value = (parseFloat(widthInput.value) * CONFIG.MIL_TO_MM).toFixed(2);
+							heightInput.value = (parseFloat(heightInput.value) * CONFIG.MIL_TO_MM).toFixed(2);
 						}
-
-						// 重新计算DPI
 						calculateDpi();
 					}
 				});
@@ -521,33 +1215,13 @@
 			layerOptions.forEach((option) => {
 				option.addEventListener('click', function () {
 					if (this.classList.contains('active')) return;
-
-					// 更新激活状态
-					layerOptions.forEach((opt) => opt.classList.remove('active'));
+					layerOptions.forEach(opt => opt.classList.remove('active'));
 					this.classList.add('active');
-					// 更新当前图层
-					const oldLayer = currentLayer;
 					currentLayer = this.dataset.layer;
 				});
 			});
 
-			// DPI选项点击
-			dpiOptions.forEach((option) => {
-				option.addEventListener('click', function () {
-					// 更新激活状态
-					dpiOptions.forEach((opt) => opt.classList.remove('active'));
-					this.classList.add('active');
-
-					// 设置当前DPI
-					currentDpi = parseInt(this.dataset.dpi);
-					customDpiInput.value = currentDpi;
-
-					// 计算并更新尺寸
-					calculateDimensionsFromDpi();
-				});
-			});
-
-			// 尺寸输入变化时重新计算DPI
+			// 尺寸输入事件
 			widthInput.addEventListener('input', function () {
 				if (!isCalculatingFromDpi) {
 					calculateDpi();
@@ -560,8 +1234,6 @@
 					}
 				}
 			});
-
-			// 尺寸输入变化时重新计算DPI
 			heightInput.addEventListener('input', function () {
 				if (!isCalculatingFromDpi) {
 					calculateDpi();
@@ -575,277 +1247,84 @@
 				}
 			});
 
-			// 自定义DPI输入
-			customDpiInput.addEventListener('input', function () {
-				const dpiValue = parseInt(this.value);
-				if (dpiValue > 0) {
-					currentDpi = dpiValue;
-
-					// 移除所有DPI选项的激活状态
-					dpiOptions.forEach((opt) => opt.classList.remove('active'));
-
-					// 计算并更新尺寸
-					calculateDimensionsFromDpi();
-				}
-			});
-
-			// 根据尺寸计算DPI
-			function calculateDpi() {
-				// 如果不保持横纵比，不计算DPI
-				if (!aspectRatioCheckbox.checked) return;
-				if (!currentImage || !widthInput.value || !heightInput.value) return;
-
-				const img = new Image();
-				img.onload = function () {
-					const width = parseFloat(widthInput.value);
-					const height = parseFloat(heightInput.value);
-
-					// 转换为英寸
-					let widthInch, heightInch;
-
-					if (currentUnit === 'mm') {
-						widthInch = width * mmToInch;
-						heightInch = height * mmToInch;
-					} else {
-						widthInch = width * milToInch;
-						heightInch = height * milToInch;
-					}
-
-					// 计算DPI
-					const dpiX = Math.round(img.width / widthInch);
-					const dpiY = Math.round(img.height / heightInch);
-
-					// 显示DPI（取平均值）
-					const avgDpi = Math.round((dpiX + dpiY) / 2);
-					customDpiInput.value = avgDpi;
-					currentDpi = avgDpi;
-
-					// 移除所有DPI选项的激活状态
-					dpiOptions.forEach((opt) => opt.classList.remove('active'));
-				};
-				img.src = URL.createObjectURL(currentImage);
-			}
-
-			// 根据DPI计算尺寸
-			function calculateDimensionsFromDpi() {
-				if (!currentImage || !currentDpi) return;
-
-				isCalculatingFromDpi = true;
-
-				const img = new Image();
-				img.onload = function () {
-					// 计算尺寸（英寸）
-					const widthInch = img.width / currentDpi;
-					const heightInch = img.height / currentDpi;
-
-					// 转换为当前单位
-					if (currentUnit === 'mm') {
-						widthInput.value = (widthInch * 25.4).toFixed(2);
-						heightInput.value = (heightInch * 25.4).toFixed(2);
-					} else {
-						widthInput.value = (widthInch * 1000).toFixed(2);
-						heightInput.value = (heightInch * 1000).toFixed(2);
-					}
-
-					isCalculatingFromDpi = false;
-				};
-				img.src = URL.createObjectURL(currentImage);
-			}
-
-			// 切换保持横纵比
+			// 保持横纵比开关
 			function toggleAspectRatio() {
 				const isChecked = aspectRatioCheckbox.checked;
-
 				if (isChecked) {
-					// 启用自定义DPI输入框并显示
 					customDpiInput.disabled = false;
-					customDpiInput.style.display = 'block';
-					document.querySelector('.custom-dpi label').style.display = 'block';
-
+					dpiSlider.disabled = false;
+					dpiValueItems.forEach(item => item.style.pointerEvents = 'auto');
 					if (currentImage) {
-						// 重新计算横纵比
 						const img = new Image();
 						img.onload = function () {
 							originalAspectRatio = img.width / img.height;
-
-							// 如果当前有尺寸值，根据横纵比重新计算
 							if (widthInput.value && heightInput.value) {
 								const width = parseFloat(widthInput.value);
 								const height = width / originalAspectRatio;
 								heightInput.value = height.toFixed(2);
 							}
-
-							// 重新计算并显示DPI
 							calculateDpi();
 						};
 						img.src = URL.createObjectURL(currentImage);
 					}
 				} else {
-					// 禁用自定义DPI输入框并隐藏
 					customDpiInput.disabled = true;
-					customDpiInput.style.display = 'none';
-					document.querySelector('.custom-dpi label').style.display = 'none';
-
-					// 清空DPI值
+					dpiSlider.disabled = true;
+					dpiValueItems.forEach(item => item.style.pointerEvents = 'none');
+					dpiValueItems.forEach(item => item.classList.remove('active'));
 					customDpiInput.value = '';
 					currentDpi = null;
-
-					// 移除所有DPI选项的激活状态
-					dpiOptions.forEach((opt) => opt.classList.remove('active'));
 				}
 			}
+			aspectRatioCheckbox.addEventListener('change', toggleAspectRatio);
 
-			// 处理图像选择
-			async function handleImageSelect() {
-				status = false;
-				try {
-					// 使用 eda 文件系统打开文件选择对话框
-					const fileResult = await eda.sys_FileSystem.openReadFileDialog(['.png', '.jpg', '.jpeg', '.bmp'], false);
-
-					if (!fileResult) return;
-
-					// 由于 eda.sys_FileSystem.openReadFileDialog() 返回的是文件对象，
-					// 我们需要检查文件格式
-					const fileType = fileResult.type.toLowerCase();
-					if (!['image/png', 'image/jpeg', 'image/bmp'].includes(fileType)) {
-						alert('仅支持PNG、JPG和BMP格式的图像文件！');
-						return;
-					}
-
-					// 显示预览
-					const reader = new FileReader();
-					reader.onload = (e) => {
-						previewImage.src = e.target.result;
-						previewImage.style.display = 'block';
-						document.querySelector('.preview-placeholder').style.display = 'none';
-
-						// 存储当前图像
-						currentImage = fileResult;
-
-						// 启用放置按钮
-						placeImageBtn.disabled = false;
-
-						// 获取图像尺寸并设置默认值
-						const img = new Image();
-						img.onload = function () {
-							// 保存原始横纵比
-							originalAspectRatio = img.width / img.height;
-
-							// 设置默认尺寸（按照1200 DPI计算，以mil为单位）
-							const widthInch = img.width / 1200;
-							const heightInch = img.height / 1200;
-
-							if (currentUnit === 'mm') {
-								widthInput.value = (widthInch * 25.4).toFixed(2);
-								heightInput.value = (heightInch * 25.4).toFixed(2);
-							} else {
-								// 默认使用mil单位
-								widthInput.value = (widthInch * 1000).toFixed(2);
-								heightInput.value = (heightInch * 1000).toFixed(2);
-							}
-
-							// 设置自定义DPI输入框的默认值
-							customDpiInput.value = 1200;
-
-							// 计算并显示DPI
-							calculateDpi();
-						};
-						img.src = e.target.result;
-					};
-					reader.readAsDataURL(fileResult);
-				} catch (error) {
-					console.error('选择图像时出错:', error);
-				}
-			}
-
-			// 将文件转换为Base64
-			function convertToBase64(file) {
-				return new Promise((resolve, reject) => {
-					const reader = new FileReader();
-
-					reader.onload = () => {
-						const base64 = reader.result;
-						resolve(base64);
-					};
-
-					reader.onerror = (error) => reject(error);
-
-					// 读取文件为 Data URL（包含 base64）
-					reader.readAsDataURL(file);
+			// DPI滑块事件
+			dpiSlider.addEventListener('input', function() {
+				const rawIdx = parseInt(this.value, 10);
+				const idx = 5 - rawIdx;
+				const selectedDpi = CONFIG.DPI_PRESETS[idx];
+				setCurrentDpiAndRecalc(selectedDpi);
+			});
+			// 右侧列表点击
+			dpiValueItems.forEach((item, idx) => {
+				item.addEventListener('click', () => {
+					const dpi = CONFIG.DPI_PRESETS[idx];
+					setCurrentDpiAndRecalc(dpi);
 				});
-			}
-
-			//创建图像到画布
-			async function handlePlaceImage() {
-				//转base64
-				base64img = await convertToBase64(currentImage);
-				status = true;
-				let ID;
-				// 获取尺寸（转换为mil）
-				let width = parseFloat(widthInput.value);
-				let height = parseFloat(heightInput.value);
-
-				if (currentUnit === 'mm') {
-					// 转换为mil    39.37007874015748
-					width = width * 39.37007874015748;
-					height = height * 39.37007874015748;
+			});
+			// 自定义DPI输入
+			customDpiInput.addEventListener('input', function() {
+				let dpiValue = parseInt(this.value, 10);
+				if (isNaN(dpiValue) || dpiValue <= 0) return;
+				currentDpi = dpiValue;
+				const index = CONFIG.DPI_PRESETS.indexOf(currentDpi);
+				if (index !== -1) {
+					const sliderValue = 5 - index;
+					dpiSlider.value = sliderValue;
+					dpiValueItems.forEach((item, i) => {
+						if (i === index) item.classList.add('active');
+						else item.classList.remove('active');
+					});
+				} else {
+					dpiValueItems.forEach(item => item.classList.remove('active'));
 				}
-
-				// 图层选择逻辑
-				let LayerId;
-				switch (currentLayer) {
-					case 'TS':
-						LayerId = EPCB_LayerId.TOP_SILKSCREEN;
-						break;
-					case 'BS':
-						LayerId = EPCB_LayerId.BOTTOM_SILKSCREEN;
-						break;
-					default:
-						LayerId = EPCB_LayerId.DOCUMENT;
-						break;
+				if (aspectRatioCheckbox.checked && currentImage) {
+					calculateDimensionsFromDpi();
 				}
-				const colorObj = eda.pcb_PrimitiveObject.create(
-					LayerId,
-					0,
-					0,
-					base64img,
-					width.toFixed(2),
-					height.toFixed(2),
-					0,
-					false,
-					'img',
-					false,
-				);
-				ID = (await colorObj).getState_PrimitiveId();
+			});
 
-				eda.sys_IFrame.hideIFrame('ImportImage'); //隐藏窗口
-
-				// 启动定时器，让图片跟随鼠标
-				followInterval = setInterval(async () => {
-					try {
-						const currentPoint = await eda.pcb_SelectControl.getCurrentMousePosition();
-						//跟随鼠标移动
-						await eda.pcb_PrimitiveObject.modify(ID, {
-							topLeftX: currentPoint.x,
-							topLeftY: currentPoint.y,
-						});
-					} catch (error) {
-						console.error('更新图像位置失败:', error);
-						clearInterval(followInterval); // 出错时清理定时器，避免内存泄漏
-					}
-				}, 10);
-			}
-
-			// 监听页面失去焦点
-			window.onblur = async function () {
-				if (status) {
-					clearInterval(followInterval);
-					followInterval = null;
-					eda.sys_IFrame.closeIFrame('ImportImage'); //关闭窗口
-				}
-			};
-
-			handleImageSelect(); // 启动时选择图片
+			// 切片开关监听
+			sliceimportCheckbox.addEventListener('change', function() {
+				isSliceEnabled = this.checked;
+			});
+			isSliceEnabled = sliceimportCheckbox.checked;
+			
+			// 按钮绑定
+			selectImageBtn.addEventListener('click', handleImageSelect);
+			placeImageBtn.addEventListener('click', handlePlaceImage);
+			
+			// 初始禁用放置按钮
+			placeImageBtn.disabled = true;
 		</script>
 	</body>
 </html>

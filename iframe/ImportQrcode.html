@@ -1,1129 +1,914 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="zh-CN">
-	<head>
-		<meta charset="UTF-8" />
-		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-		<title>狼黑工具 - 二维码生成器</title>
-
-		<script src="/iframe/js/qrcode-generator.js"></script>
-		<script src="/iframe/js/jsQR.js"></script>
-
-		<style>
-			/* --- 样式保持原版设计，仅做微调 --- */
-			* {
-				margin: 0;
-				padding: 0;
-				box-sizing: border-box;
-				font-family: 'Microsoft YaHei', sans-serif;
-			}
-			body {
-				display: flex;
-				justify-content: center;
-				align-items: center;
-				background-color: #f5f5f5;
-			} /* 增加背景色区分 */
-			.container {
-				width: 100%;
-				height: 100hv;
-				background-color: white;
-				padding: 12px;
-				overflow-y: auto;
-				display: flex;
-				flex-direction: column;
-			}
-			.header {
-				display: flex;
-				justify-content: space-between;
-				padding-bottom: 15px;
-			}
-			.header p {
-				margin: 10px;
-				text-align: left;
-				font-weight: bold;
-			}
-			.import-btn {
-				padding: 10px 16px;
-				background-color: #f0f0f0;
-				border: 1px solid #ddd;
-				border-radius: 6px;
-				cursor: pointer;
-				font-size: 14px;
-				font-weight: 500;
-				transition: all 0.3s;
-			}
-			.import-btn:hover {
-				background-color: #e0e0e0;
-			}
-			.text-input {
-				width: 100%;
-				height: 88px;
-				padding: 12px;
-				border: 1px solid #ddd;
-				border-radius: 6px;
-				resize: none;
-				margin-bottom: 20px;
-				font-size: 14px;
-				text-align: left;
-			}
-			.text-input:focus {
-				border-color: #4a90e2;
-				outline: none;
-				box-shadow: 0 0 0 2px rgba(74, 144, 226, 0.2);
-			}
-			.controls {
-				display: flex;
-				margin-bottom: 10px;
-				gap: 20px;
-				height: 220px;
-			}
-			.left-controls,
-			.right-controls {
-				flex: 1;
-				padding: 15px;
-				background-color: #f9f9f9;
-				border-radius: 8px;
-				box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
-			}
-			.control-group {
-				margin-bottom: 16px;
-			}
-			.control-label {
-				display: block;
-				margin-bottom: 6px;
-				font-size: 14px;
-				color: #333;
-				font-weight: 500;
-			}
-			.slider-container {
-				display: flex;
-				align-items: center;
-				height: 14px;
-			}
-			.slider {
-				flex: 1;
-				height: 10px;
-				background: #ddd;
-				border-radius: 5px;
-				outline: none;
-			}
-			.slider::-webkit-slider-thumb {
-				-webkit-appearance: none;
-				width: 18px;
-				height: 18px;
-				border-radius: 50%;
-				background: #4a90e2;
-				cursor: pointer;
-				box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
-			}
-			.slider-value {
-				width: 50px;
-				text-align: right;
-				margin-left: 10px;
-				font-size: 14px;
-				font-weight: 500;
-				color: #4a90e2;
-			}
-			.color-row {
-				display: flex;
-				gap: 12px;
-				align-items: center;
-			}
-			.color-item {
-				display: flex;
-				flex-direction: column;
-				align-items: center;
-				flex: 1;
-			}
-			.color-picker {
-				width: 100%;
-				height: 35px;
-				border: 1px solid #ddd;
-				border-radius: 6px;
-				cursor: pointer;
-			}
-			.output-toggle {
-				display: flex;
-				border: 1px solid #ddd;
-				border-radius: 6px;
-				overflow: hidden;
-				margin-top: 6px;
-			}
-			.output-option {
-				padding: 8px 16px;
-				background-color: #f0f0f0;
-				cursor: pointer;
-				font-size: 14px;
-				transition: all 0.2s;
-				flex: 1;
-				text-align: center;
-			}
-			.output-option.active {
-				background-color: #4a90e2;
-				color: white;
-			}
-			.size-control {
-				display: flex;
-				align-items: center;
-				margin-top: 8px;
-			}
-			.size-input {
-				width: 60px;
-				padding: 8px;
-				border: 1px solid #ddd;
-				border-radius: 6px;
-				margin-right: 6px;
-			}
-			.unit-toggle {
-				display: flex;
-				border: 1px solid #ddd;
-				border-radius: 6px;
-				overflow: hidden;
-			}
-			.unit-option {
-				padding: 8px 12px;
-				background-color: #f0f0f0;
-				cursor: pointer;
-				font-size: 14px;
-				transition: all 0.2s;
-				flex: 1;
-				text-align: center;
-			}
-			.unit-option.active {
-				background-color: #4a90e2;
-				color: white;
-			}
-			.info-text {
-				margin: 15px 0;
-				font-size: 14px;
-				color: #666;
-				text-align: center;
-				padding: 10px;
-				background-color: #f0f8ff;
-				border-radius: 6px;
-			}
-			.preview-container {
-				display: flex;
-				justify-content: space-between;
-				margin-bottom: 3px;
-			}
-			.preview-box {
-				width: 150px;
-				height: 150px;
-				border: 1px solid #ddd;
-				display: flex;
-				justify-content: center;
-				align-items: center;
-				background-color: #f9f9f9;
-				cursor: pointer;
-				overflow: hidden;
-				transition: all 0.3s;
-				position: relative;
-			}
-			.preview-box:hover {
-				transform: translateY(-5px);
-				box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
-				border-color: #4a90e2;
-			}
-			.hidden {
-				display: none;
-			}
-			.file-input {
-				display: none;
-			}
-			.checkbox-group {
-				display: flex;
-				align-items: center;
-				margin-top: 8px;
-			}
-			.checkbox-group input {
-				margin-right: 6px;
-			}
-			.status-message {
-				padding: 10px;
-				border-radius: 6px;
-				margin-top: 10px;
-				text-align: center;
-				font-weight: 500;
-			}
-			.layer-select {
-				margin-left: 8px;
-				padding: 4px 8px;
-				border: 1px solid #ddd;
-				border-radius: 4px;
-				background-color: white;
-				font-size: 14px;
-			}
-		</style>
-	</head>
-	<body>
-		<div class="container">
-			<div class="header">
-				<p>粘贴文本内容：</p>
-				<button class="import-btn" id="import-qr-btn">从二维码导入</button>
-			</div>
-
-			<textarea class="text-input" id="text-input" placeholder="粘贴文本内容..."></textarea>
-			<input type="file" class="file-input" id="file-input" accept="image/*" />
-
-			<div class="controls">
-				<div class="left-controls">
-					<div class="control-group">
-						<label class="control-label">容错级别: <span id="error-level-value">M (15%)</span></label>
-						<div class="slider-container">
-							<input type="range" min="0" max="3" value="1" class="slider" id="error-level" />
-						</div>
-					</div>
-
-					<div class="control-group">
-						<label class="control-label">色块大小: <span id="block-size-value">32 px</span></label>
-						<div class="slider-container">
-							<input type="range" min="1" max="100" value="32" class="slider" id="block-size" />
-						</div>
-					</div>
-
-					<div class="control-group">
-						<label class="control-label">白边色块: <span id="margin-size-value">1</span></label>
-						<div class="slider-container">
-							<input type="range" min="0" max="10" value="1" class="slider" id="margin-size" />
-						</div>
-					</div>
-					<label class="control-label"><span id="qrcode-px-value"></span></label>
-				</div>
-
-				<div class="right-controls">
-					<div class="control-group">
-						<div class="size-control">
-							尺寸：
-							<input type="number" class="size-input" id="qr-size" value="25.4" min="1" step="0.1" />
-							<div class="unit-toggle">
-								<div class="unit-option active" id="unit-mm">mm</div>
-								<div class="unit-option" id="unit-mil">mil</div>
-							</div>
-						</div>
-					</div>
-
-					<div class="control-group">
-						<div class="output-toggle">
-							<div class="output-option active" id="type-image">图片</div>
-							<div class="output-option" id="type-vector">矢量</div>
-						</div>
-					</div>
-
-					<div id="image-controls">
-						<div class="control-group">
-							<div class="color-row">
-								<div class="color-item">
-									<label class="control-label">前景色</label>
-									<input type="color" class="color-picker" id="foreground-color" value="#000000" />
-								</div>
-								<div class="color-item">
-									<label class="control-label">背景色</label>
-									<input type="color" class="color-picker" id="background-color" value="#FFFFFF" />
-								</div>
-							</div>
-						</div>
-					</div>
-
-					<div id="vector-controls" class="hidden">
-						<div class="control-group">
-							<label class="control-label">矢量选项</label>
-							<div class="checkbox-group">
-								<input type="checkbox" id="invert-image" />
-								<label for="invert-image">反向图像（黑白反转）</label>
-							</div>
-						</div>
-					</div>
-				</div>
-			</div>
-
-			<div class="info-text">
-				单击二维码，放置在
-				<select id="layer-select" class="layer-select"></select>
-			</div>
-
-			<div class="preview-container">
-				<div>
-					<div class="preview-box" id="preview-1" title="左倾斜特效"><canvas id="qr-canvas-1"></canvas></div>
-				</div>
-				<div>
-					<div class="preview-box" id="preview-2" title="标准无特效"><canvas id="qr-canvas-2"></canvas></div>
-				</div>
-				<div>
-					<div class="preview-box" id="preview-3" title="右倾斜特效"><canvas id="qr-canvas-3"></canvas></div>
-				</div>
-			</div>
-
-			<div id="status-message" class="status-message hidden"></div>
-		</div>
-
-		<script>
-			/**
-			 * =================================================================
-			 * 1. 全局配置 & 常量 (USER CONFIGURATION)
-			 * =================================================================
-			 */
-			const CONFIG = {
-				DEFAULT_TEXT: '狼黑工具',
-				DEBOUNCE_DELAY: 100,
-
-				// 核心算法参数 - 经过调试的最佳平衡点，对应 V1 版本的 33 模糊度
-				// 修改这些值会影响特效二维码的圆润度和清晰度
-				PROC_CELL_SIZE: 32, // 处理时的基础分辨率
-				PROC_BLUR_DEGREE: 44, // 运动模糊程度
-				PROC_BLUR_SIGMA: 3, // 高斯模糊 Sigma 值
-				PROC_SCALE_FACTOR: 4, // 插值缩放倍率
-
-				// 特效角度
-				ANGLE_LEFT: 45,
-				ANGLE_RIGHT: 135,
-
-				// 安全边距，防止模糊时被裁切
-				SAFE_PADDING: 2,
-
-				// 尺寸转换
-				MM_TO_MIL: 39.37007874015748,
-			};
-
-			/**
-			 * =================================================================
-			 * 2. 全局状态管理 (STATE MANAGEMENT)
-			 * =================================================================
-			 */
-			const STATE = {
-				outputType: 'image', // 'image' | 'vector'
-				unit: 'mm', // 'mm' | 'mil'
-				currentLayer: 'TOP_SILKSCREEN',
-				followInterval: null, // EDA 放置时的跟随定时器
-				primitiveId: null, // EDA 中生成的图元 ID
-				lastQrPixelSize: 0, // 记录最后生成的二维码像素大小
-
-				// 图层映射表 (如果 eda 对象不存在，提供默认值)
-				layerMap: {},
-			};
-
-			// 预分配 Canvas 以提升性能
-			const MEMORY = {
-				sharedCanvas: document.createElement('canvas'),
-				sharedCtx: null,
-				storedCanvas: document.createElement('canvas'),
-				storedCtx: null,
-			};
-			// 初始化 Context
-			MEMORY.sharedCtx = MEMORY.sharedCanvas.getContext('2d', { willReadFrequently: true });
-			MEMORY.storedCtx = MEMORY.storedCanvas.getContext('2d', { willReadFrequently: true });
-
-			// DOM 元素引用缓存
-			const DOM = {
-				importQrBtn: document.getElementById('import-qr-btn'),
-				fileInput: document.getElementById('file-input'),
-				textInput: document.getElementById('text-input'),
-				errorLevelSlider: document.getElementById('error-level'),
-				errorLevelValue: document.getElementById('error-level-value'),
-				blockSizeSlider: document.getElementById('block-size'),
-				blockSizeValue: document.getElementById('block-size-value'),
-				marginSizeSlider: document.getElementById('margin-size'),
-				marginSizeValue: document.getElementById('margin-size-value'),
-				qrcodePxValue: document.getElementById('qrcode-px-value'),
-				typeImageBtn: document.getElementById('type-image'),
-				typeVectorBtn: document.getElementById('type-vector'),
-				imageControls: document.getElementById('image-controls'),
-				vectorControls: document.getElementById('vector-controls'),
-				foregroundColor: document.getElementById('foreground-color'),
-				backgroundColor: document.getElementById('background-color'),
-				invertCheckbox: document.getElementById('invert-image'),
-				qrSizeInput: document.getElementById('qr-size'),
-				unitMm: document.getElementById('unit-mm'),
-				unitMil: document.getElementById('unit-mil'),
-				canvases: [document.getElementById('qr-canvas-1'), document.getElementById('qr-canvas-2'), document.getElementById('qr-canvas-3')],
-				previews: [document.getElementById('preview-1'), document.getElementById('preview-2'), document.getElementById('preview-3')],
-				layerSelect: document.getElementById('layer-select'),
-			};
-
-			/**
-			 * =================================================================
-			 * 3. 初始化 & 事件监听 (INIT & EVENTS)
-			 * =================================================================
-			 */
-			function init() {
-				initEdaLayerMap();
-				initLayerSelector();
-				initEventListeners();
-
-				// 初始化 UI 显示
-				updateSliderDisplay();
-				updateQrCode(); // 首次生成
-			}
-
-			function initEdaLayerMap() {
-				if (typeof eda !== 'undefined') {
-					STATE.layerMap = {
-						'TOP': EPCB_LayerId.TOP,
-						'TOP_SILKSCREEN': EPCB_LayerId.TOP_SILKSCREEN,
-						'TOP_SOLDER_MASK': EPCB_LayerId.TOP_SOLDER_MASK,
-						'TOP_ASSEMBLY': EPCB_LayerId.TOP_ASSEMBLY,
-						'BOTTOM': EPCB_LayerId.BOTTOM,
-						'BOTTOM_SILKSCREEN': EPCB_LayerId.BOTTOM_SILKSCREEN,
-						'BOTTOM_SOLDER_MASK': EPCB_LayerId.BOTTOM_SOLDER_MASK,
-						'BOTTOM_ASSEMBLY': EPCB_LayerId.BOTTOM_ASSEMBLY,
-						'DOCUMENT': EPCB_LayerId.DOCUMENT,
-						'MECHANICAL': EPCB_LayerId.MECHANICAL,
-						'DRILL_DRAWING': EPCB_LayerId.DRILL_DRAWING,
-					};
-				} else {
-					// 浏览器调试模式 fallback
-					STATE.layerMap = { 'TOP_SILKSCREEN': 1 };
-				}
-			}
-
-			function initEventListeners() {
-				// 文件导入
-				DOM.importQrBtn.addEventListener('click', () => DOM.fileInput.click());
-				DOM.fileInput.addEventListener('change', handleFileSelect);
-
-				// 滑块控制
-				DOM.errorLevelSlider.addEventListener('input', () => {
-					updateSliderDisplay();
-					updateQrCode();
-				});
-				DOM.blockSizeSlider.addEventListener('input', () => {
-					updateSliderDisplay();
-					updateQrCode();
-				});
-				DOM.marginSizeSlider.addEventListener('input', () => {
-					updateSliderDisplay();
-					updateQrCode();
-				});
-
-				// 模式切换
-				DOM.typeImageBtn.addEventListener('click', () => setOutputType('image'));
-				DOM.typeVectorBtn.addEventListener('click', () => setOutputType('vector'));
-
-				// 颜色与反转
-				DOM.foregroundColor.addEventListener('input', updateQrCode);
-				DOM.backgroundColor.addEventListener('input', updateQrCode);
-				DOM.invertCheckbox.addEventListener('change', updateQrCode);
-
-				// 单位切换
-				DOM.unitMm.addEventListener('click', () => setUnit('mm'));
-				DOM.unitMil.addEventListener('click', () => setUnit('mil'));
-
-				// 点击放置
-				DOM.previews.forEach((box, index) => {
-					box.addEventListener('click', () => handlePlaceQrCode(index));
-				});
-
-				// 文本输入
-				DOM.textInput.addEventListener('input', updateQrCode);
-				DOM.qrSizeInput.addEventListener('input', updateQrCode);
-
-				// 图层选择
-				DOM.layerSelect.addEventListener('change', function () {
-					STATE.currentLayer = this.value;
-				});
-			}
-
-			/**
-			 * =================================================================
-			 * 4. UI 逻辑 (UI LOGIC)
-			 * =================================================================
-			 */
-			function updateSliderDisplay() {
-				const eclLabels = ['L (7%)', 'M (15%)', 'Q (25%)', 'H (30%)'];
-				DOM.errorLevelValue.textContent = eclLabels[parseInt(DOM.errorLevelSlider.value)];
-				DOM.blockSizeValue.textContent = `${DOM.blockSizeSlider.value} px`;
-				DOM.marginSizeValue.textContent = DOM.marginSizeSlider.value;
-			}
-
-			function setUnit(unit) {
-				STATE.unit = unit;
-				DOM.unitMm.classList.toggle('active', unit === 'mm');
-				DOM.unitMil.classList.toggle('active', unit === 'mil');
-
-				// 简单的单位转换逻辑，保持数值大概一致或转换数值
-				let val = parseFloat(DOM.qrSizeInput.value);
-				if (unit === 'mil') val = val * CONFIG.MM_TO_MIL;
-				else val = val / CONFIG.MM_TO_MIL;
-
-				// 这里为了用户体验，通常不自动转换数值，而是保持数值不变让用户重输，或者只做标记
-				// 原代码并未做数值转换，仅切换了状态。这里保持原逻辑。
-			}
-
-			function setOutputType(type) {
-				STATE.outputType = type;
-				const isImage = type === 'image';
-				DOM.typeImageBtn.classList.toggle('active', isImage);
-				DOM.typeVectorBtn.classList.toggle('active', !isImage);
-				DOM.imageControls.classList.toggle('hidden', !isImage);
-				DOM.vectorControls.classList.toggle('hidden', isImage);
-				updateLayerOptions(type);
-				updateQrCode();
-			}
-
-			const layerOptionsConfig = {
-				image: [
-					{ value: 'TOP_SILKSCREEN', text: '顶层-丝印层', default: true },
-					{ value: 'BOTTOM_SILKSCREEN', text: '底层-丝印层' },
-					{ value: 'DOCUMENT', text: '文档层' },
-				],
-				vector: [
-					{ value: 'TOP', text: '顶层' },
-					{ value: 'TOP_SILKSCREEN', text: '顶层-丝印层', default: true },
-					{ value: 'TOP_SOLDER_MASK', text: '顶层-阻焊层' },
-					{ value: 'TOP_ASSEMBLY', text: '顶层-装配层' },
-					{ value: 'BOTTOM', text: '底层' },
-					{ value: 'BOTTOM_SILKSCREEN', text: '底层-丝印层' },
-					{ value: 'BOTTOM_SOLDER_MASK', text: '底层-阻焊层' },
-					{ value: 'BOTTOM_ASSEMBLY', text: '底层-装配层' },
-					{ value: 'DOCUMENT', text: '文档层' },
-					{ value: 'MECHANICAL', text: '机械层' },
-					{ value: 'DRILL_DRAWING', text: '钻孔图层' },
-				],
-			};
-
-			function initLayerSelector() {
-				updateLayerOptions(STATE.outputType);
-			}
-
-			function updateLayerOptions(outputType) {
-				DOM.layerSelect.innerHTML = '';
-				layerOptionsConfig[outputType].forEach((opt) => {
-					const option = document.createElement('option');
-					option.value = opt.value;
-					option.textContent = opt.text;
-					if (opt.default) {
-						option.selected = true;
-						STATE.currentLayer = opt.value;
-					}
-					DOM.layerSelect.appendChild(option);
-				});
-			}
-
-			/**
-			 * =================================================================
-			 * 5. 核心：二维码生成与处理 (CORE: GENERATION & PROCESSING)
-			 * =================================================================
-			 */
-
-			// 防抖函数，避免输入时卡顿
-			const updateQrCode = debounce(function () {
-				const text = DOM.textInput.value || CONFIG.DEFAULT_TEXT;
-				const ecl = ['L', 'M', 'Q', 'H'][parseInt(DOM.errorLevelSlider.value)];
-				const cellSize = parseInt(DOM.blockSizeSlider.value);
-				const userMargin = parseInt(DOM.marginSizeSlider.value);
-
-				let fg = DOM.foregroundColor.value;
-				let bg = DOM.backgroundColor.value;
-
-				// 矢量模式下的颜色逻辑
-				if (STATE.outputType === 'vector') {
-					if (DOM.invertCheckbox.checked) {
-						fg = '#FFFFFF';
-						bg = '#000000';
-					} else {
-						fg = '#000000';
-						bg = '#FFFFFF';
-					}
-				}
-
-				// --- 1. 标准二维码 (Canvas 2 - 中间预览) ---
-				// 直接绘制，无需特效，响应最快
-				const moduleCount = generateBaseQRCode(DOM.canvases[1], text, ecl, cellSize, userMargin, fg, bg, true);
-
-				// --- 2. 特效二维码 (Canvas 1 & 3 - 左右倾斜) ---
-				// 优化策略：在一个较小的、固定的分辨率下生成基础图形并应用耗时的模糊算法，
-				// 然后再缩放到目标尺寸。这确保了算法复杂度不随用户设置的“色块大小”线性增加。
-
-				// 目标总尺寸 (用于最终合成)
-				const targetTotalSize = (moduleCount + 2 * userMargin) * cellSize;
-
-				// 在 sharedCanvas 上生成用于处理的 "源" (带安全边距)
-				generateBaseQRCode(MEMORY.sharedCanvas, text, ecl, CONFIG.PROC_CELL_SIZE, CONFIG.SAFE_PADDING, fg, bg, false);
-
-				// 批量处理并合成
-				const commonParams = {
-					srcCanvas: MEMORY.sharedCanvas,
-					moduleCount: moduleCount,
-					userMargin: userMargin,
-					targetTotalSize: targetTotalSize,
-					targetCellSize: cellSize,
-					fg: fg,
-					bg: bg,
-				};
-
-				// 左倾斜 (45度)
-				compositeAndProcess({
-					...commonParams,
-					targetCanvas: DOM.canvases[0],
-					angle: CONFIG.ANGLE_LEFT,
-				});
-
-				// 右倾斜 (135度)
-				compositeAndProcess({
-					...commonParams,
-					targetCanvas: DOM.canvases[2],
-					angle: CONFIG.ANGLE_RIGHT,
-				});
-
-				if (typeof eda !== 'undefined') eda.sys_ToastMessage.showMessage('二维码已更新', 2);
-			}, CONFIG.DEBOUNCE_DELAY);
-
-			/**
-			 * 基础二维码绘制
-			 * @param {HTMLCanvasElement} canvas 目标画布
-			 * @param {string} text 内容
-			 * @param {string} ecl 容错等级
-			 * @param {number} cellSize 单个色块像素大小
-			 * @param {number} margin 白边数量
-			 * @param {string} fg 前景色Hex
-			 * @param {string} bg 背景色Hex
-			 * @param {boolean} isPreview 是否更新UI尺寸显示
-			 */
-			function generateBaseQRCode(canvas, text, ecl, cellSize, margin, fg, bg, isPreview) {
-				try {
-					const utf8Text = unescape(encodeURIComponent(text));
-					const qr = qrcode(0, ecl);
-					qr.addData(utf8Text, 'Byte');
-					qr.make();
-
-					const qrCount = qr.getModuleCount();
-					const totalSize = (qrCount + 2 * margin) * cellSize;
-
-					// 调整画布物理尺寸
-					if (canvas.width !== totalSize) canvas.width = totalSize;
-					if (canvas.height !== totalSize) canvas.height = totalSize;
-
-					if (isPreview) {
-						STATE.lastQrPixelSize = totalSize;
-						DOM.qrcodePxValue.textContent = `二维码大小: ${totalSize} x ${totalSize} px`;
-						// CSS 样式尺寸保持固定预览大小
-						canvas.style.width = '150px';
-						canvas.style.height = '150px';
-					}
-
-					const ctx = canvas.getContext('2d', { alpha: false });
-					ctx.fillStyle = bg;
-					ctx.fillRect(0, 0, totalSize, totalSize);
-
-					ctx.fillStyle = fg;
-					ctx.beginPath();
-					for (let r = 0; r < qrCount; r++) {
-						for (let c = 0; c < qrCount; c++) {
-							if (qr.isDark(r, c)) {
-								// 优化：使用 rect 路径批量绘制比多次 fillRect 更快
-								ctx.rect((margin + c) * cellSize, (margin + r) * cellSize, cellSize, cellSize);
-							}
-						}
-					}
-					ctx.fill();
-					return qrCount;
-				} catch (err) {
-					console.error('Generate Error:', err);
-					showToast('生成失败，请检查内容', 1);
-					return 0;
-				}
-			}
-
-			/**
-			 * 复合处理管道：模糊 -> 平滑 -> 缩放 -> 二值化 -> 居中合成
-			 */
-			function compositeAndProcess(params) {
-				const { srcCanvas, targetCanvas, angle, targetTotalSize, moduleCount, userMargin, targetCellSize, fg, bg } = params;
-
-				const srcWidth = srcCanvas.width;
-				const srcHeight = srcCanvas.height;
-
-				// 1. 像素级精确运动模糊 (模拟 V1 算法)
-				const blurredCanvas = applyAccurateMotionBlur(srcCanvas, CONFIG.PROC_BLUR_DEGREE, angle);
-
-				// 2. 高斯模糊 (平滑锯齿) - 在 MEMORY.storedCanvas 上操作
-				MEMORY.storedCanvas.width = srcWidth;
-				MEMORY.storedCanvas.height = srcHeight;
-				const tempCtx = MEMORY.storedCtx;
-
-				tempCtx.clearRect(0, 0, srcWidth, srcHeight);
-				tempCtx.filter = `blur(${CONFIG.PROC_BLUR_SIGMA}px)`;
-				tempCtx.drawImage(blurredCanvas, 0, 0);
-				tempCtx.filter = 'none';
-
-				// 3. 放大缩放 (Bicubic/High Quality)
-				// 放大可以让边缘二值化时更圆润
-				const scaledSize = srcWidth * CONFIG.PROC_SCALE_FACTOR;
-				const processedCanvas = document.createElement('canvas'); // 临时画布，难以复用因为尺寸可变
-				processedCanvas.width = scaledSize;
-				processedCanvas.height = scaledSize;
-				const procCtx = processedCanvas.getContext('2d');
-				procCtx.imageSmoothingEnabled = true;
-				procCtx.imageSmoothingQuality = 'high';
-				procCtx.drawImage(MEMORY.storedCanvas, 0, 0, srcWidth, srcHeight, 0, 0, scaledSize, scaledSize);
-
-				// 4. 颜色索引/二值化 (Threshold)
-				applyIndexedColorFast(processedCanvas, fg, bg);
-
-				// 5. 将处理好的核心图像合成到最终画布上 (处理白边逻辑)
-				targetCanvas.width = targetTotalSize;
-				targetCanvas.height = targetTotalSize;
-				const ctx = targetCanvas.getContext('2d');
-
-				// 填充背景
-				ctx.fillStyle = bg;
-				ctx.fillRect(0, 0, targetTotalSize, targetTotalSize);
-
-				// 计算核心图像在目标画布上的绘制尺寸和位置
-				// 逻辑：源图中 1个block 现在是 (PROC_CELL_SIZE * scale) 像素
-				// 我们需要把它缩放到 targetCellSize 像素
-				const currentBlockPx = CONFIG.PROC_CELL_SIZE * CONFIG.PROC_SCALE_FACTOR;
-				const drawScale = targetCellSize / currentBlockPx;
-
-				const drawWidth = processedCanvas.width * drawScale;
-				const drawHeight = processedCanvas.height * drawScale;
-
-				// 居中放置
-				const destX = (targetTotalSize - drawWidth) / 2;
-				const destY = (targetTotalSize - drawHeight) / 2;
-
-				ctx.imageSmoothingEnabled = true;
-				ctx.imageSmoothingQuality = 'high';
-				ctx.drawImage(processedCanvas, destX, destY, drawWidth, drawHeight);
-
-				// UI 适配
-				targetCanvas.style.width = '150px';
-				targetCanvas.style.height = '150px';
-			}
-
-			/**
-			 * V1 版本的高质量像素模糊算法
-			 * 模拟丝印油墨在特定方向上的拖尾效果
-			 */
-			function applyAccurateMotionBlur(canvas, degree, angle) {
-				const width = canvas.width;
-				const height = canvas.height;
-				const ctx = canvas.getContext('2d');
-				const imageData = ctx.getImageData(0, 0, width, height);
-				const data = imageData.data;
-				const outputData = new Uint8ClampedArray(data.length);
-
-				const rad = (angle * Math.PI) / 180;
-				const oppositeRad = ((angle + 180) * Math.PI) / 180;
-
-				const dx = Math.cos(rad);
-				const dy = Math.sin(rad);
-				const dxOpp = Math.cos(oppositeRad);
-				const dyOpp = Math.sin(oppositeRad);
-
-				const halfDegree = Math.floor(degree / 2);
-				const w = width; // 缓存属性访问
-				const h = height;
-
-				for (let y = 0; y < h; y++) {
-					for (let x = 0; x < w; x++) {
-						let r = 0,
-							g = 0,
-							b = 0,
-							count = 0;
-
-						for (let i = -halfDegree; i <= halfDegree; i++) {
-							let sampleX, sampleY;
-
-							// 双向采样以保持图形中心位置不变
-							if (i < 0) {
-								const absI = -i;
-								sampleX = Math.round(x + dxOpp * absI);
-								sampleY = Math.round(y + dyOpp * absI);
-							} else if (i > 0) {
-								sampleX = Math.round(x + dx * i);
-								sampleY = Math.round(y + dy * i);
-							} else {
-								sampleX = x;
-								sampleY = y;
-							}
-
-							if (sampleX >= 0 && sampleX < w && sampleY >= 0 && sampleY < h) {
-								const offset = (sampleY * w + sampleX) << 2;
-								r += data[offset];
-								g += data[offset + 1];
-								b += data[offset + 2];
-								count++;
-							}
-						}
-
-						const destOffset = (y * w + x) << 2;
-						if (count > 0) {
-							outputData[destOffset] = (r / count) | 0;
-							outputData[destOffset + 1] = (g / count) | 0;
-							outputData[destOffset + 2] = (b / count) | 0;
-							outputData[destOffset + 3] = 255; // Alpha
-						} else {
-							outputData[destOffset] = data[destOffset];
-							outputData[destOffset + 1] = data[destOffset + 1];
-							outputData[destOffset + 2] = data[destOffset + 2];
-							outputData[destOffset + 3] = 255;
-						}
-					}
-				}
-
-				// 临时 Canvas 返回结果
-				const tempCanvas = document.createElement('canvas');
-				tempCanvas.width = w;
-				tempCanvas.height = h;
-				tempCanvas.getContext('2d').putImageData(new ImageData(outputData, w, h), 0, 0);
-				return tempCanvas;
-			}
-
-			/**
-			 * 快速颜色量化 (欧几里得距离)
-			 * 将模糊后的灰色像素强制归类为前景色或背景色
-			 */
-			function applyIndexedColorFast(canvas, fgHex, bgHex) {
-				const ctx = canvas.getContext('2d', { willReadFrequently: true });
-				const width = canvas.width;
-				const height = canvas.height;
-				const imageData = ctx.getImageData(0, 0, width, height);
-				const data = imageData.data;
-
-				const fg = hexToRgb(fgHex);
-				const bg = hexToRgb(bgHex);
-
-				let i = 0,
-					len = data.length;
-				let r, g, b, dr, dg, db, distFg, distBg;
-
-				for (; i < len; i += 4) {
-					r = data[i];
-					g = data[i + 1];
-					b = data[i + 2];
-
-					// 前景色距离
-					dr = r - fg.r;
-					dg = g - fg.g;
-					db = b - fg.b;
-					distFg = dr * dr + dg * dg + db * db;
-
-					// 背景色距离
-					dr = r - bg.r;
-					dg = g - bg.g;
-					db = b - bg.b;
-					distBg = dr * dr + dg * dg + db * db;
-
-					if (distFg < distBg) {
-						data[i] = fg.r;
-						data[i + 1] = fg.g;
-						data[i + 2] = fg.b;
-					} else {
-						data[i] = bg.r;
-						data[i + 1] = bg.g;
-						data[i + 2] = bg.b;
-					}
-					data[i + 3] = 255;
-				}
-				ctx.putImageData(imageData, 0, 0);
-			}
-
-			/**
-			 * =================================================================
-			 * 6. 工具与导入功能 (UTILS & IMPORT)
-			 * =================================================================
-			 */
-
-			async function handleFileSelect(e) {
-				const file = e.target.files[0];
-				if (!file) return;
-				try {
-					const imageData = await getImageDataFromFile(file);
-					const code = jsQR(imageData.data, imageData.width, imageData.height);
-					if (code) {
-						DOM.textInput.value = code.data;
-						if (typeof eda !== 'undefined') eda.sys_ToastMessage.showMessage('成功导入二维码内容', 2);
-						// showToast('成功导入二维码内容', 2);
-						updateQrCode();
-					} else {
-						if (typeof eda !== 'undefined') eda.sys_ToastMessage.showMessage('未检测到二维码，请上传有效图片', 2);
-						// showToast('未检测到二维码，请上传有效图片', 1);
-					}
-				} catch (err) {
-					console.error(err);
-					showToast('图片解析失败', 1);
-				}
-				// 清空 value 允许重复上传同一文件
-				e.target.value = '';
-			}
-
-			function getImageDataFromFile(file) {
-				return new Promise((resolve, reject) => {
-					const img = new Image();
-					img.onload = () => {
-						MEMORY.sharedCanvas.width = img.width;
-						MEMORY.sharedCanvas.height = img.height;
-						MEMORY.sharedCtx.drawImage(img, 0, 0);
-						resolve(MEMORY.sharedCtx.getImageData(0, 0, img.width, img.height));
-					};
-					img.onerror = reject;
-					img.src = URL.createObjectURL(file);
-				});
-			}
-
-			function hexToRgb(hex) {
-				// 防御性转换
-				if (!hex) return { r: 0, g: 0, b: 0 };
-				hex = hex.replace(/^#/, '');
-				if (hex.length === 3) hex = hex[0] + hex[0] + hex[1] + hex[1] + hex[2] + hex[2];
-				const num = parseInt(hex, 16);
-				return { r: (num >> 16) & 255, g: (num >> 8) & 255, b: num & 255 };
-			}
-
-			function debounce(func, wait) {
-				let timeout;
-				return function (...args) {
-					clearTimeout(timeout);
-					timeout = setTimeout(() => func.apply(this, args), wait);
-				};
-			}
-
-			function showToast(msg, type) {
-				if (typeof eda !== 'undefined' && eda.sys_ToastMessage) {
-					eda.sys_ToastMessage.showMessage(msg, type);
-				} else {
-					console.log(`[Toast Type:${type}] ${msg}`);
-					// 可选：在界面上显示非 EDA 环境的提示
-					const statusDiv = document.getElementById('status-message');
-					if (statusDiv) {
-						statusDiv.textContent = msg;
-						statusDiv.classList.remove('hidden');
-						statusDiv.style.backgroundColor = type === 1 ? '#ffdddd' : '#ddffdd';
-						setTimeout(() => statusDiv.classList.add('hidden'), 3000);
-					}
-				}
-			}
-
-			/**
-			 * =================================================================
-			 * 7. EDA 交互 (EDA INTERACTION)
-			 * =================================================================
-			 */
-
-			function getCurrentLayerId() {
-				return STATE.layerMap[STATE.currentLayer] || (typeof EPCB_LayerId !== 'undefined' ? EPCB_LayerId.TOP_SILKSCREEN : 1);
-			}
-
-			async function handlePlaceQrCode(index) {
-				const canvas = DOM.canvases[index];
-
-				// 浏览器环境：下载图片
-				if (typeof eda === 'undefined') {
-					const link = document.createElement('a');
-					link.download = `QR_${Date.now()}.png`;
-					link.href = canvas.toDataURL();
-					link.click();
-					return;
-				}
-
-				try {
-					// 清除之前的跟随状态，防止重复点击导致 Bug
-					stopFollowing();
-
-					let width = parseFloat(DOM.qrSizeInput.value);
-					let height = width;
-
-					// EDA API 通常需要以特定单位传入，这里假设输入如果是mm，内部处理可能需要转换
-					// 但根据原代码，如果输入是mm，乘了39.37，说明API需要 mil 单位
-					if (STATE.unit === 'mm') {
-						width *= CONFIG.MM_TO_MIL;
-						height *= CONFIG.MM_TO_MIL;
-					}
-
-					const layerId = getCurrentLayerId();
-					const base64 = canvas.toDataURL('image/png');
-
-					if (STATE.outputType === 'image') {
-						// 图片对象模式
-						const colorObj = eda.pcb_PrimitiveObject.create(
-							layerId,
-							0,
-							0,
-							base64,
-							width.toFixed(2),
-							height.toFixed(2),
-							0,
-							false,
-							'img',
-							false,
-						);
-						STATE.primitiveId = (await colorObj).getState_PrimitiveId();
-						startFollowing(eda.pcb_PrimitiveObject);
-					} else {
-						// 矢量对象模式 (通过 ImageToPolygon 转换)
-						const blob = await (await fetch(base64)).blob();
-						// 注意：API 调用参数需严格对应文档
-						const edaImage = await eda.pcb_MathPolygon.convertImageToComplexPolygon(
-							blob,
-							width.toFixed(2),
-							height.toFixed(2),
-							0.5,
-							0,
-							0,
-							0,
-							true,
-							false,
-						);
-						// 矢量通常是无色的 PrimitiveImage 或者 Polygon 组合
-						const noColorImg = eda.pcb_PrimitiveImage.create(
-							0,
-							0,
-							edaImage,
-							layerId,
-							width.toFixed(2),
-							height.toFixed(2),
-							0,
-							false,
-							false,
-						);
-						STATE.primitiveId = (await noColorImg).getState_PrimitiveId();
-						startFollowing(eda.pcb_PrimitiveImage);
-					}
-
-					// 放置开始后隐藏插件窗口
-					eda.sys_IFrame.hideIFrame('ImportQrcode');
-				} catch (err) {
-					console.error('Place Error:', err);
-					showToast('放置失败: ' + err.message, 1);
-					stopFollowing();
-				}
-			}
-
-			function startFollowing(primitiveModule) {
-				// 双重保险：确保只有一个 interval
-				stopFollowing();
-
-				STATE.followInterval = setInterval(async () => {
-					try {
-						// 获取当前鼠标在 PCB 画布上的坐标
-						const pt = await eda.pcb_SelectControl.getCurrentMousePosition();
-						if (!pt) return;
-
-						// 不同类型的图元修改位置参数可能不同
-						const params = primitiveModule === eda.pcb_PrimitiveObject ? { topLeftX: pt.x, topLeftY: pt.y } : { x: pt.x, y: pt.y };
-
-						await primitiveModule.modify(STATE.primitiveId, params);
-					} catch (e) {
-						// 发生错误（如图元被删除）停止跟随
-						console.warn('Follow Loop Error:', e);
-						stopFollowing();
-					}
-				}, 20); // 20ms 刷新率
-			}
-
-			function stopFollowing() {
-				if (STATE.followInterval) {
-					clearInterval(STATE.followInterval);
-					STATE.followInterval = null;
-				}
-			}
-
-			// 窗口失焦时停止跟随（可选，视需求而定，防止后台消耗资源）
-			window.onblur = () => {
-				stopFollowing();
-			};
-
-			document.addEventListener('DOMContentLoaded', init);
-		</script>
-	</body>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>狼黑工具 - 各种码生成器</title>
+    <script src="js/bwip-js-min.js"></script>
+    <script src="/iframe/js/bwip-js-min.js"></script>
+    <style>
+        /* VS Code 深色主题风格 */
+        :root {
+            --vscode-bg: #1e1e1e;
+            --vscode-panel-bg: #252526;
+            --vscode-border: #3c3c3c;
+            --vscode-text: #cccccc;
+            --vscode-text-focus: #ffffff;
+            --vscode-input-bg: #3c3c3c;
+            --vscode-focus-border: #007acc;
+            --vscode-button-bg: #0e639c;
+            --vscode-button-hover: #1177bb;
+            --vscode-button-active: #094771;
+            --vscode-error: #f48771;
+            --vscode-scrollbar-bg: #1e1e1e;
+            --vscode-scrollbar-thumb: #424242;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: Consolas, "Microsoft YaHei", monospace;
+            font-size: 12px;
+        }
+
+        body {
+            background-color: var(--vscode-bg);
+            color: var(--vscode-text);
+            display: flex;
+            height: 100vh;
+            overflow: hidden;
+        }
+
+        /* 滚动条美化 */
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: var(--vscode-scrollbar-bg); }
+        ::-webkit-scrollbar-thumb { background: var(--vscode-scrollbar-thumb); }
+        ::-webkit-scrollbar-thumb:hover { background: #4f4f4f; }
+
+        /* 左侧预览区 */
+        .preview-container {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            background-color: var(--vscode-bg);
+            position: relative;
+            overflow: auto;
+        }
+
+        .canvas-wrapper {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            border: 2px solid transparent;
+            padding: 10px;
+            transition: border-color 0.2s;
+        }
+        
+        .canvas-wrapper:hover {
+            border-color: var(--vscode-focus-border);
+            border-radius: 4px;
+        }
+
+        canvas {
+            display: block;
+            width: 450px;
+            /* height: 450px; */
+            object-fit: contain;
+            /* image-rendering: pixelated; */
+            /* image-rendering: crisp-edges;  */
+        }
+
+        .error-message {
+            margin-top: 15px;
+            color: var(--vscode-error);
+            max-width: 80%;
+            text-align: center;
+            word-wrap: break-word;
+            min-height: 20px;
+            font-size: 13px;
+        }
+        
+        .info-hint {
+            /* margin-top: 15px; */
+            color: var(--vscode-text);
+            /* background-color: var(--vscode-panel-bg); */
+            /* padding: 8px 16px; */
+            /* border-radius: 20px; */
+            font-size: 20px;
+            /* border: 1px solid var(--vscode-border); */
+            /* pointer-events: none; */
+        }
+
+        /* 右侧属性面板 */
+        .properties-panel {
+            width: 300px;
+            background-color: var(--vscode-panel-bg);
+            border-left: 1px solid var(--vscode-border);
+            display: flex;
+            flex-direction: column;
+            overflow-y: auto;
+        }
+
+        .panel-header {
+            padding: 10px 12px;
+            font-size: 13px;
+            text-transform: uppercase;
+            border-bottom: 1px solid var(--vscode-border);
+            color: var(--vscode-text-focus);
+            font-weight: bold;
+        }
+
+        .form-group {
+            padding: 8px 12px;
+            border-bottom: 1px solid var(--vscode-border);
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 4px;
+            color: var(--vscode-text);
+        }
+
+		.control-item {
+			padding: 5px 0px;
+		}
+        .label-with-value {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .value-display {
+            color: var(--vscode-focus-border);
+            font-weight: bold;
+            font-size: 11px;
+        }
+
+        select, input[type="text"], input[type="number"], textarea {
+            width: 100%;
+            background-color: var(--vscode-input-bg);
+            border: 1px solid var(--vscode-border);
+            color: var(--vscode-text-focus);
+            padding: 4px 6px;
+            outline: none;
+            border-radius: 2px;
+            transition: border-color 0.15s ease;
+        }
+
+        select:focus, input[type="text"]:focus, input[type="number"]:focus, textarea:focus {
+            border-color: var(--vscode-focus-border);
+        }
+
+        input[type="range"] {
+            width: 100%;
+            margin-top: 4px;
+            accent-color: var(--vscode-focus-border);
+            background: transparent;
+            cursor: pointer;
+            height: 12px;
+        }
+
+        textarea {
+            resize: vertical;
+            min-height: 50px;
+        }
+
+        .checkbox-group {
+            display: flex;
+            align-items: center;
+            margin-top: 4px;
+        }
+
+        .checkbox-group input[type="checkbox"] {
+            margin-right: 6px;
+            accent-color: var(--vscode-focus-border);
+        }
+
+        /* EDA 移植样式: 输出切换 / 单位切换 */
+        .output-toggle, .unit-toggle {
+            display: flex;
+            border: 1px solid var(--vscode-border);
+            border-radius: 2px;
+            overflow: hidden;
+            margin-top: 2px;
+        }
+
+        .output-option, .unit-option {
+            padding: 4px 0;
+            background-color: var(--vscode-input-bg);
+            color: var(--vscode-text);
+            cursor: pointer;
+            font-size: 12px;
+            flex: 1;
+            text-align: center;
+        }
+
+        .output-option.active, .unit-option.active {
+            background-color: var(--vscode-button-bg);
+            color: #ffffff;
+        }
+        
+        .size-control {
+            display: flex;
+            align-items: center;
+        }
+        .size-control .unit-toggle { margin-top: 0; width: 80px; }
+
+        .resolution-text {
+            color: #9cdcfe;
+            font-size: 12px;
+            font-weight: normal;
+            padding: 8px 0px;
+        }
+
+        .button-group {
+            padding: 10px 12px;
+            margin-top: auto;
+            display: flex;
+            gap: 10px;
+        }
+
+        button {
+            flex: 1;
+            background-color: var(--vscode-button-bg);
+            color: #ffffff;
+            border: none;
+            padding: 6px 12px;
+            cursor: pointer;
+            border-radius: 2px;
+        }
+
+        button:hover { background-color: var(--vscode-button-hover); }
+        button:active { background-color: var(--vscode-button-active); }
+
+        #status-message {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            padding: 8px 16px;
+            background: #4ec9b0;
+            color: #1e1e1e;
+            border-radius: 4px;
+            font-weight: bold;
+            display: none;
+            z-index: 100;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.5);
+        }
+    </style>
+</head>
+<body>
+
+    <div class="preview-container">
+        <div class="canvas-wrapper" id="canvas-wrapper" title="单击左侧条码放置到选定图层">
+            <canvas id="barcode-canvas"></canvas>
+        </div>
+        <div id="error-message" class="error-message"></div>
+        <div class="info-hint" id="place-hint">单击码可放置到 PCB 画布</div>
+        <div id="status-message"></div>
+    </div>
+
+    <div class="properties-panel">
+        <div class="panel-header">属性面板</div>
+        
+        <div class="form-group flex-group">
+            <div class="control-item">
+                <label for="barcode-type">码类型</label>
+                <select id="barcode-type"></select>
+            </div>
+
+            <div class="control-item">
+                <label for="barcode-data">数据内容</label>
+                <textarea id="barcode-data">JLCJLCJLCJLC</textarea>
+            </div>
+
+            <div class="control-item" id="group-eclevel" style="display: none;">
+                <label for="barcode-eclevel">容错级别</label>
+                <select id="barcode-eclevel">
+                    <option value="L">L - 7%</option>
+                    <option value="M" selected>M - 15%</option>
+                    <option value="Q">Q - 25%</option>
+                    <option value="H">H - 30%</option>
+                </select>
+            </div>
+
+            <div class="control-item" id="group-include-text" style="display: none;">
+                <div class="checkbox-group">
+                    <input type="checkbox" id="barcode-include-text" checked>
+                    <label for="barcode-include-text" style="margin-bottom: 0;">显示文本信息</label>
+                </div>
+            </div>
+        </div>
+
+        <div class="form-group flex-group">
+            <div class="control-item">
+                <div class="label-with-value">
+                    <label for="barcode-scale" style="margin-bottom: 0;">码元尺寸</label>
+                    <span class="value-display" id="scale-value">32</span>
+                </div>
+                <input type="range" id="barcode-scale" value="32" min="1" max="50" step="1">
+            </div>
+
+            <div class="control-item">
+                <div class="label-with-value">
+                    <label for="barcode-padding" style="margin-bottom: 0;">码元边距</label>
+                    <span class="value-display" id="padding-value">1</span>
+                </div>
+                <input type="range" id="barcode-padding" value="1" min="0" max="16" step="1">
+            </div>
+
+            <div class="control-item">
+                <label>物理尺寸</label>
+                <div class="size-control">
+                    <input type="number" class="size-input" id="qr-size" value="1000" min="0.1" style="flex:1; margin-right: 10px;">
+                    <div class="unit-toggle">
+                        <div class="unit-option" id="unit-mm">mm</div>
+                        <div class="unit-option active" id="unit-mil">mil</div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="control-item">
+                <div id="resolution-info" class="resolution-text">尺寸: 0 × 0 px | 0 DPI</div>
+            </div>
+        </div>
+
+        <div class="form-group flex-group" style="border-bottom: none;">
+            <div class="control-item">
+                <label>显示类型</label>
+                <div class="output-toggle">
+                    <div class="output-option active" id="type-image">图片</div>
+                    <div class="output-option" id="type-vector">矢量</div>
+                </div>
+            </div>
+
+            <div class="control-item" id="image-controls">
+                <div style="display: flex; gap: 10px;">
+                    <div style="flex: 1;">
+                        <label for="color-fore" style="margin-bottom: 4px;">前景色</label>
+                        <input type="color" id="color-fore" value="#000000" style="width: 100%; height: 26px; cursor: pointer; border: 1px solid var(--vscode-border); background: var(--vscode-input-bg); padding: 0;">
+                    </div>
+                    <div style="flex: 1;">
+                        <label for="color-back" style="margin-bottom: 4px;">背景色</label>
+                        <input type="color" id="color-back" value="#ffffff" style="width: 100%; height: 26px; cursor: pointer; border: 1px solid var(--vscode-border); background: var(--vscode-input-bg); padding: 0;">
+                    </div>
+                </div>
+            </div>
+
+            <div class="control-item" id="vector-controls" style="display: none;">
+                <div class="checkbox-group">
+                    <input type="checkbox" id="invert-image">
+                    <label for="invert-image" style="margin-bottom:0;">反向图像 (黑底白码)</label>
+                </div>
+            </div>
+
+            <div class="control-item">
+                <label for="layer-select">放置图层</label>
+                <select id="layer-select" class="layer-select"></select>
+            </div>
+        </div>
+
+        <div class="button-group">
+            <button id="generate-btn">重新生成</button>
+            <button id="save-btn">保存图片</button>
+        </div>
+    </div>
+
+    <script>
+        // EDA 核心配置与状态管理
+        const EDA_CONFIG = {
+            MM_TO_MIL: 39.37007874015748
+        };
+        const STATE = {
+            outputType: 'image', // 'image' | 'vector'
+            unit: 'mil',         // 修改：默认单位设为 mil
+            currentLayer: 'TOP_SILKSCREEN',
+            followInterval: null,
+            primitiveId: null,
+            layerMap: {}
+        };
+
+        const layerOptionsConfig = {
+            image: [
+                { value: 'TOP_SILKSCREEN', text: '顶层丝印层', default: true },
+                { value: 'BOTTOM_SILKSCREEN', text: '底层丝印层' },
+                { value: 'DOCUMENT', text: '文档层' },
+            ],
+            vector: [
+                { value: 'TOP', text: '顶层' },
+                { value: 'TOP_SILKSCREEN', text: '顶层丝印层', default: true },
+                { value: 'TOP_SOLDER_MASK', text: '顶层阻焊层' },
+                { value: 'TOP_ASSEMBLY', text: '顶层装配层' },
+                { value: 'BOTTOM', text: '底层' },
+                { value: 'BOTTOM_SILKSCREEN', text: '底层丝印层' },
+                { value: 'BOTTOM_SOLDER_MASK', text: '底层阻焊层' },
+                { value: 'BOTTOM_ASSEMBLY', text: '底层装配层' },
+                { value: 'DOCUMENT', text: '文档层' },
+                { value: 'MECHANICAL', text: '机械层' },
+                { value: 'DRILL_DRAWING', text: '钻孔图层' },
+            ],
+        };
+
+        // 定义 PCB 领域常见的码
+        const commonCodes = [
+            { id: 'qrcode', name: 'QR Code', cn: '二维码' },
+            { id: 'datamatrix', name: 'Data Matrix', cn: '数据矩阵码' },
+            { id: 'microqrcode', name: 'Micro QR Code', cn: '微型二维码' },
+            { id: 'azteccode', name: 'Aztec Code', cn: '阿兹特克码' },
+            { id: 'code128', name: 'Code 128', cn: '128码' },
+            { id: 'code39', name: 'Code 39', cn: '39码' },
+            { id: 'pdf417', name: 'PDF417', cn: '便携式数据文件' }
+        ];
+
+        // 不常见的码数组... (此处省略其余码型定义以保持代码精简，按您原先的列表保留)
+        let uncommonCodes = [
+            { id: 'auspost', name: 'AusPost', cn: '澳大利亚邮政码' },
+            { id: 'aztecrune', name: 'Aztec Runes', cn: '阿兹特克符文' },
+            { id: 'bc412', name: 'BC412', cn: 'BC412码' },
+            { id: 'channelcode', name: 'Channel Code', cn: '通道码' },
+            { id: 'codablockf', name: 'Codablock F', cn: 'F区段码' },
+            { id: 'codabar', name: 'Codabar', cn: '库德巴码' },
+            { id: 'code11', name: 'Code 11', cn: '11码' },
+            { id: 'code16k', name: 'Code 16K', cn: '16K码' },
+            { id: 'code2of5', name: 'Code 2 of 5', cn: '25码' },
+            { id: 'code32', name: 'Code 32', cn: '意大利药监码' },
+            { id: 'code93', name: 'Code 93', cn: '93码' },
+            { id: 'codeone', name: 'Code One', cn: '一号码' },
+            { id: 'coop2of5', name: 'COOP 2 of 5', cn: 'COOP25码' },
+            { id: 'daft', name: 'DAFT Code', cn: 'DAFT码' },
+            { id: 'datalogic2of5', name: 'Datalogic 2 of 5', cn: 'Datalogic 25码' },
+            { id: 'dotcode', name: 'DotCode', cn: '点阵码' },
+            { id: 'ean13', name: 'EAN-13', cn: '欧洲商品条码13' },
+            { id: 'ean14', name: 'EAN-14', cn: '欧洲商品条码14' },
+            { id: 'ean8', name: 'EAN-8', cn: '欧洲商品条码8' },
+            { id: 'flattermarken', name: 'Flattermarken', cn: 'Flattermarken码' },
+            { id: 'gs1-128', name: 'GS1-128', cn: 'GS1-128码' },
+            { id: 'gs1datamatrix', name: 'GS1 Data Matrix', cn: 'GS1数据矩阵码' },
+            { id: 'gs1qrcode', name: 'GS1 QR Code', cn: 'GS1二维码' },
+            { id: 'hanxin', name: 'Han Xin Code', cn: '汉信码' },
+            { id: 'hibcazteccode', name: 'HIBC Aztec Code', cn: 'HIBC阿兹特克码' },
+            { id: 'hibccodablockf', name: 'HIBC Codablock F', cn: 'HIBC F区段码' },
+            { id: 'hibccode128', name: 'HIBC Code 128', cn: 'HIBC 128码' },
+            { id: 'hibccode39', name: 'HIBC Code 39', cn: 'HIBC 39码' },
+            { id: 'hibcdatamatrix', name: 'HIBC Data Matrix', cn: 'HIBC数据矩阵码' },
+            { id: 'hibcmicropdf417', name: 'HIBC MicroPDF417', cn: 'HIBC微型PDF417' },
+            { id: 'hibcpdf417', name: 'HIBC PDF417', cn: 'HIBC PDF417' },
+            { id: 'hibcqrcode', name: 'HIBC QR Code', cn: 'HIBC二维码' },
+            { id: 'iata2of5', name: 'IATA 2 of 5', cn: 'IATA 25码' },
+            { id: 'identcode', name: 'Deutsche Post Identcode', cn: '德国邮政识别码' },
+            { id: 'industrial2of5', name: 'Industrial 2 of 5', cn: '工业25码' },
+            { id: 'interleaved2of5', name: 'Interleaved 2 of 5', cn: '交叉25码' },
+            { id: 'isbn', name: 'ISBN', cn: '国际标准书号' },
+            { id: 'ismn', name: 'ISMN', cn: '国际标准音乐出版物号' },
+            { id: 'issn', name: 'ISSN', cn: '国际标准连续出版物号' },
+            { id: 'itf14', name: 'ITF-14', cn: 'ITF-14码' },
+            { id: 'japanpost', name: 'Japan Post', cn: '日本邮政码' },
+            { id: 'kix', name: 'KIX', cn: '荷兰KIX码' },
+            { id: 'leitcode', name: 'Deutsche Post Leitcode', cn: '德国邮政路由码' },
+            { id: 'matrix2of5', name: 'Matrix 2 of 5', cn: '矩阵25码' },
+            { id: 'maxicode', name: 'MaxiCode', cn: 'MaxiCode码' },
+            { id: 'micropdf417', name: 'MicroPDF417', cn: '微型PDF417' },
+            { id: 'msi', name: 'MSI', cn: 'MSI普莱西码' },
+            { id: 'onecode', name: 'USPS Intelligent Mail', cn: 'USPS智能邮件码' },
+            { id: 'pharmacode', name: 'Pharmacode', cn: '制药码' },
+            { id: 'pharmacode2', name: 'Two-track Pharmacode', cn: '双轨制药码' },
+            { id: 'planet', name: 'PLANET', cn: 'PLANET码' },
+            { id: 'plessey', name: 'Plessey', cn: '普莱西码' },
+            { id: 'posicode', name: 'PosiCode', cn: 'PosiCode码' },
+            { id: 'postnet', name: 'POSTNET', cn: 'POSTNET码' },
+            { id: 'pzn', name: 'PZN', cn: '德国药品中心码' },
+            { id: 'rationalizedCodabar', name: 'Rationalized Codabar', cn: '合理化库德巴码' },
+            { id: 'raw', name: 'Raw', cn: '原始数据码' },
+            { id: 'royalmail', name: 'Royal Mail', cn: '英国皇家邮政码' },
+            { id: 'sscc18', name: 'SSCC-18', cn: 'SSCC-18码' },
+            { id: 'symbol', name: 'Symbol', cn: '符号码' },
+            { id: 'telepen', name: 'Telepen', cn: 'Telepen码' },
+            { id: 'telepennumeric', name: 'Telepen Numeric', cn: '数字Telepen码' },
+            { id: 'ultracode', name: 'Ultracode', cn: '超码' },
+            { id: 'upca', name: 'UPC-A', cn: '通用产品代码A' },
+            { id: 'upce', name: 'UPC-E', cn: '通用产品代码E' }
+        ];
+
+        const qrCodesWithEcl = ['qrcode', 'microqrcode', 'gs1qrcode', 'hibcqrcode'];
+        const twoDCodesNoText = ['datamatrix', 'qrcode', 'microqrcode', 'azteccode', 'pdf417', 'micropdf417', 'maxicode', 'dotcode', 'hanxin', 'gs1datamatrix', 'gs1qrcode', 'hibcazteccode', 'hibcdatamatrix', 'hibcmicropdf417', 'hibcpdf417', 'hibcqrcode', 'codeone', 'aztecrune', 'flattermarken', 'ultracode'];
+
+        // DOM 元素获取
+        const selectElement = document.getElementById('barcode-type');
+        const dataInput = document.getElementById('barcode-data');
+        const scaleInput = document.getElementById('barcode-scale');
+        const paddingInput = document.getElementById('barcode-padding');
+        const eclevelSelect = document.getElementById('barcode-eclevel');
+        const includeTextInput = document.getElementById('barcode-include-text');
+        const scaleValueDisplay = document.getElementById('scale-value');
+        const paddingValueDisplay = document.getElementById('padding-value');
+        const resolutionInfo = document.getElementById('resolution-info');
+        const errorDiv = document.getElementById('error-message');
+        
+        // EDA 组件获取
+        const typeImageBtn = document.getElementById('type-image');
+        const typeVectorBtn = document.getElementById('type-vector');
+        const vectorControls = document.getElementById('vector-controls');
+		const imageControls = document.getElementById('image-controls');
+        const colorForeInput = document.getElementById('color-fore');
+        const colorBackInput = document.getElementById('color-back');
+        const invertCheckbox = document.getElementById('invert-image');
+        const unitMmBtn = document.getElementById('unit-mm');
+        const unitMilBtn = document.getElementById('unit-mil');
+        const qrSizeInput = document.getElementById('qr-size');
+        const layerSelect = document.getElementById('layer-select');
+        const canvasWrapper = document.getElementById('canvas-wrapper');
+
+        function initEdaLayerMap() {
+            if (typeof eda !== 'undefined' && typeof EPCB_LayerId !== 'undefined') {
+                STATE.layerMap = {
+                    'TOP': EPCB_LayerId.TOP,
+                    'TOP_SILKSCREEN': EPCB_LayerId.TOP_SILKSCREEN,
+                    'TOP_SOLDER_MASK': EPCB_LayerId.TOP_SOLDER_MASK,
+                    'TOP_ASSEMBLY': EPCB_LayerId.TOP_ASSEMBLY,
+                    'BOTTOM': EPCB_LayerId.BOTTOM,
+                    'BOTTOM_SILKSCREEN': EPCB_LayerId.BOTTOM_SILKSCREEN,
+                    'BOTTOM_SOLDER_MASK': EPCB_LayerId.BOTTOM_SOLDER_MASK,
+                    'BOTTOM_ASSEMBLY': EPCB_LayerId.BOTTOM_ASSEMBLY,
+                    'DOCUMENT': EPCB_LayerId.DOCUMENT,
+                    'MECHANICAL': EPCB_LayerId.MECHANICAL,
+                    'DRILL_DRAWING': EPCB_LayerId.DRILL_DRAWING,
+                };
+            } else {
+                STATE.layerMap = { 'TOP_SILKSCREEN': 1 };
+            }
+        }
+
+        function updateLayerOptions() {
+            layerSelect.innerHTML = '';
+            layerOptionsConfig[STATE.outputType].forEach(opt => {
+                const option = document.createElement('option');
+                option.value = opt.value;
+                option.textContent = opt.text;
+                if (opt.default) {
+                    option.selected = true;
+                    STATE.currentLayer = opt.value;
+                }
+                layerSelect.appendChild(option);
+            });
+        }
+
+        function setOutputType(type) {
+            STATE.outputType = type;
+            const isImage = type === 'image';
+            typeImageBtn.classList.toggle('active', isImage);
+            typeVectorBtn.classList.toggle('active', !isImage);
+            
+            // 【修改】根据类型切换对应的控制面板
+            vectorControls.style.display = isImage ? 'none' : 'block';
+            imageControls.style.display = isImage ? 'block' : 'none';
+            
+            updateLayerOptions();
+            generateBarcode();
+        }
+
+        function setUnit(unit) {
+            if (STATE.unit === unit) return; // 如果已经是当前单位则不处理
+            
+            let currentVal = parseFloat(qrSizeInput.value) || 0;
+            if (currentVal > 0) {
+                if (unit === 'mil' && STATE.unit === 'mm') {
+                    // mm 转换为 mil
+                    qrSizeInput.value = (currentVal * EDA_CONFIG.MM_TO_MIL).toFixed(2);
+                } else if (unit === 'mm' && STATE.unit === 'mil') {
+                    // mil 转换为 mm
+                    qrSizeInput.value = (currentVal / EDA_CONFIG.MM_TO_MIL).toFixed(2);
+                }
+            }
+
+            STATE.unit = unit;
+            unitMmBtn.classList.toggle('active', unit === 'mm');
+            unitMilBtn.classList.toggle('active', unit === 'mil');
+            generateBarcode();
+        }
+
+        function updateFormVisibility() {
+            const bcid = selectElement.value;
+            document.getElementById('group-eclevel').style.display = qrCodesWithEcl.includes(bcid) ? 'block' : 'none';
+            document.getElementById('group-include-text').style.display = twoDCodesNoText.includes(bcid) ? 'none' : 'block';
+        }
+
+        function generateBarcode() {
+            errorDiv.textContent = '';
+            
+            const bcid = selectElement.value;
+            const text = dataInput.value;
+            const scale = parseInt(scaleInput.value, 10);
+            const padding = parseInt(paddingInput.value * 2, 10);
+            const placeHint = document.getElementById('place-hint'); // 获取提示文字节点
+
+            if (!text) {
+                errorDiv.textContent = '输入数据不能为空。';
+                resolutionInfo.textContent = '二维码尺寸: - × - px | - DPI';
+                placeHint.style.display = 'none'; // 隐藏提示
+                return;
+            }
+
+            // 处理颜色
+            let barcolor = '000000';
+            let bgcolor = 'ffffff';
+            
+            if (STATE.outputType === 'image') {
+                // 【新增】图片模式下，读取取色器的值（需截掉前端的 '#' 符号）
+                barcolor = colorForeInput.value.substring(1);
+                bgcolor = colorBackInput.value.substring(1);
+            } else if (STATE.outputType === 'vector' && invertCheckbox.checked) {
+                // 矢量模式反转
+                barcolor = 'ffffff';
+                bgcolor = '000000';
+            }
+
+            let options = {
+                bcid: bcid,
+                text: text,
+                scale: scale,
+                padding: padding,
+                textxalign: 'center',
+                barcolor: barcolor,
+                textcolor: barcolor,
+                backgroundcolor: bgcolor
+            };
+
+            if (qrCodesWithEcl.includes(bcid)) options.eclevel = eclevelSelect.value;
+            if (!twoDCodesNoText.includes(bcid)) options.includetext = includeTextInput.checked;
+
+            try {
+                // 【新增】记录生成开始时间
+                const startTime = performance.now();
+
+                bwipjs.toCanvas('barcode-canvas', options);
+                
+                // 【新增】记录生成结束时间并输出到控制台
+                const endTime = performance.now();
+                console.log(`二维码生成耗时: ${(endTime - startTime).toFixed(2)} ms`);
+                
+                const canvas = document.getElementById('barcode-canvas');
+                let physSize = parseFloat(qrSizeInput.value) || 25.4;
+                
+                // 获取长边的像素大小，使 DPI 计算与长边物理尺寸匹配
+                let maxPixels = Math.max(canvas.width, canvas.height);
+                let dpi = 0;
+                if (STATE.unit === 'mm') {
+                    dpi = maxPixels * 25.4 / physSize;
+                } else if (STATE.unit === 'mil') {
+                    dpi = maxPixels * 1000 / physSize;
+                }
+                
+                resolutionInfo.textContent = `尺寸: ${canvas.width} × ${canvas.height} px | ${Math.round(dpi)} DPI`;
+                
+                // 生成成功，显示提示文字，恢复包裹层的鼠标指针样式
+                placeHint.style.display = 'block';
+                canvasWrapper.style.cursor = 'pointer';
+            } catch (e) {
+                const canvas = document.getElementById('barcode-canvas');
+                const ctx = canvas.getContext('2d');
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                errorDiv.textContent = '格式错误: ' + e.message;
+                resolutionInfo.textContent = '尺寸: - × - px | - DPI';
+                
+                // 生成失败，隐藏提示文字，将指针设为不可点击状态
+                placeHint.style.display = 'none';
+                canvasWrapper.style.cursor = 'not-allowed';
+            }
+        }
+		
+        // ================= EDA 跟随与放置逻辑 ================= //
+        function showToast(msg) {
+            if (typeof eda !== 'undefined' && eda.sys_ToastMessage) {
+                eda.sys_ToastMessage.showMessage(msg, 2);
+            } else {
+                const statusDiv = document.getElementById('status-message');
+                statusDiv.textContent = msg;
+                statusDiv.style.display = 'block';
+                setTimeout(() => statusDiv.style.display = 'none', 3000);
+            }
+        }
+
+        function getCurrentLayerId() {
+            return STATE.layerMap[STATE.currentLayer] || (typeof EPCB_LayerId !== 'undefined' ? EPCB_LayerId.TOP_SILKSCREEN : 1);
+        }
+
+        async function handlePlaceQrCode() {
+            const canvas = document.getElementById('barcode-canvas');
+            if (canvas.width === 0) return;
+
+            // 如果不在 EDA 环境内，提示点击保存
+            if (typeof eda === 'undefined') {
+                showToast('当前非 EDA 环境，请点击“保存图片”下载。');
+                return;
+            }
+
+            try {
+                stopFollowing();
+
+                let width = parseFloat(qrSizeInput.value) || 25.4;
+                // EDA API 参数如果是 mil 计算
+                if (STATE.unit === 'mm') {
+                    width *= EDA_CONFIG.MM_TO_MIL;
+                }
+                // 这里用长边作为基础缩放基准
+                const aspectRatio = canvas.height / canvas.width;
+                let height = width * aspectRatio;
+
+                const layerId = getCurrentLayerId();
+                const base64 = canvas.toDataURL('image/png');
+
+                if (STATE.outputType === 'image') {
+                    const colorObj = eda.pcb_PrimitiveObject.create(
+                        layerId, 0, 0, base64,
+                        width.toFixed(2), height.toFixed(2),
+                        0, false, 'img', false
+                    );
+                    STATE.primitiveId = (await colorObj).getState_PrimitiveId();
+                    startFollowing(eda.pcb_PrimitiveObject);
+                } else {
+                    const blob = await (await fetch(base64)).blob();
+                    const edaImage = await eda.pcb_MathPolygon.convertImageToComplexPolygon(
+                        blob, width.toFixed(2), height.toFixed(2),
+                        0.5, 0, 0, 0, true, false
+                    );
+                    const noColorImg = eda.pcb_PrimitiveImage.create(
+                        0, 0, edaImage, layerId,
+                        width.toFixed(2), height.toFixed(2),
+                        0, false, false
+                    );
+                    STATE.primitiveId = (await noColorImg).getState_PrimitiveId();
+                    startFollowing(eda.pcb_PrimitiveImage);
+                }
+
+                // 尝试隐藏插件窗口(防止挡住视野)
+                if (eda.sys_IFrame) eda.sys_IFrame.hideIFrame('ImportQrcode');
+            } catch (err) {
+                showToast('放置失败: ' + err.message);
+                stopFollowing();
+            }
+        }
+
+        function startFollowing(primitiveModule) {
+            stopFollowing();
+            STATE.followInterval = setInterval(async () => {
+                try {
+                    const pt = await eda.pcb_SelectControl.getCurrentMousePosition();
+                    if (!pt) return;
+                    const params = primitiveModule === eda.pcb_PrimitiveObject 
+                        ? { topLeftX: pt.x, topLeftY: pt.y } 
+                        : { x: pt.x, y: pt.y };
+                    await primitiveModule.modify(STATE.primitiveId, params);
+                } catch (e) {
+                    stopFollowing();
+                }
+            }, 20);
+        }
+
+        function stopFollowing() {
+            if (STATE.followInterval) {
+                clearInterval(STATE.followInterval);
+                STATE.followInterval = null;
+            }
+        }
+        window.onblur = stopFollowing;
+
+        // 初始化绑定事件
+        window.addEventListener('load', () => {
+            uncommonCodes.sort((a, b) => a.name.localeCompare(b.name));
+            const renderOption = (item) => {
+                const opt = document.createElement('option');
+                opt.value = item.id;
+                opt.textContent = `${item.name} (${item.cn})`;
+                return opt;
+            };
+            commonCodes.forEach(item => selectElement.appendChild(renderOption(item)));
+            const separator = document.createElement('option');
+            separator.disabled = true;
+            separator.textContent = '--------';
+            selectElement.appendChild(separator);
+            uncommonCodes.forEach(item => selectElement.appendChild(renderOption(item)));
+
+            initEdaLayerMap();
+            updateLayerOptions();
+            updateFormVisibility();
+            generateBarcode();
+
+            // 滑轮切换码型
+            selectElement.addEventListener('wheel', function(event) {
+                event.preventDefault();
+                let currentIndex = selectElement.selectedIndex;
+                let direction = event.deltaY > 0 ? 1 : -1;
+                let nextIndex = currentIndex + direction;
+                while (nextIndex >= 0 && nextIndex < selectElement.options.length) {
+                    if (!selectElement.options[nextIndex].disabled) {
+                        selectElement.selectedIndex = nextIndex;
+                        updateFormVisibility();
+                        generateBarcode();
+                        break;
+                    }
+                    nextIndex += direction;
+                }
+            });
+
+			// 【新增】物理尺寸输入框的鼠标滚轮精确控制逻辑
+            qrSizeInput.addEventListener('wheel', function(event) {
+                // 阻止浏览器原生的滚动导致的小数点错乱行为
+                event.preventDefault();
+
+                let currentVal = parseFloat(this.value) || 0;
+                
+                // 根据当前设定的单位动态决定滚动步进：mil状态下步进1，mm状态下步进0.1
+                let step = STATE.unit === 'mil' ? 1 : 0.1;
+                
+                // event.deltaY > 0 代表向下滚动（数值减），反之代表向上（数值加）
+                let direction = event.deltaY > 0 ? -1 : 1;
+                let nextVal = currentVal + (step * direction);
+
+                // 读取输入框的最小限制值，防止滚成负数
+                let minVal = parseFloat(this.min) || 0.1;
+                if (nextVal < minVal) {
+                    nextVal = minVal;
+                }
+
+                // 根据单位精确保留有效小数，mil无小数，mm保留2位，杜绝 1000.1 类似现象
+                this.value = STATE.unit === 'mil' ? Math.round(nextVal) : nextVal.toFixed(2);
+
+                // 滚动后立即刷新条码尺寸和 DPI 预览
+                generateBarcode();
+            });
+			
+            // 监听器
+            selectElement.addEventListener('change', () => { updateFormVisibility(); generateBarcode(); });
+            dataInput.addEventListener('input', generateBarcode);
+            scaleInput.addEventListener('input', function() { scaleValueDisplay.textContent = this.value; generateBarcode(); });
+            paddingInput.addEventListener('input', function() { paddingValueDisplay.textContent = this.value; generateBarcode(); });
+            eclevelSelect.addEventListener('change', generateBarcode);
+            includeTextInput.addEventListener('change', generateBarcode);
+            qrSizeInput.addEventListener('input', generateBarcode);
+            invertCheckbox.addEventListener('change', generateBarcode);
+			// colorForeInput.addEventListener('input', generateBarcode);
+            // colorBackInput.addEventListener('input', generateBarcode);
+
+			// 【修改】图片颜色的节流（Throttle）控制逻辑
+            let lastColorTime = 0;
+            let colorTimeout = null;
+            
+            function throttledColorUpdate() {
+                const now = Date.now();
+                // 如果距离上次生成已经过了 200ms，立即生成
+                if (now - lastColorTime >= 200) {
+                    generateBarcode();
+                    lastColorTime = now;
+                } else {
+                    // 如果在 200ms 内，则清除旧的定时器，重置延时，保证拖动停止时能渲染最终颜色
+                    clearTimeout(colorTimeout);
+                    colorTimeout = setTimeout(() => {
+                        generateBarcode();
+                        lastColorTime = Date.now();
+                    }, 200 - (now - lastColorTime));
+                }
+            }
+
+            // 使用节流函数替代直接绑定
+            colorForeInput.addEventListener('input', throttledColorUpdate);
+            colorBackInput.addEventListener('input', throttledColorUpdate);
+			
+            layerSelect.addEventListener('change', (e) => STATE.currentLayer = e.target.value);
+            
+            typeImageBtn.addEventListener('click', () => setOutputType('image'));
+            typeVectorBtn.addEventListener('click', () => setOutputType('vector'));
+            unitMmBtn.addEventListener('click', () => setUnit('mm'));
+            unitMilBtn.addEventListener('click', () => setUnit('mil'));
+            
+            document.getElementById('generate-btn').addEventListener('click', generateBarcode);
+            canvasWrapper.addEventListener('click', function() {
+                const canvas = document.getElementById('barcode-canvas');
+                // 通过判断 canvas 的宽度或者当前包裹层样式来决定是否执行放置逻辑
+                if (canvas.width === 0 || canvasWrapper.style.cursor === 'not-allowed') {
+                    return; // 处于禁用状态，直接拦截，不执行放置
+                }
+                handlePlaceQrCode();
+            });
+            // 保存功能
+            document.getElementById('save-btn').addEventListener('click', function() {
+                const canvas = document.getElementById('barcode-canvas');
+                const rawText = dataInput.value;
+                if (!rawText || canvas.width === 0) return; 
+                let safeFileName = rawText.replace(/[\\/:*?"<>|\r\n]/g, '_').trim();
+                if (safeFileName === '') safeFileName = 'barcode';
+                const link = document.createElement('a');
+                link.download = safeFileName + '.png';
+                link.href = canvas.toDataURL('image/png');
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+            });
+        });
+
+    </script>
+</body>
 </html>

@@ -8,8 +8,8 @@
 		<style>
 			/* === 基础布局 === */
 			body {
-				/* width: 540px;
-            height: 680px; */
+				/* width: 540px; */
+            	/* height: 680px; */
 				width: 100%;
 				height: 100vh;
 				background-color: #1e1e1e;
@@ -471,7 +471,7 @@
 			// ==========================================
 			// 1. 数据结构与加载器
 			// ==========================================
-			const MAX_SCAN_DAYS = 365;
+			// const MAX_SCAN_DAYS = 365;
 			let CURRENT_UUID = null;
 			let CURRENT_NAME = '未命名工程';
 
@@ -511,10 +511,42 @@
 						console.log('未获取到当前工程');
 					}
 
-					const { keys, displayDates } = StorageLoader.generateKeys(MAX_SCAN_DAYS);
-					const promises = keys.map((key) => eda.sys_Storage.getExtensionUserConfig(key));
-					const results = await Promise.all(promises);
+					// 1. 一次性获取所有本地存储配置
+					let allConfigs = {};
+					try {
+						allConfigs = await eda.sys_Storage.getExtensionAllUserConfigs();
+						if (!allConfigs) allConfigs = {};
+					} catch (e) {
+						console.error('获取全部配置失败:', e);
+					}
 
+					// 2. 动态计算“全部时间”的跨度（从最早的一条数据到今天）
+					const statKeys = Object.keys(allConfigs)
+						.filter(k => k.startsWith('STATS_'))
+						.sort(); // 按照 YYYY_MM_DD 字典序排序就是时间顺
+						
+					let scanDays = 7; // 默认最少显示7天
+					if (statKeys.length > 0) {
+						const earliestKey = statKeys[0]; // 例如: "STATS_2026_01_02"
+						const parts = earliestKey.split('_');
+						if (parts.length === 4) {
+							// 构造最早的日期和今天的日期，计算天数差
+							const earliestDate = new Date(Number(parts[1]), Number(parts[2]) - 1, Number(parts[3]));
+							const today = new Date();
+							today.setHours(0, 0, 0, 0);
+							const diffTime = today.getTime() - earliestDate.getTime();
+							const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
+							scanDays = Math.max(diffDays, 1);
+						}
+					}
+
+					// 3. 生成从最早记录到今天的连续日期数组
+					const { keys, displayDates } = StorageLoader.generateKeys(scanDays);
+
+					// 4. 将字典映射回按日期排序的数组（没有数据的天数填充 null）
+					const results = keys.map((key) => allConfigs[key] || null);
+
+					// 5. 找到第一天有数据的索引，截断前面无数据的空白期（兜底逻辑）
 					let startIndex = -1;
 					for (let i = 0; i < results.length; i++) {
 						if (results[i]) {
@@ -529,8 +561,9 @@
 					DB.datesRaw = keys.slice(startIndex);
 					const validResults = results.slice(startIndex);
 
+					// 6. 遍历解析数据（渲染逻辑保持不变）
 					validResults.forEach((jsonStr, index) => {
-						const dayData = jsonStr ? JSON.parse(jsonStr) : { meta: {}, slots: {} };
+						const dayData = jsonStr && typeof jsonStr === 'string' ? JSON.parse(jsonStr) : { meta: {}, slots: {} };
 						const dateKey = DB.datesRaw[index];
 						DB.rawDailyData[dateKey] = dayData;
 
@@ -923,7 +956,7 @@
 					charts.rankHistory.clear();
 				}
 			}
-
+			
 			function renderRankHistory(uuid, name) {
 				const dispName = name.length > 20 ? name.substring(0, 19) + '...' : name;
 				const titleEl = document.getElementById('rankHistoryTitle');
@@ -933,29 +966,70 @@
 				const pData = DB.projects[uuid];
 				if (!pData) return;
 
-				let startIdx = 0;
-				for (let k = 0; k < pData.work.length; k++) {
-					if (pData.work[k] > 0 || pData.idle[k] > 0) {
-						startIdx = k;
-						break;
-					}
-				}
-				if (startIdx === 0 && pData.work[0] === 0 && pData.idle[0] === 0) {
-					const lastActive = pData.work.length - 7;
-					if (startIdx < lastActive && sumArray(pData.work) === 0 && sumArray(pData.idle) === 0) {
-						startIdx = lastActive > 0 ? lastActive : 0;
+				// 找到第一个和最后一个有数据的索引（工作或休息 > 0）
+				let firstIdx = -1, lastIdx = -1;
+				for (let i = 0; i < pData.work.length; i++) {
+					if (pData.work[i] > 0 || pData.idle[i] > 0) {
+						if (firstIdx === -1) firstIdx = i;
+						lastIdx = i;
 					}
 				}
 
-				const wTotal = sumArray(pData.work);
-				const iTotal = sumArray(pData.idle);
-				document.getElementById('rankHistorySummary').innerHTML =
-					`工作<span class="sum-val">${formatTimeCN(wTotal)}</span> 休息<span class="sum-val">${formatTimeCN(iTotal)}</span>`;
+				// 如果没有数据，则默认显示最近7天（或全部）
+				if (firstIdx === -1) {
+					// 全零数据，回退到原逻辑：显示最后7天（如果总天数>=7）或全部
+					let startIdx = Math.max(0, pData.work.length - 7);
+					let xH = DB.dates.slice(startIdx);
+					let wH = pData.work.slice(startIdx);
+					let iH = pData.idle.slice(startIdx);
+					// 不足7天时左侧补零（与原逻辑保持一致）
+					if (xH.length < 7 && xH.length > 0) {
+						const padCount = 7 - xH.length;
+						const firstDate = new Date(xH[0]);
+						for (let k = 1; k <= padCount; k++) {
+							const d = new Date(firstDate);
+							d.setDate(d.getDate() - k);
+							const Y = d.getFullYear();
+							const M = (d.getMonth() + 1).toString().padStart(2, '0');
+							const D = d.getDate().toString().padStart(2, '0');
+							xH.unshift(`${Y}/${M}/${D}`);
+							wH.unshift(0);
+							iH.unshift(0);
+						}
+					}
+					// 更新汇总信息
+					const wTotal = sumArray(pData.work);
+					const iTotal = sumArray(pData.idle);
+					document.getElementById('rankHistorySummary').innerHTML =
+						`工作<span class="sum-val">${formatTimeCN(wTotal)}</span> 休息<span class="sum-val">${formatTimeCN(iTotal)}</span>`;
 
-				let xH = DB.dates.slice(startIdx);
-				let wH = pData.work.slice(startIdx);
-				let iH = pData.idle.slice(startIdx);
+					let maxDailyTotal = 0;
+					for (let i = 0; i < wH.length; i++) {
+						const sum = (Number(wH[i]) || 0) + (Number(iH[i]) || 0);
+						if (sum > maxDailyTotal) maxDailyTotal = sum;
+					}
+					const option = getLineOption(xH, wH, iH, null);
+					if (maxDailyTotal > 23) {
+						option.yAxis.max = 24;
+						option.yAxis.interval = 4;
+					} else {
+						option.yAxis.max = null;
+						option.yAxis.interval = null;
+					}
+					charts.rankHistory.setOption(option, true);
+					return;
+				}
 
+				// 计算扩展的起始和结束索引（开始-1天，末尾+1天）
+				let startIdx = Math.max(0, firstIdx - 1);
+				let endIdx = Math.min(pData.work.length - 1, lastIdx + 1);
+
+				// 切片
+				let xH = DB.dates.slice(startIdx, endIdx + 1);
+				let wH = pData.work.slice(startIdx, endIdx + 1);
+				let iH = pData.idle.slice(startIdx, endIdx + 1);
+
+				// 如果切片后不足7天，左侧补零（保持与原视觉习惯一致）
 				if (xH.length < 7 && xH.length > 0) {
 					const padCount = 7 - xH.length;
 					const firstDate = new Date(xH[0]);
@@ -971,6 +1045,12 @@
 					}
 				}
 
+				// 更新汇总信息（基于原始全量数据，与显示范围无关）
+				const wTotal = sumArray(pData.work);
+				const iTotal = sumArray(pData.idle);
+				document.getElementById('rankHistorySummary').innerHTML =
+					`工作<span class="sum-val">${formatTimeCN(wTotal)}</span> 休息<span class="sum-val">${formatTimeCN(iTotal)}</span>`;
+
 				let maxDailyTotal = 0;
 				for (let i = 0; i < wH.length; i++) {
 					const sum = (Number(wH[i]) || 0) + (Number(iH[i]) || 0);
@@ -978,7 +1058,6 @@
 				}
 
 				const option = getLineOption(xH, wH, iH, null);
-
 				if (maxDailyTotal > 23) {
 					option.yAxis.max = 24;
 					option.yAxis.interval = 4;
@@ -986,9 +1065,9 @@
 					option.yAxis.max = null;
 					option.yAxis.interval = null;
 				}
-
 				charts.rankHistory.setOption(option, true);
 			}
+
 
 			function getLineOption(xData, wData, iData, timePrecision) {
 				return {
@@ -1127,6 +1206,9 @@
 						eda.sys_Message.showToastMessage('已保存所有提醒规则', 'success');
 					} catch (e) {
 						eda.sys_Message.showToastMessage('保存失败:' + e.message, 'error');
+						if (e.includes("Cannot create property")) {
+							eda.sys_Message.showToastMessage('EDA底层数据写入异常，无法保存，建议重启EDA', 'error');
+						}
 					}
 				},
 				preview: function (index) {
@@ -1310,7 +1392,14 @@
 
 						// C. 如果有修改，写入存储
 						if (isModified) {
-							await eda.sys_Storage.setExtensionUserConfig(dateKey, JSON.stringify(dayData));
+							try {
+								await eda.sys_Storage.setExtensionUserConfig(dateKey, JSON.stringify(dayData));
+							} catch (e) {
+								eda.sys_Message.showToastMessage('保存失败:' + e.message, 'error');
+								if (e.includes("Cannot create property")) {
+									eda.sys_Message.showToastMessage('EDA底层数据写入异常，无法保存，建议重启EDA', 'error');
+								}
+							}
 						}
 					}
 
@@ -1361,6 +1450,7 @@
 
 					document.getElementById('loading-mask').style.display = 'none';
 					switchTab('total');
+					// console.log( eda.sys_Storage.getExtensionAllUserConfigs() );
 				} catch (e) {
 					document.getElementById('loading-mask').innerText = '数据读取失败: ' + e.message;
 					console.error(e);

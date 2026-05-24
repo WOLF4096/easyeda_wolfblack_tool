@@ -1,0 +1,656 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>狼黑工具 - 3D 模型批量更新</title>
+    <style>
+        /* VS Code 深色主题风格 */
+        :root {
+            --vscode-bg: #1e1e1e;
+            --vscode-fg: #cccccc;
+            --vscode-border: #404040;
+            --vscode-header-bg: #252526;
+            --vscode-btn-bg: #0e639c;
+            --vscode-btn-hover: #1177bb;
+            --vscode-table-hover: #2a2d2e;
+            --vscode-progress-bg: #007acc;
+            --vscode-success: #89d185;
+            --vscode-error: #f48771;
+        }
+
+        body, html {
+            margin: 0;
+            padding: 0;
+            height: 100%;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            background-color: var(--vscode-bg);
+            color: var(--vscode-fg);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden; /* 无边框自适应 */
+            font-size: 13px;
+        }
+
+        /* 顶部工具栏 */
+        .toolbar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 10px 15px;
+            background-color: var(--vscode-header-bg);
+            border-bottom: 1px solid var(--vscode-border);
+        }
+
+        .title {
+            font-weight: 600;
+            font-size: 14px;
+        }
+
+        .actions button {
+            background-color: var(--vscode-btn-bg);
+            color: white;
+            border: none;
+            padding: 6px 12px;
+            margin-left: 8px;
+            border-radius: 2px;
+            cursor: pointer;
+            font-size: 12px;
+            transition: background 0.2s;
+        }
+
+        .actions button:hover {
+            background-color: var(--vscode-btn-hover);
+        }
+
+        .actions button:disabled {
+            background-color: #5a5a5a;
+            cursor: not-allowed;
+            color: #a0a0a0;
+        }
+
+        /* 表格区域 */
+        .table-container {
+            flex: 1;
+            overflow: auto; /* 允许出现滚动条 */
+            position: relative;
+            width: 100%; /* 确保容器占满 */
+        }
+
+        table {
+            width: 100%; 
+            table-layout: fixed; 
+            border-collapse: separate; /* 1. 彻底放弃 collapse，改为独立边框模式 */
+            border-spacing: 0;         /* 2. 单元格间距设为 0 */
+            text-align: left;
+            border-left: 1px solid var(--vscode-border); /* 3. 整个表格只画一条左外边框 */
+        }
+
+        th, td {
+            padding: 4px 6px; 
+            border-right: 1px solid var(--vscode-border);  /* 4. 每个单元格只负责右边框 */
+            border-bottom: 1px solid var(--vscode-border); /* 5. 每个单元格只负责下边框 */
+            white-space: nowrap; 
+            overflow: hidden; 
+            text-overflow: ellipsis; 
+            box-sizing: border-box;
+        }
+
+        th {
+            background-color: var(--vscode-header-bg); 
+            position: sticky;
+            top: 0;
+            z-index: 10;
+            cursor: pointer;
+            user-select: none;
+            text-align: center; 
+            box-shadow: 0 1px 0 var(--vscode-border);
+            border-bottom: none;
+        }
+        
+        th.col-xyz {
+            width: 54px;
+            min-width: 54px;
+            max-width: 54px;
+            padding: 4px 0; 
+        }
+        
+        td.col-xyz {
+            padding: 0; 
+        }
+
+        /* 处理第二行表头的吸顶 */
+        thead tr:nth-child(2) th {
+            top: 28px; /* 如果有缝隙，把原来的 27px 改成 28px 左右 */
+            z-index: 9;
+        }
+
+        th:hover {
+            background-color: #333333;
+        }
+
+        tbody tr:hover {
+            background-color: var(--vscode-table-hover);
+        }
+
+        /* 数据列居中，让数字显示更整齐 */
+        td {
+            text-align: center; 
+        }
+        td:nth-child(1), td:nth-child(2), td:nth-child(3) {
+            text-align: left; /* 位号、封装和模型名称保留左对齐 */
+        }
+
+        /* 状态颜色 */
+        .status-ready { color: #cccccc; }
+        .status-success { color: var(--vscode-success); font-weight: bold; }
+        .status-error { color: var(--vscode-error); }
+
+        .text-error {
+            color: var(--vscode-error);
+        }
+
+        /* 底部状态及进度条 (替换为背景填充风格) */
+        .status-bar {
+            height: 22px;
+            background-color: #007acc; /* VSCode 经典蓝 */
+            color: #ffffff;
+            font-size: 12px;
+            display: flex;
+            align-items: center;
+            padding: 0 10px;
+            flex-shrink: 0;
+            position: relative;
+            overflow: hidden;
+            box-shadow: 0 -1px 2px rgba(0,0,0,0.2);
+        }
+        /* 进度条的填充层 */
+        .progress-bg {
+            position: absolute;
+            left: 0;
+            top: 0;
+            bottom: 0;
+            background-color: rgba(255, 255, 255, 0.2); /* 半透明白色作为进度填充 */
+            width: 0%;
+            transition: width 0.2s ease;
+            z-index: 1;
+        }
+        /* 状态栏文字需要浮在进度条上方 */
+        .status-text {
+            position: relative;
+            z-index: 2;
+            white-space: nowrap;
+        }
+        /* 固定 XYZ 列宽并美化输入框 */
+        th.col-xyz, td.col-xyz {
+            width: 54px;
+            min-width: 54px;
+            max-width: 54px;
+            /* padding: 4px; */
+        }
+
+        /* 3. 输入框无缝填满样式 */
+        .xyz-input {
+            width: 100%;
+            height: 100%;
+            min-height: 25px; /* 保证单元格有足够的高度 */
+            box-sizing: border-box;
+            background-color: transparent; /* 默认透明，与单元格背景融合 */
+            color: var(--vscode-fg);
+            border: none; /* 关键：去掉输入框自带边框 */
+            text-align: center;
+            font-size: 12px;
+            outline: none;
+            /* 稍微加一点内部 padding 防止文字贴边 */
+            padding: 0 2px; 
+            border-radius: 0;
+            transition: background-color 0.2s, box-shadow 0.2s;
+        }
+
+        /* 4. 聚焦时的明显提示 */
+        .xyz-input:focus {
+            background-color: #2d2d2d;
+            /* 使用内阴影代替边框，这样不会改变输入框的实际尺寸导致表格抖动 */
+            box-shadow: inset 0 0 0 1px var(--vscode-btn-bg);
+        }
+    </style>
+</head>
+<body>
+
+    <div class="toolbar">
+        <div class="title">3D 模型更新 & 恢复 （使用前必须确保没有重复位号）</div>
+        <div class="actions">
+            <button id="btn-get-current">获取当前数据</button> 
+            <button id="btn-load">读取网表</button>
+            <button id="btn-unit">单位切换</button>
+            <button id="btn-update" disabled>执行更新</button>
+        </div>
+    </div>
+
+    <div class="table-container">
+        <table id="data-table">
+            <colgroup>
+                <col style="width: 54px;"> 
+				<col style="width: auto;"> 
+                <col style="width: auto;">
+
+                <col style="width: 54px;">
+                <col style="width: 54px;">
+                <col style="width: 54px;">
+                
+                <col style="width: 54px;">
+                <col style="width: 54px;">
+                <col style="width: 54px;">
+                
+                <col style="width: 54px;">
+                <col style="width: 54px;">
+                <col style="width: 54px;">
+                
+                <col style="width: 60px;"> 
+            </colgroup>
+            <thead>
+                <tr>
+                    <th rowspan="2" data-sort="designator">位号</th>
+                    <th rowspan="2" data-sort="footprint">封装</th>
+                    <th rowspan="2" data-sort="modelTitle">3D模型</th>
+                    <th colspan="3" id="th-size">大小 (mm)</th>
+                    <th colspan="3">旋转 (°)</th>
+                    <th colspan="3" id="th-offset">偏移 (mm)</th>
+                    <th rowspan="2" data-sort="status">状态</th>
+                </tr>
+                <tr>
+                    <th data-sort="sX" class="col-xyz">X</th>
+                    <th data-sort="sY" class="col-xyz">Y</th>
+                    <th data-sort="sZ" class="col-xyz">Z</th>
+                    <th data-sort="rX" class="col-xyz">X</th> 
+                    <th data-sort="rY" class="col-xyz">Y</th>
+                    <th data-sort="rZ" class="col-xyz">Z</th>
+                    <th data-sort="oX" class="col-xyz">X</th>
+                    <th data-sort="oY" class="col-xyz">Y</th>
+                    <th data-sort="oZ" class="col-xyz">Z</th>
+                </tr>
+            </thead>
+            <tbody id="table-body">
+                <tr><td colspan="13" style="text-align: center; padding: 20px; color: #888;">请先读取网表文件</td></tr>
+            </tbody>
+        </table>
+    </div>
+
+    <div class="status-bar" id="statusBar">
+        <div class="progress-bg" id="progressBg"></div>
+        <span class="status-text" id="status-text">就绪</span>
+    </div>
+
+    <script>
+        // 获取 EDA 环境上下文 (适配 iframe)
+        const sys_eda = window.parent.eda || window.eda;
+
+        // 全局状态 (默认使用 mm)
+        let appState = {
+            data: [],          
+            unit: 'mm',       
+            sortCol: null,     
+            sortAsc: true      
+        };
+
+        // DOM 元素
+        const tbody = document.getElementById('table-body');
+        // const unitLabel = document.getElementById('unit-label');
+        const btnUnit = document.getElementById('btn-unit');
+        const btnUpdate = document.getElementById('btn-update');
+        const statusText = document.getElementById('status-text');
+        const progressBg = document.getElementById('progressBg');
+
+        // --- 核心业务逻辑 ---
+        // 新增：获取当前网表
+        // 新增：获取当前网表 (兼容 V2/V3)
+        document.getElementById('btn-get-current').addEventListener('click', async () => {
+            if (!sys_eda) {
+                alert("未检测到 EDA 运行环境！");
+                mockDataLoad();
+                return;
+            }
+
+            try {
+                statusText.textContent = '正在获取当前PCB网表...';
+
+                // 2. 获取 PCB 网表数据
+                let getNetlist;
+                try {
+                    // 只获取 PCB 网表，按照你提供的脚本 API 规范
+                    getNetlist = await sys_eda.pcb_ManufactureData.getNetlistFile('JLCEDA');
+                } catch (apiError) {
+                    console.error("API 调用失败:", apiError);
+                    throw new Error("无法读取 PCB 网表，请确保当前处于 PCB 编辑页面");
+                }
+
+                if (!getNetlist) {
+                    throw new Error("返回的网表数据为空");
+                }
+
+                // 3. 提取文本并解析 JSON
+                const netlistText = await getNetlist.text();
+                const netlistData = JSON.parse(netlistText);
+
+                // 4. 交给已有的解析函数处理 
+                // (注：原有的 parseNetlist 函数已经包含了 V2/V3 components 路径的兼容处理)
+                parseNetlist(netlistData);
+                
+                // sys_eda.sys_Message.showToastMessage(`成功获取当前网表 (${isV3 ? 'V3' : 'V2'})`, 'success');
+
+            } catch (error) {
+                console.error('获取当前网表失败:', error);
+                sys_eda.sys_Message.showToastMessage('获取当前网表失败: ' + error.message, 'error');
+                statusText.textContent = '就绪'; // 恢复状态文本
+            }
+        });
+
+        document.getElementById('btn-load').addEventListener('click', async () => {
+            if (!sys_eda) {
+                alert("未检测到 EDA 运行环境！");
+                mockDataLoad(); // 方便浏览器独立调试
+                return;
+            }
+
+            try {
+                const fileResult = await sys_eda.sys_FileSystem.openReadFileDialog();
+                if (!fileResult) return;
+
+                let fileContent = typeof fileResult === 'object' && fileResult.text ? await fileResult.text() : fileResult;
+                let jsonString = Array.isArray(fileContent) ? fileContent.join('') : fileContent;
+                const netlistData = JSON.parse(jsonString.trim());
+                
+                parseNetlist(netlistData);
+            } catch (error) {
+                sys_eda.sys_Message.showToastMessage('网表解析失败: ' + error.message, 'error');
+            }
+        });
+
+        function parseNetlist(netlistData) {
+            console.log(netlistData);
+            appState.data = [];
+            let componentsSource = netlistData.components ? netlistData.components : netlistData;
+
+            for (const key in componentsSource) {
+                const component = componentsSource[key];
+                if (component && component.props) {
+                    const designator = component.props.Designator;
+                    
+                    // 只要有位号，就将其视为有效器件
+                    if (designator) {
+                        // 提取属性，如果没有则赋予空字符串或默认值
+                        const model3D = component.props['3D Model'] || '';
+                        const modelTitle = component.props['3D Model Title'] || '';
+                        const transform = component.props['3D Model Transform'] || '0,0,0,0,0,0,0,0,0';
+                        
+                        // 兼容多种封装字段命名可能 (V2/V3)
+                        const footprint = component.props['FootprintName'] || component.props['Footprint Name'] || component.props['Footprint'] || '-'; 
+
+                        const tParts = transform.split(',').map(Number);
+                        
+                        appState.data.push({
+                            id: designator,
+                            designator: designator,
+                            footprint: footprint,
+                            modelTitle: modelTitle || '没有找到 3D 模型',
+                            rawModel: model3D,
+                            rawTransform: transform,
+                            sX: tParts[0] || 0, sY: tParts[1] || 0, sZ: tParts[2] || 0,
+                            rZ: tParts[3] || 0, rX: tParts[4] || 0, rY: tParts[5] || 0,
+                            oX: tParts[6] || 0, oY: tParts[7] || 0, oZ: tParts[8] || 0,
+                            status: model3D ? '待更新' : '无模型', // 区分一下状态
+                            primitiveId: null
+                        });
+                    }
+                }
+            }
+            
+            btnUpdate.disabled = appState.data.length === 0;
+            statusText.textContent = `成功加载 ${appState.data.length} 个器件`;
+            appState.sortCol = 'modelTitle';
+            appState.sortAsc = true;
+            renderTable();
+        }
+
+        // 单位切换及智能数值格式化
+        btnUnit.addEventListener('click', () => {
+            appState.unit = appState.unit === 'mm' ? 'mil' : 'mm';
+            // unitLabel.textContent = `(${appState.unit})`;
+            btnUnit.textContent = appState.unit === 'mm' ? '单位切换' : '单位切换';
+            // 新增：动态更新表头的大分类单位显示
+            document.getElementById('th-size').textContent = `大小 (${appState.unit})`;
+            document.getElementById('th-offset').textContent = `偏移 (${appState.unit})`;
+            renderTable();
+        });
+
+        // 缺省 0 显示的核心处理，利用 Number() 自动丢弃末尾无效 0
+        function formatVal(val, isDegree = false) {
+            let num = Number(val);
+            if (isNaN(num)) return val;
+
+            if (isDegree) {
+                return Number(num.toFixed(3)); // 旋转角度不涉转换，仅去多余零
+            }
+            if (appState.unit === 'mm') {
+                return Number((num * 0.0254).toFixed(3)); 
+            }
+            return Number(num.toFixed(3)); // mil 下同样格式化
+        }
+
+        // 处理用户在输入框中的修改
+        window.updateParam = function(id, field, value) {
+            let item = appState.data.find(d => d.id === id);
+            if (!item) return;
+
+            let numVal = Number(value);
+            if (isNaN(numVal)) numVal = 0;
+
+            // 转换逻辑：如果是大小或偏移，且当前界面显示的是 mm，则输入的值需要转回 mil 存入底层
+            let isDegree = field.startsWith('r');
+            if (!isDegree && appState.unit === 'mm') {
+                numVal = numVal / 0.0254; 
+            }
+            
+            // 更新该字段的值
+            item[field] = numVal;
+
+            // 重新拼接底层所需的 Transform 字符串格式: sX,sY,sZ,rZ,rX,rY,oX,oY,oZ
+            // 注意 rZ 对应的索引是 3，rX 是 4，rY 是 5
+            let tArray = [
+                item.sX, item.sY, item.sZ,
+                item.rZ, item.rX, item.rY,
+                item.oX, item.oY, item.oZ
+            ];
+            item.rawTransform = tArray.join(',');
+            item.status = '已修改';
+        };
+
+        // 重新渲染表格，注入 input
+        function renderTable() {
+            if (appState.data.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="13" style="text-align: center; color: #888;">未找到有效的3D模型数据</td></tr>';
+                return;
+            }
+
+            let renderData = [...appState.data];
+            if (appState.sortCol) {
+                renderData.sort((a, b) => {
+                    let valA = a[appState.sortCol];
+                    let valB = b[appState.sortCol];
+                    
+                    if (typeof valA === 'string') {
+                        return appState.sortAsc 
+                            ? valA.localeCompare(valB, undefined, {numeric: true}) 
+                            : valB.localeCompare(valA, undefined, {numeric: true});
+                    }
+                    return appState.sortAsc ? valA - valB : valB - valA;
+                });
+            }
+
+            // 辅助函数：生成 input 标签
+            const makeInput = (item, field, isDegree) => {
+                let displayVal = formatVal(item[field], isDegree);
+                return `<td class="col-xyz"><input class="xyz-input" type="text" value="${displayVal}" onchange="updateParam('${item.id}', '${field}', this.value)"></td>`;
+            };
+
+            tbody.innerHTML = renderData.map(item => {
+                let statusClass = 'status-ready';
+                if (item.status === '成功') statusClass = 'status-success';
+                if (item.status === '失败' || item.status === '未找到') statusClass = 'status-error';
+                if (item.status === '已修改') statusClass = 'status-success'; // 稍微高亮提示已修改
+
+                let modelTitleHtml = item.modelTitle;
+                if (item.modelTitle === '没有找到 3D 模型') {
+                    modelTitleHtml = `<span class="text-error">${item.modelTitle}</span>`;
+                }
+
+                return `<tr>
+                    <td title="${item.designator}">${item.designator}</td>
+                    <td title="${item.footprint}">${item.footprint}</td>
+                    <td title="${item.modelTitle}">${modelTitleHtml}</td>
+                    ${makeInput(item, 'sX', false)} ${makeInput(item, 'sY', false)} ${makeInput(item, 'sZ', false)}
+                    ${makeInput(item, 'rX', true)} ${makeInput(item, 'rY', true)} ${makeInput(item, 'rZ', true)}
+                    ${makeInput(item, 'oX', false)} ${makeInput(item, 'oY', false)} ${makeInput(item, 'oZ', false)}
+                    <td class="${statusClass}" id="status-${item.id}">${item.status}</td>
+                </tr>`;
+            }).join('');
+        }
+        
+        // 无图标隐式排序逻辑
+        document.querySelectorAll('th[data-sort]').forEach(th => {
+            th.addEventListener('click', (e) => {
+                const col = e.target.getAttribute('data-sort');
+                if (!col) return;
+                
+                if (appState.sortCol === col) {
+                    appState.sortAsc = !appState.sortAsc;
+                } else {
+                    appState.sortCol = col;
+                    appState.sortAsc = true; 
+                }
+                renderTable();
+            });
+        });
+
+        // 执行批量更新
+        btnUpdate.addEventListener('click', async () => {
+            if (!sys_eda) return;
+            //记录任务开始时间
+			const startTime = performance.now();
+
+            btnUpdate.disabled = true;
+            document.getElementById('btn-load').disabled = true;
+            document.getElementById('btn-unit').disabled = true;
+            
+            progressBg.style.width = '0%';
+            statusText.textContent = '正在获取PCB器件...';
+            
+            try {
+                const pcbComps = await sys_eda.pcb_PrimitiveComponent.getAll();
+                const pcbMap = {};
+                pcbComps.forEach(comp => {
+                    if (comp && comp.designator && comp.primitiveId) {
+                        pcbMap[comp.designator] = comp.primitiveId;
+                    }
+                });
+
+                const total = appState.data.length;
+                let successCount = 0;
+
+                for (let i = 0; i < total; i++) {
+                    let item = appState.data[i];
+                    let primId = pcbMap[item.designator];
+
+                    statusText.textContent = `正在处理: ${item.designator}`;
+                    
+                    if (!primId) {
+                        item.status = '未找到';
+                    } 
+                    // ===== 新增需求：如果没有模型或 UUID 为空，则拒绝修改 =====
+                    else if (!item.rawModel || item.rawModel.trim() === '') {
+                        item.status = '跳过';
+                    } 
+                    // =========================================================
+                    else {
+                        try {
+                            const result = await sys_eda.pcb_PrimitiveComponent.modify(primId, {
+                                otherProperty: {
+                                    '3D Model': item.rawModel,
+                                    '3D Model Title': item.modelTitle,
+                                    '3D Model Transform': item.rawTransform,
+                                }
+                            });
+                            
+                            // 校验返回值
+                            let isSuccess = false;
+                            if (result && result.otherProperty) {
+                                const retModel = result.otherProperty['3D Model'] || '';
+                                const retTitle = result.otherProperty['3D Model Title'] || '';
+                                const retTransform = result.otherProperty['3D Model Transform'] || '';
+                                
+                                // 提取返回值中的实际 UUID (忽略 | 后面的内容)
+                                const actualRetModel = retModel.split('|')[0];
+                                const targetModel = item.rawModel.split('|')[0]; // 也对输入值做容错处理
+
+                                // 比较核心属性是否一致
+                                if (actualRetModel === targetModel && 
+                                    retTitle === item.modelTitle && 
+                                    retTransform === item.rawTransform) {
+                                    isSuccess = true;
+                                }
+                            }
+
+                            if (isSuccess) {
+                                item.status = '成功';
+                                successCount++;
+                            } else {
+                                item.status = '校验失败';
+                                console.warn(`更新 ${item.designator} 返回值校验不匹配:`, result);
+                            }
+                            
+                        } catch (err) {
+                            item.status = '失败';
+                            console.error(`更新 ${item.designator} 失败:`, err);
+                        }
+                    }
+
+                    // 进度条流畅更新 (合并状态与进度百分比文字)
+                    let percent = Math.round(((i + 1) / total) * 100);
+                    progressBg.style.width = percent + '%';
+                    statusText.textContent = `进度：${i + 1} / ${total} (${percent}%)，正在处理: ${item.designator}`;
+                    renderTable();
+                    
+                    await new Promise(r => setTimeout(r, 10)); 
+                }
+
+                // 【新增】：计算耗时（秒）保留两位小数
+                const costTime = ((performance.now() - startTime) / 1000).toFixed(2);
+                
+                // 【修改】：将耗时拼接到状态文本中
+                statusText.textContent = `更新完成: 成功 ${successCount}/${total} | 耗时：${costTime}秒`;
+                sys_eda.sys_Message.showToastMessage(`批量更新完成`, 'success');
+
+            } catch (error) {
+                statusText.textContent = '更新异常中断';
+                sys_eda.sys_Message.showToastMessage('发生未预期错误', 'error');
+            } finally {
+                btnUpdate.disabled = false;
+                document.getElementById('btn-load').disabled = false;
+                document.getElementById('btn-unit').disabled = false;
+            }
+        });
+
+        // 开发测试用的 Mock 数据
+        function mockDataLoad() {
+            const mockJSON = {
+                components: {
+                    "comp1": { props: { Designator: "R1", "3D Model": "uuid1", "3D Model Title": "RES_0603", "3D Model Transform": "387,200,300,90,0,45.500,10,20.000,0", "Footprint": "R0603" }},
+                    "comp2": { props: { Designator: "C1", "3D Model": "uuid2", "3D Model Title": "CAP_0402", "3D Model Transform": "50,50,50,0,0,0,0,0,0", "Footprint": "C0402" }},
+                    "comp3": { props: { Designator: "U1", "3D Model": "uuid3", "3D Model Title": "ESP32-WROOM", "3D Model Transform": "700.00,1000,120,0,0,90,-50,20,10", "Footprint": "MODULE-38P" }}
+                }
+            };
+            parseNetlist(mockJSON);
+        }
+    </script>
+</body>
+</html>

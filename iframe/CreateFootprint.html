@@ -2,94 +2,116 @@
 <html lang="zh-CN">
 	<head>
 		<meta charset="UTF-8" />
-		<title>狼黑工具 - 创建封装 (仅支持V2版本)</title>
+		<title>狼黑工具 - 创建封装 ( 仅支持 V2.2.x 版本 )</title>
 		<style>
+			/* VS Code 深色主题风格 */
 			body {
 				margin: 0;
 				padding: 0;
-				width: 400px;
+				width: 300px;
 				height: 120px;
 				overflow: hidden;
-				font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-				background-color: #f5f5f5;
+				font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+				background-color: #1e1e1e;
+				color: #cccccc;
+				font-size: 13px;
 			}
 			.container {
-				width: 100%;
-				height: 100%;
+				width: 300px;
+				height: 100px;
 				box-sizing: border-box;
-				padding: 15px;
+				padding: 0px 14px;
 				display: flex;
 				flex-direction: column;
-				justify-content: space-between;
+				justify-content: center;
+				gap: 12px;
 			}
 			.input-group {
 				width: 100%;
+				display: flex;
+    			gap: 12px;
 			}
 			input[type='text'] {
-				width: 100%;
-				padding: 10px;
-				border: 1px solid #ccc;
-				border-radius: 4px;
-				font-size: 14px;
+				/* width: 100%; */
+				padding: 5px;
+				background-color: #3c3c3c;
+				color: #cccccc;
+				border: 1px solid #3c3c3c;
+				border-radius: 2px;
+				font-size: 13px;
 				outline: none;
 				box-sizing: border-box;
-				transition: border-color 0.2s;
+				transition: border-color 0.1s ease;
+			}
+			input[type='text']::placeholder {
+				color: #808080;
 			}
 			input[type='text']:focus {
-				border-color: #1976d2;
+				border-color: #007fd4;
 			}
 			.footer {
 				display: flex;
 				flex-direction: row;
 				align-items: center;
-				gap: 16px;
+				gap: 12px;
 				width: 100%;
 			}
+			.footer label {
+				white-space: nowrap;
+				color: #cccccc;
+			}
 			select {
+				width: 135px;
 				flex: 1;
-				padding: 8px;
-				border: 1px solid #ccc;
-				border-radius: 4px;
+				padding: 4px;
+				background-color: #3c3c3c;
+				color: #cccccc;
+				border: 1px solid #3c3c3c;
+				border-radius: 2px;
 				font-size: 13px;
 				outline: none;
-				background-color: white;
 				cursor: pointer;
-			}
-			button {
-				padding: 8px 16px;
-				background-color: #1976d2;
-				color: white;
-				border: none;
-				border-radius: 4px;
-				font-size: 13px;
-				font-weight: 500;
-				cursor: pointer;
-				white-space: nowrap;
-				transition: background-color 0.2s;
-			}
-			button:hover {
-				background-color: #1565c0;
-			}
-			button:active {
-				background-color: #0d47a1;
-			}
-			button:disabled {
-				background-color: #b0bec5;
-				cursor: not-allowed;
 			}
 			select:focus {
-				border-color: #1976d2;
+				border-color: #007fd4;
+			}
+			select option {
+				background-color: #252526;
+				color: #cccccc;
+			}
+			button {
+				padding: 3px 10px;
+				background-color: #0e639c;
+				color: #ffffff;
+				border: 1px solid transparent;
+				border-radius: 2px;
+				font-size: 13px;
+				cursor: pointer;
+				white-space: nowrap;
+				transition: background-color 0.1s ease;
+			}
+			button:hover:not(:disabled) {
+				background-color: #1177bb;
+			}
+			button:active:not(:disabled) {
+				background-color: #094771;
+			}
+			button:disabled {
+				background-color: #4d4d4d;
+				color: #aaaaaa;
+				cursor: not-allowed;
 			}
 		</style>
 	</head>
 	<body>
 		<div class="container">
 			<div class="input-group">
-				<input type="text" id="pkgNameInput" placeholder="输入封装名称 (例如: QFP-32)" />
+				<input type="text" id="fooNameInput" placeholder="封装名称" autocomplete="off" style="width: 186px;"/>
+				<input type="text" id="desNameInput" placeholder="位号" autocomplete="off" style="width: 74px;"/>
 			</div>
 
 			<div class="footer">
-				选择库
+				<label>选择库</label>
 				<select id="libSelect" title="目标库">
 					<option value="" disabled selected>正在加载库列表...</option>
 				</select>
@@ -97,17 +119,29 @@
 				<button id="runBtn" disabled>创建封装</button>
 			</div>
 		</div>
-
 		<script>
 			function showMsg(msg, type = 'info') {
-				if (window.eda && window.eda.sys_Message && window.eda.sys_Message.showToastMessage) {
-					window.eda.sys_Message.showToastMessage(msg, type);
-				}
+				eda.sys_Message.showToastMessage(msg, type);
 			}
 
 			(async function initLibList() {
 				const select = document.getElementById('libSelect');
 				const btn = document.getElementById('runBtn');
+
+				try {
+					const currentVersion = eda.sys_Environment.getEditorCurrentVersion();
+					// 判断是否为 V3 版本
+					if (currentVersion && currentVersion.startsWith('3')) {
+						// 获取主容器
+						const container = document.querySelector('.container');
+						// 清空所有控件，替换为居中提示文字
+						container.innerHTML = '<div style="display: flex; height: 100%; width: 100%; align-items: center; justify-content: center; text-align: center; color: #AFF; font-size: 14px;">由于 API 存在缺陷，底层源码无法写入成功<br/>此功能暂时不支持 V3 版本</div>';
+						return;
+					}
+				} catch (err) {
+					console.warn('版本检测异常，尝试继续执行...', err);
+				}
+
 				try {
 					let components0 = await eda.lib_LibrariesList.getAllLibrariesList();
 					select.innerHTML = '';
@@ -134,7 +168,8 @@
 
 			document.getElementById('runBtn').addEventListener('click', async function () {
 				const btn = document.getElementById('runBtn');
-				const inputVal = document.getElementById('pkgNameInput').value.trim();
+				const inputVal = document.getElementById('fooNameInput').value.trim();
+				const inputdes = document.getElementById('desNameInput').value.trim();
 				const libSelect = document.getElementById('libSelect');
 				const LIBRARY_UUID = libSelect.value;
 
@@ -151,58 +186,88 @@
 
 					const ALLOWED_TYPES = ['Pad', 'Polyline', 'Region'];
 
-					// A. 获取选中
+					// A. 获取选中并过滤
 					let allSelected = await eda.pcb_SelectControl.getAllSelectedPrimitives();
 					if (!allSelected || allSelected.length === 0) {
 						throw new Error('请先在 PCB 中选中图元！');
 					}
 
-					let targetPrimitives = allSelected.filter((p) => ALLOWED_TYPES.includes(p.primitiveType));
-					console.log(`选中 ${allSelected.length} 个, 过滤后处理 ${targetPrimitives.length} 个`);
-
+					// 获取除 Component 以外的所有选中图元 (保留对象用于结尾删除图元)
+					let targetPrimitives = allSelected.filter((p) => p.primitiveType !== 'Component');
 					if (targetPrimitives.length === 0) {
-						throw new Error('未选中有效图元 (Pad, Region, Polyline)');
+						throw new Error('未选中有效图元');
+					}
+					let selectedIds = targetPrimitives.map((p) => p.primitiveId);
+
+					// 获取完整源码并提取对应行
+					let docSource = await eda.sys_FileManager.getDocumentSource();
+					let sourceLines = docSource.split('\n');
+					let sourcePrimitives = [];
+
+					sourceLines.forEach(line => {
+						if (!line.trim()) return;
+						try {
+							let arr = JSON.parse(line);
+							let id = arr[1]; // 源码中索引 1 通常是 primitiveId
+							if (selectedIds.includes(id)) {
+								sourcePrimitives.push(arr);
+							}
+						} catch (e) {}
+					});
+
+					if (sourcePrimitives.length === 0) {
+						throw new Error('无法在源码中匹配到选中的图元数据');
 					}
 
-					// B. 计算原点
-					let pads = targetPrimitives.filter((p) => p.primitiveType === 'Pad');
-					let originX = 0,
-						originY = 0;
+					console.log(`选中 ${allSelected.length} 个, 过滤后提取到源码 ${sourcePrimitives.length} 行`);
 
+					// B. 计算原点 (从源码中提取精确坐标)
+					let pads = sourcePrimitives.filter((p) => p[0] === 'PAD');
+					let originX = 0, originY = 0;
+
+					// 辅助函数：从不同类型的源码数组中提取第一个有效坐标点
+					function getCoordsFromSource(arr) {
+						let type = arr[0];
+						let pathObj = null;
+						if (type === 'PAD')   return { x: arr[6], y: arr[7] };
+						if (type === 'VIA')   return { x: arr[5], y: arr[6] };
+						if (type === 'IMAGE') return { x: arr[4], y: arr[5] };
+						if (type === 'POLY' || type === 'REGION') pathObj = arr[6];
+						if (type === 'FILL') pathObj = arr[7];
+						if (type === 'POUR') pathObj = arr[8];
+
+						if (pathObj) {
+							// 兼容单层数组和双层数组
+							let polyArr = Array.isArray(pathObj[0]) ? pathObj[0] : pathObj;
+							for (let i = 0; i < polyArr.length - 1; i++) {
+								if (typeof polyArr[i] === 'number' && typeof polyArr[i + 1] === 'number') {
+									return { x: polyArr[i], y: polyArr[i + 1] };
+								}
+							}
+						}
+						return { x: undefined, y: undefined };
+					}
+
+					// 计算几何中心
 					if (pads.length === 1) {
-						originX = pads[0].x;
-						originY = pads[0].y;
+						originX = pads[0][6];
+						originY = pads[0][7];
 					} else if (pads.length > 1) {
-						let minX = Infinity,
-							minY = Infinity,
-							maxX = -Infinity,
-							maxY = -Infinity;
+						let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
 						pads.forEach((p) => {
-							if (p.x < minX) minX = p.x;
-							if (p.x > maxX) maxX = p.x;
-							if (p.y < minY) minY = p.y;
-							if (p.y > maxY) maxY = p.y;
+							let x = p[6], y = p[7];
+							if (x < minX) minX = x;
+							if (x > maxX) maxX = x;
+							if (y < minY) minY = y;
+							if (y > maxY) maxY = y;
 						});
 						originX = (minX + maxX) / 2;
 						originY = (minY + maxY) / 2;
 					} else {
-						let minX = Infinity,
-							minY = Infinity,
-							maxX = -Infinity,
-							maxY = -Infinity;
-						targetPrimitives.forEach((p) => {
-							let x = p.x,
-								y = p.y;
-							if ((x === undefined || x === null) && (p.polygon || p.complexPolygon)) {
-								let polyArr = (p.polygon || p.complexPolygon).polygon;
-								for (let i = 0; i < polyArr.length - 1; i++) {
-									if (typeof polyArr[i] === 'number' && typeof polyArr[i + 1] === 'number') {
-										x = polyArr[i];
-										y = polyArr[i + 1];
-										break;
-									}
-								}
-							}
+						let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+						sourcePrimitives.forEach((p) => {
+							let coords = getCoordsFromSource(p);
+							let x = coords.x, y = coords.y;
 							if (x !== undefined && y !== undefined) {
 								if (x < minX) minX = x;
 								if (x > maxX) maxX = x;
@@ -210,12 +275,7 @@
 								if (y > maxY) maxY = y;
 							}
 						});
-						if (minX === Infinity) {
-							minX = 0;
-							maxX = 0;
-							minY = 0;
-							maxY = 0;
-						}
+						if (minX === Infinity) { minX = 0; maxX = 0; minY = 0; maxY = 0; }
 						originX = (minX + maxX) / 2;
 						originY = (minY + maxY) / 2;
 					}
@@ -223,8 +283,9 @@
 					// C. 命名
 					let uniquePadNumbers = new Set();
 					pads.forEach((p) => {
-						if (p.padNumber !== undefined && p.padNumber !== null && String(p.padNumber).trim() !== '') {
-							uniquePadNumbers.add(String(p.padNumber).trim());
+						let padNumber = p[5]; // 源码中索引 5 是焊盘号
+						if (padNumber !== undefined && padNumber !== null && String(padNumber).trim() !== '') {
+							uniquePadNumbers.add(String(padNumber).trim());
 						}
 					});
 					let pinCount = uniquePadNumbers.size;
@@ -237,6 +298,10 @@
 						const timeStr = `${now.getHours().toString().padStart(2, '0')}${now.getMinutes().toString().padStart(2, '0')}${now.getSeconds().toString().padStart(2, '0')}`;
 						deviceName = `NEW-${pinCount}Pin_${timeStr}`;
 					}
+
+					let desMatch = inputdes.match(/^[a-zA-Z]+/);
+					// 提取到则转为大写并拼接 '?'，提取不到或为空则默认使用 'U?'
+					let finalDesignator = (desMatch ? desMatch[0].toUpperCase() : 'U') + '?';
 
 					// D. 创建库元素
 					let fp_uuid = await eda.lib_Footprint.create(LIBRARY_UUID, deviceName);
@@ -256,34 +321,13 @@
 						{
 							addIntoBom: true,
 							addIntoPcb: true,
-							designator: 'U?',
-							name: deviceName,
-							// manufacturer: '',// 设置了但不生效
-							// manufacturerId: '',
-							// supplier: '',
-							// supplierId: '',
-							// otherProperty: { 'FPuuid': fp_uuid, 'SYMuuid': sym_uuid }
-						},
+							designator: finalDesignator,
+							name: deviceName
+						}
 					);
+					console.log('创建器件成功\n', fp_uuid, sym_uuid, dev_uuid);
 
-					// 修改器件属性，API存在BUG，无法修改
-					// await eda.lib_Device.modify(dev_uuid, LIBRARY_UUID, deviceName,
-					//         undefined, undefined,'新建器件', {
-					//         designator: 'U?',
-					//         addIntoBom: true,
-					//         addIntoPcb: true,
-					//         otherProperty: {
-					//             '器件UUID': dev_uuid,
-					//             '封装UUID': fp_uuid ,
-					//             '符号UUID': sym_uuid
-					//         }
-					//     }
-					// );
-
-					console.log('创建器件成功');
-					console.log(fp_uuid, sym_uuid, dev_uuid);
-
-					// E. 生成封装源码
+					// E. 生成封装源码 (基于提取的源码直接偏移)
 					let fpHeader = `["DOCTYPE","FOOTPRINT","1.8"]
 ["HEAD",{"editorVersion":"2.2.43.4","importFlag":0,"uuid":"${fp_uuid}","source":"generated","title":"${deviceName}"}]
 ["CANVAS",0,0,"mil",10,10,10,10,100,100,0,0,5]
@@ -306,33 +350,34 @@
 ["NET","",null,null,1,null,0,null]
 ["PRIMITIVE","PAD",1,1]
 `;
+					// 路径偏移重算
 					function transformPath(arr, ox, oy) {
 						let newArr = [...arr];
 						if (newArr.length === 0) return newArr;
 						let type = newArr[0];
 						if (type === 'R' || type === 'CIRCLE') {
-							if (typeof newArr[1] === 'number') newArr[1] -= ox;
-							if (typeof newArr[2] === 'number') newArr[2] -= oy;
+							if (typeof newArr[1] === 'number') newArr[1] = parseFloat((newArr[1] - ox).toFixed(4));
+							if (typeof newArr[2] === 'number') newArr[2] = parseFloat((newArr[2] - oy).toFixed(4));
 						} else {
 							let i = 0;
 							if (typeof newArr[0] === 'number') {
-								newArr[0] -= ox;
-								newArr[1] -= oy;
+								newArr[0] = parseFloat((newArr[0] - ox).toFixed(4));
+								newArr[1] = parseFloat((newArr[1] - oy).toFixed(4));
 								i = 2;
 							}
 							while (i < newArr.length) {
 								let cmd = newArr[i];
 								if (typeof cmd === 'number') {
-									newArr[i] -= ox;
-									newArr[i + 1] -= oy;
+									newArr[i] = parseFloat((newArr[i] - ox).toFixed(4));
+									newArr[i + 1] = parseFloat((newArr[i + 1] - oy).toFixed(4));
 									i += 2;
 								} else if (cmd === 'L') {
-									newArr[i + 1] -= ox;
-									newArr[i + 2] -= oy;
+									newArr[i + 1] = parseFloat((newArr[i + 1] - ox).toFixed(4));
+									newArr[i + 2] = parseFloat((newArr[i + 2] - oy).toFixed(4));
 									i += 3;
 								} else if (cmd === 'ARC') {
-									newArr[i + 2] -= ox;
-									newArr[i + 3] -= oy;
+									newArr[i + 2] = parseFloat((newArr[i + 2] - ox).toFixed(4));
+									newArr[i + 3] = parseFloat((newArr[i + 3] - oy).toFixed(4));
 									i += 4;
 								} else {
 									i++;
@@ -343,55 +388,68 @@
 					}
 
 					let primitivesSource = '';
-					targetPrimitives.forEach((prim) => {
-						// 1. Pad
-						if (prim.primitiveType === 'Pad') {
-							let relX = prim.x - originX;
-							let relY = prim.y - originY;
-							let shapeStr = JSON.stringify(prim.pad || ['ELLIPSE', 60, 60]);
-							let holeData = prim.hole ? [...prim.hole] : null;
-							if (holeData) {
-								if (typeof holeData[1] === 'number') holeData[1] = parseFloat((holeData[1] * 10).toFixed(4));
-								if (typeof holeData[2] === 'number') holeData[2] = parseFloat((holeData[2] * 10).toFixed(4));
-							}
-							let holeStr = holeData ? JSON.stringify(holeData) : 'null';
-							let specialPadStr = JSON.stringify(prim.specialPad || []);
-							let line = `["PAD","${prim.primitiveId}",0,"",${prim.layer},"${prim.padNumber}",${relX},${relY},${prim.rotation},${holeStr},${shapeStr},${specialPadStr},0,0,0,1,0,null,null,null,null,0,null,null,null,null,[]]`;
-							primitivesSource += line + '\n';
-						}
-						// 2. Polyline
-						else if (prim.primitiveType === 'Polyline') {
-							if (prim.polygon && prim.polygon.polygon) {
-								let pathData = transformPath(prim.polygon.polygon, originX, originY);
-								let rawWidth = prim.lineWidth !== undefined ? prim.lineWidth : 0.1;
-								let width = parseFloat((rawWidth * 10).toFixed(4));
-								primitivesSource += `["POLY","${prim.primitiveId}",0,"",${prim.layer},${width},${JSON.stringify(pathData)},0]\n`;
-							}
-						}
-						// 3. Region
-						else if (prim.primitiveType === 'Region') {
-							if (prim.complexPolygon && prim.complexPolygon.polygon) {
-								let pathData = transformPath(prim.complexPolygon.polygon, originX, originY);
-								let rawWidth = prim.lineWidth !== undefined ? prim.lineWidth : 0;
-								let width = parseFloat((rawWidth * 10).toFixed(4));
+					let idCounter = 1;
 
-								if (prim.regionName === 'Prohibited Region') {
-									let fillPathStr = JSON.stringify([pathData]);
-									primitivesSource += `["REGION","${prim.primitiveId}",0,${prim.layer},${width},[2],${fillPathStr},0,null]\n`;
-								} else if (prim.regionName === 'Fill Region' || prim.regionName === 'Slot Region' || pathData[0] === 'CIRCLE') {
-									let fillPathStr = JSON.stringify([pathData]);
-									primitivesSource += `["FILL","${prim.primitiveId}",0,"",${prim.layer},${width},0,${fillPathStr},0]\n`;
-								} else {
-									let pathStr = JSON.stringify(pathData);
-									primitivesSource += `["POLY","${prim.primitiveId}",0,"",${prim.layer},${width},${pathStr},0]\n`;
-								}
+					sourcePrimitives.forEach((p) => {
+						let type = p[0];
+						// 重新排列图元 ID，从 e1 开始递增
+						p[1] = `e${idCounter++}`; 
+
+						// 根据图元类型处理偏移量
+						if (type === 'PAD') {
+							// 修改焊盘的中心坐标
+							p[6] = parseFloat((p[6] - originX).toFixed(4));
+							p[7] = parseFloat((p[7] - originY).toFixed(4));
+							
+							// 处理异形焊盘 (POLYGON) 的多边形绝对坐标
+							let padShape = p[10];
+							if (Array.isArray(padShape) && padShape[0] === 'POLYGON' && Array.isArray(padShape[1])) {
+								padShape[1] = transformPath(padShape[1], originX, originY);
+							}
+						} else if (type === 'VIA') {
+							p[5] = parseFloat((p[5] - originX).toFixed(4));
+							p[6] = parseFloat((p[6] - originY).toFixed(4));
+						} else if (type === 'IMAGE') { // <--- 新增：处理 IMAGE 图元
+							// 1. 偏移图片的基准 X 和 Y
+							p[4] = parseFloat((p[4] - originX).toFixed(4));
+							p[5] = parseFloat((p[5] - originY).toFixed(4));
+							
+							// 2. 偏移图片轮廓数组 (索引 10)
+							let pathIndex = 10;
+							if (Array.isArray(p[pathIndex]) && Array.isArray(p[pathIndex][0])) {
+								p[pathIndex] = p[pathIndex].map(sub => transformPath(sub, originX, originY));
+							} else if (Array.isArray(p[pathIndex])) {
+								p[pathIndex] = transformPath(p[pathIndex], originX, originY);
+							}
+						} else if (type === 'POLY' || type === 'REGION') {
+							let pathIndex = 6;
+							if (Array.isArray(p[pathIndex]) && Array.isArray(p[pathIndex][0])) {
+								p[pathIndex] = p[pathIndex].map(sub => transformPath(sub, originX, originY));
+							} else if (Array.isArray(p[pathIndex])) {
+								p[pathIndex] = transformPath(p[pathIndex], originX, originY);
+							}
+						} else if (type === 'FILL') {
+							let pathIndex = 7;
+							if (Array.isArray(p[pathIndex]) && Array.isArray(p[pathIndex][0])) {
+								p[pathIndex] = p[pathIndex].map(sub => transformPath(sub, originX, originY));
+							} else if (Array.isArray(p[pathIndex])) {
+								p[pathIndex] = transformPath(p[pathIndex], originX, originY);
+							}
+						} else if (type === 'POUR') {
+							let pathIndex = 8;
+							if (Array.isArray(p[pathIndex]) && Array.isArray(p[pathIndex][0])) {
+								p[pathIndex] = p[pathIndex].map(sub => transformPath(sub, originX, originY));
+							} else if (Array.isArray(p[pathIndex])) {
+								p[pathIndex] = transformPath(p[pathIndex], originX, originY);
 							}
 						}
+
+						// 格式化为字符串后拼接换行
+						primitivesSource += JSON.stringify(p) + '\n';
 					});
 
 					await eda.lib_Footprint.updateDocumentSource(fp_uuid, LIBRARY_UUID, fpHeader + primitivesSource);
 					console.log('封装源码生成完毕');
-					// console.log(fpHeader + primitivesSource);
 
 					// ================= F. 生成符号源码 (含动态BBOX和CCW排序) =================
 
@@ -499,14 +557,16 @@
 					let idsToRemove = targetPrimitives.map((p) => ({ id: p.primitiveId, type: p.primitiveType }));
 					for (let item of idsToRemove) {
 						try {
-							if (item.type === 'Pad') eda.pcb_PrimitivePad.delete(item.id);
-							else if (item.type === 'Polyline') eda.pcb_PrimitivePolyline.delete(item.id);
-							else if (item.type === 'Region') eda.pcb_PrimitivePour.delete(item.id);
+								 if (item.type === 'Pad') 		eda.pcb_PrimitivePad.delete(item.id);// 已知不支持删除异形焊盘
+							else if (item.type === 'Polyline')  eda.pcb_PrimitivePolyline.delete(item.id);
+							else if (item.type === 'Region') 	eda.pcb_PrimitivePour.delete(item.id);
+							else if (item.type === 'Via') 		eda.pcb_PrimitiveVia.delete(item.id);
+							else if (item.type === 'Image') 	eda.pcb_PrimitiveImage.delete(item.id);
 						} catch (e) {}
 					}
-
+					
 					eda.sys_IFrame.hideIFrame('CreateFootprint');
-					document.getElementById('pkgNameInput').value = '';
+					document.getElementById('fooNameInput').value = '';
 
 					console.log('转换完成！');
 					showMsg('成功创建封装: ' + deviceName, 'success');
