@@ -222,7 +222,7 @@ if (editorVersion.trim().startsWith('3.')) {
 	// 图片 ⇄ 填充
 	eda.sys_ShortcutKey.unregisterShortcutKey(['Ctrl+Shift+F']);
 	eda.sys_ShortcutKey.registerShortcutKey(
-		['Ctrl+Shift+F'],'焊盘 ⇄ 过孔',
-		() => PadViaToggle(),[4, 5],[1, 2, 3, 4, 5]
+		['Ctrl+Shift+F'],'填充 ⇄ 图片',
+		() => RegionImageConverter(),[4, 5],[1, 2, 3, 4, 5]
 	);
 }
