@@ -198,23 +198,101 @@ export function WorkingHours() {
 	// 3. 消息提醒 & 状态变量
 	// ==========================================
 	const ReminderManager = {
-		rules: [],
+		data: {
+			durationRules: [],
+			intervalRules: [],
+			welcomeEnabled: true,
+			welcomeText: "距离上次打开EDA已经经过了<time>",
+			idleText: "距离上次离开过了<time>",
+			idleThresholdMin: 10,
+			lastHb: 0
+		},
 		lastTriggeredMin: -1,
+		lastIntervalTriggered: {}, // 记录每个规则上次触发的绝对分钟数
+		isLastTickIdle: false, // 记录上一次检测是否处于闲置状态
+
 		reload: async () => {
 			try {
 				const str = await eda.sys_Storage.getExtensionUserConfig(CONFIG.reminderKey);
-				if (str) ReminderManager.rules = JSON.parse(str);
+				if (str) {
+					const parsed = JSON.parse(str);
+					if (Array.isArray(parsed)) {
+						ReminderManager.data.durationRules = parsed;
+					} else {
+						ReminderManager.data = Object.assign(ReminderManager.data, parsed);
+					}
+				}
 			} catch (e) {}
 		},
-		check: (totalWorkSeconds) => {
-			const currentMin = Math.floor(totalWorkSeconds / 60);
-			if (currentMin === ReminderManager.lastTriggeredMin) return;
-			const matches = ReminderManager.rules.filter((rule) => rule.m === currentMin);
-			if (matches.length > 0) {
-				matches.forEach((rule) => eda.sys_Message.showToastMessage(rule.msg, 'info'));
-			}
-			ReminderManager.lastTriggeredMin = currentMin;
+
+		formatTimeStr: (ms) => {
+			const totalSec = Math.floor(ms / 1000);
+			const h = Math.floor(totalSec / 3600);
+			const m = Math.floor((totalSec % 3600) / 60);
+			const s = totalSec % 60;
+			let res = "";
+			if (h > 0) res += `${h}时`;
+			if (m > 0 || h > 0) res += `${m}分`;
+			res += `${s}秒`;
+			return res;
 		},
+
+		triggerToast: (msg, count = 1) => {
+			for(let i=0; i<count; i++) {
+				setTimeout(() => eda.sys_Message.showToastMessage(msg, 'info'), i * 150);
+			}
+		},
+
+		check: (totalWorkSeconds, isCurrentlyIdle) => {
+			const nowTs = Date.now();
+			const upTimeMin = Math.floor((nowTs - SESSION_START_TIME) / 60000);
+			const workTodayMin = Math.floor(totalWorkSeconds / 60);
+
+			// 1. 工作时长提醒 (每日累计)
+			if (workTodayMin !== ReminderManager.lastTriggeredMin) {
+				const matches = ReminderManager.data.durationRules.filter(r => r.m === workTodayMin);
+				matches.forEach(r => ReminderManager.triggerToast(r.msg, r.count));
+				ReminderManager.lastTriggeredMin = workTodayMin;
+			}
+
+			// 2. 固定间隔提醒 (启动后循环)
+			ReminderManager.data.intervalRules.forEach(rule => {
+				if (upTimeMin > 0 && upTimeMin % rule.m === 0) {
+					if (ReminderManager.lastIntervalTriggered[rule.m] !== upTimeMin) {
+						ReminderManager.triggerToast(rule.msg, rule.count);
+						ReminderManager.lastIntervalTriggered[rule.m] = upTimeMin;
+					}
+				}
+			});
+
+			// 3. 挂机返回提醒
+			if (ReminderManager.isLastTickIdle && !isCurrentlyIdle) {
+				const idleMs = Date.now() - session.lastMoveTime;
+				if (idleMs > (ReminderManager.data.idleThresholdMin || 10) * 60000) {
+					const template = ReminderManager.data.idleText || "距离上次离开过了<time>";
+					const msg = template.replace("<time>", ReminderManager.formatTimeStr(idleMs));
+					eda.sys_Message.showToastMessage(msg, 'success');
+				}
+			}
+			ReminderManager.isLastTickIdle = isCurrentlyIdle;
+		},
+
+		updateHeartbeat: async () => {
+			ReminderManager.data.lastHb = Date.now();
+			try {
+				await eda.sys_Storage.setExtensionUserConfig(CONFIG.reminderKey, JSON.stringify(ReminderManager.data));
+			} catch(e) {}
+		},
+
+		showWelcome: () => {
+			if (!ReminderManager.data.lastHb) return;
+			const diffMs = Date.now() - ReminderManager.data.lastHb;
+			if (diffMs < 60000) return;
+
+			const template = ReminderManager.data.welcomeText || "距离上次打开EDA已经经过了<time>";
+			const msg = template.replace("<time>", ReminderManager.formatTimeStr(diffMs));
+			eda.sys_Message.showToastMessage(msg, 'success');
+		}
 	};
 
 	let session = {
@@ -277,21 +355,24 @@ export function WorkingHours() {
 		}
 
 		let diff = (Date.now() - session.lastMoveTime) / 1000;
+		const isCurrentlyIdle = diff > CONFIG.idleThreshold;
 
 		// 判定状态 (阈值10秒)
-		if (diff > CONFIG.idleThreshold) {
+		if (isCurrentlyIdle) {
 			session.fishBuffer += delta;
 		} else {
 			session.workBuffer += delta;
 			session.totalWorkToday += delta;
-			ReminderManager.check(session.totalWorkToday);
 		}
+
+		ReminderManager.check(session.totalWorkToday, isCurrentlyIdle);
 
 		// 保存检查
 		if (now - lastSaveTime >= CONFIG.saveInterval * 1000) {
 			lastSaveTime = now;
 
 			await ReminderManager.reload();
+			await ReminderManager.updateHeartbeat(); // 更新心跳时间
 			await updateProjectInfo();
 
 			if (session.currentUuid && (session.workBuffer > 0 || session.fishBuffer > 0)) {
@@ -315,6 +396,7 @@ export function WorkingHours() {
 		try {
 			await updateProjectInfo();
 			await ReminderManager.reload();
+			ReminderManager.showWelcome(); // 显示欢迎语
 			const historySeconds = await StorageManager.calculateTodayWorkSeconds();
 			session.totalWorkToday = historySeconds;
 			console.log(`======= 启动工作时间统计成功 =======`);

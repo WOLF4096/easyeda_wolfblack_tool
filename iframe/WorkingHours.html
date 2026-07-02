@@ -115,7 +115,7 @@
 
         /* === 消息提醒专用样式 === */
         .reminder-card {
-            display: flex; flex-direction: column; height: 100%; background: var(--bg-sidebar);
+            display: flex; flex-direction: column; background: var(--bg-sidebar);
             border: 1px solid var(--border-main); border-radius: 4px; padding: 12px;
         }
 
@@ -186,6 +186,37 @@
         ::-webkit-scrollbar-thumb { background: #424242; border-radius: 3px; }
         ::-webkit-scrollbar-thumb:hover { background: #4f4f4f; }
         ::-webkit-scrollbar-track { background: transparent; }
+
+        /* 去除原生数字输入框箭头 */
+        input[type=number]::-webkit-inner-spin-button,
+        input[type=number]::-webkit-outer-spin-button {
+            -webkit-appearance: none; margin: 0;
+        }
+        input[type=number] { -moz-appearance: textfield; }
+
+        /* 步进器样式 */
+        .stepper {
+            display: flex; align-items: center; background: var(--bg-input);
+            border: 1px solid #6b6b6b; border-radius: 2px; height: 26px; overflow: hidden;
+        }
+        .stepper button {
+            background: none; border: none; color: var(--text-muted); width: 22px;
+            height: 100%; cursor: pointer; font-size: 14px; display: flex;
+            align-items: center; justify-content: center; transition: all 0.2s;
+        }
+        .stepper button:hover { background: var(--bg-hover); color: var(--text-light); }
+        .stepper input {
+            background: none; border: none; color: #b5cea8; width: 26px;
+            text-align: center; font-size: 12px; outline: none; padding: 0; font-family: Consolas;
+        }
+
+        /* 列表内联编辑样式 */
+        .list-input {
+            background: transparent; border: 1px solid transparent; color: inherit;
+            padding: 2px 4px; border-radius: 2px; outline: none; font-size: 11px;
+        }
+        .list-input:hover { border-color: var(--border-light); background: var(--bg-input); }
+        .list-input:focus { border-color: var(--accent-blue); background: var(--bg-input); }
 
 		/* === 节律分析专用样式 === */
         .rhythm-mode-block {
@@ -468,18 +499,65 @@
 				</div>
 			</div>
 
-            <div id="view-reminder" class="view-container hidden">
-                <div class="reminder-card">
-                    <div class="scroll-wrapper">
-                        <div id="reminderListContainer" class="reminder-list"></div>
+            <div id="view-reminder" class="view-container hidden" style="padding: 12px; display: flex; flex-direction: column; gap: 10px; overflow-y: auto;">
+                <!-- 顶部：欢迎语与挂机配置 -->
+                <div class="reminder-card" style="flex: 0 0 auto; gap: 10px;">
+                    <div style="display: flex; flex-direction: column; gap: 8px;">
+                        <div style="display: flex; align-items: center; gap: 10px;">
+                            <span style="font-size:12px; color:var(--text-light); width: 80px; font-weight: bold;">启动欢迎语</span>
+                            <input id="welcome-text-input" type="text" class="vscode-input" style="flex: 1" onchange="ReminderApp.save()" placeholder="使用 <time> 代表时间..." />
+                        </div>
+                        <div style="display: flex; align-items: center; gap: 10px;">
+                            <span style="font-size:12px; color:var(--text-light); width: 80px; font-weight: bold;">挂机返回</span>
+                            <div style="display: flex; align-items: center; gap: 5px;">
+                                <span style="font-size:11px; color:var(--text-muted);">超过</span>
+                                <input id="idle-min-input" type="number" class="vscode-input" style="width: 50px" onchange="ReminderApp.save()" />
+                                <span style="font-size:11px; color:var(--text-muted);">分钟后回来时提醒：</span>
+                            </div>
+                            <input id="idle-text-input" type="text" class="vscode-input" style="flex: 1" onchange="ReminderApp.save()" placeholder="返回时提醒文本..." />
+                        </div>
                     </div>
-                    <div class="reminder-input-zone">
-                        <div class="input-tip">添加提醒规则，添加/删除后都需要点击保存</div>
-                        <div class="input-row">
-                            <input id="remindMinInput" type="number" class="vscode-input" style="width: 80px" placeholder="分钟" />
-                            <input id="remindMsgInput" type="text" class="vscode-input" style="flex: 1" placeholder="提醒内容 (例如: 空闲一下)" />
-                            <button class="vscode-btn" onclick="ReminderApp.add()">新增</button>
-                            <button class="vscode-btn success" onclick="ReminderApp.save()">保存</button>
+                </div>
+
+                <!-- 下部：双列提醒规则 -->
+                <div style="flex: 1; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; min-height: 0;">
+                    <!-- 左列：累计时长 -->
+                    <div class="reminder-card" style="display: flex; flex-direction: column;">
+                        <div style="font-size:12px; font-weight:bold; color:var(--accent-blue); margin-bottom:8px; border-bottom:1px solid var(--border-main); padding-bottom:5px;">工作时长提醒 (每日)</div>
+                        <div class="scroll-wrapper" style="flex:1; margin-bottom:8px;">
+                            <div id="list-duration" class="reminder-list"></div>
+                        </div>
+                        <div class="reminder-input-zone" style="border-top:none; padding-top:0;">
+                            <div class="input-row" style="gap:4px;">
+                                <input id="add-dur-m" type="text" class="vscode-input" style="width: 55px" placeholder="时间" />
+                                <input id="add-dur-msg" type="text" class="vscode-input" style="flex: 1" placeholder="提醒内容..." />
+                                <div class="stepper" title="提醒次数：触发时显示几条提醒">
+                                    <button onclick="const el=document.getElementById('add-dur-c'); el.value=Math.max(1,parseInt(el.value)-1)">-</button>
+                                    <input id="add-dur-c" type="number" value="1" readonly>
+                                    <button onclick="const el=document.getElementById('add-dur-c'); el.value=parseInt(el.value)+1">+</button>
+                                </div>
+                                <button class="small-btn export" style="height:26px; background:var(--accent-blue); color:#fff; border-color:var(--accent-blue);" onclick="ReminderApp.add('duration')">添加</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 右列：固定间隔 -->
+                    <div class="reminder-card" style="display: flex; flex-direction: column;">
+                        <div style="font-size:12px; font-weight:bold; color:var(--accent-green); margin-bottom:8px; border-bottom:1px solid var(--border-main); padding-bottom:5px;">固定间隔提醒 (循环)</div>
+                        <div class="scroll-wrapper" style="flex:1; margin-bottom:8px;">
+                            <div id="list-interval" class="reminder-list"></div>
+                        </div>
+                        <div class="reminder-input-zone" style="border-top:none; padding-top:0;">
+                            <div class="input-row" style="gap:4px;">
+                                <input id="add-int-m" type="text" class="vscode-input" style="width: 55px" placeholder="时间" />
+                                <input id="add-int-msg" type="text" class="vscode-input" style="flex: 1" placeholder="提醒内容..." />
+                                <div class="stepper" title="提醒次数：触发时显示几条提醒">
+                                    <button onclick="const el=document.getElementById('add-int-c'); el.value=Math.max(1,parseInt(el.value)-1)">-</button>
+                                    <input id="add-int-c" type="number" value="1" readonly>
+                                    <button onclick="const el=document.getElementById('add-int-c'); el.value=parseInt(el.value)+1">+</button>
+                                </div>
+                                <button class="small-btn export" style="height:26px; background:var(--accent-green); color:#fff; border-color:var(--accent-green);" onclick="ReminderApp.add('interval')">添加</button>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -2175,38 +2253,149 @@
         // [10] 小工具模块 (消息提醒管理)
         // ==========================================
         const ReminderApp = {
-            KEY: 'USER_CONFIG_REMINDERS', data: [],
+            KEY: 'USER_CONFIG_REMINDERS',
+            data: {
+                durationRules: [],
+                intervalRules: [],
+                welcomeEnabled: true,
+                welcomeText: "距离上次打开EDA经过了<time>",
+                idleText: "距离上次离开经过了<time>",
+                idleThresholdMin: 10,
+                lastHb: 0
+            },
+
             init: async function () {
                 try {
                     const str = await eda.sys_Storage.getExtensionUserConfig(this.KEY);
-                    if (str) this.data = JSON.parse(str);
-                } catch (e) { console.log('Init Reminder Error', e); }
+                    if (str) {
+                        const parsed = JSON.parse(str);
+                        if (Array.isArray(parsed)) {
+                            this.data.durationRules = parsed;
+                        } else {
+                            this.data = Object.assign(this.data, parsed);
+                        }
+                    }
+                } catch (e) {}
+
+                // 填充输入框
+                document.getElementById('welcome-text-input').value = this.data.welcomeText || "";
+                document.getElementById('idle-text-input').value = this.data.idleText || "";
+                document.getElementById('idle-min-input').value = this.data.idleThresholdMin || 10;
+
                 this.render();
             },
+
+            formatMin: function(m) {
+                const h = Math.floor(m / 60);
+                const min = m % 60;
+                if (h > 0) return `${h}:${min.toString().padStart(2, '0')}:00`;
+                return `${min.toString().padStart(2, '0')}:00`;
+            },
+
+            parseMin: function(str) {
+                if (!str) return 0;
+                str = str.toString().trim();
+                if (/^\d+$/.test(str)) return parseInt(str);
+                const p = str.split(':').filter(x => x !== "").map(Number);
+                if (p.length >= 3) return (isNaN(p[0])?0:p[0])*60 + (isNaN(p[1])?0:p[1]);
+                if (p.length === 2) return (isNaN(p[0])?0:p[0]);
+                return isNaN(parseInt(str)) ? 0 : parseInt(str);
+            },
+
             render: function () {
-                const container = document.getElementById('reminderListContainer'); container.innerHTML = '';
-                if (this.data.length === 0) { container.innerHTML = '<div style="text-align:center; color:#666; padding:20px; font-size:12px;">暂无任何提醒规则</div>'; return; }
-                this.data.forEach((item, idx) => {
-                    const div = document.createElement('div'); div.className = 'reminder-item';
-                    // 使用 textContent 赋值或转义防止 XSS
-                    div.innerHTML = `<span style="color:var(--accent-blue); font-weight:bold; width:70px;">${item.m}分钟</span><span class="reminder-content" title="${escapeHtml(item.msg)}">${escapeHtml(item.msg)}</span><div class="item-actions"><button class="small-btn" onclick="ReminderApp.preview(${idx})">预览</button> <button class="small-btn del" onclick="ReminderApp.remove(${idx})">删除</button></div>`;
+                this.renderList('duration', 'list-duration');
+                this.renderList('interval', 'list-interval');
+            },
+
+            renderList: function(type, containerId) {
+                const container = document.getElementById(containerId);
+                container.innerHTML = '';
+                const rules = type === 'duration' ? this.data.durationRules : this.data.intervalRules;
+
+                if (rules.length === 0) {
+                    container.innerHTML = '<div style="text-align:center; color:#666; padding:10px; font-size:11px;">暂无规则</div>';
+                    return;
+                }
+
+                rules.forEach((item, idx) => {
+                    const div = document.createElement('div');
+                    div.className = 'reminder-item';
+                    div.style.padding = '4px 8px';
+                    const color = type === 'duration' ? 'var(--accent-blue)' : 'var(--accent-green)';
+                    div.innerHTML = `
+                        <input class="list-input" style="width:55px; color:${color}; font-weight:bold; font-family:Consolas;"
+                               value="${this.formatMin(item.m)}" onchange="ReminderApp.updateRule('${type}', ${idx}, 'm', this.value)">
+                        <input class="list-input" style="flex:1; margin:0 5px;" value="${escapeHtml(item.msg)}"
+                               onchange="ReminderApp.updateRule('${type}', ${idx}, 'msg', this.value)">
+                        <div class="stepper" style="height:22px; margin-right:5px;" title="提醒次数：触发时显示几条提醒">
+                            <button onclick="ReminderApp.stepRule('${type}', ${idx}, -1)">-</button>
+                            <input type="number" value="${item.count || 1}" readonly>
+                            <button onclick="ReminderApp.stepRule('${type}', ${idx}, 1)">+</button>
+                        </div>
+                        <button class="small-btn del" style="padding:0 4px;" onclick="ReminderApp.remove('${type}', ${idx})">×</button>`;
                     container.appendChild(div);
                 });
             },
-            add: function () {
-                const mInput = document.getElementById('remindMinInput'); const msgInput = document.getElementById('remindMsgInput');
-                const m = parseInt(mInput.value); const msg = msgInput.value.trim();
-                if (!m || m <= 0) { eda.sys_Message.showToastMessage('请输入有效的分钟数', 'error'); return; }
-                if (!msg) { eda.sys_Message.showToastMessage('请输入提醒内容', 'error'); return; }
-                this.data.push({ m, msg }); this.data.sort((a, b) => a.m - b.m);
-                mInput.value = ''; msgInput.value = ''; this.render();
+
+            add: async function (type) {
+                const prefix = type === 'duration' ? 'dur' : 'int';
+                const mVal = document.getElementById(`add-${prefix}-m`).value;
+                const msg = document.getElementById(`add-${prefix}-msg`).value.trim();
+                const count = parseInt(document.getElementById(`add-${prefix}-c`).value) || 1;
+
+                const m = this.parseMin(mVal);
+                if (!m || m <= 0) { eda.sys_Message.showToastMessage('时间无效', 'error'); return; }
+                if (!msg) { eda.sys_Message.showToastMessage('内容为空', 'error'); return; }
+
+                const rules = type === 'duration' ? this.data.durationRules : this.data.intervalRules;
+                rules.push({ m, msg, count });
+                rules.sort((a, b) => a.m - b.m);
+
+                document.getElementById(`add-${prefix}-m`).value = '';
+                document.getElementById(`add-${prefix}-msg`).value = '';
+                document.getElementById(`add-${prefix}-c`).value = '1';
+                await this.save();
             },
-            remove: function (index) { this.data.splice(index, 1); this.render(); },
+
+            updateRule: async function(type, idx, field, val) {
+                const rules = type === 'duration' ? this.data.durationRules : this.data.intervalRules;
+                if (!rules[idx]) return;
+                if (field === 'm') rules[idx].m = this.parseMin(val);
+                else if (field === 'msg') rules[idx].msg = val;
+                await this.save();
+            },
+
+            stepRule: async function(type, idx, delta) {
+                const rules = type === 'duration' ? this.data.durationRules : this.data.intervalRules;
+                if (!rules[idx]) return;
+                rules[idx].count = Math.max(1, (rules[idx].count || 1) + delta);
+                await this.save();
+            },
+
+            remove: function (type, index) {
+                eda.sys_Dialog.showConfirmationMessage('确定要删除这条提醒规则吗？', '确认删除', '确认', '取消', async (confirmed) => {
+                    if (confirmed) {
+                        const rules = type === 'duration' ? this.data.durationRules : this.data.intervalRules;
+                        rules.splice(index, 1);
+                        await this.save();
+                    }
+                });
+            },
+
             save: async function () {
-                try { await eda.sys_Storage.setExtensionUserConfig(this.KEY, JSON.stringify(this.data)); eda.sys_Message.showToastMessage('已保存所有提醒规则', 'success'); } 
-                catch (e) { eda.sys_Message.showToastMessage('保存失败:' + e.message, 'error'); }
-            },
-            preview: function (index) { if (this.data[index]) eda.sys_Message.showToastMessage(this.data[index].msg, 'info'); }
+                // 同步输入框数据
+                this.data.welcomeText = document.getElementById('welcome-text-input').value;
+                this.data.idleText = document.getElementById('idle-text-input').value;
+                this.data.idleThresholdMin = parseInt(document.getElementById('idle-min-input').value) || 10;
+
+                try {
+                    await eda.sys_Storage.setExtensionUserConfig(this.KEY, JSON.stringify(this.data));
+                    this.render();
+                    eda.sys_Message.showToastMessage('自动保存成功', 'success');
+                } catch (e) {
+                    eda.sys_Message.showToastMessage('保存失败:' + e.message, 'error');
+                }
+            }
         };
 
         // ==========================================
