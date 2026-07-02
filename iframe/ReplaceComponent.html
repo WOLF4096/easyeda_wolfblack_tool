@@ -58,6 +58,13 @@
             transition: background-color 0.1s;
         }
         button:hover { background-color: var(--btn-hover); }
+        
+        /* === 新增：按钮禁用状态样式 === */
+        button:disabled { 
+            background-color: #333333; 
+            cursor: not-allowed; 
+            color: #666666; 
+        }
 
         /* 确保 table-container 能正常滚动 */
         .table-container {
@@ -187,6 +194,39 @@
             white-space: nowrap;
         }
 		
+		/* ================= 滚动条全局美化 ================= */
+        /* 支持 Chrome, Edge, Safari 等 Webkit 内核浏览器 */
+        
+        /* 滚动条整体宽度/高度 */
+        ::-webkit-scrollbar {
+            width: 12px;  /* 垂直滚动条的宽度 */
+            height: 12px; /* 水平滚动条的高度 */
+        }
+
+        /* 滚动条轨道（背景） */
+        ::-webkit-scrollbar-track {
+            background: transparent; /* 轨道背景透明 */
+        }
+
+        /* 滚动条滑块（拖动的部分） */
+        ::-webkit-scrollbar-thumb {
+            background-color: #424242; 
+            border-radius: 0px;        /* 去除圆角，更加极客 */
+            border: 2px solid var(--bg); /* 使用正确的背景变量隔离 */
+        }
+        ::-webkit-scrollbar-thumb:hover { background-color: #4f4f4f; }
+
+        /* 滚动条两端的按钮（上下/左右箭头），这里将其隐藏 */
+        ::-webkit-scrollbar-button {
+            display: none;
+        }
+
+        /* 支持 Firefox 浏览器 */
+        * {
+            scrollbar-width: thin; /* 变细 */
+            scrollbar-color: #424242 transparent; /* 滑块颜色 轨道颜色 */
+        }
+
     </style>
 </head>
 <body>
@@ -195,8 +235,8 @@
         <div class="warning-text">由于没有替换元件的API，本工具将直接修改源码，需要确保没有重复位号，使用前务必做好备份!!!</div>
         <div class="button-group">
             <button id="btnPaste">粘贴</button>
-            <button id="btnFetch">获取</button>
-            <button id="btnReplace">替换</button>
+            <button id="btnFetch" disabled>获取</button>
+            <button id="btnReplace" disabled>替换</button>
         </div>
     </div>
 
@@ -538,6 +578,11 @@
                 groupedData = Array.from(groupMap.values());
 
                 console.log(`[Debug] 匹配并更新了 ${updateCount} 条记录的立创编号`);
+
+				// === 新增：如果成功匹配到需要更新的数据，解锁“获取”按钮 ===
+                if (updateCount > 0) {
+                    document.getElementById('btnFetch').disabled = false;
+                }
                 renderTable();
             } catch (err) {
                 console.error("[Debug] 读取剪贴板失败:", err);
@@ -784,6 +829,10 @@
                 if (manualPendingIds.size === 0) {
                     const costTime = ((performance.now() - totalFetchStart) / 1000).toFixed(2);
                     statusBar.setText(`获取完成，耗时${costTime}秒`);
+					
+					// === 新增：自动获取完成，解锁“替换”按钮 ===
+                    document.getElementById('btnReplace').disabled = false;
+
                     setTimeout(() => statusBar.readyToReplace(costTime), 3000);
                     
                     console.log(`[性能打点] 🎉 handleFetch 完整生命周期 总耗时: ${costTime} 秒`);

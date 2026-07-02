@@ -1,1461 +1,2289 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="zh-CN">
-	<head>
-		<meta charset="UTF-8" />
-		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-		<title>狼黑工具 - 工作时间统计</title>
-		<script src="/iframe/js/echarts.min.js"></script>
-		<style>
-			/* === 基础布局 === */
-			body {
-				/* width: 540px; */
-            	/* height: 680px; */
-				width: 100%;
-				height: 100vh;
-				background-color: #1e1e1e;
-				color: #ccc;
-				font-family: Consolas, 'Microsoft YaHei', sans-serif;
-				margin: 0;
-				padding: 15px;
-				box-sizing: border-box;
-				overflow: hidden;
-				display: flex;
-				flex-direction: column;
-				gap: 10px;
-			}
-			.header {
-				display: flex;
-				justify-content: space-between;
-				align-items: center;
-				padding-bottom: 5px;
-				border-bottom: 1px solid #333;
-				height: 25px;
-				flex-shrink: 0;
-			}
-			.main-title {
-				font-size: 16px;
-				font-weight: bold;
-				color: #fff;
-				border-left: 4px solid #00d000;
-				padding-left: 10px;
-			}
-			.today-stats {
-				font-size: 12px;
-				color: #aaa;
-			}
-			.highlight {
-				color: #00d000;
-				font-weight: bold;
-				margin: 0 2px;
-			}
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>狼黑工具 - 工作时间统计</title>
+    <script src="/iframe/js/echarts.min.js"></script>
+	<script src="/iframe/js/fflate.js"></script>
+    <style>
+        :root {
+            --bg-base: #1e1e1e;
+            --bg-sidebar: #252526;
+            --bg-hover: #2a2d2e;
+            --bg-active: #37373d;
+            --bg-input: #3c3c3c;
+            --border-main: #2d2d2d;
+            --border-light: #3c3c3c;
+            --text-main: #cccccc;
+            --text-light: #ffffff;
+            --text-muted: #858585;
+            --accent-blue: #007acc;
+            --accent-green: #16a34a;
+            --accent-green-hover: #15803d;
+            --accent-red: #902020;
+            --chart-rest: #b0b0b0;
+        }
 
-			/* 导航栏 */
-			.nav-tabs {
-				display: flex;
-				background: #2b2b2b;
-				border-radius: 6px;
-				padding: 3px;
-				gap: 5px;
-				flex-shrink: 0;
-			}
-			.nav-item {
-				flex: 1;
-				text-align: center;
-				padding: 6px 0;
-				font-size: 13px;
-				color: #888;
-				cursor: pointer;
-				border-radius: 4px;
-				transition: all 0.2s;
-				user-select: none;
-			}
-			.nav-item:hover {
-				background: #333;
-				color: #eee;
-			}
-			.nav-item.active {
-				background: #444;
-				color: #00d000;
-				font-weight: bold;
-			}
+        * { box-sizing: border-box; }
+        body, html {
+            margin: 0; padding: 0;
+            width: 960px; height: 600px;
+            background-color: var(--bg-base);
+            color: var(--text-main);
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            overflow: hidden;
+            user-select: none;
+        }
+        
+        .vscode-container { display: flex; width: 960px; height: 600px; }
 
-			/* 视图容器 */
-			.view-container {
-				flex: 1;
-				display: flex;
-				flex-direction: column;
-				gap: 10px;
-				min-height: 0;
-				position: relative;
-			}
-			.view-container.hidden {
-				display: none;
-			}
-			.chart-card {
-				background: #2b2b2b;
-				border-radius: 6px;
-				padding: 10px;
-				box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
-				display: flex;
-				flex-direction: column;
-				overflow: hidden;
-			}
+        /* 左侧标签栏 Sidebar */
+        .sidebar {
+            width: 100px; background-color: var(--bg-sidebar); border-right: 1px solid var(--border-main);
+            display: flex; flex-direction: column; padding-top: 10px; flex-shrink: 0;
+        }
+        .sidebar-item {
+            padding: 12px 15px; font-size: 13px; color: #969696; cursor: pointer;
+            border-left: 3px solid transparent; transition: all 0.15s ease;
+        }
+        .sidebar-item:hover { background-color: var(--bg-hover); color: #e0e0e0; }
+        .sidebar-item.active { background-color: var(--bg-active); color: var(--text-light); border-left-color: var(--accent-blue); font-weight: bold; }
 
-			/* 高度分配 */
-			.h-40 {
-				height: 40%;
-				flex-shrink: 0;
-			}
-			.h-60 {
-				flex: 1;
-			}
-			.rank-list-card {
-				flex: 1;
-				min-height: 0;
-				display: flex;
-				flex-direction: column;
-			}
-			.rank-history-card {
-				height: 35%;
-				flex-shrink: 0;
-			}
+        /* 右侧主内容区 */
+        .main-content {
+            flex: 1; background-color: var(--bg-base); display: flex; flex-direction: column;
+            position: relative; height: 100%; min-width: 0;
+        }
 
-			/* 滚动条 */
-			.scroll-wrapper {
-				flex: 1;
-				overflow-y: auto;
-				overflow-x: hidden;
-				margin-right: -5px;
-				padding-right: 5px;
-			}
-			.scroll-wrapper::-webkit-scrollbar {
-				width: 4px;
-			}
-			.scroll-wrapper::-webkit-scrollbar-thumb {
-				background: #444;
-				border-radius: 2px;
-			}
-			.scroll-wrapper::-webkit-scrollbar-track {
-				background: transparent;
-			}
+        /* 统一头部信息栏 */
+        .main-header {
+            height: 42px; background-color: var(--bg-base); border-bottom: 1px solid var(--border-main);
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 0 15px; flex-shrink: 0;
+        }
+        .header-title { font-size: 13px; font-weight: 600; color: var(--text-light); }
+        .header-stats { font-size: 12px; color: var(--text-muted); }
+        .highlight { color: var(--accent-blue); font-weight: bold; margin-left: 4px; }
 
-			/* 图表头部 */
-			.chart-header-row {
-				display: flex;
-				justify-content: space-between;
-				align-items: center;
-				margin-bottom: 5px;
-				height: 24px;
-				flex-shrink: 0;
-			}
-			.chart-title {
-				font-size: 12px;
-				color: #888;
-				display: flex;
-				align-items: center;
-				white-space: nowrap;
-				overflow: hidden;
-				text-overflow: ellipsis;
-			}
-			.summary-info {
-				margin-left: 10px;
-				font-size: 11px;
-				color: #666;
-				font-family: Consolas, monospace;
-			}
-			.sum-val {
-				color: #ccc;
-				margin: 0 2px;
-			}
-			.chart-box {
-				flex: 1;
-				width: 100%;
-				min-height: 0;
-			}
+        /* 视图容器包装器 */
+        .view-container { flex: 1; height: calc(100% - 42px); position: relative; overflow: hidden; }
+        .view-container.hidden { display: none !important; }
 
-			/* 按钮组 */
-			.btn-group {
-				display: flex;
-				background: #1e1e1e;
-				border-radius: 4px;
-				padding: 2px;
-				gap: 2px;
-			}
-			.filter-btn {
-				background: transparent;
-				border: none;
-				color: #666;
-				font-size: 10px;
-				padding: 2px 8px;
-				cursor: pointer;
-				border-radius: 3px;
-				font-family: inherit;
-			}
-			.filter-btn:hover {
-				color: #ccc;
-			}
-			.filter-btn.active {
-				background: #333;
-				color: #00d000;
-				font-weight: bold;
-			}
+        /* === 图表与悬浮窗组件样式 (统一复用) === */
+        #wrapper, .chart-wrapper-style { position: relative; width: 100%; height: 100%; background-color: var(--bg-base); }
+        .chart-box-elem { width: 100%; height: 100%; }
+        
+        .legend-panel {
+            position: absolute; top: 10px; right: 10px;
+            background: rgba(37, 37, 38, 0.94); border: 1px solid #454545;
+            border-radius: 4px; padding: 10px; box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+            z-index: 10; max-height: calc(100% - 20px); width: 200px;
+            box-sizing: border-box; display: flex; flex-direction: column;
+        }
+        .legend-title {
+            font-weight: bold; margin-bottom: 6px; font-size: 12px; padding-bottom: 4px;
+            border-bottom: 1px solid var(--border-light); cursor: pointer;
+            display: flex; justify-content: space-between; align-items: center; color: var(--text-light);
+        }
+        .legend-title:hover { color: var(--accent-blue); }
+        .legend-list { overflow-y: auto; max-height: 180px; padding-right: 2px; }
+        .legend-item { display: flex; align-items: center; margin-bottom: 6px; cursor: pointer; transition: opacity 0.2s; }
+        .legend-item:hover { opacity: 0.8; }
+        .legend-item.hidden { opacity: 0.25; text-decoration: line-through; }
+        .color-block { display: inline-block; width: 11px; height: 11px; border-radius: 2px; margin-right: 8px; flex-shrink: 0; }
+        .legend-detail {
+            margin-top: 8px; padding-top: 6px; border-top: 1px dashed var(--border-light);
+            font-size: 11px; color: #aaaaaa; line-height: 1.5; word-break: break-all;
+        }
+        .legend-panel.collapsed .legend-list, .legend-panel.collapsed .legend-detail { display: none; }
+        .legend-panel.collapsed .legend-title { margin-bottom: 0; border-bottom: none; padding-bottom: 0; }
 
-			/* === 提醒页面样式优化 === */
-			.reminder-list {
-				display: flex;
-				flex-direction: column;
-				gap: 5px;
-			}
-			.reminder-item {
-				display: flex;
-				justify-content: space-between;
-				align-items: center;
-				background: #333;
-				padding: 10px;
-				border-radius: 4px;
-				font-size: 14px;
-				border: 1px solid transparent;
-				transition: all 0.2s;
-			}
-			.reminder-item:hover {
-				background: #3c3c3c;
-			}
+        /* === 工程管理表格样式 === */
+        .table-wrapper {
+            width: 100%; overflow-y: auto; border: 1px solid var(--border-main);
+            background-color: var(--bg-sidebar); border-radius: 4px;
+        }
+        .vscode-table { width: 100%; border-collapse: collapse; font-size: 12px; text-align: left; table-layout: fixed; }
+        .vscode-table th {
+            background-color: var(--bg-sidebar); color: var(--text-light); padding: 8px 6px; position: sticky;
+            top: 0; border-bottom: 2px solid var(--border-main); user-select: none; font-weight: 500; z-index: 2;
+        }
+        .vscode-table th.sortable:hover { background-color: var(--bg-hover); cursor: pointer; }
+        .vscode-table td { padding: 7px 6px; border-bottom: 1px solid var(--border-main); color: var(--text-main); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .vscode-table tr:hover { background-color: var(--bg-hover); }
 
-			.reminder-content {
-				flex: 1;
-				margin-left: 10px;
-				margin-right: 10px;
-				color: #eee;
-				overflow: hidden;
-				text-overflow: ellipsis;
-				white-space: nowrap;
-			}
+        /* === 消息提醒专用样式 === */
+        .reminder-card {
+            display: flex; flex-direction: column; height: 100%; background: var(--bg-sidebar);
+            border: 1px solid var(--border-main); border-radius: 4px; padding: 12px;
+        }
+        .scroll-wrapper {
+            flex: 1; overflow-y: auto; background: var(--bg-base); border: 1px solid var(--border-main);
+            border-radius: 4px; padding: 10px; margin-bottom: 10px;
+        }
+        .reminder-list { display: flex; flex-direction: column; gap: 6px; }
+        .reminder-item {
+            display: flex; justify-content: space-between; align-items: center;
+            background: var(--border-main); padding: 6px 12px; border-radius: 4px; font-size: 12px; border: 1px solid var(--border-light);
+        }
+        .reminder-content { flex: 1; margin: 0 15px; color: #e0e0e0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .reminder-input-zone { border-top: 1px solid var(--border-main); padding-top: 8px; }
+        .input-tip { font-size: 11px; color: var(--text-muted); margin-bottom: 6px; }
+        .input-row { display: flex; gap: 8px; align-items: center; }
 
-			/* 行内按钮组 */
-			.item-actions {
-				display: flex;
-				gap: 5px;
-			}
-			.small-btn {
-				font-size: 12px;
-				padding: 2px 6px;
-				border-radius: 2px;
-				border: none;
-				cursor: pointer;
-				background: #444;
-				color: #bbb;
-			}
-			.small-btn:hover {
-				background: #555;
-				color: #fff;
-			}
-			.small-btn.del:hover {
-				background: #550000;
-				color: #ff6666;
-			}
+        /* === VSCode 风格基础组件 === */
+        .vscode-input {
+            background-color: var(--bg-input); border: 1px solid #6b6b6b; color: var(--text-main);
+            padding: 4px 8px; border-radius: 2px; outline: none; font-size: 12px; height: 26px;
+        }
+        .vscode-input:focus { border-color: var(--accent-blue); }
+        .vscode-btn {
+            background-color: #0e639c; border: none; color: var(--text-light); padding: 0 12px;
+            height: 26px; border-radius: 2px; cursor: pointer; font-size: 12px;
+        }
+        .vscode-btn:hover { background-color: #1177bb; }
+        .vscode-btn.success { background-color: var(--accent-green); }
+        .vscode-btn.success:hover { background-color: var(--accent-green-hover); }
+        .small-btn {
+            background: var(--bg-input); border: 1px solid #555; color: #ccc;
+            padding: 2px 6px; border-radius: 2px; cursor: pointer; font-size: 11px;
+        }
+        .small-btn:hover { background: #4c4c4c; color: #fff; }
+        .small-btn.del:hover { background: var(--accent-red); color: #fff; border-color: var(--accent-red); }
+        .small-btn.export:hover { background: var(--accent-blue); color: #fff; border-color: var(--accent-blue); }
 
-			.input-row {
-				display: flex;
-				gap: 5px;
-				margin-top: 10px;
-				align-items: center;
-			}
-			.dark-input {
-				background: #1e1e1e;
-				border: 1px solid #444;
-				color: #ccc;
-				padding: 5px;
-				border-radius: 3px;
-				font-family: inherit;
-				font-size: 12px;
-				height: 28px;
-				box-sizing: border-box;
-			}
-			.dark-input:focus {
-				outline: none;
-				border-color: #00d000;
-			}
+        /* 全局滚动条美化 */
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-thumb { background: #424242; border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: #4f4f4f; }
+        ::-webkit-scrollbar-track { background: transparent; }
 
-			.action-btn {
-				background: #444;
-				border: none;
-				color: #ccc;
-				padding: 0 15px;
-				height: 28px;
-				border-radius: 3px;
-				cursor: pointer;
-				font-size: 12px;
-				transition: background 0.2s;
-				white-space: nowrap;
-			}
-			.action-btn:hover {
-				background: #555;
-				color: #fff;
-			}
-			.action-btn.primary {
-				background: #006600;
-				color: #fff;
-			}
-			.action-btn.primary:hover {
-				background: #008800;
-			}
-			.action-btn.save {
-				background: #006600;
-				color: #fff;
-			}
-			.action-btn.save:hover {
-				background: #008800;
-			}
+		/* === 节律分析专用样式 === */
+        .rhythm-mode-block {
+            border: 1px solid var(--border-main);
+            border-radius: 4px;
+            padding: 10px;
+            cursor: pointer;
+            transition: all 0.2s;
+            background: var(--bg-base);
+        }
+        .rhythm-mode-block.active {
+            border-color: var(--accent-blue);
+            background: rgba(0, 122, 204, 0.05);
+        }
+        .rhythm-mode-title {
+            font-weight: bold;
+            color: var(--text-light);
+            font-size: 13px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .rhythm-mode-title::before {
+            content: '';
+            display: inline-block;
+            width: 12px; height: 12px;
+            border-radius: 50%;
+            border: 2px solid var(--text-muted);
+            box-sizing: border-box;
+        }
+        .rhythm-mode-block.active .rhythm-mode-title::before {
+            border-color: var(--accent-blue);
+            background: var(--accent-blue);
+            box-shadow: inset 0 0 0 2px var(--bg-base);
+        }
+        .rhythm-mode-block:not(.active) .rhythm-mode-content {
+            display: none !important;
+        }
+        .rhythm-mode-content {
+            margin-top: 12px;
+            padding-top: 12px;
+            border-top: 1px dashed var(--border-main);
+            cursor: default;
+        }
+        .rhythm-radio-group {
+            display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px;
+        }
+        .rhythm-radio-group label {
+            font-size: 12px; color: var(--text-main); cursor: pointer; display: flex; align-items: center; gap: 4px;
+        }
 
-			/* 加载遮罩 */
-			#loading-mask {
-				position: absolute;
-				top: 0;
-				left: 0;
-				width: 100%;
-				height: 100%;
-				background: rgba(30, 30, 30, 0.9);
-				z-index: 999;
-				display: flex;
-				justify-content: center;
-				align-items: center;
-				color: #00d000;
-			}
-		</style>
-	</head>
-	<body>
-		<div id="loading-mask">正在读取历史数据...</div>
+		/* 修改原有的 loading-mask，建议直接用 bg-base 纯色盖住底层白屏或未排版内容 */
+		#loading-mask {
+			position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+			background: var(--bg-base); /* 使用主题底色完全遮挡 */
+			z-index: 999;
+			display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 15px;
+			color: var(--text-muted); font-size: 13px; font-weight: bold;
+		}
 
-		<div class="header">
-			<div class="main-title">工作时间统计</div>
-			<div class="today-stats" id="headerStatsArea">
-				<span id="headerScope">今日已工作</span>
-				<span id="headerVal" class="highlight">0时0分</span>
+		/* 新增：CSS 旋转动画引擎 */
+		.loading-spinner {
+			width: 28px; height: 28px;
+			border: 3px solid rgba(0, 122, 204, 0.2);
+			border-top-color: var(--accent-blue);
+			border-radius: 50%;
+			animation: loading-spin 0.8s linear infinite;
+		}
+
+		@keyframes loading-spin {
+			0% { transform: rotate(0deg); }
+			100% { transform: rotate(360deg); }
+		}
+
+		/* === 节律分析：时间子模式互斥块样式 === */
+        .time-sub-block {
+            background: rgba(0, 0, 0, 0.15);
+            border: 1px solid var(--border-main);
+            border-radius: 4px;
+            padding: 10px;
+        }
+        .sub-block-title {
+            font-size: 12px; color: var(--text-light);
+            display: flex; align-items: center; gap: 6px;
+            cursor: pointer; margin-bottom: 8px; font-weight: bold;
+        }
+        /* 隐藏原生单选框，改造成方块按钮 */
+        .rhythm-quick-buttons { display: flex; gap: 5px; width: 100%; }
+        .rhythm-quick-buttons label { flex: 1; margin: 0; }
+        .rhythm-quick-buttons input[type="radio"] { display: none; }
+        .rhythm-quick-buttons span {
+            display: block; text-align: center;
+            background: var(--bg-sidebar); border: 1px solid var(--border-light);
+            color: var(--text-main); padding: 5px 0; border-radius: 2px;
+            font-size: 11px; cursor: pointer; transition: all 0.2s; white-space: nowrap;
+        }
+        .rhythm-quick-buttons input[type="radio"]:checked + span {
+            background: var(--accent-blue); color: #fff; border-color: var(--accent-blue);
+        }
+        /* 自定义时间段：同行显示 */
+        .rhythm-custom-row { display: flex; align-items: center; gap: 6px; }
+        .rhythm-custom-row input {
+            flex: 1; min-width: 0; padding: 2px 4px; font-size: 11px; height: 26px;
+        }
+
+    </style>
+</head>
+<body>
+
+    <div class="vscode-container">
+        <div class="sidebar">
+            <div class="sidebar-item active" onclick="switchTab('total')">总趋势</div>
+            <div class="sidebar-item" onclick="switchTab('project')">工程详情</div>
+            <div class="sidebar-item" onclick="switchTab('manage')">工程管理</div>
+			<div class="sidebar-item" onclick="switchTab('rhythm')">节律分析</div>
+            <div class="sidebar-item" onclick="switchTab('reminder')">消息提醒</div>
+			<div class="sidebar-item" onclick="switchTab('more')">更多选项</div>
+        </div>
+
+        <div class="main-content">
+            <div id="loading-mask">
+				<div class="loading-spinner"></div>
+				<span>数据获取中...</span>
 			</div>
-		</div>
 
-		<div class="nav-tabs">
-			<div class="nav-item active" onclick="switchTab('total')">总趋势</div>
-			<div class="nav-item" onclick="switchTab('project')">当前工程</div>
-			<div class="nav-item" onclick="switchTab('rank')">排行榜</div>
-			<div class="nav-item" onclick="switchTab('reminder')">消息提醒</div>
-		</div>
+            <div class="main-header">
+				<div style="display: flex; align-items: center; gap: 10px;">
+					<select id="project-selector" class="vscode-input" style="display: none; height: 26px; padding: 2px 6px;" onchange="onProjectSelectorChange()"></select>
+					<div class="header-title" id="page-title">总趋势</div>
+				</div>
+				<div class="header-stats" id="headerStatsArea">
+                    <span id="headerScope">今日已工作</span>
+                    <span id="headerVal" class="highlight">0时0分</span>
+                </div>
+            </div>
 
-		<div id="view-dashboard" class="view-container">
-			<div class="chart-card h-40">
-				<div class="chart-header-row">
-					<span class="chart-title">
-						<span id="trendTitle">历史趋势</span>
-						<span class="summary-info" id="trendSummary"></span>
-					</span>
-					<div class="btn-group" id="dateRangeGroup">
-						<button class="filter-btn active" onclick="updateDashboardRange(7, this)">近7天</button>
-						<button class="filter-btn" onclick="updateDashboardRange(30, this)">近30天</button>
-						<button class="filter-btn" onclick="updateDashboardRange(0, this)">全部</button>
+            <div id="view-chart" class="view-container" style="display: flex; flex-direction: column;">
+                <div id="heatmap-container" style="width: 100%; height: 155px; flex-shrink: 0; background-color: var(--bg-base); border-bottom: 1px solid var(--border-main); padding-top: 10px; box-sizing: border-box;"></div>
+                
+                <div id="wrapper" style="flex: 1; min-height: 0;">
+                    <div id="custom-legend" class="legend-panel">
+                        <div class="legend-title" id="legend-title-main">当前视图工程 <span id="legend-toggle-icon">▼</span></div>
+                        <div class="legend-list" id="legend-list">加载中...</div>
+                        <div class="legend-detail">把鼠标悬浮在工程上查看详情</div>
+                    </div>
+                    <div id="chart-container" class="chart-box-elem"></div>
+                </div>
+            </div>
+
+            <div id="project-empty-tip" class="view-container hidden" style="display:flex; flex-direction:column; justify-content:center; align-items:center; color:var(--text-muted); font-size:13px;">
+                <div style="margin-bottom:8px; font-weight: bold; color:#e0e0e0;">当前未打开工程</div>
+                <div style="font-size:11px; color:#666;">当前视图不包含任何数据。请在 EDA 中打开有效的项目。</div>
+            </div>
+
+            <div id="view-manage" class="view-container hidden" style="display: flex; flex-direction: column; gap: 10px;">
+                <div class="table-wrapper" style="height: 240px; flex-shrink: 0;">
+                    <table class="vscode-table">
+                        <thead>
+                            <tr>
+                                <th class="sortable" onclick="sortTable('name')">工程名称<span id="sort-name"></span></th>
+                                <th class="sortable" onclick="sortTable('start')" style="width: 111px;">开始时间<span id="sort-start"></span></th>
+                                <th class="sortable" onclick="sortTable('end')" style="width: 111px;">最后时间<span id="sort-end"></span></th>
+                                <th class="sortable" onclick="sortTable('work')" style="width: 80px; text-align: center;">工作时间<span id="sort-work"></span></th>
+                                <th class="sortable" onclick="sortTable('rest')" style="width: 80px; text-align: center;">空闲时间<span id="sort-rest"></span></th>
+                                <th style="width: 64px; text-align: center;">导出图表</th>
+                                <th style="width: 64px; text-align: center;">删除记录</th>
+                            </tr>
+                        </thead>
+                        <tbody id="project-table-body"></tbody>
+                    </table>
+                </div>
+                <div id="manage-chart-wrapper" class="chart-wrapper-style" style="flex: 1; min-height: 0; border: 1px solid var(--border-main); border-radius: 4px; padding: 10px;">
+                    <div id="manage-chart-title" style="font-size: 12px; font-weight: bold; color: var(--text-light); position: absolute; top: 8px; left: 70px; z-index: 5;">请点击上方工程行查看对应工程时间轴</div>
+                    
+                    <div id="manage-custom-legend" class="legend-panel">
+                        <div class="legend-title" id="legend-title-manage">目标工程数据 <span id="m-legend-toggle-icon">▼</span></div>
+                        <div class="legend-list" id="m-legend-list">加载中...</div>
+                        <div class="legend-detail">把鼠标悬浮在工程上查看详情</div>
+                    </div>
+
+                    <div id="manage-chart-container" style="width: 100%; height: 100%;"></div>
+                </div>
+            </div>
+
+			<div id="view-rhythm" class="view-container hidden" style="display: flex; gap: 10px;">
+				<div style="width: 300px; background: var(--bg-sidebar); border: 1px solid var(--border-main); border-radius: 4px; padding: 15px; display: flex; flex-direction: column; overflow-y: auto; flex-shrink: 0;">
+					<h3 style="margin:0 0 15px 0; font-size: 14px; color: var(--text-light); border-bottom: 1px solid var(--border-main); padding-bottom: 8px;">节律分析维度</h3>
+
+					<div style="display: flex; flex-direction: column; gap: 10px;">
+						<div id="rhythm-mode-time" class="rhythm-mode-block active" onclick="setRhythmMode('time')">
+							<div class="rhythm-mode-title">按时间范围</div>
+							<div class="rhythm-mode-content" onclick="event.stopPropagation()">
+								
+								<div class="time-sub-block">
+									<label class="sub-block-title">
+										<input type="radio" name="time-submode" value="quick" checked onchange="renderRhythmChart()"> 快速选择
+									</label>
+									<div class="rhythm-quick-buttons">
+										<label><input type="radio" name="rhythm-time-radio" value="day" onchange="onQuickTimeChange()"><span>1天</span></label>
+										<label><input type="radio" name="rhythm-time-radio" value="week" onchange="onQuickTimeChange()"><span>1周</span></label>
+										<label><input type="radio" name="rhythm-time-radio" value="month" onchange="onQuickTimeChange()"><span>1月</span></label>
+										<label><input type="radio" name="rhythm-time-radio" value="year" onchange="onQuickTimeChange()"><span>1年</span></label>
+										<label><input type="radio" name="rhythm-time-radio" value="all" checked onchange="onQuickTimeChange()"><span>全部</span></label>
+									</div>
+								</div>
+
+								<div class="time-sub-block" style="margin-top: 10px;">
+									<label class="sub-block-title">
+										<input type="radio" name="time-submode" value="custom" onchange="renderRhythmChart()"> 自定义时间段
+									</label>
+									<div class="rhythm-custom-row">
+										<input type="date" id="rhythm-start-date" class="vscode-input" onchange="onCustomDateChange()">
+										<span style="color: var(--text-muted); font-weight: bold;">~</span>
+										<input type="date" id="rhythm-end-date" class="vscode-input" onchange="onCustomDateChange()">
+									</div>
+								</div>
+
+							</div>
+						</div>
+
+						<div id="rhythm-mode-project" class="rhythm-mode-block" onclick="setRhythmMode('project')">
+							<div class="rhythm-mode-title">按指定工程</div>
+							<div class="rhythm-mode-content" onclick="event.stopPropagation()">
+								<div style="font-size: 11px; color: var(--text-muted); margin-bottom: 6px;">选择工程聚合历史作息:</div>
+								<select id="rhythm-project-select" class="vscode-input" style="width: 100%;" onchange="renderRhythmChart()">
+									</select>
+							</div>
+						</div>
 					</div>
 				</div>
-				<div id="dailyChart" class="chart-box"></div>
-			</div>
 
-			<div class="chart-card h-60">
-				<div class="chart-header-row">
-					<span class="chart-title">
-						<span id="detailTitle" style="color: #00d000">详情</span>
-						<span class="summary-info" id="detailSummary"></span>
-					</span>
-					<div class="btn-group" id="precisionGroup">
-						<button class="filter-btn" onclick="updateDetailPrecision(15, this)">15分</button>
-						<button class="filter-btn" onclick="updateDetailPrecision(30, this)">30分</button>
-						<button class="filter-btn active" onclick="updateDetailPrecision(60, this)">1小时</button>
+				<div style="flex: 1; background: var(--bg-sidebar); border: 1px solid var(--border-main); border-radius: 4px; position: relative;">
+                    <div id="rhythm-custom-legend" class="legend-panel collapsed">
+						<div class="legend-title" id="legend-title-rhythm">作息图例 <span id="r-legend-toggle-icon">▶</span></div>
+						<div class="legend-list" id="r-legend-list">加载中...</div>
+						<div class="legend-detail">把鼠标悬浮在图例上查看详情</div>
 					</div>
-				</div>
-				<div id="hourlyChart" class="chart-box"></div>
-			</div>
-		</div>
 
-		<div id="view-rank" class="view-container hidden">
-			<div class="chart-card rank-list-card">
-				<div class="chart-header-row">
-					<span class="chart-title">工程耗时排行 (右侧X可删除数据)</span>
-				</div>
-				<div class="scroll-wrapper">
-					<div id="rankChart" style="width: 100%"></div>
+					<div id="rhythm-chart-container" style="width: 100%; height: 100%;"></div>
 				</div>
 			</div>
 
-			<div class="chart-card rank-history-card">
-				<div class="chart-header-row">
-					<span class="chart-title">
-						<span
-							id="rankHistoryTitle"
-							style="
-								color: #00d000;
-								max-width: 150px;
-								overflow: hidden;
-								text-overflow: ellipsis;
-								display: inline-block;
-								vertical-align: bottom;
-							"
-							>选中工程</span
-						>
-						<span id="rankHistorySummary" class="summary-info"></span>
-					</span>
-				</div>
-				<div id="rankHistoryChart" class="chart-box"></div>
-			</div>
-		</div>
-
-		<div id="view-reminder" class="view-container hidden">
-			<div class="chart-card" style="flex: 1">
-				<div class="chart-header-row">
-					<span class="chart-title" style="color: #00d000">消息提醒设置</span>
-					<span class="summary-info">当今日工作满指定时间触发</span>
-				</div>
-
-				<div class="scroll-wrapper" style="background: #222; border-radius: 4px; padding: 5px; margin-bottom: 10px">
-					<div id="reminderListContainer" class="reminder-list"></div>
-				</div>
-
-				<div style="border-top: 1px solid #333; padding-top: 10px; margin-top: auto">
-					<div style="font-size: 12px; color: #888; margin-bottom: 5px">添加提醒规则，添加/删除后都需要点击保存</div>
-					<div class="input-row">
-						<input id="remindMinInput" type="number" class="dark-input" style="width: 70px" placeholder="分钟" />
-						<input id="remindMsgInput" type="text" class="dark-input" style="flex: 1" placeholder="提醒内容 (例如: 休息一下)" />
-						<button class="action-btn primary" onclick="ReminderApp.add()">新增</button>
-						<button class="action-btn save" onclick="ReminderApp.save()">保存</button>
-					</div>
-				</div>
-			</div>
-		</div>
-
-		<script>
-			// ==========================================
-			// 0. 工具函数 (格式化)
-			// ==========================================
-
-			function formatTimeCN(hoursFloat) {
-				if (typeof hoursFloat !== 'number') hoursFloat = parseFloat(hoursFloat);
-				if (isNaN(hoursFloat)) return '0时0分';
-				const totalMin = Math.round(hoursFloat * 60);
-				const h = Math.floor(totalMin / 60);
-				const m = totalMin % 60;
-				return `${h}时${m}分`;
-			}
-
-			function formatTimeHHMM(hoursFloat) {
-				if (typeof hoursFloat !== 'number') hoursFloat = parseFloat(hoursFloat);
-				if (isNaN(hoursFloat)) return '00:00';
-				const totalMin = Math.round(hoursFloat * 60);
-				const h = Math.floor(totalMin / 60);
-				const m = totalMin % 60;
-				const hStr = h.toString().padStart(2, '0');
-				const mStr = m.toString().padStart(2, '0');
-				return `${hStr}:${mStr}`;
-			}
-
-			function sanitizeSlotData(rawW, rawI) {
-				let w = Number(rawW) || 0;
-				let i = Number(rawI) || 0;
-				const MAX_SEC = 900;
-
-				if (w > MAX_SEC) {
-					w = MAX_SEC;
-					i = 0;
-				} else if (w + i > MAX_SEC) {
-					i = MAX_SEC - w;
-					if (i < 0) i = 0;
-				}
-				return [w, i];
-			}
-
-			// ==========================================
-			// 1. 数据结构与加载器
-			// ==========================================
-			// const MAX_SCAN_DAYS = 365;
-			let CURRENT_UUID = null;
-			let CURRENT_NAME = '未命名工程';
-
-			const DB = {
-				dates: [],
-				datesRaw: [],
-				rawDailyData: {},
-				projects: {},
-				total: { work: [], idle: [] },
-				rankData: [],
-			};
-
-			const StorageLoader = {
-				generateKeys: (days) => {
-					const keys = [];
-					const displayDates = [];
-					for (let i = days - 1; i >= 0; i--) {
-						const d = new Date();
-						d.setDate(d.getDate() - i);
-						const Y = d.getFullYear();
-						const M = (d.getMonth() + 1).toString().padStart(2, '0');
-						const D = d.getDate().toString().padStart(2, '0');
-						keys.push(`STATS_${Y}_${M}_${D}`);
-						displayDates.push(`${Y}/${M}/${D}`);
-					}
-					return { keys, displayDates };
-				},
-
-				loadAll: async () => {
-					try {
-						const info = await eda.dmt_Project.getCurrentProjectInfo();
-						if (info) {
-							CURRENT_UUID = info.uuid;
-							CURRENT_NAME = info.friendlyName || '未命名工程';
-						}
-					} catch (e) {
-						console.log('未获取到当前工程');
-					}
-
-					// 1. 一次性获取所有本地存储配置
-					let allConfigs = {};
-					try {
-						allConfigs = await eda.sys_Storage.getExtensionAllUserConfigs();
-						if (!allConfigs) allConfigs = {};
-					} catch (e) {
-						console.error('获取全部配置失败:', e);
-					}
-
-					// 2. 动态计算“全部时间”的跨度（从最早的一条数据到今天）
-					const statKeys = Object.keys(allConfigs)
-						.filter(k => k.startsWith('STATS_'))
-						.sort(); // 按照 YYYY_MM_DD 字典序排序就是时间顺
-						
-					let scanDays = 7; // 默认最少显示7天
-					if (statKeys.length > 0) {
-						const earliestKey = statKeys[0]; // 例如: "STATS_2026_01_02"
-						const parts = earliestKey.split('_');
-						if (parts.length === 4) {
-							// 构造最早的日期和今天的日期，计算天数差
-							const earliestDate = new Date(Number(parts[1]), Number(parts[2]) - 1, Number(parts[3]));
-							const today = new Date();
-							today.setHours(0, 0, 0, 0);
-							const diffTime = today.getTime() - earliestDate.getTime();
-							const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
-							scanDays = Math.max(diffDays, 1);
-						}
-					}
-
-					// 3. 生成从最早记录到今天的连续日期数组
-					const { keys, displayDates } = StorageLoader.generateKeys(scanDays);
-
-					// 4. 将字典映射回按日期排序的数组（没有数据的天数填充 null）
-					const results = keys.map((key) => allConfigs[key] || null);
-
-					// 5. 找到第一天有数据的索引，截断前面无数据的空白期（兜底逻辑）
-					let startIndex = -1;
-					for (let i = 0; i < results.length; i++) {
-						if (results[i]) {
-							startIndex = i;
-							break;
-						}
-					}
-					if (startIndex === -1) startIndex = results.length - 1;
-
-					const validLen = results.length - startIndex;
-					DB.dates = displayDates.slice(startIndex);
-					DB.datesRaw = keys.slice(startIndex);
-					const validResults = results.slice(startIndex);
-
-					// 6. 遍历解析数据（渲染逻辑保持不变）
-					validResults.forEach((jsonStr, index) => {
-						const dayData = jsonStr && typeof jsonStr === 'string' ? JSON.parse(jsonStr) : { meta: {}, slots: {} };
-						const dateKey = DB.datesRaw[index];
-						DB.rawDailyData[dateKey] = dayData;
-
-						let dayTotalWork = 0;
-						let dayTotalIdle = 0;
-						const dailyProjectSum = {};
-
-						for (const slotIdx in dayData.slots) {
-							const slotObj = dayData.slots[slotIdx];
-							let slotPhysicalWork = 0;
-							let slotPhysicalIdle = 0;
-
-							for (const uuid in slotObj) {
-								const [rawW, rawI] = slotObj[uuid];
-								slotPhysicalWork += Number(rawW) || 0;
-								slotPhysicalIdle += Number(rawI) || 0;
-
-								const [pW, pI] = sanitizeSlotData(rawW, rawI);
-
-								if (!dailyProjectSum[uuid]) {
-									dailyProjectSum[uuid] = { w: 0, i: 0, name: dayData.meta[uuid] || '未知' };
-								}
-								dailyProjectSum[uuid].w += pW;
-								dailyProjectSum[uuid].i += pI;
-							}
-
-							const [finalSlotW, finalSlotI] = sanitizeSlotData(slotPhysicalWork, slotPhysicalIdle);
-							dayTotalWork += finalSlotW;
-							dayTotalIdle += finalSlotI;
-						}
-
-						DB.total.work.push(Number((dayTotalWork / 3600).toFixed(2)));
-						DB.total.idle.push(Number((dayTotalIdle / 3600).toFixed(2)));
-
-						for (const uuid in dailyProjectSum) {
-							if (!DB.projects[uuid]) {
-								DB.projects[uuid] = {
-									name: dailyProjectSum[uuid].name,
-									work: new Array(validLen).fill(0),
-									idle: new Array(validLen).fill(0),
-								};
-							}
-							DB.projects[uuid].work[index] = Number((dailyProjectSum[uuid].w / 3600).toFixed(2));
-							DB.projects[uuid].idle[index] = Number((dailyProjectSum[uuid].i / 3600).toFixed(2));
-							if (dailyProjectSum[uuid].name) DB.projects[uuid].name = dailyProjectSum[uuid].name;
-						}
-					});
-
-					DB.rankData = Object.keys(DB.projects)
-						.map((uuid) => {
-							const p = DB.projects[uuid];
-							const totalSec = p.work.reduce((a, b) => a + b, 0);
-							return {
-								name: p.name,
-								uuid: uuid,
-								value: Number(totalSec.toFixed(2)),
-							};
-						})
-						.sort((a, b) => b.value - a.value);
-
-					if (CURRENT_UUID && !DB.projects[CURRENT_UUID]) {
-						DB.projects[CURRENT_UUID] = {
-							name: CURRENT_NAME,
-							work: new Array(validLen).fill(0),
-							idle: new Array(validLen).fill(0),
-						};
-					}
-				},
-			};
-
-			// === 2. 状态 ===
-			const state = {
-				activeTab: 'total',
-				dashDateRange: 7,
-				dashPrecision: 60,
-				dashSelectedDateIdx: -1,
-				dashDataSource: DB.total,
-				rankSelectedUuid: null,
-			};
-
-			// === 3. 图表实例 ===
-			const charts = {
-				daily: echarts.init(document.getElementById('dailyChart'), 'dark'),
-				hourly: echarts.init(document.getElementById('hourlyChart'), 'dark'),
-				rank: echarts.init(document.getElementById('rankChart'), 'dark'),
-				rankHistory: echarts.init(document.getElementById('rankHistoryChart'), 'dark'),
-			};
-
-			// === 4. 辅助函数 ===
-			function sumArray(arr) {
-				if (!arr || arr.length === 0) return 0;
-				return arr.reduce((a, b) => a + b, 0);
-			}
-
-			function formatTimeRange(startStr, minutesToAdd) {
-				if (!startStr.includes(':')) return startStr;
-				const [hStr, mStr] = startStr.split(':');
-				const totalStart = parseInt(hStr, 10) * 60 + parseInt(mStr, 10);
-				const totalEnd = totalStart + minutesToAdd;
-				const endH = Math.floor(totalEnd / 60) % 24;
-				const endM = totalEnd % 60;
-				const format = (val) => val.toString().padStart(2, '0');
-				return `${startStr}~${format(endH)}:${format(endM)}`;
-			}
-
-			function updateTrendSummary(actualCount, wData, iData, label) {
-				const wSum = sumArray(wData);
-				const iSum = sumArray(iData);
-				document.getElementById('trendSummary').innerHTML =
-					`${label}: 工作<span class="sum-val">${formatTimeCN(wSum)}</span> 休息<span class="sum-val">${formatTimeCN(iSum)}</span>`;
-			}
-
-			function updateDetailSummary(wTotalMin, iTotalMin) {
-				const wH = wTotalMin / 60;
-				const iH = iTotalMin / 60;
-				document.getElementById('detailSummary').innerHTML =
-					`工作<span class="sum-val">${formatTimeCN(wH)}</span> 休息<span class="sum-val">${formatTimeCN(iH)}</span>`;
-			}
-
-			// === 5. 渲染 Dashboard ===
-			function renderDashboard() {
-				const days = state.dashDateRange;
-				let startIdx = 0;
-
-				if (days > 0) {
-					if (days < DB.dates.length) {
-						startIdx = DB.dates.length - days;
-					}
-				} else {
-					if (state.activeTab === 'project') {
-						const pData = state.dashDataSource;
-						let firstActiveIdx = -1;
-						for (let k = 0; k < pData.work.length; k++) {
-							if (pData.work[k] > 0 || pData.idle[k] > 0) {
-								firstActiveIdx = k;
-								break;
-							}
-						}
-						if (firstActiveIdx !== -1) {
-							startIdx = firstActiveIdx;
-						} else {
-							startIdx = DB.dates.length - 1;
-						}
-					} else {
-						startIdx = 0;
-					}
-				}
-
-				let xData = DB.dates.slice(startIdx);
-				let wData = state.dashDataSource.work.slice(startIdx);
-				let iData = state.dashDataSource.idle.slice(startIdx);
-
-				const actualCount = xData.length;
-				let rangeLabel = days === 0 ? `全部${actualCount}天` : `近${days}天`;
-
-				if (xData.length < 7 && xData.length > 0) {
-					const padCount = 7 - xData.length;
-					const firstDateStr = xData[0];
-					const firstDate = new Date(firstDateStr);
-
-					for (let k = 1; k <= padCount; k++) {
-						const d = new Date(firstDate);
-						d.setDate(d.getDate() - k);
-						const Y = d.getFullYear();
-						const M = (d.getMonth() + 1).toString().padStart(2, '0');
-						const D = d.getDate().toString().padStart(2, '0');
-
-						xData.unshift(`${Y}/${M}/${D}`);
-						wData.unshift(0);
-						iData.unshift(0);
-					}
-				} else if (xData.length === 0) {
-					for (let k = 6; k >= 0; k--) {
-						const d = new Date();
-						d.setDate(d.getDate() - k);
-						const Y = d.getFullYear();
-						const M = (d.getMonth() + 1).toString().padStart(2, '0');
-						const D = d.getDate().toString().padStart(2, '0');
-						xData.push(`${Y}/${M}/${D}`);
-						wData.push(0);
-						iData.push(0);
-					}
-				}
-
-				updateTrendSummary(actualCount, wData, iData, rangeLabel);
-
-				let title = state.activeTab === 'total' ? '总趋势' : CURRENT_NAME;
-				if (title.length > 20) title = title.substring(0, 19) + '...';
-				document.getElementById('trendTitle').innerText = title;
-
-				let maxDailyTotal = 0;
-				for (let i = 0; i < wData.length; i++) {
-					const sum = (Number(wData[i]) || 0) + (Number(iData[i]) || 0);
-					if (sum > maxDailyTotal) maxDailyTotal = sum;
-				}
-
-				const dailyOption = getLineOption(xData, wData, iData, null);
-
-				if (maxDailyTotal > 23) {
-					dailyOption.yAxis.max = 24;
-					dailyOption.yAxis.interval = 4;
-				} else {
-					delete dailyOption.yAxis.max;
-					delete dailyOption.yAxis.interval;
-				}
-
-				charts.daily.setOption(dailyOption, true);
-				renderHourlyChart();
-			}
-
-			function renderHourlyChart() {
-				if (state.dashSelectedDateIdx < 0 || state.dashSelectedDateIdx >= DB.dates.length) {
-					state.dashSelectedDateIdx = DB.dates.length - 1;
-				}
-
-				const rawKey = DB.datesRaw[state.dashSelectedDateIdx];
-				if (!rawKey) {
-					charts.hourly.clear();
-					return;
-				}
-
-				const dateDisplay = DB.dates[state.dashSelectedDateIdx] || '无数据';
-				document.getElementById('detailTitle').innerText = dateDisplay;
-
-				const dayData = DB.rawDailyData[rawKey] || { slots: {} };
-				const precision = state.dashPrecision;
-				const slotsPerPoint = precision / 15;
-				const totalPoints = (24 * 60) / precision;
-
-				const xData = [],
-					wData = [],
-					iData = [];
-				let totalW = 0,
-					totalI = 0;
-				const targetUuid = state.activeTab === 'project' ? CURRENT_UUID : null;
-
-				for (let i = 0; i < totalPoints; i++) {
-					const startMin = i * precision;
-					const h = Math.floor(startMin / 60)
-						.toString()
-						.padStart(2, '0');
-					const m = (startMin % 60).toString().padStart(2, '0');
-					xData.push(`${h}:${m}`);
-
-					let pointW = 0,
-						pointI = 0;
-					for (let k = 0; k < slotsPerPoint; k++) {
-						const slotIdx = i * slotsPerPoint + k;
-						const slotContent = dayData.slots[slotIdx.toString()];
-
-						if (slotContent) {
-							let slotRawW = 0;
-							let slotRawI = 0;
-
-							for (const uuid in slotContent) {
-								if (!targetUuid || uuid === targetUuid) {
-									const [rawW, rawI] = slotContent[uuid];
-									slotRawW += Number(rawW) || 0;
-									slotRawI += Number(rawI) || 0;
-								}
-							}
-
-							const [sw, si] = sanitizeSlotData(slotRawW, slotRawI);
-
-							pointW += sw;
-							pointI += si;
-						}
-					}
-					wData.push(pointW / 3600);
-					iData.push(pointI / 3600);
-					totalW += pointW;
-					totalI += pointI;
-				}
-
-				updateDetailSummary(totalW / 60, totalI / 60);
-				charts.hourly.setOption(getLineOption(xData, wData, iData, precision));
-			}
-
-			// === 6. 渲染 Rank (排行榜) - 修改版：增加双 Y 轴支持删除 ===
-			function renderRankView() {
-				const data = DB.rankData;
-				const barHeight = 35;
-				const totalHeight = data.length * barHeight + 40;
-
-				const rankDiv = document.getElementById('rankChart');
-				rankDiv.style.height = `${totalHeight}px`;
-				charts.rank.resize();
-
-				const option = {
-					animation: false,
-					backgroundColor: 'transparent',
-					tooltip: {
-						trigger: 'axis',
-						axisPointer: { type: 'shadow' },
-						confine: true,
-						formatter: function (params) {
-							// 过滤掉我们添加的 "删除按钮" 系列的 tooltip
-							const item = params.find((p) => p.seriesType === 'bar');
-							if (!item) return '';
-							return `<div style="max-width:200px;word-wrap:break-word;"><b>${item.name}</b><br/>总耗时: ${formatTimeCN(item.value)}</div>`;
-						},
-					},
-					// 增加 right 边距，为删除按钮留空间
-					grid: { top: 10, bottom: 10, right: 40, left: 220 },
-					xAxis: { type: 'value', splitLine: { show: false }, axisLabel: { show: false } },
-					yAxis: [
-						// 左侧 Y 轴：显示工程名称 (保持原样)
-						{
-							type: 'category',
-							data: data.map((d) => d.name),
-							inverse: true,
-							axisLine: { show: false },
-							axisTick: { show: false },
-							triggerEvent: true,
-							axisLabel: {
-								color: '#ccc',
-								align: 'left',
-								margin: 210,
-								fontSize: 12,
-								formatter: function (value, index) {
-									let name = value;
-									if (name.length > 20) name = name.substring(0, 19) + '...';
-									return `${index + 1}. ${name}`;
-								},
-							},
-						},
-						// 右侧 Y 轴：显示 X 按钮
-						{
-							type: 'category',
-							position: 'right',
-							data: data.map(() => '×'), // 所有行都显示 X
-							inverse: true,
-							axisLine: { show: false },
-							axisTick: { show: false },
-							triggerEvent: true, // 允许点击
-							axisLabel: {
-								color: '#3c3c3c',
-								fontSize: 18,
-								fontWeight: 'bold',
-								margin: 10,
-								// ECharts 坐标轴标签本身不支持 cursor pointer，但视觉上红色 X 足够明显
-							},
-						},
-					],
-					series: [
-						{
-							type: 'bar',
-							barWidth: 18,
-							// 对应左侧 Y 轴
-							yAxisIndex: 0,
-							data: data.map((d) => ({ value: d.value, uuid: d.uuid })),
-							itemStyle: { color: '#00D000', borderRadius: 4 },
-							showBackground: true,
-							backgroundStyle: { color: 'rgba(255,255,255,0.05)', borderRadius: 4 },
-							label: {
-								show: true,
-								position: 'right',
-								color: '#00D000',
-								fontWeight: 'bold',
-								formatter: function (p) {
-									return formatTimeHHMM(p.value);
-								},
-							},
-						},
-					],
-				};
-				charts.rank.setOption(option);
-
-				if (!state.rankSelectedUuid && data.length > 0) {
-					// 如果当前选中的不在列表里（比如刚删除了），默认选第一个
-					if (!data.find((d) => d.uuid === state.rankSelectedUuid)) {
-						state.rankSelectedUuid = data[0].uuid;
-					}
-				}
-
-				if (state.rankSelectedUuid) {
-					const item = data.find((d) => d.uuid === state.rankSelectedUuid);
-					if (item) {
-						renderRankHistory(item.uuid, item.name);
-					} else {
-						// 兜底：如果列表为空
-						document.getElementById('rankHistoryTitle').innerText = '无数据';
-						document.getElementById('rankHistorySummary').innerText = '';
-						charts.rankHistory.clear();
-					}
-				} else {
-					// 列表为空
-					document.getElementById('rankHistoryTitle').innerText = '无数据';
-					document.getElementById('rankHistorySummary').innerText = '';
-					charts.rankHistory.clear();
-				}
-			}
-			
-			function renderRankHistory(uuid, name) {
-				const dispName = name.length > 20 ? name.substring(0, 19) + '...' : name;
-				const titleEl = document.getElementById('rankHistoryTitle');
-				titleEl.innerText = dispName;
-				titleEl.title = name;
-
-				const pData = DB.projects[uuid];
-				if (!pData) return;
-
-				// 找到第一个和最后一个有数据的索引（工作或休息 > 0）
-				let firstIdx = -1, lastIdx = -1;
-				for (let i = 0; i < pData.work.length; i++) {
-					if (pData.work[i] > 0 || pData.idle[i] > 0) {
-						if (firstIdx === -1) firstIdx = i;
-						lastIdx = i;
-					}
-				}
-
-				// 如果没有数据，则默认显示最近7天（或全部）
-				if (firstIdx === -1) {
-					// 全零数据，回退到原逻辑：显示最后7天（如果总天数>=7）或全部
-					let startIdx = Math.max(0, pData.work.length - 7);
-					let xH = DB.dates.slice(startIdx);
-					let wH = pData.work.slice(startIdx);
-					let iH = pData.idle.slice(startIdx);
-					// 不足7天时左侧补零（与原逻辑保持一致）
-					if (xH.length < 7 && xH.length > 0) {
-						const padCount = 7 - xH.length;
-						const firstDate = new Date(xH[0]);
-						for (let k = 1; k <= padCount; k++) {
-							const d = new Date(firstDate);
-							d.setDate(d.getDate() - k);
-							const Y = d.getFullYear();
-							const M = (d.getMonth() + 1).toString().padStart(2, '0');
-							const D = d.getDate().toString().padStart(2, '0');
-							xH.unshift(`${Y}/${M}/${D}`);
-							wH.unshift(0);
-							iH.unshift(0);
-						}
-					}
-					// 更新汇总信息
-					const wTotal = sumArray(pData.work);
-					const iTotal = sumArray(pData.idle);
-					document.getElementById('rankHistorySummary').innerHTML =
-						`工作<span class="sum-val">${formatTimeCN(wTotal)}</span> 休息<span class="sum-val">${formatTimeCN(iTotal)}</span>`;
-
-					let maxDailyTotal = 0;
-					for (let i = 0; i < wH.length; i++) {
-						const sum = (Number(wH[i]) || 0) + (Number(iH[i]) || 0);
-						if (sum > maxDailyTotal) maxDailyTotal = sum;
-					}
-					const option = getLineOption(xH, wH, iH, null);
-					if (maxDailyTotal > 23) {
-						option.yAxis.max = 24;
-						option.yAxis.interval = 4;
-					} else {
-						option.yAxis.max = null;
-						option.yAxis.interval = null;
-					}
-					charts.rankHistory.setOption(option, true);
-					return;
-				}
-
-				// 计算扩展的起始和结束索引（开始-1天，末尾+1天）
-				let startIdx = Math.max(0, firstIdx - 1);
-				let endIdx = Math.min(pData.work.length - 1, lastIdx + 1);
-
-				// 切片
-				let xH = DB.dates.slice(startIdx, endIdx + 1);
-				let wH = pData.work.slice(startIdx, endIdx + 1);
-				let iH = pData.idle.slice(startIdx, endIdx + 1);
-
-				// 如果切片后不足7天，左侧补零（保持与原视觉习惯一致）
-				if (xH.length < 7 && xH.length > 0) {
-					const padCount = 7 - xH.length;
-					const firstDate = new Date(xH[0]);
-					for (let k = 1; k <= padCount; k++) {
-						const d = new Date(firstDate);
-						d.setDate(d.getDate() - k);
-						const Y = d.getFullYear();
-						const M = (d.getMonth() + 1).toString().padStart(2, '0');
-						const D = d.getDate().toString().padStart(2, '0');
-						xH.unshift(`${Y}/${M}/${D}`);
-						wH.unshift(0);
-						iH.unshift(0);
-					}
-				}
-
-				// 更新汇总信息（基于原始全量数据，与显示范围无关）
-				const wTotal = sumArray(pData.work);
-				const iTotal = sumArray(pData.idle);
-				document.getElementById('rankHistorySummary').innerHTML =
-					`工作<span class="sum-val">${formatTimeCN(wTotal)}</span> 休息<span class="sum-val">${formatTimeCN(iTotal)}</span>`;
-
-				let maxDailyTotal = 0;
-				for (let i = 0; i < wH.length; i++) {
-					const sum = (Number(wH[i]) || 0) + (Number(iH[i]) || 0);
-					if (sum > maxDailyTotal) maxDailyTotal = sum;
-				}
-
-				const option = getLineOption(xH, wH, iH, null);
-				if (maxDailyTotal > 23) {
-					option.yAxis.max = 24;
-					option.yAxis.interval = 4;
-				} else {
-					option.yAxis.max = null;
-					option.yAxis.interval = null;
-				}
-				charts.rankHistory.setOption(option, true);
-			}
-
-
-			function getLineOption(xData, wData, iData, timePrecision) {
-				return {
-					animation: false,
-					backgroundColor: 'transparent',
-					tooltip: {
-						trigger: 'axis',
-						axisPointer: { type: 'line' },
-						backgroundColor: 'rgba(0,0,0,0.9)',
-						borderColor: '#333',
-						textStyle: { color: '#eee', fontSize: 12 },
-						formatter: (params) => {
-							let header = params[0].name;
-							if (timePrecision) header = formatTimeRange(header, timePrecision);
-							let html = `<div style="border-bottom:1px solid #555;margin-bottom:3px;">${header}</div>`;
-							params.forEach((item) => {
-								html += `${item.marker} ${item.seriesName}: ${formatTimeCN(item.value)}<br/>`;
-							});
-							return html;
-						},
-					},
-					legend: { data: ['工作', '休息'], right: 0, top: 0, itemWidth: 10, itemHeight: 10, textStyle: { fontSize: 10, color: '#aaa' } },
-					grid: { left: 5, right: 15, top: 30, bottom: 20, containLabel: true },
-					xAxis: {
-						type: 'category',
-						boundaryGap: false,
-						data: xData,
-						axisLabel: {
-							interval: 'auto',
-							fontSize: 10,
-							color: '#666',
-							formatter: function (value) {
-								if (value.length === 10 && value.indexOf('/') > -1) {
-									return value.substring(5);
-								}
-								return value;
-							},
-						},
-					},
-					yAxis: {
-						nameTextStyle: { align: 'left', padding: [0, 0, 0, 5], color: '#666', fontSize: 10 },
-						splitLine: { lineStyle: { color: '#333' } },
-						axisLabel: {
-							formatter: function (val) {
-								return formatTimeHHMM(val);
-							},
-						},
-					},
-					series: [
-						{
-							name: '工作',
-							type: 'line',
-							stack: 'T',
-							smooth: true,
-							showSymbol: false,
-							areaStyle: { opacity: 0.5 },
-							itemStyle: { color: '#00D000' },
-							data: wData,
-						},
-						{
-							name: '休息',
-							type: 'line',
-							stack: 'T',
-							smooth: true,
-							showSymbol: false,
-							areaStyle: { opacity: 0.5 },
-							itemStyle: { color: '#FF9800' },
-							data: iData,
-						},
-					],
-				};
-			}
-
-			// ==========================================
-			// 消息提醒应用逻辑 (不变)
-			// ==========================================
-			const ReminderApp = {
-				KEY: 'USER_CONFIG_REMINDERS',
-				data: [],
-				init: async function () {
-					try {
-						const str = await eda.sys_Storage.getExtensionUserConfig(this.KEY);
-						if (str) this.data = JSON.parse(str);
-					} catch (e) {
-						console.log('Init Reminder Error', e);
-					}
-					this.render();
-				},
-				render: function () {
-					const container = document.getElementById('reminderListContainer');
-					container.innerHTML = '';
-					if (this.data.length === 0) {
-						container.innerHTML = '<div style="text-align:center; color:#666; padding:20px;">暂无提醒规则</div>';
-						return;
-					}
-					this.data.forEach((item, idx) => {
-						const div = document.createElement('div');
-						div.className = 'reminder-item';
-						div.innerHTML = `
-                        <span style="color:#00D000; font-weight:bold; width:60px;">${item.m}分钟</span>
-                        <span class="reminder-content">${item.msg}</span>
-                        <div class="item-actions">
-                            <button class="small-btn" onclick="ReminderApp.preview(${idx})">预览</button>
-                            <button class="small-btn del" onclick="ReminderApp.remove(${idx})">删除</button>
+            <div id="view-reminder" class="view-container hidden">
+                <div class="reminder-card">
+                    <div class="scroll-wrapper">
+                        <div id="reminderListContainer" class="reminder-list"></div>
+                    </div>
+                    <div class="reminder-input-zone">
+                        <div class="input-tip">添加提醒规则，添加/删除后都需要点击保存</div>
+                        <div class="input-row">
+                            <input id="remindMinInput" type="number" class="vscode-input" style="width: 80px" placeholder="分钟" />
+                            <input id="remindMsgInput" type="text" class="vscode-input" style="flex: 1" placeholder="提醒内容 (例如: 空闲一下)" />
+                            <button class="vscode-btn" onclick="ReminderApp.add()">新增</button>
+                            <button class="vscode-btn success" onclick="ReminderApp.save()">保存</button>
                         </div>
-                    `;
-						container.appendChild(div);
-					});
-				},
-				add: function () {
-					const mInput = document.getElementById('remindMinInput');
-					const msgInput = document.getElementById('remindMsgInput');
-					const m = parseInt(mInput.value);
-					const msg = msgInput.value.trim();
-					if (!m || m <= 0) {
-						eda.sys_Message.showToastMessage('请输入有效的分钟数', 'error');
-						return;
-					}
-					if (!msg) {
-						eda.sys_Message.showToastMessage('请输入提醒内容', 'error');
-						return;
-					}
-					this.data.push({ m, msg });
-					this.data.sort((a, b) => a.m - b.m);
-					mInput.value = '';
-					msgInput.value = '';
-					this.render();
-				},
-				remove: function (index) {
-					this.data.splice(index, 1);
-					this.render();
-				},
-				save: async function () {
-					try {
-						await eda.sys_Storage.setExtensionUserConfig(this.KEY, JSON.stringify(this.data));
-						eda.sys_Message.showToastMessage('已保存所有提醒规则', 'success');
-					} catch (e) {
-						eda.sys_Message.showToastMessage('保存失败:' + e.message, 'error');
-						if (e.includes("Cannot create property")) {
-							eda.sys_Message.showToastMessage('EDA底层数据写入异常，无法保存，建议重启EDA', 'error');
-						}
-					}
-				},
-				preview: function (index) {
-					if (this.data[index]) {
-						eda.sys_Message.showToastMessage(this.data[index].msg, 'info');
-					}
-				},
+                    </div>
+                </div>
+            </div>
+
+			<div id="view-more" class="view-container hidden">
+                <div class="reminder-card" style="gap: 20px;">
+                    <div>
+                        <h3 style="color:var(--text-light); margin:0 0 10px 0; font-size:14px; border-bottom:1px solid var(--border-light); padding-bottom:8px;">导出数据</h3>
+                        <div style="display:flex; gap:10px;">
+                            <button class="vscode-btn" onclick="exportTotalChart()">导出总趋势图表</button>
+                            <button class="vscode-btn" onclick="exportAllDataJson()">导出全部数据</button>
+                        </div>
+                    </div>
+                    
+                    <div>
+                        <h3 style="color:var(--text-light); margin:0 0 10px 0; font-size:14px; border-bottom:1px solid var(--border-light); padding-bottom:8px;">清除数据</h3>
+                        <div>
+                            <button class="vscode-btn" style="background-color:var(--accent-red);" onclick="clearAllDataConfirm()">清除工程耗时数据</button>
+                        </div>
+                        <div style="font-size:11px; color:var(--text-muted); margin-top:6px;">警告：此操作不可逆，将彻底删除所有本地记录的工程耗时数据。</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ==========================================
+        // [1] 全局状态与基础配置
+        // ==========================================
+        let CURRENT_UUID = null;
+        let CURRENT_NAME = '未命名工程';
+        let GLOBAL_TODAY_TS = 0;
+        let SELECTED_DETAIL_UUID = null;
+
+        const state = { activeTab: 'total' };
+        const hiddenSeries = new Set();
+        
+        let globalTimeline = [];
+        let globalProjectMeta = {};
+        let pidColorMap = {};
+        let sortedProjectIds = []; 
+        let projectStats = {};    
+        let tsMap = new Map();
+
+        let myChart = null;
+        let manageChart = null;
+        let heatmapChart = null;
+		let rhythmChart = null;
+
+        let currentClusterSize = 1;
+        let currentYMax = 900;
+        let manageClusterSize = 1;
+        let manageYMax = 900;
+
+        const chartCache = {
+            main: { lastClusterSize: -1, lastYMax: -1, lastHourInterval: -1, lastDynamicYMax: -1 },
+            manage: { lastClusterSize: -1, lastYMax: -1, lastHourInterval: -1, lastDynamicYMax: -1 }
+        };
+
+        let currentSortField = ''; 
+        let currentSortOrder = 'desc'; 
+        let currentlySelectedManageUuid = null;
+
+        // ==========================================
+        // [2] 基础工具函数
+        // ==========================================
+        
+        // XSS 转义函数
+        const escapeHtml = (unsafe) => {
+            return (unsafe || '').toString()
+                 .replace(/&/g, "&amp;")
+                 .replace(/</g, "&lt;")
+                 .replace(/>/g, "&gt;")
+                 .replace(/"/g, "&quot;")
+                 .replace(/'/g, "&#039;");
+        };
+
+        function formatDuration(seconds) {
+            if (!seconds) return '0:00:00';
+            const h = Math.floor(seconds / 3600);
+            const m = Math.floor((seconds % 3600) / 60);
+            const s = Math.floor(seconds % 60);
+            return `${h}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+        }
+
+        function formatTimeCN(hoursFloat) {
+            if (isNaN(hoursFloat) || hoursFloat === null) return '0时0分';
+            const totalMin = Math.round(hoursFloat * 60);
+            const h = Math.floor(totalMin / 60);
+            const m = totalMin % 60;
+            return `${h}时${m}分`;
+        }
+
+        function formatFullDateTime(ts) {
+            if (!ts || ts === Infinity || ts === -Infinity) return '无';
+            const d = new Date(ts);
+            return `${d.getFullYear()}/${d.getMonth() + 1}/${d.getDate()} ${d.getHours().toString().padStart(2, '0')}:${d.getMinutes().toString().padStart(2, '0')}`;
+        }
+
+        // ==========================================
+        // [3] 安全导出机制 (异步 Base64 提升性能)
+        // ==========================================
+        async function encryptPayloadAES(jsonObject) {
+			const jsonStr = JSON.stringify(jsonObject);
+			const enc = new TextEncoder();
+			const plainBuffer = enc.encode(jsonStr);
+
+			// 将明文 Buffer 进行 GZIP 最高级别压缩
+			const compressedBuffer = fflate.gzipSync(plainBuffer, { level: 9 });
+
+			const keyMaterial = await crypto.subtle.generateKey(
+				{ name: "AES-GCM", length: 256 }, true, ["encrypt", "decrypt"]
+			);
+			const iv = crypto.getRandomValues(new Uint8Array(12));
+			
+			// 这里传入的是 compressedBuffer，而不是 plainBuffer
+			const cipherBuffer = await crypto.subtle.encrypt(
+				{ name: "AES-GCM", iv: iv }, keyMaterial, compressedBuffer
+			);
+			const exportedKey = await crypto.subtle.exportKey("raw", keyMaterial);
+			
+			const toB64 = (buf) => {
+				return new Promise((resolve) => {
+					const blob = new Blob([buf]);
+					const reader = new FileReader();
+					reader.onload = () => resolve(reader.result.split(',')[1]);
+					reader.readAsDataURL(blob);
+				});
 			};
 
-			// ==========================================
-			// 9. 交互与初始化
-			// ==========================================
-			function switchTab(tab) {
-				state.activeTab = tab;
-				document.querySelectorAll('.nav-item').forEach((e) => e.classList.remove('active'));
-				const tabs = document.querySelectorAll('.nav-item');
+			return {
+				ct: await toB64(cipherBuffer),
+				iv: await toB64(iv),
+				k: await toB64(exportedKey)
+			};
+		}
 
-				const headerArea = document.getElementById('headerStatsArea');
-				let hTextPrefix = '';
-				let hValue = 0;
+        // 计算整天起止索引
+        function getDayAlignedIndices(startTs, endTs) {
+            if (startTs === Infinity || endTs === -Infinity) {
+                return { startValue: tsMap.has(GLOBAL_TODAY_TS) ? tsMap.get(GLOBAL_TODAY_TS) : 0, endValue: tsMap.has(GLOBAL_TODAY_TS) ? tsMap.get(GLOBAL_TODAY_TS) + 95 : 95 };
+            }
+            const dStart = new Date(startTs);
+            const dayStartTs = new Date(dStart.getFullYear(), dStart.getMonth(), dStart.getDate(), 0, 0, 0).getTime();
+            const dEnd = new Date(endTs);
+            const dayEndTs = new Date(dEnd.getFullYear(), dEnd.getMonth(), dEnd.getDate() + 1, 0, 0, 0).getTime(); 
 
-				if (tab === 'total') {
-					tabs[0].classList.add('active');
-					hTextPrefix = '今日已工作 ';
-					if (DB.total.work.length > 0) hValue = DB.total.work.at(-1);
-				} else if (tab === 'project') {
-					tabs[1].classList.add('active');
-					hTextPrefix = '当前工程今日耗时 ';
-					if (DB.projects[CURRENT_UUID] && DB.projects[CURRENT_UUID].work.length > 0) {
-						hValue = DB.projects[CURRENT_UUID].work.at(-1);
+            let sIdx = 0; let eIdx = globalTimeline.length - 1;
+            if (tsMap.has(dayStartTs)) sIdx = tsMap.get(dayStartTs);
+            else if (dayStartTs < globalTimeline[0]?.ts) sIdx = 0;
+
+            if (tsMap.has(dayEndTs)) eIdx = tsMap.get(dayEndTs);
+            else if (dayEndTs > globalTimeline[globalTimeline.length - 1]?.ts) eIdx = globalTimeline.length - 1;
+
+            return { startValue: sIdx, endValue: eIdx };
+        }
+
+        // ==========================================
+        // [4] 数据中心加载逻辑
+        // ==========================================
+        async function loadAllData() {
+            try {
+                const info = await eda.dmt_Project.getCurrentProjectInfo();
+                if (info) {
+                    CURRENT_UUID = info.uuid;
+                    CURRENT_NAME = info.friendlyName || '未命名工程';
+                }
+            } catch (e) { console.log('当前未在有效的工程上下文中'); }
+
+            let allConfigs = {};
+            try {
+                allConfigs = await eda.sys_Storage.getExtensionAllUserConfigs();
+                if (!allConfigs) allConfigs = {};
+            } catch (e) { console.error('扩展数据配置读取失败:', e); }
+
+            globalTimeline = [];
+            globalProjectMeta = {};
+            projectStats = {};
+            tsMap = new Map();
+
+            let minDateTs = Infinity;
+            let maxDateTs = -Infinity;
+
+            for (const [dateKey, jsonString] of Object.entries(allConfigs)) {
+                if (!dateKey.startsWith('STATS_')) continue;
+                let dayData;
+                try { dayData = typeof jsonString === 'string' ? JSON.parse(jsonString) : jsonString; } catch(e) { continue; }
+                if (!dayData) continue;
+
+                if (dayData.meta) Object.assign(globalProjectMeta, dayData.meta);
+
+                const parts = dateKey.split('_');
+                const ts = new Date(`${parts[1]}/${parts[2]}/${parts[3]} 00:00:00`).getTime();
+                if (ts < minDateTs) minDateTs = ts;
+                if (ts > maxDateTs) maxDateTs = ts;
+            }
+
+            const now = new Date();
+            const todayTs = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0).getTime();
+            GLOBAL_TODAY_TS = todayTs;
+
+            if (minDateTs === Infinity) { minDateTs = todayTs; maxDateTs = todayTs; }
+            if (todayTs < minDateTs) minDateTs = todayTs;
+            if (todayTs > maxDateTs) maxDateTs = todayTs;
+
+            let indexCounter = 0;
+            for (let ts = minDateTs; ts <= maxDateTs; ts += 24 * 3600 * 1000) {
+                for (let slot = 0; slot < 96; slot++) {
+                    const slotTs = ts + slot * 15 * 60 * 1000;
+                    globalTimeline.push({ ts: slotTs, work: {}, rest: {} });
+                    tsMap.set(slotTs, indexCounter++);
+                }
+            }
+
+            Object.keys(globalProjectMeta).forEach(pId => {
+                projectStats[pId] = { name: globalProjectMeta[pId], uuid: pId, totalWork: 0, totalRest: 0, startTs: Infinity, endTs: -Infinity };
+            });
+
+            if (CURRENT_UUID && !projectStats[CURRENT_UUID]) {
+                globalProjectMeta[CURRENT_UUID] = CURRENT_NAME;
+                projectStats[CURRENT_UUID] = { name: CURRENT_NAME, uuid: CURRENT_UUID, totalWork: 0, totalRest: 0, startTs: Infinity, endTs: -Infinity };
+            }
+
+            for (const [dateKey, jsonString] of Object.entries(allConfigs)) {
+                if (!dateKey.startsWith('STATS_')) continue;
+                let dayData;
+                try { dayData = typeof jsonString === 'string' ? JSON.parse(jsonString) : jsonString; } catch(e) { continue; }
+                if (!dayData || !dayData.slots) continue;
+
+                const parts = dateKey.split('_');
+                const baseTs = new Date(`${parts[1]}/${parts[2]}/${parts[3]} 00:00:00`).getTime();
+                
+                for (const [slotStr, projects] of Object.entries(dayData.slots)) {
+                    const slotIndex = parseInt(slotStr, 10);
+                    const currentSlotTs = baseTs + slotIndex * 15 * 60 * 1000;
+                    const tlIndex = tsMap.get(currentSlotTs);
+                    
+                    if (tlIndex !== undefined) {
+                        for (const [pId, timeArray] of Object.entries(projects)) {
+                            const wTime = timeArray[0] || 0;
+                            const rTime = timeArray[1] || 0;
+                            
+                            globalTimeline[tlIndex].work[pId] = wTime; 
+                            globalTimeline[tlIndex].rest[pId] = rTime;
+
+                            if (projectStats[pId]) {
+                                projectStats[pId].totalWork += wTime;
+                                projectStats[pId].totalRest += rTime;
+                                if (wTime > 0 || rTime > 0) {
+                                    if (currentSlotTs < projectStats[pId].startTs) projectStats[pId].startTs = currentSlotTs;
+                                    if (currentSlotTs > projectStats[pId].endTs) projectStats[pId].endTs = currentSlotTs;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            sortedProjectIds = Object.keys(globalProjectMeta).sort((a, b) => projectStats[b].totalWork - projectStats[a].totalWork);
+            const colorPalette = ['#5470c6', '#91cc75', '#fac858', '#ee6666', '#73c0de', '#3ba272', '#fc8452', '#9a60b4', '#ea7ccc'];
+            sortedProjectIds.forEach((pId, idx) => {
+                pidColorMap[pId] = colorPalette[idx % colorPalette.length];
+            });
+
+            updateHeaderStats();
+        }
+
+        function getTodayWorkHours(targetUuid = null) {
+            let totalSeconds = 0;
+            const startIndex = tsMap.get(GLOBAL_TODAY_TS);
+            if (startIndex === undefined) return 0;
+            for (let i = startIndex; i < startIndex + 96 && i < globalTimeline.length; i++) {
+                const slot = globalTimeline[i];
+                for (const pid in slot.work) {
+                    if (!targetUuid || pid === targetUuid) { totalSeconds += slot.work[pid]; }
+                }
+            }
+            return totalSeconds / 3600;
+        }
+
+        function getProjectTitleString(uuid) {
+            if (!uuid || !projectStats[uuid]) return '暂无数据';
+            const p = projectStats[uuid];
+            return `工程：${escapeHtml(p.name)} 、时间：${formatFullDateTime(p.startTs)} ~ ${formatFullDateTime(p.endTs)} 、工作：${formatDuration(p.totalWork)} 、空闲：${formatDuration(p.totalRest)}`;
+        }
+
+        // ==========================================
+        // [5] UI 交互与图例控制
+        // ==========================================
+        function initLegendToggle() {
+            document.getElementById('legend-title-main').addEventListener('click', function() {
+                const dom = document.getElementById('custom-legend');
+                dom.classList.toggle('collapsed');
+                document.getElementById('legend-toggle-icon').innerText = dom.classList.contains('collapsed') ? '▶' : '▼';
+            });
+            document.getElementById('legend-title-manage').addEventListener('click', function() {
+                const dom = document.getElementById('manage-custom-legend');
+                dom.classList.toggle('collapsed');
+                document.getElementById('m-legend-toggle-icon').innerText = dom.classList.contains('collapsed') ? '▶' : '▼';
+            });
+			document.getElementById('legend-title-rhythm').addEventListener('click', function() {
+				const dom = document.getElementById('rhythm-custom-legend');
+				dom.classList.toggle('collapsed');
+				document.getElementById('r-legend-toggle-icon').innerText = dom.classList.contains('collapsed') ? '▶' : '▼';
+			});
+        }
+
+        document.body.addEventListener('click', function(e) {
+            const item = e.target.closest('.legend-item');
+            if (!item) return;
+            const seriesName = item.getAttribute('data-name');
+            if (hiddenSeries.has(seriesName)) hiddenSeries.delete(seriesName);
+            else hiddenSeries.add(seriesName);
+            
+            chartCache.main = { lastClusterSize: -1, lastYMax: -1, lastHourInterval: -1, lastDynamicYMax: -1 };
+            chartCache.manage = { lastClusterSize: -1, lastYMax: -1, lastHourInterval: -1, lastDynamicYMax: -1 };
+            
+            // 修改全局 Click 监听器的底部分支
+			if (state.activeTab === 'manage' && currentlySelectedManageUuid) {
+				handleZoomOrPanCore(manageChart, 'manage', currentlySelectedManageUuid, false);
+			} else if (state.activeTab === 'rhythm') {
+				renderRhythmChart();
+			} else {
+				handleZoomOrPan();
+				if (typeof renderHeatmap === 'function') renderHeatmap();
+			}
+        });
+
+        document.body.addEventListener('mouseover', function(e) {
+            const item = e.target.closest('.legend-item');
+            if (!item) return;
+            const panel = item.closest('.legend-panel');
+            if (!panel) return;
+            const detailEl = panel.querySelector('.legend-detail');
+            if (!detailEl) return;
+
+            const seriesName = item.getAttribute('data-name');
+            
+            if (seriesName === '工作时间' || seriesName === '空闲时间') {
+                let totalSec = 0;
+                if (state.activeTab === 'total') {
+                    sortedProjectIds.forEach(uuid => {
+                        const p = projectStats[uuid];
+                        if (p) totalSec += (seriesName === '工作时间') ? p.totalWork : p.totalRest;
+                    });
+                } else if (state.activeTab === 'project' && SELECTED_DETAIL_UUID) {
+                    const p = projectStats[SELECTED_DETAIL_UUID];
+                    if (p) totalSec = (seriesName === '工作时间') ? p.totalWork : p.totalRest;
+                } else if (state.activeTab === 'manage' && currentlySelectedManageUuid) {
+                    const p = projectStats[currentlySelectedManageUuid];
+                    if (p) totalSec = (seriesName === '工作时间') ? p.totalWork : p.totalRest;
+                } else if (state.activeTab === 'rhythm') {
+					if (rhythmChart && rhythmChart._aggWork && rhythmChart._aggRest) {
+						const arr = seriesName === '工作时间' ? rhythmChart._aggWork : rhythmChart._aggRest;
+						for (let i = 0; i < arr.length; i++) totalSec += arr[i];
 					}
-				} else if (tab === 'rank') {
-					tabs[2].classList.add('active');
-					hTextPrefix = `在${DB.dates.length}天里你工作了 `;
-					hValue = sumArray(DB.total.work);
-				} else if (tab === 'reminder') {
-					tabs[3].classList.add('active');
-					hTextPrefix = '今日已工作 ';
-					if (DB.total.work.length > 0) hValue = DB.total.work.at(-1);
 				}
+                detailEl.innerHTML = `<div style="color:#fff;">${escapeHtml(seriesName)}总和：<span style="color:var(--accent-blue); font-weight:bold;">${formatDuration(totalSec)}</span></div>`;
+                return;
+            }
 
-				headerArea.innerHTML = `<span id="headerScope">${hTextPrefix}</span><span id="headerVal" class="highlight">${formatTimeCN(hValue)}</span>`;
+            let targetUuid = null;
+            for (const uuid of sortedProjectIds) {
+                if (globalProjectMeta[uuid] === seriesName) { targetUuid = uuid; break; }
+            }
 
-				const views = {
-					'total': document.getElementById('view-dashboard'),
-					'project': document.getElementById('view-dashboard'),
-					'rank': document.getElementById('view-rank'),
-					'reminder': document.getElementById('view-reminder'),
-				};
+            if (targetUuid && projectStats[targetUuid]) {
+                const p = projectStats[targetUuid];
+                detailEl.innerHTML = `
+                    <div style="color:#e0e0e0; font-weight:bold; white-space:nowrap; text-overflow:ellipsis; overflow:hidden;">${escapeHtml(seriesName)}</div>
+                    <div style="margin-top:4px;">
+                        工作时间: <span style="color:#fff">${formatDuration(p.totalWork)}</span><br/>
+                        空闲时间: <span style="color:#fff">${formatDuration(p.totalRest)}</span>
+                    </div>`;
+            }
+        });
 
-				Object.values(views).forEach((el) => el.classList.add('hidden'));
+        document.body.addEventListener('mouseout', function(e) {
+            const item = e.target.closest('.legend-item');
+            if (!item) return;
+            const panel = item.closest('.legend-panel');
+            if (!panel) return;
+            const detailEl = panel.querySelector('.legend-detail');
+            if (detailEl) detailEl.innerHTML = '把鼠标悬浮在工程上查看详情';
+        });
 
-				if (tab === 'rank') {
-					views['rank'].classList.remove('hidden');
-					renderRankView();
-					setTimeout(() => {
-						charts.rank.resize();
-						charts.rankHistory.resize();
-					}, 10);
-				} else if (tab === 'reminder') {
-					views['reminder'].classList.remove('hidden');
-					ReminderApp.render();
+        // ==========================================
+        // [6] 图表核心逻辑提取
+        // ==========================================
+        function bindRightDrag(chartInstance) {
+            let isRightDragging = false;
+            let rightDragStartX = 0;
+            chartInstance.getZr().on('mousedown', function(e) {
+                if (e.event.button === 2) { isRightDragging = true; rightDragStartX = e.offsetX; chartInstance.getZr().setCursorStyle('grabbing'); }
+            });
+            chartInstance.getZr().on('mousemove', function(e) {
+                if (isRightDragging) {
+                    const startPt = chartInstance.convertFromPixel({seriesIndex: 0}, [rightDragStartX, e.offsetY]);
+                    const endPt = chartInstance.convertFromPixel({seriesIndex: 0}, [e.offsetX, e.offsetY]);
+                    if (startPt && endPt) {
+                        const deltaIndex = startPt[0] - endPt[0];
+                        const currentDz = chartInstance.getOption().dataZoom[0];
+                        let newStart = currentDz.startValue + deltaIndex;
+                        let newEnd = currentDz.endValue + deltaIndex;
+                        const maxIdx = globalTimeline.length - 1;
+                        if (newStart < 0) { newEnd -= newStart; newStart = 0; }
+                        if (newEnd > maxIdx) { newStart -= (newEnd - maxIdx); newEnd = maxIdx; }
+                        chartInstance.dispatchAction({ type: 'dataZoom', startValue: newStart, endValue: newEnd });
+                        rightDragStartX = e.offsetX;
+                    }
+                }
+            });
+            chartInstance.getZr().on('mouseup', function(e) {
+                if (e.event.button === 2) { isRightDragging = false; chartInstance.getZr().setCursorStyle('default'); }
+            });
+        }
+
+        function createChartOption(bounds, isManage, specificUuid) {
+            const dummyData = new Float32Array(globalTimeline.length).fill(900);
+            return {
+                animation: false,
+                backgroundColor: 'transparent',
+                tooltip: {
+                    trigger: 'axis', axisPointer: { type: 'shadow' },
+                    backgroundColor: 'rgba(37, 37, 38, 0.95)', borderColor: '#454545', borderWidth: 1,
+                    textStyle: { color: '#cccccc', fontSize: 12 },
+                    formatter: function(params) {
+                        const ts = Number(params[0].axisValue);
+                        const tlIndex = tsMap.get(ts);
+                        const currentSize = isManage ? manageClusterSize : currentClusterSize;
+                        const blockStartIdx = Math.floor(tlIndex / currentSize) * currentSize;
+                        
+                        const blockWork = {};
+                        let blockRest = 0;
+                        for (let k = 0; k < currentSize && (blockStartIdx + k) < globalTimeline.length; k++) {
+                            const slot = globalTimeline[blockStartIdx + k];
+                            for (const pid in slot.work) {
+                                if (specificUuid && pid !== specificUuid) continue;
+                                blockWork[pid] = (blockWork[pid] || 0) + slot.work[pid];
+                            }
+                            for (const pid in slot.rest) {
+                                if (specificUuid && pid !== specificUuid) continue;
+                                blockRest += slot.rest[pid];
+                            }
+                        }
+
+                        const startTs = globalTimeline[blockStartIdx].ts;
+                        const endTs = startTs + currentSize * 15 * 60 * 1000;
+                        const title = `${formatFullDateTime(startTs)} ~ ${new Date(endTs).getHours().toString().padStart(2, '0')}:${new Date(endTs).getMinutes().toString().padStart(2, '0')}`;
+                        
+                        let tooltipHtml = `<b style="font-size:13px; color:#fff;">${title}</b><br/>`;
+                        let hasData = false;
+
+                        if (!hiddenSeries.has('工作时间')) {
+                            const idsToIterate = isManage && specificUuid ? [specificUuid] : sortedProjectIds;
+                            for (let i = idsToIterate.length - 1; i >= 0; i--) {
+                                const pid = idsToIterate[i];
+                                if (!isManage && state.activeTab === 'project' && pid !== CURRENT_UUID) continue;
+                                const name = globalProjectMeta[pid];
+                                if (hiddenSeries.has(name)) continue;
+                                const val = blockWork[pid] || 0;
+                                if (val > 0) {
+                                    tooltipHtml += `<div style="margin: 4px 0; font-size:12px;"><span class="color-block" style="background:${pidColorMap[pid] || 'var(--accent-blue)'};"></span> ${escapeHtml(name)}: <span style="float:right; font-weight:bold; margin-left: 15px; color:#fff;">${formatDuration(val)}</span></div>`;
+                                    hasData = true;
+                                }
+                            }
+                        }
+
+                        if (blockRest > 0 && !hiddenSeries.has('空闲时间')) {
+                            tooltipHtml += `<div style="margin: 4px 0; font-size:12px;"><span class="color-block" style="background:var(--chart-rest);"></span> 空闲时间: <span style="float:right; font-weight:bold; margin-left: 15px; color:#fff;">${formatDuration(blockRest)}</span></div>`;
+                            hasData = true;
+                        }
+                        return hasData ? tooltipHtml : `<b style="font-size:13px; color:#fff;">${title}</b><br/><span style="color:#666;">无活动记录</span>`;
+                    }
+                },
+                legend: { show: false },
+                grid: { left: 60, right: 20, bottom: 45, top: isManage ? 15 : 20 },
+                xAxis: {
+                    type: 'category', data: globalTimeline.map(item => item.ts),
+                    axisLabel: {
+                        hideOverlap: true, rotate: 30, color: '#858585', fontSize: 10,
+                        formatter: function(value) {
+                            const d = new Date(Number(value));
+                            const hh = d.getHours().toString().padStart(2, '0');
+                            const mm = d.getMinutes().toString().padStart(2, '0');
+                            if (hh === '00' && mm === '00') return `${d.getFullYear()}/${d.getMonth() + 1}/${d.getDate()}`;
+                            return `${hh}:${mm}`;
+                        }
+                    },
+                    axisLine: { lineStyle: { color: '#333' } }
+                },
+                yAxis: { 
+                    type: 'value', max: 900, 
+                    axisLabel: { color: '#858585', fontSize: 10, formatter: value => formatDuration(value) },
+                    splitLine: { lineStyle: { color: '#252526' } }
+                },
+                dataZoom: [{ 
+                    type: 'inside', startValue: bounds.startValue, endValue: bounds.endValue, 
+                    zoomOnMouseWheel: true, moveOnMouseMove: true, moveOnMouseWheel: false, filterMode: 'none', minValueSpan: 23
+                }],
+                series: [
+                    { type: 'bar', data: Array.from(dummyData), itemStyle: { color: 'rgba(0,0,0,0)' }, barGap: '-100%', large: true, progressive: 0, progressiveThreshold: 999999 },
+                    {
+                        type: 'custom', clip: true, progressive: 0, progressiveThreshold: 999999,
+                        renderItem: function (params, api) {
+                            const categoryIndex = api.value(0);
+                            const startY = api.value(1);
+                            const endY = api.value(2);
+                            const pid = api.value(3);
+                            const cSize = api.value(4) || 1;
+                            const leftCoord = api.coord([categoryIndex, startY]);
+                            const rightCoord = api.coord([categoryIndex + cSize - 1, startY]);
+                            const bandWidth = api.size([1, 0])[0];
+                            const x = leftCoord[0] - bandWidth / 2;
+                            const width = (rightCoord[0] + bandWidth / 2) - x;
+                            const y = api.coord([categoryIndex, endY])[1];
+                            const height = leftCoord[1] - y;
+                            if (height <= 0) return;
+                            return { type: 'rect', shape: { x, y, width, height }, style: api.style({ fill: pid === 'REST' ? '#b0b0b0' : (pidColorMap[pid] || '#007acc') }) };
+                        },
+                        encode: { x: 0, y: [1, 2] }, data: []
+                    }
+                ]
+            };
+        }
+
+        function renderHeatmap() {
+            if (!heatmapChart) {
+                const dom = document.getElementById('heatmap-container');
+                if (!dom) return;
+                heatmapChart = echarts.init(dom, 'dark');
+                heatmapChart.on('click', function(params) {
+                    const dateStr = params.value[0];
+                    const targetTs = new Date(dateStr.replace(/-/g, '/') + " 00:00:00").getTime(); 
+                    const bounds = getDayAlignedIndices(targetTs, targetTs);
+                    if (myChart) {
+                        myChart.dispatchAction({ type: 'dataZoom', startValue: bounds.startValue, endValue: bounds.endValue });
+                        handleZoomOrPan();
+                    }
+                });
+            }
+
+            const filterUuid = state.activeTab === 'project' ? SELECTED_DETAIL_UUID : null;
+            const dailyData = new Map();
+            const now = new Date();
+            const startTs = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0).getTime() - 365 * 24 * 3600 * 1000;
+
+            for (let i = 0; i < globalTimeline.length; i++) {
+                const slot = globalTimeline[i];
+                if (slot.ts < startTs) continue;
+                
+                const d = new Date(slot.ts);
+                const dateStr = [d.getFullYear(), (d.getMonth() + 1).toString().padStart(2, '0'), d.getDate().toString().padStart(2, '0')].join('-');
+                if (!dailyData.has(dateStr)) dailyData.set(dateStr, { work: 0, rest: 0 });
+                const dayStat = dailyData.get(dateStr);
+                
+                for (const pid in slot.work) {
+                    if (filterUuid && pid !== filterUuid) continue;
+                    if (!hiddenSeries.has(globalProjectMeta[pid]) && !hiddenSeries.has('工作时间')) dayStat.work += slot.work[pid];
+                }
+                for (const pid in slot.rest) {
+                    if (filterUuid && pid !== filterUuid) continue;
+                    if (!hiddenSeries.has(globalProjectMeta[pid]) && !hiddenSeries.has('空闲时间')) dayStat.rest += slot.rest[pid];
+                }
+            }
+            
+            const result = [];
+            dailyData.forEach((stat, dateStr) => result.push([dateStr, stat.work, stat.rest]));
+
+            const endStr = [now.getFullYear(), (now.getMonth() + 1).toString().padStart(2, '0'), now.getDate().toString().padStart(2, '0')].join('-');
+            const startD = new Date(startTs);
+            const startStr = [startD.getFullYear(), (startD.getMonth() + 1).toString().padStart(2, '0'), startD.getDate().toString().padStart(2, '0')].join('-');
+
+            heatmapChart.setOption({
+                backgroundColor: 'transparent',
+                tooltip: {
+                    appendToBody: true, backgroundColor: 'rgba(37, 37, 38, 0.95)', borderColor: '#454545', borderWidth: 1, textStyle: { color: '#cccccc', fontSize: 12 },
+                    formatter: function (p) {
+                        return `<b style="font-size:13px; color:#fff;">${p.value[0]}</b><br/>
+                                <div style="margin-top:6px; font-size:12px;"><span class="color-block" style="background:#39d353;"></span> 工作时间: <span style="float:right; font-weight:bold; margin-left: 15px; color:#fff;">${formatDuration(p.value[1] || 0)}</span></div>
+                                <div style="margin-top:4px; font-size:12px;"><span class="color-block" style="background:#b0b0b0;"></span> 空闲时间: <span style="float:right; font-weight:bold; margin-left: 15px; color:#fff;">${formatDuration(p.value[2] || 0)}</span></div>`;
+                    }
+                },
+                visualMap: {
+                    type: 'piecewise', show: false, dimension: 1, 
+                    pieces: [ { min: 21601, color: '#56D364' }, { min: 14401, max: 21600, color: '#2EA043' }, { min: 7021, max: 14400, color: '#196C2E' }, { min: 1, max: 7200, color: '#033A16' } ],
+                    outOfRange: { color: '#151B23' } 
+                },
+                calendar: {
+                    top: 25, left: 45, right: 25, bottom: 15, range: [startStr, endStr], cellSize: ['auto', 14],
+                    itemStyle: { color: '#151B23', borderWidth: 4, borderColor: '#1e1e1e', borderRadius: 2 },
+                    yearLabel: { show: false }, dayLabel: { color: '#858585', nameMap: 'ZH', fontSize: 10 }, monthLabel: { color: '#858585', nameMap: 'ZH', fontSize: 10 }, splitLine: { show: false }
+                },
+                series: { type: 'heatmap', coordinateSystem: 'calendar', data: result, itemStyle: { borderRadius: 2 } }
+            });
+        }
+
+        function initChartCore() {
+            initLegendToggle();
+            myChart = echarts.init(document.getElementById('chart-container'), 'dark');
+            const bounds = getDayAlignedIndices(GLOBAL_TODAY_TS, GLOBAL_TODAY_TS);
+            
+            myChart.setOption(createChartOption(bounds, false));
+            bindRightDrag(myChart);
+
+            let zoomTimer = null;
+            myChart.on('dataZoom', () => {
+                if (zoomTimer) clearTimeout(zoomTimer);
+                zoomTimer = setTimeout(handleZoomOrPan, 120); 
+            });
+            handleZoomOrPan();
+            renderHeatmap();
+        }
+
+		// ==========================================
+		// 节律极坐标分析引擎
+		// ==========================================
+		let currentRhythmMode = 'time';
+		let rhythmFirstInit = true;
+
+		function setRhythmMode(mode) {
+			currentRhythmMode = mode;
+			document.getElementById('rhythm-mode-time').classList.toggle('active', mode === 'time');
+			document.getElementById('rhythm-mode-project').classList.toggle('active', mode === 'project');
+			renderRhythmChart();
+		}
+
+		function onQuickTimeChange() {
+			document.querySelector('input[name="time-submode"][value="quick"]').checked = true;
+			renderRhythmChart();
+		}
+
+		function onCustomDateChange() {
+			document.querySelector('input[name="time-submode"][value="custom"]').checked = true;
+			renderRhythmChart();
+		}
+
+		// A-Z 排序下拉菜单渲染 (复用已有数据)
+		function updateRhythmProjectSelector() {
+			const selector = document.getElementById('rhythm-project-select');
+			if (!selector) return;
+			const currentVal = selector.value;
+			selector.innerHTML = '<option value="">-- 请选择工程 --</option>';
+			
+			Object.keys(globalProjectMeta).sort((a, b) => {
+				return (globalProjectMeta[a] || '').localeCompare(globalProjectMeta[b] || '', 'zh');
+			}).forEach(uuid => {
+				const opt = document.createElement('option');
+				opt.value = uuid;
+				opt.innerText = globalProjectMeta[uuid];
+				if (uuid === currentVal) opt.selected = true;
+				selector.appendChild(opt);
+			});
+		}
+
+		function renderRhythmChart() {
+			if (!rhythmChart) {
+				const dom = document.getElementById('rhythm-chart-container');
+				if (!dom) return;
+				rhythmChart = echarts.init(dom, 'dark');
+			}
+
+			// 1. 获取用户过滤条件
+			let startTs = 0;
+			let endTs = Infinity;
+			const now = new Date();
+			const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0).getTime();
+
+			if (currentRhythmMode === 'time') {
+				const subModeEl = document.querySelector('input[name="time-submode"]:checked');
+				const subMode = subModeEl ? subModeEl.value : 'quick';
+				if (subMode === 'custom') {
+					const customStart = document.getElementById('rhythm-start-date').value;
+					const customEnd = document.getElementById('rhythm-end-date').value;
+					if (customStart) startTs = new Date(customStart + "T00:00:00").getTime();
+					if (customEnd) endTs = new Date(customEnd + "T23:59:59").getTime();
 				} else {
-					views['total'].classList.remove('hidden');
-					state.dashDataSource = tab === 'total' ? DB.total : DB.projects[CURRENT_UUID];
-					renderDashboard();
+					const presetEl = document.querySelector('input[name="rhythm-time-radio"]:checked');
+					const preset = presetEl ? presetEl.value : 'all';
+					if (preset === 'day') startTs = todayStart;
+					else if (preset === 'week') startTs = todayStart - 6 * 24 * 3600 * 1000;
+					else if (preset === 'month') startTs = todayStart - 29 * 24 * 3600 * 1000;
+					else if (preset === 'year') startTs = todayStart - 364 * 24 * 3600 * 1000;
 				}
 			}
 
-			window.updateDashboardRange = (days, btn) => {
-				toggleBtn(btn, '#dateRangeGroup');
-				state.dashDateRange = days;
-				renderDashboard();
-			};
+			const targetUuid = document.getElementById('rhythm-project-select').value;
 
-			window.updateDetailPrecision = (mins, btn) => {
-				toggleBtn(btn, '#precisionGroup');
-				state.dashPrecision = mins;
-				renderHourlyChart();
-			};
+			// 2. 数据合并压入 96 个时间切片
+			const aggregatedWork = new Float64Array(96).fill(0);
+			const aggregatedRest = new Float64Array(96).fill(0);
 
-			function toggleBtn(btn, selector) {
-				document.querySelectorAll(`${selector} .filter-btn`).forEach((b) => b.classList.remove('active'));
-				btn.classList.add('active');
-			}
-
-			charts.daily.getZr().on('click', (params) => {
-				const point = [params.offsetX, params.offsetY];
-				if (charts.daily.containPixel('grid', point)) {
-					const idx = charts.daily.convertFromPixel({ seriesIndex: 0 }, point)[0];
-					const xData = charts.daily.getOption().xAxis[0].data;
-					if (xData[idx]) {
-						const dateStr = xData[idx];
-						const globalIdx = DB.dates.indexOf(dateStr);
-						if (globalIdx !== -1) {
-							state.dashSelectedDateIdx = globalIdx;
-							renderHourlyChart();
-						}
+			for (let i = 0; i < globalTimeline.length; i++) {
+				const slot = globalTimeline[i];
+				if (currentRhythmMode === 'time' && (slot.ts < startTs || slot.ts > endTs)) continue;
+				const d = new Date(slot.ts);
+				const slotIndex = d.getHours() * 4 + Math.floor(d.getMinutes() / 15);
+				let sWork = 0; let sRest = 0;
+				
+				if (currentRhythmMode === 'project') {
+					if (targetUuid) {
+						sWork = slot.work[targetUuid] || 0;
+						sRest = slot.rest[targetUuid] || 0;
 					}
+				} else {
+					for (const pid in slot.work) sWork += slot.work[pid];
+					for (const pid in slot.rest) sRest += slot.rest[pid];
 				}
-			});
-
-			// === 修正后的点击事件：支持点击右侧X ===
-			charts.rank.on('click', function (params) {
-				// 如果点击的是 Y 轴 (triggerEvent: true)
-				if (params.componentType === 'yAxis') {
-					const index = params.dataIndex; // 行号
-					const item = DB.rankData[index]; // 对应的数据
-					if (!item) return;
-
-					// 判断点击的是左边(名字)还是右边(X)
-					// params.yAxisIndex 为 0 是左边，1 是右边
-					if (params.yAxisIndex === 1) {
-						// 点击了删除按钮
-						confirmDeleteProject(item.uuid, item.name);
-					} else {
-						// 点击了左侧名字，执行选中
-						handleRankClick(item.name, item.uuid);
-					}
-				}
-				// 如果点击的是柱子本身
-				else if (params.componentType === 'series') {
-					handleRankClick(params.name, params.data ? params.data.uuid : null);
-				}
-			});
-
-			function handleRankClick(name, uuid) {
-				if (!uuid) return;
-				state.rankSelectedUuid = uuid;
-				renderRankHistory(uuid, name);
+				aggregatedWork[slotIndex] += sWork;
+				aggregatedRest[slotIndex] += sRest;
 			}
 
-			// === 新增：删除确认逻辑 ===
-			function confirmDeleteProject(uuid, name) {
-				eda.sys_Dialog.showConfirmationMessage(
-					`确认删除 “${name}” 的全部时间数据？\n(此操作不可恢复)`,
-					'删除时间数据',
-					'确认删除',
-					'取消',
-					async (mainButtonClicked) => {
-						if (mainButtonClicked) {
-							await deleteProjectData(uuid);
-						} else {
-							eda.sys_Message.showToastMessage('已取消', 'info');
-						}
+			// 挂载数据给鼠标悬浮汇总使用
+			rhythmChart._aggWork = aggregatedWork;
+			rhythmChart._aggRest = aggregatedRest;
+
+			// 如果是首次渲染节律图表，默认将“空闲时间”加入隐藏集
+			if (rhythmFirstInit) {
+				hiddenSeries.add('空闲时间');
+				rhythmFirstInit = false;
+			}
+
+			let showWork = !hiddenSeries.has('工作时间');
+			let showRest = !hiddenSeries.has('空闲时间');
+
+			// 动态绘制 HTML 列表，并根据隐藏状态追加 hidden 样式（出现横线）
+			const rListDom = document.getElementById('r-legend-list');
+			if (rListDom) {
+				rListDom.innerHTML = `
+					<div class="legend-item ${!showWork ? 'hidden' : ''}" data-name="工作时间">
+						<span class="color-block" style="background: linear-gradient(135deg, #007acc, #3ba272);"></span>
+						<span style="font-size:11px; font-weight:bold;">工作时间</span>
+					</div>
+					<div class="legend-item ${!showRest ? 'hidden' : ''}" data-name="空闲时间">
+						<span class="color-block" style="background: var(--chart-rest);"></span>
+						<span style="font-size:11px; color:#aaa;">空闲时间</span>
+					</div>
+				`;
+			}
+
+			// 只根据当前 "未被隐藏" 的图层计算雷达图的最大极坐标值，触发等比放大
+			let maxTotal = 0; 
+			for(let i=0; i<96; i++){
+				let total = 0;
+				if (showWork) total += aggregatedWork[i];
+				if (showRest) total += aggregatedRest[i];
+				if (total > maxTotal) maxTotal = total;
+			}
+			const axisMax = maxTotal > 0 ? (maxTotal / 0.96) : 100;
+
+			// 3. 构建 96 个类目轴标签
+			const categories = [];
+			for (let h = 0; h < 24; h++) {
+				for (let m = 0; m < 60; m += 15) {
+					categories.push(`${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}`);
+				}
+			}
+
+			// 4. 极坐标 ECharts 配置
+			const option = {
+				backgroundColor: 'transparent',
+				tooltip: {
+					trigger: 'axis',
+					axisPointer: { type: 'cross' },
+					backgroundColor: 'rgba(37, 37, 38, 0.95)',
+					borderColor: '#454545',
+					textStyle: { color: '#cccccc', fontSize: 12 },
+					formatter: function(params) {
+						const startTime = params[0].name;
+						const timeParts = startTime.split(':').map(Number);
+						let endH = timeParts[0];
+						let endM = timeParts[1] + 15;
+						if (endM >= 60) { endM = 0; endH += 1; }
+						const endTime = `${endH.toString().padStart(2, '0')}:${endM.toString().padStart(2, '0')}`;
+						
+						let html = `<b style="font-size:13px; color:#fff;">${startTime} ~ ${endTime}</b><br/>`;
+						let hasData = false;
+						params.forEach(p => {
+							if (p.value > 0) {
+								const blockColor = typeof p.color === 'string' ? p.color : (p.color && p.color.colorStops ? p.color.colorStops[0].color : '#007acc');
+								html += `<div style="margin: 4px 0; font-size:12px;"><span class="color-block" style="background:${blockColor};"></span> ${p.seriesName}: <span style="float:right; font-weight:bold; margin-left: 15px; color:#fff;">${formatDuration(p.value)}</span></div>`;
+								hasData = true;
+							}
+						});
+						return hasData ? html : html + `<span style="color:#666;">无活动记录</span>`;
+					}
+				},
+				angleAxis: {
+					type: 'category', data: categories, startAngle: 90, clockwise: true,
+					axisLine: { lineStyle: { color: 'var(--border-light)' } },
+					splitLine: { show: true, lineStyle: { color: 'var(--border-main)', type: 'solid' } },
+					axisLabel: {
+						interval: 3, color: '#CCCCCC', fontSize: 12, textShadowColor: 'rgba(0,0,0,0.8)', textShadowBlur: 3,
+						formatter: function (value) { return value.endsWith(':00') ? value.split(':')[0] : ''; }
 					},
-				);
+					axisPointer: { label: { backgroundColor: '#1E1F20', color: '#D0DFDF' } }
+				},
+				radiusAxis: {
+					max: axisMax, 
+					axisLabel: { show: false, color: '#999999', fontSize: 10, formatter: v => v === 0 ? '' : formatDuration(v) },
+					axisLine: { show: false }, splitLine: { lineStyle: { color: 'var(--border-main)', type: 'dashed' } },
+					axisPointer: { label: { formatter: params => formatDuration(params.value) } }
+				},
+				polar: { center: ['50%', '50%'], radius: '76%' },
+				series: [
+					{
+						type: 'bar',
+						data: showWork ? Array.from(aggregatedWork) : new Float64Array(96).fill(0),
+						coordinateSystem: 'polar',
+						name: '工作时间', stack: 'time-stack', barCategoryGap: '0%', 
+						itemStyle: { color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [{ offset: 0, color: '#007acc' }, { offset: 1, color: '#3ba272' }]) }
+					},
+					{
+						type: 'bar',
+						data: showRest ? Array.from(aggregatedRest) : new Float64Array(96).fill(0),
+						coordinateSystem: 'polar',
+						name: '空闲时间', stack: 'time-stack', barCategoryGap: '0%', 
+						itemStyle: { color: '#666666' } 
+					}
+				]
+			};
+
+			rhythmChart.setOption(option);
+		}
+		
+        function initManageChart(selectedUuid, selectedName) {
+            if (manageChart) { manageChart.dispose(); }
+            const container = document.getElementById('manage-chart-container');
+            if (!container) return;
+            
+            manageChart = echarts.init(container, 'dark');
+            const pStat = projectStats[selectedUuid];
+            const bounds = getDayAlignedIndices(pStat.startTs, pStat.endTs);
+            
+            chartCache.manage = { lastClusterSize: -1, lastYMax: -1, lastHourInterval: -1, lastDynamicYMax: -1 };
+
+            manageChart.setOption(createChartOption(bounds, true, selectedUuid));
+            bindRightDrag(manageChart);
+
+            let zoomTimer = null;
+            manageChart.on('dataZoom', () => {
+                if (zoomTimer) clearTimeout(zoomTimer);
+                zoomTimer = setTimeout(() => handleZoomOrPanCore(manageChart, 'manage', selectedUuid, false), 120); 
+            });
+            handleZoomOrPanCore(manageChart, 'manage', selectedUuid, false);
+        }
+
+        function buildLegendHtml(startIdx, endIdx, isMainView) {
+            const visiblePIds = new Set();
+            let hasRestTime = false;
+            let targetUuid = isMainView ? (state.activeTab === 'project' ? SELECTED_DETAIL_UUID : null) : currentlySelectedManageUuid;
+
+            for (let i = startIdx; i <= endIdx; i++) {
+                for (const pid in globalTimeline[i].rest) {
+                    if (targetUuid && pid !== targetUuid) continue;
+                    if (globalTimeline[i].rest[pid] > 0) hasRestTime = true;
+                }
+                for (const pid in globalTimeline[i].work) {
+                    if (targetUuid && pid !== targetUuid) continue;
+                    if (globalTimeline[i].work[pid] > 0) visiblePIds.add(pid);
+                }
+            }
+
+            let html = '';
+            sortedProjectIds.forEach((pId) => {
+                if (targetUuid && pId !== targetUuid) return;
+                if (visiblePIds.has(pId)) {
+                    const name = globalProjectMeta[pId];
+                    const isHidden = hiddenSeries.has(name);
+                    html += `<div class="legend-item ${isHidden ? 'hidden' : ''}" data-name="${escapeHtml(name)}">
+                        <span class="color-block" style="background:${pidColorMap[pId]};"></span>
+                        <span style="font-size:11px; white-space:nowrap; text-overflow:ellipsis; overflow:hidden;">${escapeHtml(name)}</span>
+                    </div>`;
+                }
+            });
+
+            if (visiblePIds.size > 0) {
+                const isWorkHidden = hiddenSeries.has('工作时间');
+                html += `<div class="legend-item ${isWorkHidden ? 'hidden' : ''}" data-name="工作时间">
+                    <span class="color-block" style="background: linear-gradient(135deg, #5470c6, #91cc75, #fac858);"></span>
+                    <span style="font-size:11px; font-weight:bold;">工作时间</span>
+                </div>`;
+            }
+            if (hasRestTime) {
+                const isHidden = hiddenSeries.has('空闲时间');
+                html += `<div class="legend-item ${isHidden ? 'hidden' : ''}" data-name="空闲时间">
+                    <span class="color-block" style="background:var(--chart-rest);"></span><span style="font-size:11px; color:#aaa;">空闲时间</span>
+                </div>`;
+            }
+            return html || '<div style="color:#666; font-size:11px;">当前区间无记录</div>';
+        }
+
+        function updateChartData(chartInstance, currentTab, filterUuid, clusterSize, yMax, hourInterval) {
+            const customData = [];
+            for (let i = 0; i < globalTimeline.length; i += clusterSize) {
+                const mergedWork = {};
+                const mergedRest = {};
+
+                for (let k = 0; k < clusterSize && (i + k) < globalTimeline.length; k++) {
+                    const slot = globalTimeline[i + k];
+                    for (const pid in slot.work) {
+                        if ((currentTab === 'project' || currentTab === 'manage') && pid !== filterUuid) continue;
+                        mergedWork[pid] = (mergedWork[pid] || 0) + slot.work[pid];
+                    }
+                    for (const pid in slot.rest) {
+                        if ((currentTab === 'project' || currentTab === 'manage') && pid !== filterUuid) continue;
+                        mergedRest[pid] = (mergedRest[pid] || 0) + slot.rest[pid];
+                    }
+                }
+
+                let yOffset = 0;
+                if (!hiddenSeries.has('工作时间')) {
+                    for (const pid of sortedProjectIds) {
+                        if ((currentTab === 'project' || currentTab === 'manage') && pid !== filterUuid) continue;
+                        const name = globalProjectMeta[pid];
+                        if (hiddenSeries.has(name)) continue;
+                        let val = mergedWork[pid] || 0;
+                        if (val > 0) {
+                            if (yOffset >= yMax) break;
+                            let nextOffset = yOffset + val;
+                            if (nextOffset > yMax) { val = yMax - yOffset; nextOffset = yMax; } 
+                            customData.push([i, yOffset, nextOffset, pid, clusterSize]);
+                            yOffset = nextOffset;
+                        }
+                    }
+                }
+                
+                if (!hiddenSeries.has('空闲时间') && yOffset < yMax) {
+                    let totalRestVal = 0;
+                    for (const pid in mergedRest) {
+                        const name = globalProjectMeta[pid];
+                        if (!hiddenSeries.has(name)) totalRestVal += mergedRest[pid]; 
+                    }
+                    if (totalRestVal > 0) {
+                        let val = totalRestVal;
+                        let nextOffset = yOffset + val;
+                        if (nextOffset > yMax) { val = yMax - yOffset; nextOffset = yMax; } 
+                        customData.push([i, yOffset, nextOffset, 'REST', clusterSize]);
+                    }
+                }
+            }
+            
+            chartInstance.setOption({
+                xAxis: { axisLabel: { interval: function(index, value) {
+                    const d = new Date(Number(value));
+                    if (d.getMinutes() !== 0) return false;
+                    if (d.getHours() === 0) return true;
+                    return d.getHours() % hourInterval === 0;
+                }}},
+                series: [ {}, { data: customData } ]
+            });
+        }
+
+        function handleZoomOrPanCore(chartInstance, currentTab, filterUuid, isMain) {
+            if (!chartInstance) return;
+            const currentOption = chartInstance.getOption();
+            if (!currentOption.dataZoom || !currentOption.dataZoom[0]) return;
+            
+            const dz = currentOption.dataZoom[0];
+            const totalSlots = globalTimeline.length;
+            let startIdx = 0, endIdx = totalSlots - 1;
+
+            if (dz.startValue !== undefined) {
+                startIdx = Math.max(0, Math.floor(dz.startValue));
+                endIdx = Math.min(totalSlots - 1, Math.ceil(dz.endValue));
+            }
+
+            const exactDiffHours = (globalTimeline[endIdx].ts - globalTimeline[startIdx].ts) / (3600 * 1000);
+            const safeDiffHours = Math.round(exactDiffHours * 10) / 10; 
+
+            let multiplier = Math.max(1, Math.ceil(safeDiffHours / 48));
+            let clusterSize = multiplier; 
+            let dataYMax = multiplier * 900; 
+            let hourInterval = Math.max(2, Math.ceil(safeDiffHours / 24) * 2);
+
+            if (isMain) {
+                currentClusterSize = clusterSize;
+                currentYMax = dataYMax;
+                document.getElementById('legend-list').innerHTML = buildLegendHtml(startIdx, endIdx, true);
+            } else {
+                manageClusterSize = clusterSize;
+                manageYMax = dataYMax;
+                document.getElementById('m-legend-list').innerHTML = buildLegendHtml(startIdx, endIdx, false);
+            }
+
+            let visibleMax = 0;
+            const blockStartIdx = Math.floor(startIdx / clusterSize) * clusterSize;
+            for (let i = blockStartIdx; i <= endIdx; i += clusterSize) {
+                let blockTotal = 0;
+                for (let k = 0; k < clusterSize && (i + k) < globalTimeline.length; k++) {
+                    const slot = globalTimeline[i + k];
+                    if (!hiddenSeries.has('工作时间')) {
+                        for (const pid in slot.work) {
+                            if ((currentTab === 'project' || currentTab === 'manage') && pid !== filterUuid) continue;
+                            if (!hiddenSeries.has(globalProjectMeta[pid])) blockTotal += slot.work[pid];
+                        }
+                    }
+                    if (!hiddenSeries.has('空闲时间')) {
+                        for (const pid in slot.rest) {
+                            if ((currentTab === 'project' || currentTab === 'manage') && pid !== filterUuid) continue;
+                            if (!hiddenSeries.has(globalProjectMeta[pid])) blockTotal += slot.rest[pid];
+                        }
+                    }
+                }
+                if (blockTotal > visibleMax) visibleMax = blockTotal;
+            }
+
+            let dynamicYMax = Math.min(visibleMax, dataYMax);
+            dynamicYMax = Math.ceil(dynamicYMax / 60) * 60;
+            if (dynamicYMax <= 0) dynamicYMax = Math.max(60, Math.floor(dataYMax / 3 / 60) * 60); 
+            if (dynamicYMax > dataYMax) dynamicYMax = dataYMax;
+
+            const cacheKey = isMain ? 'main' : 'manage';
+            const cache = chartCache[cacheKey];
+
+            if (clusterSize !== cache.lastClusterSize || dataYMax !== cache.lastYMax || hourInterval !== cache.lastHourInterval) {
+                updateChartData(chartInstance, currentTab, filterUuid, clusterSize, dataYMax, hourInterval);
+                cache.lastClusterSize = clusterSize;
+                cache.lastYMax = dataYMax;
+                cache.lastHourInterval = hourInterval;
+            }
+
+            if (dynamicYMax !== cache.lastDynamicYMax) {
+                chartInstance.setOption({ yAxis: { max: dynamicYMax } });
+                cache.lastDynamicYMax = dynamicYMax;
+            }
+        }
+
+        function handleZoomOrPan() {
+            const filterUuid = state.activeTab === 'project' ? SELECTED_DETAIL_UUID : null;
+            handleZoomOrPanCore(myChart, state.activeTab, filterUuid, true);
+        }
+
+        // ==========================================
+        // [7] 视图渲染管理与交互
+        // ==========================================
+        function sortTable(field) {
+            if (currentSortField === field) {
+                currentSortOrder = currentSortOrder === 'desc' ? 'asc' : 'desc';
+            } else {
+                currentSortField = field; currentSortOrder = 'desc';
+            }
+            renderManageTable();
+        }
+
+        function renderManageTable() {
+            const tbody = document.getElementById('project-table-body');
+            tbody.innerHTML = '';
+            
+            ['name', 'start', 'end', 'work', 'rest'].forEach(f => {
+                const el = document.getElementById(`sort-${f}`);
+                if(el) {
+                    if (currentSortField === f) { el.innerText = currentSortOrder === 'desc' ? ' ▼' : ' ▲'; el.style.color = 'var(--accent-blue)'; } 
+                    else { el.innerText = ''; }
+                }
+            });
+
+            let list = Object.values(projectStats);
+            if (currentSortField) {
+                list.sort((a, b) => {
+                    let valA, valB;
+                    if (currentSortField === 'name') { valA = a.name; valB = b.name; return currentSortOrder === 'desc' ? valB.localeCompare(valA) : valA.localeCompare(valB); } 
+                    else if (currentSortField === 'start') { valA = a.startTs; valB = b.startTs; } 
+                    else if (currentSortField === 'end') { valA = a.endTs; valB = b.endTs; } 
+                    else if (currentSortField === 'work') { valA = a.totalWork; valB = b.totalWork; } 
+                    else if (currentSortField === 'rest') { valA = a.totalRest; valB = b.totalRest; }
+                    return currentSortOrder === 'desc' ? valB - valA : valA - valB;
+                });
+            }
+
+            if (!currentlySelectedManageUuid && list.length > 0) currentlySelectedManageUuid = list[0].uuid;
+
+            list.forEach(item => {
+                const tr = document.createElement('tr');
+                tr.style.cursor = 'pointer';
+                if (currentlySelectedManageUuid === item.uuid) tr.style.background = 'var(--bg-active)';
+                
+                tr.onclick = () => {
+                    currentlySelectedManageUuid = item.uuid;
+                    document.querySelectorAll('#project-table-body tr').forEach(r => r.style.background = '');
+                    tr.style.background = 'var(--bg-active)';
+                    document.getElementById('manage-chart-title').innerText = getProjectTitleString(item.uuid);
+                    initManageChart(item.uuid, item.name);
+                };
+                
+                // 防御式渲染：利用 escapeHtml 防止名字内的标签注入
+                tr.innerHTML = `
+                    <td title="${escapeHtml(item.name)}">${escapeHtml(item.name)}</td>
+                    <td>${formatFullDateTime(item.startTs)}</td>
+                    <td>${formatFullDateTime(item.endTs)}</td>
+                    <td style="text-align: center;">${formatDuration(item.totalWork)}</td>
+                    <td style="text-align: center;">${formatDuration(item.totalRest)}</td>
+                    <td style="text-align: center;" onclick="event.stopPropagation();">
+                        <button class="small-btn export" onclick="exportProjectChart('${item.uuid}')">导出</button>
+                    </td>
+                    <td style="text-align: center;" onclick="event.stopPropagation();">
+                        <button class="small-btn del" onclick="confirmDeleteProject('${item.uuid}', '${escapeHtml(item.name)}')">删除</button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+
+            if (currentlySelectedManageUuid) {
+                const activeItem = list.find(i => i.uuid === currentlySelectedManageUuid);
+                if (activeItem) {
+                    document.getElementById('manage-chart-title').innerText = getProjectTitleString(activeItem.uuid);
+                    initManageChart(activeItem.uuid, activeItem.name);
+                }
+            } else {
+                if (manageChart) { manageChart.dispose(); manageChart = null; }
+                document.getElementById('manage-chart-title').innerText = '当前暂无工程数据';
+            }
+        }
+
+		// 提取热力图聚合数据辅助函数 (供导出模块使用)
+        function getHeatmapDataForExport(filterUuid = null) {
+            const dailyData = new Map();
+            for (let i = 0; i < globalTimeline.length; i++) {
+                const slot = globalTimeline[i];
+                const d = new Date(slot.ts);
+                const dateStr = [d.getFullYear(), (d.getMonth() + 1).toString().padStart(2, '0'), d.getDate().toString().padStart(2, '0')].join('-');
+                
+                let sWork = 0; let sRest = 0;
+                for (const pid in slot.work) {
+                    if (filterUuid && pid !== filterUuid) continue;
+                    sWork += slot.work[pid];
+                }
+                for (const pid in slot.rest) {
+                    if (filterUuid && pid !== filterUuid) continue;
+                    sRest += slot.rest[pid];
+                }
+                if (sWork > 0 || sRest > 0) {
+                    if (!dailyData.has(dateStr)) dailyData.set(dateStr, { work: 0, rest: 0 });
+                    const dayStat = dailyData.get(dateStr);
+                    dayStat.work += sWork;
+                    dayStat.rest += sRest;
+                }
+            }
+            const result = [];
+            dailyData.forEach((stat, dateStr) => result.push([dateStr, stat.work, stat.rest]));
+            return result;
+        }
+
+        // ==========================================
+        // [8] 安全导出模块
+        // ==========================================
+        async function exportProjectChart(uuid) {
+            const pStat = projectStats[uuid];
+            if (!pStat || pStat.startTs === Infinity) {
+                if(window.eda && eda.sys_Message) eda.sys_Message.showToastMessage('当前工程暂无可导出数据', 'warning');
+                return;
+            }
+
+            const bounds = getDayAlignedIndices(pStat.startTs, pStat.endTs);
+            const baseTs = globalTimeline[bounds.startValue].ts;
+            const totalSlots = bounds.endValue - bounds.startValue + 1;
+            
+            const timeData = [];
+            for (let i = bounds.startValue; i <= bounds.endValue; i++) {
+                const w = globalTimeline[i].work[uuid] || 0;
+                const r = globalTimeline[i].rest[uuid] || 0;
+                if (w > 0 || r > 0) { timeData.push([i - bounds.startValue, { [uuid]: w }, { [uuid]: r }]); }
+            }
+
+            const payloadObj = {
+                pageTitle: getProjectTitleString(uuid),
+                baseTs: baseTs, totalSlots: totalSlots,
+                projectMeta: { [uuid]: { name: pStat.name, color: pidColorMap[uuid] || '#007acc' } },
+                data: timeData,
+                heatmapData: getHeatmapDataForExport(uuid) // <-- 注入热力图数据
+            };
+
+            await triggerSecureExport(payloadObj, `工程耗时图_${pStat.name.replace(/[\/\\:\*\?"<>\|]/g, '_')}`);
+        }
+
+        async function exportTotalChart() {
+            if (globalTimeline.length === 0) {
+                if(window.eda && eda.sys_Message) eda.sys_Message.showToastMessage('当前暂无可导出数据', 'warning');
+                return;
+            }
+
+            let minIdx = -1, maxIdx = -1;
+            for(let i=0; i<globalTimeline.length; i++) {
+                if(Object.keys(globalTimeline[i].work).length > 0 || Object.keys(globalTimeline[i].rest).length > 0) {
+                    if(minIdx === -1) minIdx = i; maxIdx = i;
+                }
+            }
+            if(minIdx === -1) {
+                if(window.eda && eda.sys_Message) eda.sys_Message.showToastMessage('当前记录全为空，无法导出', 'warning'); return;
+            }
+
+            const baseTs = globalTimeline[minIdx].ts;
+            const endTs = globalTimeline[maxIdx].ts + 15 * 60 * 1000;
+            const totalSlots = maxIdx - minIdx + 1;
+            
+            const timeData = [];
+            let rangeWork = 0, rangeRest = 0;
+            for(let i=minIdx; i<=maxIdx; i++) {
+                let wObj = {}, rObj = {}; let hasData = false;
+                for(let uid in globalTimeline[i].work) { wObj[uid] = globalTimeline[i].work[uid]; hasData = true; rangeWork += wObj[uid]; }
+                for(let uid in globalTimeline[i].rest) { rObj[uid] = globalTimeline[i].rest[uid]; hasData = true; rangeRest += rObj[uid]; }
+                if(hasData) timeData.push([ i - minIdx, wObj, rObj ]);
+            }
+
+            let pMeta = {};
+            sortedProjectIds.forEach(uid => { pMeta[uid] = { name: globalProjectMeta[uid], color: pidColorMap[uid] }; });
+
+            const payloadObj = {
+                pageTitle: '全部工程时间总趋势 、时间：' + formatFullDateTime(baseTs) + ' ~ ' + formatFullDateTime(endTs) + ' 、工作：' + formatDuration(rangeWork) + ' 、空闲：' + formatDuration(rangeRest),
+                baseTs: baseTs, totalSlots: totalSlots,
+                projectMeta: pMeta, data: timeData,
+                heatmapData: getHeatmapDataForExport(null) // <-- 注入全局热力图数据
+            };
+
+            await triggerSecureExport(payloadObj, `总趋势耗时图`);
+        }
+
+        function exportAllDataJson() {
+            if (globalTimeline.length === 0) {
+                if(window.eda && eda.sys_Message) eda.sys_Message.showToastMessage('当前暂无可导出数据', 'warning');
+                return;
+            }
+            try {
+                const filteredTimeline = globalTimeline.filter(slot => Object.keys(slot.work).length > 0 || Object.keys(slot.rest).length > 0);
+                if (filteredTimeline.length === 0) {
+                    if(window.eda && eda.sys_Message) eda.sys_Message.showToastMessage('所有时间片均为空，无有效数据导出', 'warning'); return;
+                }
+                const payload = { exportTime: new Date().toLocaleString(), projectMeta: globalProjectMeta, stats: projectStats, timeline: filteredTimeline };
+                
+                const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json;charset=utf-8' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a'); a.href = url;
+                const d = new Date();
+                a.download = `全部工程耗时数据备份_${d.getFullYear()}${(d.getMonth()+1).toString().padStart(2,'0')}${d.getDate().toString().padStart(2,'0')}.json`;
+                
+                document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
+                if(window.eda && eda.sys_Message) eda.sys_Message.showToastMessage('全部数据 JSON 导出成功', 'success');
+            } catch (e) {
+                console.error(e);
+                if(window.eda && eda.sys_Message) eda.sys_Message.showToastMessage('导出失败: ' + e.message, 'error');
+            }
+        }
+
+        async function triggerSecureExport(payloadObj, fileNameBase) {
+            let securePack;
+            try { securePack = await encryptPayloadAES(payloadObj); } 
+            catch (e) {
+                if(window.eda && eda.sys_Message) eda.sys_Message.showToastMessage('底层加密引擎调用失败', 'error'); return;
+            }
+
+            const htmlContent = `<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>狼黑工具 - ${escapeHtml(fileNameBase)}</title>
+    <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"><\/script>
+	<script src="https://cdn.jsdelivr.net/npm/fflate@0.8.2/umd/index.js"><\/script>
+    <style>
+        /* 整体背景改为暗色，使用 Flex 居中 */
+        body { 
+            margin: 0; padding: 0; 
+            background-color: #0d0d0d; color: #cccccc; 
+            font-family: sans-serif; overflow: hidden; user-select: none; 
+            display: flex; justify-content: center; align-items: center; 
+            height: 100vh; 
+        }
+        /* 固定尺寸的核心 UI 容器 */
+        .export-container { 
+            width: 860px; height: 600px; 
+            background-color: #1e1e1e; padding: 15px 20px; 
+            box-sizing: border-box; display: flex; flex-direction: column; 
+            box-shadow: 0 10px 40px rgba(0,0,0,0.8); 
+            border-radius: 8px; border: 1px solid #333; 
+        }
+        .header { text-align: center; margin-bottom: 12px; border-bottom: 1px solid #333; padding-bottom: 8px; flex-shrink: 0; }
+        .title { font-size: 16px; color: #fff; font-weight: bold; margin-bottom: 4px; }
+        /* 图表区自适应容器剩余高度 */
+        #view-chart { display: flex; flex-direction: column; width: 100%; flex: 1; background: #1e1e1e; border: 1px solid #333; border-radius: 6px; overflow: hidden; position: relative; min-height: 0; }
+        #heatmap-container { width: 100%; height: 155px; flex-shrink: 0; background-color: #1e1e1e; border-bottom: 1px solid #333; padding-top: 10px; box-sizing: border-box; }
+        #chart-container { flex: 1; position: relative; background: #252526; min-height: 0; }
+        #chart { width: 100%; height: 100%; }
+        .legend-panel { position: absolute; top: 15px; right: 20px; background: rgba(37, 37, 38, 0.94); border: 1px solid #454545; border-radius: 4px; padding: 10px; box-shadow: 0 4px 12px rgba(0,0,0,0.4); z-index: 10; max-height: calc(100% - 20px); width: 220px; box-sizing: border-box; display: flex; flex-direction: column; }
+        .legend-title { font-weight: bold; margin-bottom: 6px; font-size: 12px; padding-bottom: 4px; border-bottom: 1px solid #3c3c3c; cursor: pointer; display: flex; justify-content: space-between; align-items: center; color: #ffffff; }
+        .legend-list { overflow-y: auto; max-height: 180px; padding-right: 2px; }
+        .legend-item { display: flex; align-items: center; margin-bottom: 6px; cursor: pointer; transition: opacity 0.2s; }
+        .legend-item.hidden { opacity: 0.25; text-decoration: line-through; }
+        .color-block { display: inline-block; width: 11px; height: 11px; border-radius: 2px; margin-right: 8px; flex-shrink: 0; }
+        .legend-detail { margin-top: 8px; padding-top: 6px; border-top: 1px dashed #3c3c3c; font-size: 11px; color: #aaaaaa; word-break: break-all; }
+        .legend-panel.collapsed .legend-list, .legend-panel.collapsed .legend-detail { display: none; }
+        .legend-panel.collapsed .legend-title { margin-bottom: 0; border-bottom: none; padding-bottom: 0; }
+        #error-banner { display: none; background: #902020; color: #fff; padding: 20px; text-align: center; border-radius: 8px; margin-top: 10vh; font-size: 16px; font-weight: bold; }
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-thumb { background: #424242; border-radius: 3px; }
+    </style>
+</head>
+<body oncontextmenu="return false;">
+    <div class="export-container">
+        <div class="header"><div class="title" id="page-title">数据处理中...</div></div>
+        
+        <div id="view-chart">
+            <div id="heatmap-container"></div>
+            <div id="chart-container">
+                <div id="error-banner"></div>
+                <div class="legend-panel" id="custom-legend" style="display:none;">
+                    <div class="legend-title" id="legend-title-main">统计摘要 <span id="legend-toggle-icon">▼</span></div>
+                    <div class="legend-list" id="legend-list"></div>
+                    <div class="legend-detail">图例点击控制显示/隐藏，鼠标悬浮查看详情</div>
+                </div>
+                <div id="chart"></div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        (async function() {
+            Object.defineProperty(window, 'console', { get: function() { return { log: function(){}, warn: function(){}, error: function(){}, dir: function(){} }; } });
+            document.addEventListener('keydown', e => { if (e.key === 'F12' || (e.ctrlKey && e.shiftKey && (e.key === 'I' || e.key === 'J')) || (e.ctrlKey && e.key === 'U')) e.preventDefault(); });
+            setInterval(() => { Function('debugger')(); }, 200);
+
+            const _C = "${securePack.ct}"; 
+			const _I = "${securePack.iv}"; 
+			const _K = "${securePack.k}";
+            
+            let hiddenSeries = new Set(); let chartInstance = null; let heatmapInstance = null; let globalCoreData = null; 
+            let currentClusterSize = 1; let slotDataMap = new Map(); let sortedUuids = [];
+
+            const escapeHtml = (u) => (u||'').toString().replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#039;");
+            const formatDuration = (sec) => { if (!sec) return '0:00:00'; const h = Math.floor(sec/3600); const m = Math.floor((sec%3600)/60); const s = Math.floor(sec%60); return h + ':' + m.toString().padStart(2, '0') + ':' + s.toString().padStart(2, '0'); };
+            const formatFullDateTime = (ts) => { const d = new Date(ts); return d.getFullYear() + '/' + (d.getMonth() + 1) + '/' + d.getDate() + ' ' + d.getHours().toString().padStart(2, '0') + ':' + d.getMinutes().toString().padStart(2, '0'); };
+
+            try {
+                const fromB64 = (str) => Uint8Array.from(atob(str), c => c.charCodeAt(0));
+                const cryptoKey = await crypto.subtle.importKey("raw", fromB64(_K), { name: "AES-GCM" }, false, ["decrypt"]);
+                
+                const decryptedZippedBuffer = await crypto.subtle.decrypt({ name: "AES-GCM", iv: fromB64(_I) }, cryptoKey, fromB64(_C));
+                
+                const decompressedBuffer = fflate.gunzipSync(new Uint8Array(decryptedZippedBuffer));
+                
+                globalCoreData = JSON.parse(new TextDecoder().decode(decompressedBuffer));
+                
+                globalCoreData.data.forEach(d => slotDataMap.set(d[0], { w: d[1], r: d[2] }));
+                sortedUuids = Object.keys(globalCoreData.projectMeta);
+            } catch(e) {
+                document.getElementById('error-banner').style.display = 'block'; 
+                document.getElementById('error-banner').innerText = '校验失败：数据异常或文件被篡改！'; 
+                return;
+            }
+                
+            document.getElementById('custom-legend').style.display = 'flex';
+            document.getElementById('page-title').innerText = globalCoreData.pageTitle;
+
+            // ================== 图例点击与悬浮逻辑 ==================
+            document.getElementById('legend-title-main').addEventListener('click', () => {
+                const dom = document.getElementById('custom-legend'); dom.classList.toggle('collapsed');
+                document.getElementById('legend-toggle-icon').innerText = dom.classList.contains('collapsed') ? '▶' : '▼';
+            });
+            const legendListEl = document.getElementById('legend-list');
+            
+            legendListEl.addEventListener('click', (e) => {
+                const item = e.target.closest('.legend-item'); if(!item) return;
+                const sName = item.getAttribute('data-name');
+                if(hiddenSeries.has(sName)) hiddenSeries.delete(sName); else hiddenSeries.add(sName);
+                renderLogic();
+            });
+
+            legendListEl.addEventListener('mouseover', (e) => {
+                const item = e.target.closest('.legend-item'); if(!item) return;
+                const sName = item.getAttribute('data-name');
+                const detailEl = document.querySelector('.legend-detail');
+                
+                if (sName === '工作时间' || sName === '空闲时间') {
+                    let totalSec = 0;
+                    slotDataMap.forEach(slot => {
+                        if (sName === '工作时间') { for(let uid in slot.w) totalSec += slot.w[uid]; }
+                        else { for(let uid in slot.r) totalSec += slot.r[uid]; }
+                    });
+                    detailEl.innerHTML = '<div style="color:#fff;">' + escapeHtml(sName) + '总和：<span style="color:#007acc; font-weight:bold;">' + formatDuration(totalSec) + '</span></div>';
+                    return;
+                }
+
+                let targetUid = null;
+                for(let uid of sortedUuids) { if(globalCoreData.projectMeta[uid].name === sName) { targetUid = uid; break; } }
+                if (targetUid) {
+                    let pWork = 0, pRest = 0;
+                    slotDataMap.forEach(slot => {
+                        if(slot.w[targetUid]) pWork += slot.w[targetUid];
+                        if(slot.r[targetUid]) pRest += slot.r[targetUid];
+                    });
+                    detailEl.innerHTML = '<div style="color:#e0e0e0; font-weight:bold; white-space:nowrap; text-overflow:ellipsis; overflow:hidden;">'+escapeHtml(sName)+'</div><div style="margin-top:4px;">工作时间: <span style="color:#fff">'+formatDuration(pWork)+'</span><br/>空闲时间: <span style="color:#fff">'+formatDuration(pRest)+'</span></div>';
+                }
+            });
+
+            legendListEl.addEventListener('mouseout', (e) => {
+                const item = e.target.closest('.legend-item'); if(!item) return;
+                document.querySelector('.legend-detail').innerHTML = '图例点击控制显示/隐藏，鼠标悬浮查看详情';
+            });
+
+            // ================== 热力图渲染 ==================
+            if (globalCoreData.heatmapData && globalCoreData.heatmapData.length > 0) {
+                heatmapInstance = echarts.init(document.getElementById('heatmap-container'), 'dark');
+                
+                // 修改: 动态判定热力图时间跨度，不足一年用空方块补齐
+                let minDateTs = Infinity; 
+                let maxDateTs = -Infinity;
+                globalCoreData.heatmapData.forEach(d => {
+                    const ts = new Date(d[0].replace(/-/g, '/') + " 00:00:00").getTime();
+                    if(ts < minDateTs) minDateTs = ts;
+                    if(ts > maxDateTs) maxDateTs = ts;
+                });
+                
+                const ONE_YEAR = 364 * 24 * 3600 * 1000;
+                // 若实际数据跨度不足一年，则强制倒推一年的时间作为起点
+                if (maxDateTs - minDateTs < ONE_YEAR) {
+                    minDateTs = maxDateTs - ONE_YEAR;
+                }
+
+                const minD = new Date(minDateTs);
+                const maxD = new Date(maxDateTs);
+                const formatStr = (d) => d.getFullYear() + '-' + (d.getMonth() + 1).toString().padStart(2, '0') + '-' + d.getDate().toString().padStart(2, '0');
+                
+                heatmapInstance.setOption({
+                    backgroundColor: 'transparent',
+                    tooltip: {
+                        appendToBody: true, backgroundColor: 'rgba(37, 37, 38, 0.95)', borderColor: '#454545', borderWidth: 1, textStyle: { color: '#cccccc', fontSize: 12 },
+                        formatter: function (p) {
+                            return '<b style="font-size:13px; color:#fff;">'+p.value[0]+'</b><br/>'+
+                                   '<div style="margin-top:6px; font-size:12px;"><span class="color-block" style="background:#39d353;"></span> 工作时间: <span style="float:right; font-weight:bold; margin-left: 15px; color:#fff;">'+formatDuration(p.value[1] || 0)+'</span></div>'+
+                                   '<div style="margin-top:4px; font-size:12px;"><span class="color-block" style="background:#b0b0b0;"></span> 空闲时间: <span style="float:right; font-weight:bold; margin-left: 15px; color:#fff;">'+formatDuration(p.value[2] || 0)+'</span></div>';
+                        }
+                    },
+                    visualMap: {
+                        type: 'piecewise', show: false, dimension: 1, 
+                        pieces: [ { min: 21601, color: '#56D364' }, { min: 14401, max: 21600, color: '#2EA043' }, { min: 7021, max: 14400, color: '#196C2E' }, { min: 1, max: 7200, color: '#033A16' } ],
+                        outOfRange: { color: '#151B23' } 
+                    },
+                    calendar: {
+                        top: 25, left: 45, right: 25, bottom: 15, 
+                        range: [formatStr(minD), formatStr(maxD)],  // 注入计算后防拉伸的 Range
+                        cellSize: ['auto', 14],
+                        itemStyle: { color: '#151B23', borderWidth: 4, borderColor: '#1e1e1e', borderRadius: 2 },
+                        yearLabel: { show: false }, dayLabel: { color: '#858585', nameMap: 'ZH', fontSize: 10 }, monthLabel: { color: '#858585', nameMap: 'ZH', fontSize: 10 }, splitLine: { show: false }
+                    },
+                    series: { type: 'heatmap', coordinateSystem: 'calendar', data: globalCoreData.heatmapData, itemStyle: { borderRadius: 2 } }
+                });
+
+                heatmapInstance.on('click', function(params) {
+                    const targetTs = new Date(params.value[0].replace(/-/g, '/') + " 00:00:00").getTime();
+                    const diffBase = targetTs - globalCoreData.baseTs;
+                    let sIdx = Math.floor(diffBase / (15 * 60 * 1000));
+                    let eIdx = sIdx + 95;
+                    if (sIdx < 0) { eIdx -= sIdx; sIdx = 0; }
+                    if (eIdx >= globalCoreData.totalSlots) { sIdx -= (eIdx - globalCoreData.totalSlots + 1); eIdx = globalCoreData.totalSlots - 1; }
+                    if (sIdx < 0) sIdx = 0;
+                    if (chartInstance) chartInstance.dispatchAction({ type: 'dataZoom', startValue: sIdx, endValue: eIdx });
+                });
+            } else {
+                document.getElementById('heatmap-container').style.display = 'none';
+            }
+
+            // ================== 时间轴渲染 ==================
+            chartInstance = echarts.init(document.getElementById('chart'), 'dark');
+            const dummyData = new Float32Array(globalCoreData.totalSlots).fill(900);
+            
+            chartInstance.setOption({
+                animation: false, backgroundColor: 'transparent',
+                tooltip: {
+                    trigger: 'axis', axisPointer: { type: 'shadow' }, backgroundColor: 'rgba(37,37,38,0.95)',
+                    borderColor: '#454545', textStyle: { color: '#ccc' },
+                    formatter: function(params) {
+                        const ts = Number(params[0].axisValue);
+                        const idx = Math.floor((ts - globalCoreData.baseTs) / (15 * 60 * 1000));
+                        const blockStartIdx = Math.floor(idx / currentClusterSize) * currentClusterSize;
+                        
+                        let bWork = {}; let bRest = 0;
+                        for(let k=0; k<currentClusterSize && (blockStartIdx+k)<globalCoreData.totalSlots; k++) {
+                            const slot = slotDataMap.get(blockStartIdx+k);
+                            if(slot) {
+                                for(let uid in slot.w) bWork[uid] = (bWork[uid]||0) + slot.w[uid];
+                                for(let uid in slot.r) { const pInfo = globalCoreData.projectMeta[uid]; if(!hiddenSeries.has(pInfo.name)) bRest += slot.r[uid]; }
+                            }
+                        }
+                        const startTs = globalCoreData.baseTs + blockStartIdx * 15 * 60 * 1000;
+                        const endD = new Date(startTs + currentClusterSize * 15 * 60 * 1000);
+                        const title = formatFullDateTime(startTs) + ' ~ ' + endD.getHours().toString().padStart(2, '0') + ':' + endD.getMinutes().toString().padStart(2, '0');
+                        
+                        let html = '<b style="font-size:12px; color:#fff;">' + title + '</b><br/>'; let hasD = false;
+                        if(!hiddenSeries.has('工作时间')) {
+                            sortedUuids.forEach(uid => {
+                                const pInfo = globalCoreData.projectMeta[uid];
+                                if(!hiddenSeries.has(pInfo.name) && bWork[uid]>0) {
+                                    html += '<div style="margin:4px 0;font-size:11px;"><span class="color-block" style="background:' + pInfo.color + '"></span>' + escapeHtml(pInfo.name) + ': <span style="float:right;font-weight:bold;margin-left:15px;color:#fff;">' + formatDuration(bWork[uid]) + '</span></div>';
+                                    hasD = true;
+                                }
+                            });
+                        }
+                        if(bRest > 0 && !hiddenSeries.has('空闲时间')) {
+                            html += '<div style="margin:4px 0;font-size:11px;"><span class="color-block" style="background:#b0b0b0"></span>空闲时间: <span style="float:right;font-weight:bold;margin-left:15px;color:#fff;">' + formatDuration(bRest) + '</span></div>'; hasD = true;
+                        }
+                        return hasD ? html : ('<b style="font-size:12px; color:#fff;">' + title + '</b><br/><span style="color:#666">无活动记录</span>');
+                    }
+                },
+                grid: { left: 60, right: 20, bottom: 45, top: 20 },
+                xAxis: { 
+                    type: 'category', data: Array.from({length: globalCoreData.totalSlots}, (_, i) => globalCoreData.baseTs + i * 15 * 60 * 1000), 
+                    axisLine: { lineStyle:{color:'#333'} }, 
+                    axisLabel: { color: '#858585', hideOverlap: true, rotate: 30, formatter: function(value) {
+                        const d = new Date(Number(value)); const hh = d.getHours().toString().padStart(2, '0'); const mm = d.getMinutes().toString().padStart(2, '0');
+                        if (hh === '00' && mm === '00') return d.getFullYear() + '/' + (d.getMonth()+1) + '/' + d.getDate(); return hh + ':' + mm;
+                    }}
+                },
+                yAxis: { type: 'value', max: 900, axisLabel: { color:'#858585', formatter: v=>formatDuration(v) }, splitLine: { lineStyle:{color:'#252526'} } },
+                dataZoom: [{ type: 'inside', start: 0, end: 100, zoomOnMouseWheel: true, moveOnMouseMove: true, filterMode: 'none', minValueSpan: 23 }],
+                series: [
+                    { type: 'bar', data: Array.from(dummyData), itemStyle:{color:'rgba(0,0,0,0)'}, barGap:'-100%', large:true, progressive:0 },
+                    { type: 'custom', clip:true, renderItem: function(params, api) {
+                        const catIdx = api.value(0); const startY = api.value(1); const endY = api.value(2); const pid = api.value(3); const cSize = api.value(4) || 1;
+                        const left = api.coord([catIdx, startY]); const right = api.coord([catIdx + cSize - 1, startY]); const bw = api.size([1, 0])[0];
+                        const x = left[0] - bw/2; const w = (right[0] + bw/2) - x; const y = api.coord([catIdx, endY])[1]; const h = left[1] - y;
+                        if(h<=0) return; let color = '#b0b0b0'; if(pid !== 'REST') color = globalCoreData.projectMeta[pid] ? globalCoreData.projectMeta[pid].color : '#007acc';
+                        return { type: 'rect', shape: {x,y,width:w,height:h}, style: api.style({fill: color}) };
+                    }, encode: {x:0, y:[1,2]}, data: [] }
+                ]
+            });
+            chartInstance.on('dataZoom', () => renderLogic()); renderLogic();
+
+            function renderLogic() {
+                const dz = chartInstance.getOption().dataZoom[0];
+                const startIdx = Math.max(0, Math.floor(dz.startValue !== undefined ? dz.startValue : 0));
+                const endIdx = Math.min(globalCoreData.totalSlots - 1, Math.ceil(dz.endValue !== undefined ? dz.endValue : globalCoreData.totalSlots - 1));
+                
+                const diffHours = (endIdx - startIdx) * 15 / 60;
+                currentClusterSize = Math.max(1, Math.ceil(diffHours / 48));
+                const yMax = currentClusterSize * 900;
+                let hourInt = Math.max(2, Math.ceil(diffHours / 24) * 2);
+
+                let lgHtml = '';
+                sortedUuids.forEach(uid => {
+                    const pInfo = globalCoreData.projectMeta[uid];
+                    lgHtml += '<div class="legend-item '+(hiddenSeries.has(pInfo.name)?'hidden':'')+'" data-name="'+escapeHtml(pInfo.name)+'"><span class="color-block" style="background:'+pInfo.color+';"></span><span style="font-size:11px; white-space:nowrap; text-overflow:ellipsis; overflow:hidden;">'+escapeHtml(pInfo.name)+'</span></div>';
+                });
+                lgHtml += '<div class="legend-item '+(hiddenSeries.has('工作时间')?'hidden':'')+'" data-name="工作时间"><span class="color-block" style="background: linear-gradient(135deg, #5470c6, #91cc75, #fac858);"></span><span style="font-size:11px;font-weight:bold;">工作时间</span></div>';
+                lgHtml += '<div class="legend-item '+(hiddenSeries.has('空闲时间')?'hidden':'')+'" data-name="空闲时间"><span class="color-block" style="background:#b0b0b0;"></span><span style="font-size:11px;color:#aaa;">空闲时间</span></div>';
+                document.getElementById('legend-list').innerHTML = lgHtml;
+
+                const cData = []; let dynYMax = 0;
+                for(let i=0; i<globalCoreData.totalSlots; i+=currentClusterSize) {
+                    let mWork = {}; let mRest = {};
+                    for(let k=0; k<currentClusterSize && (i+k)<globalCoreData.totalSlots; k++) {
+                        const slot = slotDataMap.get(i+k);
+                        if(slot) {
+                            for(let uid in slot.w) mWork[uid] = (mWork[uid]||0) + slot.w[uid];
+                            for(let uid in slot.r) mRest[uid] = (mRest[uid]||0) + slot.r[uid];
+                        }
+                    }
+
+                    let yOffset = 0;
+                    if(!hiddenSeries.has('工作时间')) {
+                        sortedUuids.forEach(uid => {
+                            const pInfo = globalCoreData.projectMeta[uid];
+                            if(!hiddenSeries.has(pInfo.name) && mWork[uid]>0) {
+                                let val = mWork[uid], nx = yOffset + val; if(nx>yMax) {val=yMax-yOffset; nx=yMax;}
+                                cData.push([i, yOffset, nx, uid, currentClusterSize]); yOffset = nx;
+                            }
+                        });
+                    }
+                    if(i>=startIdx && i<=endIdx && yOffset > dynYMax) dynYMax = yOffset;
+
+                    if(!hiddenSeries.has('空闲时间') && yOffset < yMax) {
+                        let tr = 0;
+                        sortedUuids.forEach(uid => { const pInfo = globalCoreData.projectMeta[uid]; if(!hiddenSeries.has(pInfo.name)) tr += (mRest[uid]||0); });
+                        if(tr > 0) {
+                            let val = tr, nx = yOffset + val; if(nx>yMax) {val=yMax-yOffset; nx=yMax;}
+                            cData.push([i, yOffset, nx, 'REST', currentClusterSize]);
+                            if(i>=startIdx && i<=endIdx && nx > dynYMax) dynYMax = nx;
+                        }
+                    }
+                }
+                dynYMax = Math.min(Math.ceil(dynYMax/60)*60, yMax);
+                if(dynYMax<=0) dynYMax = Math.max(60, Math.floor(yMax/3/60)*60);
+                
+                chartInstance.setOption({
+                    xAxis: { axisLabel: { interval: function(idx, val) { const d=new Date(Number(val)); if(d.getMinutes()!==0) return false; if(d.getHours()===0) return true; return d.getHours()%hourInt===0; }}},
+                    yAxis: { max: dynYMax }, series: [{}, { data: cData }]
+                });
+            }
+            window.addEventListener('resize', () => {
+                if(chartInstance) chartInstance.resize();
+                if(heatmapInstance) heatmapInstance.resize();
+            });
+        })();
+    <\/script>
+</body>
+</html>`;
+
+            const blob = new Blob([htmlContent], { type: 'text/html;charset=utf-8' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a'); a.href = url; a.download = `${fileNameBase}.html`;
+            document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
+            if(window.eda && eda.sys_Message) eda.sys_Message.showToastMessage('图表导出成功', 'success');
+        }
+		
+        // ==========================================
+        // [9] 危险擦除操作 (精准清洗)
+        // ==========================================
+        function clearAllDataConfirm() {
+            if(!window.eda || !eda.sys_Dialog) return;
+            eda.sys_Dialog.showConfirmationMessage(
+                '警告：此操作不可逆，将彻底删除所有本地记录的工程耗时数据。\n确认要清除全部数据吗？', '确认强制清除', '确认清除', '取消',
+                async (mainButtonClicked) => {
+                    if (mainButtonClicked) {
+                        const mask = document.getElementById('loading-mask');
+                        mask.style.display = 'flex'; mask.innerText = '正在强制擦除时间切片记录...';
+                        try {
+                            let allConfigs = await eda.sys_Storage.getExtensionAllUserConfigs();
+                            for (const key in allConfigs) {
+                                if (key.startsWith('STATS_')) await eda.sys_Storage.setExtensionUserConfig(key, "");
+                            }
+                            if(window.eda && eda.sys_Message) eda.sys_Message.showToastMessage('全部记录已被安全擦除', 'success');
+                            await loadAllData(); SELECTED_DETAIL_UUID = null; currentlySelectedManageUuid = null; switchTab('total');
+                        } catch (e) {
+                            if(window.eda && eda.sys_Message) eda.sys_Message.showToastMessage('清除产生未知错误: ' + e.message, 'error');
+                        }
+                        mask.style.display = 'none';
+                    }
+                }
+            );
+        }
+
+        function confirmDeleteProject(uuid, name) {
+            eda.sys_Dialog.showConfirmationMessage(
+                `确认彻底删除 “${name}” 的全部时间记录？\n(此操作无法恢复)`, '确认清除时间片记录', '确认删除', '取消',
+                async (mainButtonClicked) => { if (mainButtonClicked) await deleteProjectData(uuid); }
+            );
+        }
+
+        async function deleteProjectData(uuid) {
+            const mask = document.getElementById('loading-mask');
+            mask.style.display = 'flex'; mask.innerText = '正在执行本地存储清洗...';
+            try {
+                let allConfigs = await eda.sys_Storage.getExtensionAllUserConfigs();
+                if (!allConfigs) allConfigs = {};
+
+                for (const dateKey in allConfigs) {
+                    if (!dateKey.startsWith('STATS_')) continue;
+                    let dayData;
+                    try { dayData = typeof allConfigs[dateKey] === 'string' ? JSON.parse(allConfigs[dateKey]) : allConfigs[dateKey]; } catch(e) { continue; }
+                    if (!dayData) continue;
+                    let isModified = false;
+                    if (dayData.slots) {
+                        for (const slotId in dayData.slots) {
+                            if (dayData.slots[slotId] && dayData.slots[slotId][uuid]) {
+                                delete dayData.slots[slotId][uuid]; isModified = true;
+                                if (Object.keys(dayData.slots[slotId]).length === 0) delete dayData.slots[slotId];
+                            }
+                        }
+                    }
+                    if (dayData.meta && dayData.meta[uuid]) { delete dayData.meta[uuid]; isModified = true; }
+                    if (isModified) await eda.sys_Storage.setExtensionUserConfig(dateKey, JSON.stringify(dayData));
+                }
+
+                eda.sys_Message.showToastMessage('底层驱动数据同步擦除成功', 'success');
+                await loadAllData();
+                
+                if (currentlySelectedManageUuid === uuid) {
+                    currentlySelectedManageUuid = null;
+                    if (manageChart) { manageChart.dispose(); manageChart = null; }
+                    document.getElementById('manage-chart-title').innerText = '请点击上方工程行查看对应工程时间轴';
+                    document.getElementById('manage-custom-legend').classList.add('collapsed');
+                }
+                
+                if (SELECTED_DETAIL_UUID === uuid) {
+                    SELECTED_DETAIL_UUID = null;
+                    if (state.activeTab === 'project') { updateProjectSelector(); onProjectSelectorChange(); }
+                }
+
+                renderManageTable();
+                if (manageChart && currentlySelectedManageUuid) initManageChart(currentlySelectedManageUuid, globalProjectMeta[currentlySelectedManageUuid] || '');
+                mask.style.display = 'none';
+            } catch (e) {
+                mask.innerText = '擦除产生未知错误: ' + e.message; mask.onclick = () => (mask.style.display = 'none');
+            }
+        }
+
+        // ==========================================
+        // [10] 小工具模块 (消息提醒管理)
+        // ==========================================
+        const ReminderApp = {
+            KEY: 'USER_CONFIG_REMINDERS', data: [],
+            init: async function () {
+                try {
+                    const str = await eda.sys_Storage.getExtensionUserConfig(this.KEY);
+                    if (str) this.data = JSON.parse(str);
+                } catch (e) { console.log('Init Reminder Error', e); }
+                this.render();
+            },
+            render: function () {
+                const container = document.getElementById('reminderListContainer'); container.innerHTML = '';
+                if (this.data.length === 0) { container.innerHTML = '<div style="text-align:center; color:#666; padding:20px; font-size:12px;">暂无任何提醒规则</div>'; return; }
+                this.data.forEach((item, idx) => {
+                    const div = document.createElement('div'); div.className = 'reminder-item';
+                    // 使用 textContent 赋值或转义防止 XSS
+                    div.innerHTML = `<span style="color:var(--accent-blue); font-weight:bold; width:70px;">${item.m}分钟</span><span class="reminder-content" title="${escapeHtml(item.msg)}">${escapeHtml(item.msg)}</span><div class="item-actions"><button class="small-btn" onclick="ReminderApp.preview(${idx})">预览</button> <button class="small-btn del" onclick="ReminderApp.remove(${idx})">删除</button></div>`;
+                    container.appendChild(div);
+                });
+            },
+            add: function () {
+                const mInput = document.getElementById('remindMinInput'); const msgInput = document.getElementById('remindMsgInput');
+                const m = parseInt(mInput.value); const msg = msgInput.value.trim();
+                if (!m || m <= 0) { eda.sys_Message.showToastMessage('请输入有效的分钟数', 'error'); return; }
+                if (!msg) { eda.sys_Message.showToastMessage('请输入提醒内容', 'error'); return; }
+                this.data.push({ m, msg }); this.data.sort((a, b) => a.m - b.m);
+                mInput.value = ''; msgInput.value = ''; this.render();
+            },
+            remove: function (index) { this.data.splice(index, 1); this.render(); },
+            save: async function () {
+                try { await eda.sys_Storage.setExtensionUserConfig(this.KEY, JSON.stringify(this.data)); eda.sys_Message.showToastMessage('已保存所有提醒规则', 'success'); } 
+                catch (e) { eda.sys_Message.showToastMessage('保存失败:' + e.message, 'error'); }
+            },
+            preview: function (index) { if (this.data[index]) eda.sys_Message.showToastMessage(this.data[index].msg, 'info'); }
+        };
+
+        // ==========================================
+        // [11] 页面路由与生命周期管理
+        // ==========================================
+        function updateHeaderStats() {
+            const titleEl = document.getElementById('page-title'); const scopeEl = document.getElementById('headerScope'); const valEl = document.getElementById('headerVal');
+            
+            if (state.activeTab === 'total') { titleEl.innerText = '全部工程时间总趋势'; scopeEl.innerText = '今日总计已工作:'; valEl.innerText = formatTimeCN(getTodayWorkHours(null)); } 
+            else if (state.activeTab === 'project') { titleEl.innerText = SELECTED_DETAIL_UUID ? getProjectTitleString(SELECTED_DETAIL_UUID) : '请选择工程'; scopeEl.innerText = ''; valEl.innerText = ''; } 
+            else if (state.activeTab === 'manage') { titleEl.innerText = '工程耗时管理'; scopeEl.innerText = '本地记录工程项目总数:'; valEl.innerText = `${Object.keys(projectStats).length} 个`; } 
+            else if (state.activeTab === 'reminder') { titleEl.innerText = '时限触发器规则设定'; scopeEl.innerText = '今日总计已工作:'; valEl.innerText = formatTimeCN(getTodayWorkHours(null)); } 
+            else if (state.activeTab === 'more') { titleEl.innerText = '更多选项'; scopeEl.innerText = ''; valEl.innerText = ''; }
+			else if (state.activeTab === 'rhythm') { titleEl.innerText = '节律分析 (活动钟)'; scopeEl.innerText = ''; valEl.innerText = ''; }
+        }
+
+        async function switchTab(tab) {
+            state.activeTab = tab;
+            if (tab === 'project') {
+                try {
+                    const info = await eda.dmt_Project.getCurrentProjectInfo();
+                    if (info && info.uuid) {
+                        CURRENT_UUID = info.uuid; CURRENT_NAME = info.friendlyName || '未命名工程';
+                        if (!globalProjectMeta[CURRENT_UUID]) {
+                            globalProjectMeta[CURRENT_UUID] = CURRENT_NAME;
+                            projectStats[CURRENT_UUID] = { name: CURRENT_NAME, uuid: CURRENT_UUID, totalWork: 0, totalRest: 0, startTs: Infinity, endTs: -Infinity };
+                        }
+                    }
+                } catch (e) {}
+                if (!SELECTED_DETAIL_UUID) SELECTED_DETAIL_UUID = CURRENT_UUID;
+                updateProjectSelector();
+            }
+
+            document.querySelectorAll('.sidebar-item').forEach(el => el.classList.remove('active'));
+            if(window.event && window.event.currentTarget) window.event.currentTarget.classList.add('active');
+            else {
+                const items = document.querySelectorAll('.sidebar-item');
+                // 修改后（把 rhythm 换到 reminder 前面）：
+				const idx = ['total', 'project', 'manage', 'rhythm', 'reminder', 'more'].indexOf(tab);
+                if(items[idx]) items[idx].classList.add('active');
+            }
+            
+            document.querySelectorAll('.view-container').forEach(el => el.classList.add('hidden'));
+			if (tab === 'rhythm') {
+				document.getElementById('view-rhythm').classList.remove('hidden');
+				updateRhythmProjectSelector();
+				// 首次进入强制渲染一次
+				setTimeout(() => renderRhythmChart(), 50); 
+				if (rhythmChart) rhythmChart.resize();
 			}
+            document.getElementById('project-empty-tip').classList.add('hidden');
+            
+            const selector = document.getElementById('project-selector');
+            if (selector) selector.style.display = (tab === 'project') ? 'inline-block' : 'none';
+            updateHeaderStats();
 
-			// === 修改：执行删除并使用“软刷新”代替 reload ===
-			async function deleteProjectData(uuid) {
-				const mask = document.getElementById('loading-mask');
-				mask.style.display = 'flex';
-				mask.innerText = '正在删除数据...';
+            if (tab === 'total' || tab === 'project') {
+                if (tab === 'project' && !SELECTED_DETAIL_UUID) {
+                    const emptyTip = document.getElementById('project-empty-tip');
+                    emptyTip.innerHTML = `<div style="margin-bottom:8px; font-weight: bold; color:#e0e0e0;">当前未打开工程</div><div style="font-size:11px; color:#666;">当前视图不包含任何数据。请在顶部下拉菜单中选择一个项目。</div>`;
+                    emptyTip.classList.remove('hidden');
+                } else {
+                    document.getElementById('view-chart').classList.remove('hidden');
+                    chartCache.main = { lastClusterSize: -1, lastYMax: -1, lastHourInterval: -1, lastDynamicYMax: -1 };
+                    
+                    if (myChart) {
+                        myChart.resize();
+                        let bounds;
+                        if (tab === 'project' && SELECTED_DETAIL_UUID && projectStats[SELECTED_DETAIL_UUID] && projectStats[SELECTED_DETAIL_UUID].startTs !== Infinity) {
+                            bounds = getDayAlignedIndices(projectStats[SELECTED_DETAIL_UUID].startTs, projectStats[SELECTED_DETAIL_UUID].endTs);
+                        } else bounds = getDayAlignedIndices(GLOBAL_TODAY_TS, GLOBAL_TODAY_TS);
+                        myChart.dispatchAction({ type: 'dataZoom', startValue: bounds.startValue, endValue: bounds.endValue });
+                        handleZoomOrPan();
+                        if (typeof renderHeatmap === 'function') renderHeatmap();
+                    }
+                }
+            } else if (tab === 'manage') {
+                document.getElementById('view-manage').classList.remove('hidden'); renderManageTable();
+                if (manageChart) manageChart.resize();
+            } else if (tab === 'reminder') {
+                document.getElementById('view-reminder').classList.remove('hidden'); ReminderApp.render();
+            } else if (tab === 'more') {
+                document.getElementById('view-more').classList.remove('hidden');
+            }
+        }
 
-				try {
-					// 1. 遍历所有已经加载到内存的历史数据日期
-					for (const dateKey of DB.datesRaw) {
-						const dayData = DB.rawDailyData[dateKey];
-						if (!dayData) continue;
+        function updateProjectSelector() {
+            const selector = document.getElementById('project-selector'); if (!selector) return;
+            selector.innerHTML = '';
+            
+            if (!SELECTED_DETAIL_UUID) {
+                const opt = document.createElement('option'); opt.value = ''; opt.innerText = '-- 请选择工程 --'; selector.appendChild(opt);
+            }
+            
+            Object.keys(globalProjectMeta).sort((a, b) => (globalProjectMeta[a] || '').localeCompare(globalProjectMeta[b] || '', 'zh')).forEach(uuid => {
+                const opt = document.createElement('option');
+                opt.value = uuid; opt.innerText = globalProjectMeta[uuid];
+                if (uuid === SELECTED_DETAIL_UUID) opt.selected = true;
+                selector.appendChild(opt);
+            });
+			// 同步更新节律面板的工程下拉单
+			const rhythmSelector = document.getElementById('rhythm-project-select');
+			if (rhythmSelector) rhythmSelector.innerHTML = selector.innerHTML;
+        }
 
-						let isModified = false;
+        function onProjectSelectorChange() {
+            const selector = document.getElementById('project-selector'); if (!selector) return;
+            SELECTED_DETAIL_UUID = selector.value || null; updateHeaderStats();
+            chartCache.main = { lastClusterSize: -1, lastYMax: -1, lastHourInterval: -1, lastDynamicYMax: -1 };
+            
+            if (!SELECTED_DETAIL_UUID) {
+                document.getElementById('view-chart').classList.add('hidden');
+                document.getElementById('project-empty-tip').innerHTML = `<div style="margin-bottom:8px; font-weight: bold; color:#e0e0e0;">当前未打开工程</div><div style="font-size:11px; color:#666;">当前视图不包含任何数据。请在顶部下拉菜单中选择一个项目。</div>`;
+                document.getElementById('project-empty-tip').classList.remove('hidden');
+            } else {
+                document.getElementById('project-empty-tip').classList.add('hidden'); document.getElementById('view-chart').classList.remove('hidden');
+                if (myChart) {
+                    myChart.resize();
+                    let bounds = (SELECTED_DETAIL_UUID && projectStats[SELECTED_DETAIL_UUID] && projectStats[SELECTED_DETAIL_UUID].startTs !== Infinity) 
+                               ? getDayAlignedIndices(projectStats[SELECTED_DETAIL_UUID].startTs, projectStats[SELECTED_DETAIL_UUID].endTs) 
+                               : getDayAlignedIndices(GLOBAL_TODAY_TS, GLOBAL_TODAY_TS);
+                    myChart.dispatchAction({ type: 'dataZoom', startValue: bounds.startValue, endValue: bounds.endValue });
+                    handleZoomOrPan(); if (typeof renderHeatmap === 'function') renderHeatmap();
+                }
+            }
+        }
 
-						// A. 清除 slots 中的数据
-						for (const slotId in dayData.slots) {
-							const slotObj = dayData.slots[slotId];
-							if (slotObj && slotObj[uuid]) {
-								delete slotObj[uuid];
-								isModified = true;
-								if (Object.keys(slotObj).length === 0) {
-									delete dayData.slots[slotId];
-								}
-							}
-						}
+        window.addEventListener('resize', () => { 
+			if (myChart) myChart.resize(); 
+			if (manageChart) manageChart.resize(); 
+			if (heatmapChart) heatmapChart.resize(); 
+			if (rhythmChart) rhythmChart.resize();
+		});
 
-						// B. 清除 meta 中的名字
-						if (dayData.meta && dayData.meta[uuid]) {
-							delete dayData.meta[uuid];
-							isModified = true;
-						}
-
-						// C. 如果有修改，写入存储
-						if (isModified) {
-							try {
-								await eda.sys_Storage.setExtensionUserConfig(dateKey, JSON.stringify(dayData));
-							} catch (e) {
-								eda.sys_Message.showToastMessage('保存失败:' + e.message, 'error');
-								if (e.includes("Cannot create property")) {
-									eda.sys_Message.showToastMessage('EDA底层数据写入异常，无法保存，建议重启EDA', 'error');
-								}
-							}
-						}
-					}
-
-					eda.sys_Message.showToastMessage('删除成功，正在刷新...', 'success');
-
-					// === 软刷新逻辑：清空内存，重新加载，不刷新页面 ===
-
-					// 1. 清空 DB
-					DB.dates = [];
-					DB.datesRaw = [];
-					DB.rawDailyData = {};
-					DB.projects = {};
-					DB.total = { work: [], idle: [] };
-					DB.rankData = [];
-
-					// 2. 如果删除的是当前选中的工程，重置选中状态
-					if (state.rankSelectedUuid === uuid) {
-						state.rankSelectedUuid = null;
-					}
-
-					// 3. 重新加载数据
-					await StorageLoader.loadAll();
-
-					// 4. 刷新当前视图
-					if (state.activeTab === 'rank') {
-						renderRankView();
-					} else {
-						switchTab(state.activeTab);
-					}
-
-					// 5. 隐藏遮罩
-					mask.style.display = 'none';
-				} catch (e) {
-					console.error(e);
-					mask.innerText = '删除出错: ' + e.message;
-					mask.onclick = () => (mask.style.display = 'none');
-				}
+		(async function main() {
+			try {
+				// === 核心修复：延迟 50 毫秒执行 ===
+				// 让 JavaScript 喘口气，把主线程交还给浏览器，让它先把 Loading 动画渲染到屏幕上！
+				await new Promise(resolve => setTimeout(resolve, 50));
+				
+				await loadAllData(); 
+				initChartCore(); 
+				await ReminderApp.init();
+				
+				document.getElementById('loading-mask').style.display = 'none'; 
+				switchTab('total');
+			} catch (e) {
+				document.getElementById('loading-mask').innerText = '内核渲染矩阵加载失败: ' + e.message; 
+				console.error(e);
 			}
-
-			window.addEventListener('resize', () => Object.values(charts).forEach((c) => c.resize()));
-
-			(async function init() {
-				try {
-					await StorageLoader.loadAll();
-					await ReminderApp.init();
-
-					state.dashSelectedDateIdx = DB.dates.length - 1;
-
-					document.getElementById('loading-mask').style.display = 'none';
-					switchTab('total');
-					// console.log( eda.sys_Storage.getExtensionAllUserConfigs() );
-				} catch (e) {
-					document.getElementById('loading-mask').innerText = '数据读取失败: ' + e.message;
-					console.error(e);
-				}
-			})();
-		</script>
-	</body>
+		})();
+    </script>
+</body>
 </html>

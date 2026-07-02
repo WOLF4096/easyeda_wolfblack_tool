@@ -462,27 +462,51 @@
         a.click();
         URL.revokeObjectURL(url);
     }
-	// 导出全部网络为 CSV (每行一个网络名)
-	function exportAllNetsAsCSV() {
-		const netSet = new Set();
-		allComponents.forEach(comp => {
-			Object.values(comp.pins).forEach(net => {
-				if (net && typeof net === 'string' && net.trim() !== '') {
-					netSet.add(net.trim());
-				}
-			});
-		});
+	// 导出全部网络为 CSV (新版：包含网络长度)
+	async function exportAllNetsAsCSV() {
+		try {
+			// 使用新 API 获取 PCB 全部网络和长度信息
+			const allNets = await eda.pcb_Net.getAllNets();
+			
+			if (!allNets || allNets.length === 0) {
+				alert("未能获取到网络数据，请确认是否处于 PCB 环境或图纸中是否包含网络。");
+				return;
+			}
 
-		const sortedNets = Array.from(netSet).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
-		const content = sortedNets.join('\n');
-		// 添加 BOM 以便 Excel 正确打开 UTF-8 文件
-		const blob = new Blob(['\uFEFF' + content], { type: 'text/csv;charset=utf-8;' });
-		const url = URL.createObjectURL(blob);
-		const a = document.createElement('a');
-		a.href = url;
-		a.download = 'all_networks.csv';   // 后缀改为 .csv
-		a.click();
-		URL.revokeObjectURL(url);
+			// 按网络名称自然排序，保持与之前版本一致的阅读体验
+			allNets.sort((a, b) => a.net.localeCompare(b.net, undefined, { numeric: true }));
+
+			const rows = [];
+			// 添加表头格式：网络名称 + 长度(mil) + 长度(mm)
+			rows.push("网络名称,长度(mil),长度(mm)");
+
+			// 遍历数据并进行单位转换与格式化
+			allNets.forEach(netItem => {
+				const netName = netItem.net || "";
+				const lenMil = netItem.length || 0;
+				
+				// 计算并保留小数位数 (1 mil = 0.0254 mm)
+				const formattedMil = lenMil.toFixed(2);
+				const formattedMm = (lenMil * 0.0254).toFixed(4);
+
+				// 拼接 CSV 行
+				rows.push(`${netName},${formattedMil},${formattedMm}`);
+			});
+
+			const content = rows.join('\n');
+			// 添加 BOM 以便 Excel 正确打开 UTF-8 文件
+			const blob = new Blob(['\uFEFF' + content], { type: 'text/csv;charset=utf-8;' });
+			const url = URL.createObjectURL(blob);
+			const a = document.createElement('a');
+			a.href = url;
+			a.download = 'all_networks_length.csv'; 
+			a.click();
+			URL.revokeObjectURL(url);
+
+		} catch (error) {
+			console.error("获取网络长度失败:", error);
+			alert("导出网络数据失败！注意：带长度的网络导出功能仅在 PCB 视图下有效。");
+		}
 	}
 
     // ---------- 初始化: 获取数据并渲染 ----------

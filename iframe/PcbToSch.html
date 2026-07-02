@@ -143,8 +143,8 @@
                 <div class="option-group">
                     <div class="group-title">分类</div>
                     <div class="radio-list">
-                        <label class="radio-item"><input type="radio" name="classify" value="device" checked> 按照器件分类</label>
-                        <label class="radio-item"><input type="radio" name="classify" value="ref"> 按照位号分类</label>
+                        <label class="radio-item"><input type="radio" name="classify" value="device"> 按照器件分类</label>
+                        <label class="radio-item"><input type="radio" name="classify" value="ref" checked> 按照位号分类</label>
                         <label class="radio-item"><input type="radio" name="classify" value="pkg"> 按照封装分类</label>
                         <label class="radio-item"><input type="radio" name="classify" value="coord"> 按照元件坐标</label>
                     </div>
@@ -162,9 +162,9 @@
 
             <div class="action-bar">
                 <div class="agree-area">
-                    <input type="checkbox" id="agreeCheck">
+                    <!-- <input type="checkbox" id="agreeCheck">
                     <label for="agreeCheck">同意</label>
-                    <span class="disclaimer-link" id="showDisclaimerBtn">《免责声明》</span>
+                    <span class="disclaimer-link" id="showDisclaimerBtn">《免责声明》</span> -->
                 </div>
                 <div class="button-group">
                     <button class="secondary-btn" id="refreshListBtn">加载数据</button>
@@ -183,7 +183,7 @@
     </div>
 
     <!-- 免责声明模态框 -->
-    <div class="modal-overlay" id="disclaimerModal">
+    <!-- <div class="modal-overlay" id="disclaimerModal">
         <div class="modal-card">
             <h3>📄 免责声明</h3>
 
@@ -200,7 +200,7 @@
 
             <button class="modal-close" id="closeModalBtn">关 闭</button>
         </div>
-    </div>
+    </div> -->
 
     <script>
 		// ---------- 全局状态 ----------
@@ -215,18 +215,18 @@
 		let currentSchematicUuid = null; // 当前原理图文档的UUID
 
 		// ---------- DOM 元素 ----------
-		const showDisclaimerBtn = document.getElementById('showDisclaimerBtn');
-		const closeModalBtn = document.getElementById('closeModalBtn');
+		// const showDisclaimerBtn = document.getElementById('showDisclaimerBtn');
+		// const closeModalBtn = document.getElementById('closeModalBtn');
 		const progressFill = document.getElementById('progressFill');
 		const progressText = document.getElementById('progressText');
 		const versionSpan = document.getElementById('versionDisplay');
 		const yvalueCheck = document.getElementById('yvalue');
-		const agreeCheck = document.getElementById('agreeCheck');
+		// const agreeCheck = document.getElementById('agreeCheck');
 		const refreshBtn = document.getElementById('refreshListBtn');
 		const tableRows = document.getElementById('tableRows');
 		const buildBtn = document.getElementById('buildBtn');
 		const writeBtn = document.getElementById('writeBtn');
-		const modal = document.getElementById('disclaimerModal');
+		// const modal = document.getElementById('disclaimerModal');
 		// 更多选项复选框
 		const genTitleCheck = document.getElementById('genTitle');
 		const genFrameCheck = document.getElementById('genTitle');
@@ -249,7 +249,7 @@
 			versionSpan.textContent = '当前不在EDA环境，当前版本不支持转换';
 			versionSpan.style.color = '#f88';
 			refreshBtn.disabled = true;
-			agreeCheck.disabled = true;
+			// agreeCheck.disabled = true;
 			buildBtn.disabled = true;
 			writeBtn.disabled = true;
 			exportCsvBtn.disabled = true;
@@ -276,24 +276,24 @@
 		}
 
 		// ---------- 按钮启用状态管理 ----------
-		agreeCheck.addEventListener('change', () => {
-			refreshBtn.disabled = !agreeCheck.checked;
-		});
+		// agreeCheck.addEventListener('change', () => {
+		// 	refreshBtn.disabled = !agreeCheck.checked;
+		// });
 
 		// 免责声明弹窗
-		showDisclaimerBtn.addEventListener('click', (e) => {
-			e.preventDefault();
-			modal.style.display = 'flex';
-		});
-		closeModalBtn.addEventListener('click', () => { modal.style.display = 'none'; });
-		modal.addEventListener('click', (e) => { if (e.target === modal) modal.style.display = 'none'; });
+		// showDisclaimerBtn.addEventListener('click', (e) => {
+		// 	e.preventDefault();
+		// 	modal.style.display = 'flex';
+		// });
+		// closeModalBtn.addEventListener('click', () => { modal.style.display = 'none'; });
+		// modal.addEventListener('click', (e) => { if (e.target === modal) modal.style.display = 'none'; });
 
 		// ---------- 获取数据 ----------
 		refreshBtn.addEventListener('click', async () => {
-			if (!agreeCheck.checked) {
-				updateProgress(0, '请先勾选《免责声明》');
-				return;
-			}
+			// if (!agreeCheck.checked) {
+			// 	updateProgress(0, '请先勾选《免责声明》');
+			// 	return;
+			// }
 
 			// 获取分类选项
 			const classifyRadio = document.querySelector('input[name="classify"]:checked');
@@ -475,10 +475,10 @@
 
 		// ---------- 构建源码 ----------
 		buildBtn.addEventListener('click', async () => {
-			if (!agreeCheck.checked) {
-				updateProgress(0, '请先勾选《免责声明》');
-				return;
-			}
+			// if (!agreeCheck.checked) {
+			// 	updateProgress(0, '请先勾选《免责声明》');
+			// 	return;
+			// }
 
 			const yvalue = document.getElementById('yvalue').checked; // 获取翻转状态
 			// 获取分类选项
@@ -518,7 +518,7 @@
 					});
 
 					if (!ignoreMissing) {
-						throw new Error(`未生成源码，部分元件格式错误，已标红`);
+						throw new Error(`未生成源码，部分元件格式错误，已标红，需要做完 器件标准化 才能转换！！！`);
 					} else {
 						console.log(`忽略 ${missingSymbols.length} 组缺失符号的元件，它们将不会出现在生成的源码中`);
 						updateProgress(10, `忽略 ${missingSymbols.length} 组缺失符号元件`);
@@ -579,10 +579,10 @@
 
 		// ---------- 写入文档 ----------
 		writeBtn.addEventListener('click', async () => {
-			if (!agreeCheck.checked) {
-				updateProgress(0, '请先勾选《免责声明》');
-				return;
-			}
+			// if (!agreeCheck.checked) {
+			// 	updateProgress(0, '请先勾选《免责声明》');
+			// 	return;
+			// }
 			try {
 				if (!candidateSource) {
 					throw new Error('没有可写入的源码，请先构建');
@@ -613,10 +613,10 @@
 
 		// 新增导出文件按钮监听器（放在 writeBtn 监听器之后）
 		document.getElementById('outfile').addEventListener('click', async () => {
-			if (!agreeCheck.checked) {
-				updateProgress(0, '请先勾选《免责声明》');
-				return;
-			}
+			// if (!agreeCheck.checked) {
+			// 	updateProgress(0, '请先勾选《免责声明》');
+			// 	return;
+			// }
 			if (!zip || !currentSchematicUuid) {
 				updateProgress(0, '请先刷新加载数据');
 				return;
@@ -838,15 +838,20 @@
 				// 判断该组是否有符号：检查组内所有元件的 symbolUuid 是否都不为空
 				const hasSymbol = group.componentIndices.some(idx => components[idx] && components[idx].symbolUuid);
 
+				// 新增：安全转义双引号，防止属性截断
+				const escapeHtml = (str) => String(str || '').replace(/"/g, '&quot;');
+
 				const row = document.createElement('div');
 				row.className = 'grid-row';
 				row.setAttribute('data-group-key', group.key);
+                
+				// 修改后：前 5 个单元格均加上了 title 属性
 				row.innerHTML = `
-					<div class="row-cell">${group.designatorDisplay}</div>
-					<div class="row-cell">${group.nameDisplay}</div>
-					<div class="row-cell">${group.footprintName || ''}</div>
-					<div class="row-cell">${group.deviceName || ''}</div>
-					<div class="row-cell">${group.symbolName || ''}</div>
+					<div class="row-cell" title="${escapeHtml(group.designatorDisplay)}">${group.designatorDisplay}</div>
+					<div class="row-cell" title="${escapeHtml(group.nameDisplay)}">${group.nameDisplay}</div>
+					<div class="row-cell" title="${escapeHtml(group.footprintName)}">${group.footprintName || ''}</div>
+					<div class="row-cell" title="${escapeHtml(group.deviceName)}">${group.deviceName || ''}</div>
+					<div class="row-cell" title="${escapeHtml(group.symbolName)}">${group.symbolName || ''}</div>
 					<div class="row-cell"><input class="manual-input" type="text" placeholder="指定..." data-group-key="${group.key}" value=""></div>
 				`;
 				tableRows.appendChild(row);

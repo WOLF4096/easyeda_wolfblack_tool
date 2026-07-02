@@ -119,7 +119,7 @@
 <div class="header">
     <div class="header-info">
         <strong style="color: var(--primary)">API 基准测试</strong>
-        <span class="version-tag" id="ver-info">当前EDA版本: 获取中...</span>
+        <span class="version-tag" id="ver-info">EDA版本: 获取中...</span>
     </div>
     <div class="btn-group">
         <button class="btn" onclick="executeBatch('create')">创建</button>
@@ -159,7 +159,7 @@
     window.onload = async () => {
         if(window.eda) {
             const v = await eda.sys_Environment.getEditorCurrentVersion();
-            document.getElementById('ver-info').innerText = `当前EDA版本: ${v}`;
+            document.getElementById('ver-info').innerText = `EDA版本: ${v}`;
         }
         render(); // 必须先渲染DOM，生成输入框
         

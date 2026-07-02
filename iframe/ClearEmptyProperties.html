@@ -135,6 +135,43 @@
         .col-cb-header:hover {
             color: var(--accent-blue);
         }
+        /* 针对 WebKit 浏览器 (Chrome, Edge, Safari) 及基于 Chromium 的 EDA 客户端 */
+        ::-webkit-scrollbar {
+            width: 10px;
+            height: 10px;
+        }
+
+        /* 滚动条轨道 */
+        ::-webkit-scrollbar-track {
+            background: transparent; 
+        }
+
+        /* 滚动条滑块 */
+        ::-webkit-scrollbar-thumb {
+            background-color: rgba(121, 121, 121, 0.4);
+            /* VSCode 默认是直角，如果你喜欢稍微圆润一点可以加上 border-radius: 4px; */
+        }
+
+        /* 滑块悬停状态 */
+        ::-webkit-scrollbar-thumb:hover {
+            background-color: rgba(100, 100, 100, 0.7);
+        }
+
+        /* 滑块点击/激活状态 */
+        ::-webkit-scrollbar-thumb:active {
+            background-color: rgba(191, 191, 191, 0.4);
+        }
+
+        /* 右下角滚动条交汇处 */
+        ::-webkit-scrollbar-corner {
+            background: transparent;
+        }
+
+        /* 针对 Firefox 的滚动条标准属性 */
+        * {
+            scrollbar-width: thin;
+            scrollbar-color: rgba(121, 121, 121, 0.4) transparent;
+        }
     </style>
 </head>
 <body>

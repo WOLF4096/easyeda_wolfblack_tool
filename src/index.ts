@@ -132,8 +132,12 @@ export function CodeConvert() {
 }
 
 // 工作时间统计 - 前端界面
+// export async function WorkingHours() {
+// 	eda.sys_IFrame.openIFrame('/iframe/WorkingHours.html', 540, 680, 'WorkingHours');
+// }
+// 工作时间统计 - 前端界面
 export async function WorkingHours() {
-	eda.sys_IFrame.openIFrame('/iframe/WorkingHours.html', 540, 680, 'WorkingHours');
+	eda.sys_IFrame.openIFrame('/iframe/WorkingHours.html', 960, 600, 'WorkingHours');
 }
 // 工作时间统计 - 后台记录
 export async function WorkingHoursJs() {
