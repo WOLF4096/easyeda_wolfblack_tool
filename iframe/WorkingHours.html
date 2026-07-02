@@ -504,15 +504,17 @@
                 <div class="reminder-card" style="flex: 0 0 auto; gap: 10px;">
                     <div style="display: flex; flex-direction: column; gap: 8px;">
                         <div style="display: flex; align-items: center; gap: 10px;">
-                            <span style="font-size:12px; color:var(--text-light); width: 80px; font-weight: bold;">启动欢迎语</span>
+                            <input type="checkbox" id="welcome-enabled" class="checkbox" onchange="ReminderApp.save()" />
+                            <span style="font-size:12px; color:var(--text-light); width: 80px; font-weight: bold;">启动欢迎</span>
                             <input id="welcome-text-input" type="text" class="vscode-input" style="flex: 1" onchange="ReminderApp.save()" placeholder="使用 <time> 代表时间..." />
                         </div>
                         <div style="display: flex; align-items: center; gap: 10px;">
+                            <input type="checkbox" id="idle-enabled" class="checkbox" onchange="ReminderApp.save()" />
                             <span style="font-size:12px; color:var(--text-light); width: 80px; font-weight: bold;">挂机返回</span>
                             <div style="display: flex; align-items: center; gap: 5px;">
                                 <span style="font-size:11px; color:var(--text-muted);">超过</span>
                                 <input id="idle-min-input" type="number" class="vscode-input" style="width: 50px" onchange="ReminderApp.save()" />
-                                <span style="font-size:11px; color:var(--text-muted);">分钟后回来时提醒：</span>
+                                <span style="font-size:11px; color:var(--text-muted);">分钟后</span>
                             </div>
                             <input id="idle-text-input" type="text" class="vscode-input" style="flex: 1" onchange="ReminderApp.save()" placeholder="返回时提醒文本..." />
                         </div>
@@ -2258,6 +2260,7 @@
                 durationRules: [],
                 intervalRules: [],
                 welcomeEnabled: true,
+                idleEnabled: true,
                 welcomeText: "距离上次打开EDA经过了<time>",
                 idleText: "距离上次离开经过了<time>",
                 idleThresholdMin: 10,
@@ -2277,7 +2280,8 @@
                     }
                 } catch (e) {}
 
-                // 填充输入框
+                document.getElementById('welcome-enabled').checked = !!this.data.welcomeEnabled;
+                document.getElementById('idle-enabled').checked = !!this.data.idleEnabled;
                 document.getElementById('welcome-text-input').value = this.data.welcomeText || "";
                 document.getElementById('idle-text-input').value = this.data.idleText || "";
                 document.getElementById('idle-min-input').value = this.data.idleThresholdMin || 10;
@@ -2383,7 +2387,8 @@
             },
 
             save: async function () {
-                // 同步输入框数据
+                this.data.welcomeEnabled = document.getElementById('welcome-enabled').checked;
+                this.data.idleEnabled = document.getElementById('idle-enabled').checked;
                 this.data.welcomeText = document.getElementById('welcome-text-input').value;
                 this.data.idleText = document.getElementById('idle-text-input').value;
                 this.data.idleThresholdMin = parseInt(document.getElementById('idle-min-input').value) || 10;

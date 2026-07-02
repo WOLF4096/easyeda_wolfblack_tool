@@ -203,8 +203,9 @@ export function WorkingHours() {
 			durationRules: [],
 			intervalRules: [],
 			welcomeEnabled: true,
-			welcomeText: "距离上次打开EDA已经经过了<time>",
-			idleText: "距离上次离开过了<time>",
+			idleEnabled: true,
+			welcomeText: "距离上次打开EDA经过了<time>",
+			idleText: "距离上次离开经过了<time>",
 			idleThresholdMin: 10,
 			lastHb: 0
 		},
@@ -282,10 +283,10 @@ export function WorkingHours() {
 			});
 
 			// 3. 挂机返回提醒
-			if (ReminderManager.isLastTickIdle && !isCurrentlyIdle) {
+			if (ReminderManager.data.idleEnabled && ReminderManager.isLastTickIdle && !isCurrentlyIdle) {
 				const idleMs = Date.now() - session.lastMoveTime;
 				if (idleMs > (ReminderManager.data.idleThresholdMin || 10) * 60000) {
-					const template = ReminderManager.data.idleText || "距离上次离开过了<time>";
+					const template = ReminderManager.data.idleText || "距离上次离开经过了<time>";
 					const msg = template.replace("<time>", ReminderManager.formatTimeStr(idleMs));
 					eda.sys_Message.showToastMessage(msg, 'success');
 				}
@@ -301,13 +302,20 @@ export function WorkingHours() {
 		},
 
 		showWelcome: () => {
-			if (!ReminderManager.data.lastHb) return;
+			// 只有明确开启且有历史记录才显示
+			if (!ReminderManager.data.welcomeEnabled || !ReminderManager.data.lastHb) return;
+
 			const diffMs = Date.now() - ReminderManager.data.lastHb;
+			// 保护机制：离开时间少于 1 分钟不显示（防止刷新插件时弹出）
 			if (diffMs < 60000) return;
 
 			const template = ReminderManager.data.welcomeText || "距离上次打开EDA已经经过了<time>";
 			const msg = template.replace("<time>", ReminderManager.formatTimeStr(diffMs));
-			eda.sys_Message.showToastMessage(msg, 'success');
+
+			// 延迟 2 秒弹出，确保 EDA UI 完全加载
+			setTimeout(() => {
+				eda.sys_Message.showToastMessage(msg, 'success');
+			}, 2000);
 		}
 	};
 
