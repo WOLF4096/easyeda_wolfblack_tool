@@ -118,6 +118,34 @@
             display: flex; flex-direction: column; height: 100%; background: var(--bg-sidebar);
             border: 1px solid var(--border-main); border-radius: 4px; padding: 12px;
         }
+
+        /* === 周报视图专用样式 === */
+        .weekly-report-container {
+            display: flex; flex-direction: column; height: 100%; padding: 15px; gap: 15px;
+            background: var(--bg-base); overflow-y: auto;
+        }
+        .weekly-header {
+            display: flex; justify-content: space-between; align-items: center;
+            background: var(--bg-sidebar); padding: 10px 15px; border-radius: 4px; border: 1px solid var(--border-main);
+        }
+        .weekly-nav-btn {
+            background: var(--bg-input); border: 1px solid var(--border-light); color: var(--text-main);
+            padding: 4px 10px; border-radius: 2px; cursor: pointer; font-size: 12px;
+        }
+        .weekly-nav-btn:hover { background: var(--bg-hover); color: #fff; }
+        .weekly-summary-cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; }
+        .summary-card {
+            background: var(--bg-sidebar); border: 1px solid var(--border-main); border-radius: 4px;
+            padding: 12px; display: flex; flex-direction: column; align-items: center; gap: 5px;
+        }
+        .card-label { font-size: 11px; color: var(--text-muted); }
+        .card-value { font-size: 18px; font-weight: bold; color: var(--accent-blue); }
+        .weekly-charts-row { display: grid; grid-template-columns: 1.5fr 1fr; gap: 15px; flex: 1; min-height: 280px; }
+        .chart-card {
+            background: var(--bg-sidebar); border: 1px solid var(--border-main); border-radius: 4px;
+            padding: 10px; position: relative;
+        }
+        .chart-title { font-size: 12px; font-weight: bold; color: var(--text-light); margin-bottom: 8px; }
         .scroll-wrapper {
             flex: 1; overflow-y: auto; background: var(--bg-base); border: 1px solid var(--border-main);
             border-radius: 4px; padding: 10px; margin-bottom: 10px;
@@ -271,7 +299,8 @@
         <div class="sidebar">
             <div class="sidebar-item active" onclick="switchTab('total')">总趋势</div>
             <div class="sidebar-item" onclick="switchTab('project')">工程详情</div>
-            <div class="sidebar-item" onclick="switchTab('manage')">工程管理</div>
+			<div class="sidebar-item" onclick="switchTab('manage')">工程管理</div>
+            <div class="sidebar-item" onclick="switchTab('weekly')">周报生成</div>
 			<div class="sidebar-item" onclick="switchTab('rhythm')">节律分析</div>
             <div class="sidebar-item" onclick="switchTab('reminder')">消息提醒</div>
 			<div class="sidebar-item" onclick="switchTab('more')">更多选项</div>
@@ -310,6 +339,45 @@
             <div id="project-empty-tip" class="view-container hidden" style="display:flex; flex-direction:column; justify-content:center; align-items:center; color:var(--text-muted); font-size:13px;">
                 <div style="margin-bottom:8px; font-weight: bold; color:#e0e0e0;">当前未打开工程</div>
                 <div style="font-size:11px; color:#666;">当前视图不包含任何数据。请在 EDA 中打开有效的项目。</div>
+            </div>
+
+            <div id="view-weekly" class="view-container hidden">
+                <div class="weekly-report-container" id="weekly-report-body">
+                    <div class="weekly-header">
+                        <button class="weekly-nav-btn" onclick="changeWeek(-1)">◀ 上一周</button>
+                        <div id="weekly-range-text" style="font-weight: bold; color: var(--text-light); font-size: 14px;">2023 第 42 周</div>
+                        <div style="display: flex; gap: 8px;">
+                            <button class="weekly-nav-btn" onclick="exportWeeklyReport()">导出图片</button>
+                            <button class="weekly-nav-btn" onclick="changeWeek(1)">下一周 ▶</button>
+                        </div>
+                    </div>
+
+                    <div class="weekly-summary-cards">
+                        <div class="summary-card">
+                            <span class="card-label">本周总投入</span>
+                            <span class="card-value" id="weekly-total-work">0h</span>
+                        </div>
+                        <div class="summary-card">
+                            <span class="card-label">日均工时</span>
+                            <span class="card-value" id="weekly-avg-work">0h</span>
+                        </div>
+                        <div class="summary-card">
+                            <span class="card-label">最专注工程</span>
+                            <span class="card-value" id="weekly-top-project" style="font-size: 14px; text-align: center;">--</span>
+                        </div>
+                    </div>
+
+                    <div class="weekly-charts-row">
+                        <div class="chart-card">
+                            <div class="chart-title">每日工时分布</div>
+                            <div id="weekly-bar-chart" style="width: 100%; height: calc(100% - 25px);"></div>
+                        </div>
+                        <div class="chart-card">
+                            <div class="chart-title">项目占比情况</div>
+                            <div id="weekly-pie-chart" style="width: 100%; height: calc(100% - 25px);"></div>
+                        </div>
+                    </div>
+                </div>
             </div>
 
             <div id="view-manage" class="view-container hidden" style="display: flex; flex-direction: column; gap: 10px;">
@@ -462,6 +530,8 @@
         let manageChart = null;
         let heatmapChart = null;
 		let rhythmChart = null;
+        let weeklyBarChart = null;
+        let weeklyPieChart = null;
 
         let currentClusterSize = 1;
         let currentYMax = 900;
@@ -492,11 +562,11 @@
         };
 
         function formatDuration(seconds) {
-            if (!seconds) return '0:00:00';
+            if (!seconds) return '00:00:00';
             const h = Math.floor(seconds / 3600);
             const m = Math.floor((seconds % 3600) / 60);
             const s = Math.floor(seconds % 60);
-            return `${h}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+            return `${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
         }
 
         function formatTimeCN(hoursFloat) {
@@ -673,7 +743,11 @@
             }
 
             sortedProjectIds = Object.keys(globalProjectMeta).sort((a, b) => projectStats[b].totalWork - projectStats[a].totalWork);
-            const colorPalette = ['#5470c6', '#91cc75', '#fac858', '#ee6666', '#73c0de', '#3ba272', '#fc8452', '#9a60b4', '#ea7ccc'];
+            const colorPalette = [
+                '#5470c6', '#91cc75', '#fac858', '#ee6666', '#73c0de', '#3ba272', '#fc8452', '#9a60b4', '#ea7ccc',
+                '#16a34a', '#d946ef', '#f59e0b', '#06b6d4', '#8b5cf6', '#ec4899', '#10b981', '#f43f5e', '#6366f1',
+                '#84cc16', '#f97316', '#0ea5e9', '#64748b', '#fbbf24', '#22c55e'
+            ];
             sortedProjectIds.forEach((pId, idx) => {
                 pidColorMap[pId] = colorPalette[idx % colorPalette.length];
             });
@@ -2147,6 +2221,7 @@
             else if (state.activeTab === 'reminder') { titleEl.innerText = '时限触发器规则设定'; scopeEl.innerText = '今日总计已工作:'; valEl.innerText = formatTimeCN(getTodayWorkHours(null)); } 
             else if (state.activeTab === 'more') { titleEl.innerText = '更多选项'; scopeEl.innerText = ''; valEl.innerText = ''; }
 			else if (state.activeTab === 'rhythm') { titleEl.innerText = '节律分析 (活动钟)'; scopeEl.innerText = ''; valEl.innerText = ''; }
+            else if (state.activeTab === 'weekly') { titleEl.innerText = '工程开发周报'; scopeEl.innerText = ''; valEl.innerText = ''; }
         }
 
         async function switchTab(tab) {
@@ -2171,7 +2246,7 @@
             else {
                 const items = document.querySelectorAll('.sidebar-item');
                 // 修改后（把 rhythm 换到 reminder 前面）：
-				const idx = ['total', 'project', 'manage', 'rhythm', 'reminder', 'more'].indexOf(tab);
+				const idx = ['total', 'project', 'weekly', 'manage', 'rhythm', 'reminder', 'more'].indexOf(tab);
                 if(items[idx]) items[idx].classList.add('active');
             }
             
@@ -2209,6 +2284,9 @@
                         if (typeof renderHeatmap === 'function') renderHeatmap();
                     }
                 }
+            } else if (tab === 'weekly') {
+                document.getElementById('view-weekly').classList.remove('hidden');
+                setTimeout(() => renderWeeklyReport(), 50);
             } else if (tab === 'manage') {
                 document.getElementById('view-manage').classList.remove('hidden'); renderManageTable();
                 if (manageChart) manageChart.resize();
@@ -2260,12 +2338,209 @@
             }
         }
 
+        // ==========================================
+        // [12] 周报引擎
+        // ==========================================
+        let currentWeeklyOffset = 0; // 0 是本周, -1 是上周
+
+        function changeWeek(delta) {
+            currentWeeklyOffset += delta;
+            renderWeeklyReport();
+        }
+
+        function getWeekInfo(offset) {
+            const now = new Date();
+            // 找到本周一
+            const day = now.getDay() || 7;
+            const monday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - day + 1);
+
+            // 根据偏移计算目标周一
+            const targetMonday = new Date(monday.getTime() + offset * 7 * 24 * 3600 * 1000);
+            const targetSunday = new Date(targetMonday.getTime() + 6 * 24 * 3600 * 1000);
+
+            // 获取周数
+            const startOfYear = new Date(targetMonday.getFullYear(), 0, 1);
+            const weekNum = Math.ceil((((targetMonday - startOfYear) / 86400000) + startOfYear.getDay() + 1) / 7);
+
+            return {
+                monday: targetMonday.getTime(),
+                sunday: targetSunday.getTime(),
+                rangeText: `${targetMonday.getFullYear()} 第 ${weekNum} 周 (${targetMonday.getMonth()+1}.${targetMonday.getDate()} - ${targetSunday.getMonth()+1}.${targetSunday.getDate()})`
+            };
+        }
+
+        function renderWeeklyReport() {
+            if (!weeklyBarChart) weeklyBarChart = echarts.init(document.getElementById('weekly-bar-chart'), 'dark');
+            if (!weeklyPieChart) weeklyPieChart = echarts.init(document.getElementById('weekly-pie-chart'), 'dark');
+
+            const info = getWeekInfo(currentWeeklyOffset);
+            document.getElementById('weekly-range-text').innerText = info.rangeText;
+
+            const weekData = Array.from({length: 7}, () => ({ work: {}, totalWork: 0 }));
+            const projectTotals = {};
+            let totalSeconds = 0;
+
+            for (let i = 0; i < globalTimeline.length; i++) {
+                const slot = globalTimeline[i];
+                if (slot.ts >= info.monday && slot.ts < info.monday + 7 * 24 * 3600 * 1000) {
+                    const dayIdx = Math.floor((slot.ts - info.monday) / (24 * 3600 * 1000));
+                    if (dayIdx >= 0 && dayIdx < 7) {
+                        for (const pid in slot.work) {
+                            const sec = slot.work[pid];
+                            weekData[dayIdx].work[pid] = (weekData[dayIdx].work[pid] || 0) + sec;
+                            weekData[dayIdx].totalWork += sec;
+                            projectTotals[pid] = (projectTotals[pid] || 0) + sec;
+                            totalSeconds += sec;
+                        }
+                    }
+                }
+            }
+
+            // 更新汇总卡片
+            document.getElementById('weekly-total-work').innerText = formatDuration(totalSeconds);
+            document.getElementById('weekly-avg-work').innerText = formatDuration(Math.round(totalSeconds / 7));
+
+            let topPid = '--';
+            let maxSec = 0;
+            for (const pid in projectTotals) {
+                if (projectTotals[pid] > maxSec) { maxSec = projectTotals[pid]; topPid = globalProjectMeta[pid] || pid; }
+            }
+            document.getElementById('weekly-top-project').innerText = topPid;
+
+            // 每日柱状图
+            const days = ['周一', '周二', '周三', '周四', '周五', '周六', '周日'];
+            const barSeries = sortedProjectIds.map(pid => {
+                return {
+                    name: globalProjectMeta[pid],
+                    type: 'bar',
+                    stack: 'total',
+                    data: weekData.map(d => (d.work[pid] || 0)),
+                    itemStyle: { color: pidColorMap[pid] }
+                };
+            }).filter(s => s.data.some(v => v > 0));
+
+            weeklyBarChart.setOption({
+                backgroundColor: 'transparent',
+                tooltip: {
+                    trigger: 'axis',
+                    backgroundColor: 'rgba(37, 37, 38, 0.95)',
+                    borderColor: '#454545',
+                    borderWidth: 1,
+                    textStyle: { color: '#cccccc', fontSize: 12 },
+                    formatter: params => {
+                        let h = `<b style="color:#fff;">${params[0].name}</b><br/>`;
+                        params.forEach(p => { if(p.value > 0) h += `${p.marker} ${p.seriesName}: <span style="float:right; font-weight:bold; margin-left:15px; color:#fff;">${formatDuration(p.value)}</span><br/>`; });
+                        return h;
+                    }
+                },
+                grid: { top: 30, left: 70, right: 10, bottom: 30 },
+                xAxis: { type: 'category', data: days, axisLabel: { color: '#858585' } },
+                yAxis: { type: 'value', axisLabel: { color: '#858585', formatter: value => formatDuration(value) }, splitLine: { lineStyle: { color: '#333' } } },
+                series: barSeries
+            }, true);
+
+            // 项目占比饼图
+            const pieData = Object.keys(projectTotals).map(pid => ({
+                name: globalProjectMeta[pid] || pid,
+                value: projectTotals[pid],
+                itemStyle: { color: pidColorMap[pid] }
+            })).sort((a, b) => b.value - a.value);
+
+            weeklyPieChart.setOption({
+                backgroundColor: 'transparent',
+                tooltip: {
+                    trigger: 'item',
+                    backgroundColor: 'rgba(37, 37, 38, 0.95)',
+                    borderColor: '#454545',
+                    borderWidth: 1,
+                    textStyle: { color: '#cccccc', fontSize: 12 },
+                    formatter: params => {
+                        return `<b style="color:#fff;">${params.name}</b><br/>
+                                时间: <span style="float:right; font-weight:bold; margin-left:15px; color:#fff;">${formatDuration(params.value)}</span><br/>
+                                占比: <span style="float:right; font-weight:bold; margin-left:15px; color:#fff;">${params.percent}%</span>`;
+                    }
+                },
+                series: [{
+                    type: 'pie', radius: ['35%', '60%'], center: ['50%', '55%'],
+                    avoidLabelOverlap: true,
+                    data: pieData,
+                    label: { show: false },
+                    labelLine: { show: false },
+                    emphasis: { itemStyle: { shadowBlur: 10, shadowOffsetX: 0, shadowColor: 'rgba(0, 0, 0, 0.5)' } }
+                }]
+            }, true);
+        }
+
+        async function exportWeeklyReport() {
+            const body = document.getElementById('weekly-report-body');
+            // 简单的截图导出方案：利用 html2canvas 或手动拼凑
+            // 由于插件环境限制，我们使用 ECharts 自带的 getDataURL 并手动组合
+            const barImg = weeklyBarChart.getDataURL({ type: 'png', backgroundColor: '#252526' });
+            const pieImg = weeklyPieChart.getDataURL({ type: 'png', backgroundColor: '#252526' });
+
+            // 创建一个隐藏的画布来合成周报
+            const canvas = document.createElement('canvas');
+            canvas.width = 800;
+            canvas.height = 600;
+            const ctx = canvas.getContext('2d');
+
+            // 背景
+            ctx.fillStyle = '#1e1e1e';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // 标题
+            ctx.fillStyle = '#ffffff';
+            ctx.font = 'bold 24px Arial';
+            ctx.fillText('工程开发周报', 30, 50);
+
+            ctx.font = '16px Arial';
+            ctx.fillStyle = '#858585';
+            ctx.fillText(document.getElementById('weekly-range-text').innerText, 30, 85);
+
+            // 统计卡片
+            ctx.fillStyle = '#252526';
+            ctx.fillRect(30, 110, 230, 80);
+            ctx.fillRect(285, 110, 230, 80);
+            ctx.fillRect(540, 110, 230, 80);
+
+            ctx.fillStyle = '#858585'; ctx.font = '12px Arial';
+            ctx.fillText('本周总投入', 40, 135); ctx.fillText('日均工时', 295, 135); ctx.fillText('最专注工程', 550, 135);
+
+            ctx.fillStyle = '#007acc'; ctx.font = 'bold 20px Arial';
+            ctx.fillText(document.getElementById('weekly-total-work').innerText, 40, 170);
+            ctx.fillText(document.getElementById('weekly-avg-work').innerText, 295, 170);
+            ctx.font = 'bold 14px Arial';
+            ctx.fillText(document.getElementById('weekly-top-project').innerText, 550, 170);
+
+            // 绘制图表
+            const imgBar = new Image();
+            imgBar.src = barImg;
+            imgBar.onload = () => {
+                ctx.drawImage(imgBar, 30, 210, 450, 360);
+                const imgPie = new Image();
+                imgPie.src = pieImg;
+                imgPie.onload = () => {
+                    ctx.drawImage(imgPie, 490, 210, 280, 360);
+
+                    // 导出
+                    const finalUrl = canvas.toDataURL('image/png');
+                    const a = document.createElement('a');
+                    a.href = finalUrl;
+                    a.download = `周报_${document.getElementById('weekly-range-text').innerText}.png`;
+                    a.click();
+                };
+            };
+        }
+
         window.addEventListener('resize', () => { 
 			if (myChart) myChart.resize(); 
 			if (manageChart) manageChart.resize(); 
 			if (heatmapChart) heatmapChart.resize(); 
 			if (rhythmChart) rhythmChart.resize();
+            if (weeklyBarChart) weeklyBarChart.resize();
+            if (weeklyPieChart) weeklyPieChart.resize();
 		});
+
 
 		(async function main() {
 			try {
