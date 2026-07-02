@@ -348,7 +348,7 @@
 					<select id="project-selector" class="vscode-input" style="display: none; height: 26px; padding: 2px 6px;" onchange="onProjectSelectorChange()"></select>
 					<div class="header-title" id="page-title">总趋势</div>
 				</div>
-				<div class="header-stats" id="headerStatsArea">
+				<div class="header-stats" id="headerStatsArea" ondblclick="ReminderApp.toggleDebug()">
                     <span id="headerScope">今日已工作</span>
                     <span id="headerVal" class="highlight">0时0分</span>
                 </div>
@@ -2395,6 +2395,14 @@
                 } catch (e) {
                     eda.sys_Message.showToastMessage('保存失败:' + e.message, 'error');
                 }
+            },
+
+            toggleDebug: async function() {
+                const key = 'WORKING_HOURS_DEBUG_ENABLED';
+                const raw = await eda.sys_Storage.getExtensionUserConfig(key);
+                const isDebug = raw === 'true';
+                await eda.sys_Storage.setExtensionUserConfig(key, (!isDebug).toString());
+                eda.sys_Message.showToastMessage(`Debug模式已${!isDebug ? '开启' : '关闭'}，请查看控制台日志`, 'info');
             }
         };
 

@@ -82,27 +82,28 @@ export function WorkingHours() {
 					if (targetKey !== currentKey) {
 						if (currentKey && currentData && isDirty) {
 							try {
-								const save = await eda.sys_Storage.setExtensionUserConfig(currentKey, JSON.stringify(currentData));// 持久化存储
-								if(save){
-									// eda.sys_Message.showToastMessage('保存成功', 'success');
-								}else{
-									// eda.sys_Message.showToastMessage('保存失败', 'error');
-								}
+								await eda.sys_Storage.setExtensionUserConfig(currentKey, JSON.stringify(currentData));
 							} catch (error) {
-								eda.sys_Message.showToastMessage('保存失败', 'error');
-								if (error.includes("Cannot create property")) {
-									eda.sys_Message.showToastMessage('EDA底层数据写入异常，无法保存，建议重启EDA', 'error');
-								}
+								console.error('保存历史分片失败:', error);
 							}
 						}
 						let raw = await eda.sys_Storage.getExtensionUserConfig(targetKey);
-						currentData = raw ? JSON.parse(raw) : { meta: {}, slots: {} };
+						try {
+							currentData = raw ? JSON.parse(raw) : { meta: {}, slots: {} };
+						} catch(e) {
+							currentData = { meta: {}, slots: {} };
+						}
+
+						// 确保核心结构存在
+						if (!currentData.slots) currentData.slots = {};
+						if (!currentData.meta) currentData.meta = {};
+
 						currentData.meta[uuid] = friendlyName;
 						currentKey = targetKey;
 						isDirty = false;
 					}
 
-					// 初始化槽位
+					// 确保槽位存在
 					if (!currentData.slots[slotIdx]) currentData.slots[slotIdx] = {};
 					if (!currentData.slots[slotIdx][uuid]) currentData.slots[slotIdx][uuid] = [0, 0];
 
@@ -170,14 +171,14 @@ export function WorkingHours() {
 
 				// 保存最后持有的数据
 				if (currentKey && currentData && isDirty) {
-					// console.log(currentKey, JSON.stringify(currentData));
+					if (globalThis.__WORKING_HOURS_DEBUG__) {
+						console.log(`[工作时间统计-DEBUG] 准备保存数据至 ${currentKey}:`, currentData);
+					}
 					// 在特定版本EDA会出现BUG，表现为无法保存，系API变更导致
 					try {
 						const save = await eda.sys_Storage.setExtensionUserConfig(currentKey, JSON.stringify(currentData));// 持久化存储
-						if(save){
-							// eda.sys_Message.showToastMessage('保存成功', 'success');
-						}else{
-							// eda.sys_Message.showToastMessage('保存失败', 'error');
+						if (globalThis.__WORKING_HOURS_DEBUG__) {
+							console.log(`[工作时间统计-DEBUG] 保存结果: ${save ? '成功' : '失败'}`);
 						}
 					} catch (error) {
 						eda.sys_Message.showToastMessage('保存失败', 'error');
@@ -222,7 +223,13 @@ export function WorkingHours() {
 						ReminderManager.data = Object.assign(ReminderManager.data, parsed);
 					}
 				}
-			} catch (e) {}
+				// 强制加固数据结构
+				if (!Array.isArray(ReminderManager.data.durationRules)) ReminderManager.data.durationRules = [];
+				if (!Array.isArray(ReminderManager.data.intervalRules)) ReminderManager.data.intervalRules = [];
+			} catch (e) {
+				ReminderManager.data.durationRules = [];
+				ReminderManager.data.intervalRules = [];
+			}
 		},
 
 		formatTimeStr: (ms) => {
@@ -244,6 +251,9 @@ export function WorkingHours() {
 		},
 
 		check: (totalWorkSeconds, isCurrentlyIdle) => {
+			// 安全性检查：如果数据还未加载或被意外清空
+			if (!ReminderManager.data || !ReminderManager.data.durationRules) return;
+
 			const nowTs = Date.now();
 			const upTimeMin = Math.floor((nowTs - SESSION_START_TIME) / 60000);
 			const workTodayMin = Math.floor(totalWorkSeconds / 60);
@@ -251,6 +261,9 @@ export function WorkingHours() {
 			// 1. 工作时长提醒 (每日累计)
 			if (workTodayMin !== ReminderManager.lastTriggeredMin) {
 				const matches = ReminderManager.data.durationRules.filter(r => r.m === workTodayMin);
+				if (globalThis.__WORKING_HOURS_DEBUG__ && matches.length > 0) {
+					console.log(`[工作时间统计-DEBUG] 触发工作时长提醒: ${workTodayMin}m`, matches);
+				}
 				matches.forEach(r => ReminderManager.triggerToast(r.msg, r.count));
 				ReminderManager.lastTriggeredMin = workTodayMin;
 			}
@@ -259,6 +272,9 @@ export function WorkingHours() {
 			ReminderManager.data.intervalRules.forEach(rule => {
 				if (upTimeMin > 0 && upTimeMin % rule.m === 0) {
 					if (ReminderManager.lastIntervalTriggered[rule.m] !== upTimeMin) {
+						if (globalThis.__WORKING_HOURS_DEBUG__) {
+							console.log(`[工作时间统计-DEBUG] 触发固定间隔提醒: ${rule.m}m`, rule);
+						}
 						ReminderManager.triggerToast(rule.msg, rule.count);
 						ReminderManager.lastIntervalTriggered[rule.m] = upTimeMin;
 					}
@@ -322,24 +338,34 @@ export function WorkingHours() {
 
 	function checkActivity(apiObj, type) {
 		if (!apiObj) return;
-		apiObj
-			.getCurrentMousePosition()
-			.then((res) => {
-				if (!res) return;
-				let str = JSON.stringify(res);
-				let lastKey = type === 'pcb' ? 'lastPcb' : 'lastSch';
-				if (str !== session[lastKey]) {
-					session.lastMoveTime = Date.now();
-					session[lastKey] = str;
+
+		// 只监测坐标，提高灵敏度
+		apiObj.getCurrentMousePosition().then((pos) => {
+			if (!pos) return;
+			const posStr = JSON.stringify(pos);
+			const lastKey = type === 'pcb' ? 'lastPcb' : 'lastSch';
+
+			// 如果坐标变了，视为在操作
+			if (posStr !== session[lastKey]) {
+				if (globalThis.__WORKING_HOURS_DEBUG__) {
+					console.log(`[工作时间统计-DEBUG] 检测到活动(${type}): 坐标=${posStr}`);
 				}
-			})
-			.catch(() => {});
+				session.lastMoveTime = Date.now();
+				session[lastKey] = posStr;
+			}
+		}).catch(() => {});
 	}
 
 	// ==========================================
 	// 4. 主循环逻辑 (去中心化：每个窗口独立统计)
 	// ==========================================
 	mainTimer = setInterval(async () => {
+		// [Debug] 同步 Debug 标志
+		try {
+			const debugFlag = await eda.sys_Storage.getExtensionUserConfig('WORKING_HOURS_DEBUG_ENABLED');
+			globalThis.__WORKING_HOURS_DEBUG__ = (debugFlag === 'true');
+		} catch(e) {}
+
 		let now = Date.now();
 		let delta = (now - session.lastTick) / 1000;
 		session.lastTick = now;
