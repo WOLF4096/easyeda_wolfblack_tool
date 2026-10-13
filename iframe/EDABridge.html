@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta http-equiv="Cache-Control" content="no-store">
+<title>EDA 桥</title>
+<style>
+  :root{ --bg:#1e1e1e; --border:#3c3c3c; --text:#cccccc; --input:#3c3c3c;
+         --focus:#007fd4; --ok:#89d185; --err:#f48771; }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:"Segoe UI",sans-serif;background:var(--bg);color:var(--text);padding:6px 8px;font-size:12px}
+  .bar{display:flex;align-items:center;gap:6px;white-space:nowrap}
+  input{background:var(--input);color:#fff;border:1px solid var(--border);border-radius:2px;
+        padding:4px 6px;font-size:12px;outline:none;width:132px;font-family:Consolas,monospace}
+  input:focus{border-color:var(--focus)}
+  button{background:#0e639c;color:#fff;border:none;border-radius:2px;padding:4px 10px;cursor:pointer;font-size:12px}
+  button:hover{background:#1177bb}
+  button.ghost{background:#3a3d41} button.ghost:hover{background:#4a4d51}
+  .dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--err);margin-right:5px}
+  .dot.ok{background:var(--ok)}
+</style>
+</head>
+<body>
+  <div class="bar" id="bar">
+    <span><span class="dot" id="dot"></span><span id="st">未连接</span></span>
+    <input id="addr" value="127.0.0.1:8233" spellcheck="false" title="后端地址，格式 IP:端口">
+    <button id="conn">连接</button>
+    <button class="ghost" id="disc">断开</button>
+  </div>
+
+<script>
+"use strict";
+/* EDA 单文件桥：接收后端下发的指令，在 EDA 环境执行 pcb_Primitive*.create，并回传结果。
+   通道【只使用 WebSocket】（/ws/eda），不做 HTTP 轮询降级：
+   连接断开即显示「未连接」，不再自动重连（点「连接」重新建立）。
+
+   另外：持续监听「当前选中对象」的参数（每 100ms 采样一次；每 500ms 回传一次最新的
+   一次结果），供工作台获取当前选中图像的坐标 / 尺寸 / 旋转；未选中任何对象时
+   沿用上一次的结果（继承上一次坐标），不回传空值。 */
+
+const VER = "2.1";                 // 版本号：便于确认 EDA 里加载的是哪一版
+const $ = id => document.getElementById(id);
+let ws = null;
+
+// 仅输出到控制台，页面上不显示日志
+function log(...a){ try{ console.log("[EDA 桥]", ...a); }catch(e){} }
+
+function setStatus(txt, ok){ $("st").textContent = txt; $("dot").classList.toggle("ok", !!ok); }
+function wsOpen(){ return !!ws && ws.readyState === 1; }
+
+function hasEda(){ return typeof eda !== "undefined" && eda && eda.pcb_PrimitiveVia; }
+
+// 解析地址：「127.0.0.1:8233」/「127.0.0.1」/「http://127.0.0.1:8233」都可以
+function parseAddr(){
+  let s = ($("addr").value || "").trim().replace(/^[a-zA-Z]+:\/\//, "");
+  let host = s, port = "8233";
+  const i = s.lastIndexOf(":");
+  if (i >= 0) { host = s.slice(0, i); port = s.slice(i + 1) || "8233"; }
+  host = (host || "").replace(/^:+|:+$/g, "").trim();
+  if (!host) host = "127.0.0.1";
+  if (!/^\d+$/.test(port)) port = "8233";
+  return { host: host, port: port };
+}
+
+/* ============ 指令执行 ============ */
+// 一律走 EDA API 查 UUID：从下拉选中的封装由工作台随指令带 it.uuid（免查 API），
+// 手输的 C 编号才会进到这里。
+async function resolveUuid(cno){
+  const t = await eda.lib_Device.getByLcscIds(cno);
+  if(!t || !t.length) throw new Error("API 未找到 C 编号 " + cno + " 对应的元件");
+  return t[0].uuid;
+}
+
+async function execItems(items){
+  if(!hasEda()) throw new Error("当前环境未检测到 EDA API，请在立创EDA专业版中运行本页面");
+  let count = 0; const errors = [];
+
+  // 元件：同一批只取一次系统库 UUID
+  let sysLibUuid = null;
+  if(items.some(it => it.type === "component")) sysLibUuid = await eda.lib_LibrariesList.getSystemLibraryUuid();
+
+  for(let i = 0;i < items.length;i++){
+    const it = items[i];
+    try{
+      if(it.type === "component"){
+        const uuid = it.uuid || await resolveUuid(it.cno);
+        eda.pcb_PrimitiveComponent.create(
+          { libraryUuid: sysLibUuid, uuid: uuid },
+          it.layer || 1, it.x, it.y, it.rot || 0, !!it.lock );
+        count++;
+      } else if(it.type === "via"){
+        eda.pcb_PrimitiveVia.create(
+          "",                 // NET（不需要）
+          it.x, it.y,
+          it.innerD,          // 孔直径
+          it.outerD,          // 焊盘直径
+          0,                  // 过孔类型：普通
+          null,               // 设计规则名称（不需要）
+          null,               // 阻焊扩展
+          false );
+        count++;
+      } else if(it.type === "line"){
+        eda.pcb_PrimitiveLine.create(
+          "",                 // 网络名称
+          it.layer || 1,      // 层编号
+          it.x1, it.y1, it.x2, it.y2,
+          it.width || 0.5,    // 线宽
+          false );
+        count++;
+      } else {
+        errors.push(`第${i+1}个：未知类型 ${it.type}`);
+      }
+    }catch(err){
+      errors.push(`第${i+1}个(${it.type})：${err && err.message || err}`);
+    }
+  }
+  return { ok: errors.length === 0, count: count, errors: errors };
+}
+
+async function handleCommand(cmd){
+  if(!cmd || !cmd.id) return;
+  if(cmd.cmd !== "import"){ sendResult({ id: cmd.id, ok: false, error: "未知指令 " + cmd.cmd }); return; }
+  const items = cmd.items || [];
+  log("收到指令：导入 " + items.length + " 个对象");
+  try{
+    const r = await execItems(items);
+    log("执行完成：成功 " + r.count + (r.errors.length ? ("，失败 " + r.errors.length) : ""));
+    r.errors.slice(0, 5).forEach(e => log(e));
+    sendResult({ id: cmd.id, ok: r.ok, count: r.count, errors: r.errors });
+  }catch(e){
+    log("执行异常：" + (e && e.message || e));
+    sendResult({ id: cmd.id, ok: false, count: 0, error: String(e && e.message || e) });
+  }
+}
+
+// 只走 WebSocket
+function send(payload){
+  if(!wsOpen()){ log("未连接，发送失败：", payload); return false; }
+  try{ ws.send(JSON.stringify(payload)); return true; }
+  catch(e){ log("发送失败：" + (e && e.message || e)); return false; }
+}
+function sendResult(payload){ send(payload); }
+
+/* ============ 选中对象参数：100ms 采样 / 500ms 回传 ============ */
+let selSampleTimer = null, selPushTimer = null, selBusy = false, watchStarted = false;
+let lastSel = null;   // 最近一次「选中对象」的参数；未选中时保留上一次（继承）
+
+// 读取当前选中对象：只认 pcb_PrimitiveObject（图像/对象），取第一个命中的
+async function sampleSelection(){
+  if(selBusy) return; selBusy = true;
+  try{
+    if(hasEda() && eda.pcb_SelectControl && eda.pcb_SelectControl.getAllSelectedPrimitives_PrimitiveId
+       && eda.pcb_PrimitiveObject && eda.pcb_PrimitiveObject.get){
+      const ids = await eda.pcb_SelectControl.getAllSelectedPrimitives_PrimitiveId();
+      const arr = Array.isArray(ids) ? ids
+                : (ids && typeof ids.length === "number" ? Array.prototype.slice.call(ids) : []);
+      for(let i = 0;i < arr.length;i++){
+        try{
+          const o = await eda.pcb_PrimitiveObject.get(arr[i]);
+          if(o && o.primitiveType === "Object"
+             && typeof o.width === "number" && typeof o.height === "number"){
+            lastSel = {
+              topLeftX: o.topLeftX, topLeftY: o.topLeftY,
+              width: o.width, height: o.height,
+              rotation: o.rotation || 0, mirror: !!o.mirror,
+              primitiveId: o.primitiveId || String(arr[i])
+            };
+            break;
+          }
+        }catch(e){ /* 该对象不是 Object，跳过 */ }
+      }
+    }
+  }catch(e){ /* 忽略单次采样失败 */ }
+  selBusy = false;
+}
+
+function pushSelection(){
+  // 未选中 -> 回传上一次（继承上一次坐标）；同时也起到保活作用
+  send({ type: "selection", selection: lastSel });
+}
+
+function startWatch(){
+  if(watchStarted) return; watchStarted = true;
+  selSampleTimer = setInterval(sampleSelection, 100);   // 100ms 采样
+  selPushTimer = setInterval(pushSelection, 500);       // 500ms 回传最新
+}
+function stopWatch(){
+  if(selSampleTimer){ clearInterval(selSampleTimer); selSampleTimer = null; }
+  if(selPushTimer){ clearInterval(selPushTimer); selPushTimer = null; }
+  watchStarted = false;
+}
+
+/* ============ WebSocket（唯一通道） ============ */
+function connectWS(){
+  // 关掉旧连接（其 onclose 会因 ws !== sock 而被忽略）
+  const prev = ws; ws = null;
+  if(prev){ try{ prev.close(); }catch(e){} }
+  stopWatch();
+
+  const a = parseAddr();
+  const url = "ws://" + a.host + ":" + a.port + "/ws/eda";
+  let sock;
+  try{ sock = new WebSocket(url); }catch(e){ sock = null; }
+  if(!sock){ setStatus("未连接", false); log("WebSocket 创建失败：" + url); return; }
+  ws = sock;
+
+  sock.onopen = () => {
+    if(ws !== sock) return;
+    setStatus("已连接", true);
+    log("WebSocket 已连接 " + url);
+    startWatch();
+  };
+  sock.onmessage = (ev) => {
+    if(ws !== sock) return;
+    let m; try{ m = JSON.parse(ev.data); }catch(e){ return; }
+    handleCommand(m);
+  };
+  sock.onclose = () => {
+    if(ws !== sock) return;      // 已被新连接/主动断开取代，不处理
+    ws = null;
+    stopWatch();
+    setStatus("未连接", false);
+    log("WebSocket 已断开 " + url);
+  };
+  sock.onerror = () => { try{ sock.close(); }catch(e){} };
+}
+
+function disconnect(){
+  stopWatch();
+  const old = ws; ws = null;     // 先置空：old.onclose 会因 ws !== old 被忽略
+  if(old){ try{ old.close(); }catch(e){} }
+  setStatus("未连接", false);
+}
+
+$("conn").onclick = () => { disconnect(); connectWS(); };
+$("disc").onclick = disconnect;
+
+/* 状态自校对：每 500ms 强制让界面显示与真实 socket 状态一致，
+   杜绝「已点断开但界面仍显示已连接」这类不一致 */
+setInterval(() => {
+  const on = wsOpen();
+  if (on !== ($("st").textContent === "已连接")) setStatus(on ? "已连接" : "未连接", on);
+}, 500);
+
+/* 启动即自动连接（仅一次，不自动重连） */
+setStatus("未连接", false);
+const _a = parseAddr();
+$("bar").title = "EDA 桥 v" + VER + "（仅 WebSocket）";
+log("EDA 桥 v" + VER + " 已就绪（只使用 WebSocket），正在自动连接 " + _a.host + ":" + _a.port);
+if(!hasEda()) log("提示：未检测到 EDA API —— 请确认本页面在立创EDA专业版环境中打开");
+connectWS();
+</script>
+</body>
+</html>

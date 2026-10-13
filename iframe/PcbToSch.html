@@ -38,6 +38,8 @@
 		
 		#exportCsvBtn { background: var(--vscode-sec); border: 1px solid transparent; color: #ffffff; padding: 4px 12px; font-size: 12px; cursor: pointer; border-radius: 2px; margin-left: auto; transition: 0.1s;}
 		#exportCsvBtn:hover { background: var(--vscode-sec-hover); }
+		#exportNetBtn { background: var(--vscode-sec); border: 1px solid transparent; color: #ffffff; padding: 4px 12px; font-size: 12px; cursor: pointer; border-radius: 2px; transition: 0.1s;}
+		#exportNetBtn:hover { background: var(--vscode-sec-hover); }
 
 		/* 列表与表格部分 */
 		.list-section { flex: 1 1 0; min-height: 0; display: flex; flex-direction: column; }
@@ -172,6 +174,7 @@
                     <button class="primary-btn"   id="writeBtn" disabled>写入文档</button>
                     <button class="primary-btn"   id="outfile"  disabled>导出文件</button>
 					<button class="secondary-btn" id="exportCsvBtn" disabled>导出表格</button>
+					<button class="secondary-btn" id="exportNetBtn" disabled>导出网络</button>
                 </div>
             </div>
 
@@ -234,6 +237,7 @@
 		const exportCsvBtn = document.getElementById('exportCsvBtn');
 		const errorsCheck = document.getElementById('errors');
 		const outfile = document.getElementById('outfile');
+		const exportNetBtn = document.getElementById('exportNetBtn');
 
 		try {
 			version = eda.sys_Environment.getEditorCurrentVersion();
@@ -253,6 +257,7 @@
 			buildBtn.disabled = true;
 			writeBtn.disabled = true;
 			exportCsvBtn.disabled = true;
+			exportNetBtn.disabled = true;
 		}
 
 
@@ -473,6 +478,72 @@
 			URL.revokeObjectURL(link.href);
 		});
 
+		// ---------- 导出网络 ----------
+		exportNetBtn.addEventListener('click', () => {
+			if (!components || components.length === 0) {
+				updateProgress(0, '请先加载数据并构建源码');
+				return;
+			}
+			if (Object.keys(symbolPinsDatabase).length === 0) {
+				updateProgress(0, '请先构建源码以获取引脚信息');
+				return;
+			}
+
+			const csvHeader = '唯一ID,位号,引脚编号,引脚名称,引脚网络';
+			const csvRows = [csvHeader];
+
+			components.forEach(comp => {
+				const designator = comp.designator || '';
+				const uniqueId = comp.uniqueId || '';
+				const pins = comp.pins || {};
+				const symbolParts = symbolPinsDatabase[comp.symbolUuid] || [];
+
+				Object.entries(pins).forEach(([pinNumber, netName]) => {
+					if (!pinNumber) return; // 跳过无效引脚编号
+					let pinName = '';
+					for (let partIdx = 0; partIdx < symbolParts.length; partIdx++) {
+						const partPins = symbolParts[partIdx].pins || {};
+						if (partPins[pinNumber] && partPins[pinNumber].name) {
+							pinName = partPins[pinNumber].name;
+							break;
+						}
+					}
+
+					const escapeCsv = (val) => {
+						if (typeof val === 'string' && (val.includes(',') || val.includes('"'))) {
+							return '"' + val.replace(/"/g, '""') + '"';
+						}
+						return val;
+					};
+
+					csvRows.push([
+						escapeCsv(uniqueId),
+						escapeCsv(designator),
+						escapeCsv(pinNumber),
+						escapeCsv(pinName),
+						escapeCsv(netName || '')
+					].join(','));
+				});
+			});
+
+			const now = new Date();
+			const dateStr = now.getFullYear() +
+				('0' + (now.getMonth() + 1)).slice(-2) +
+				('0' + now.getDate()).slice(-2);
+			const timeStr = ('0' + now.getHours()).slice(-2) +
+				('0' + now.getMinutes()).slice(-2) +
+				('0' + now.getSeconds()).slice(-2);
+			const filename = `${currentPcbUuid || 'netlist'}_${dateStr}_${timeStr}_netlist.csv`;
+
+			updateProgress(100, `导出网络成功：${filename}`);
+			const blob = new Blob(['\uFEFF' + csvRows.join('\n')], { type: 'text/csv;charset=utf-8;' });
+			const link = document.createElement('a');
+			link.href = URL.createObjectURL(blob);
+			link.download = filename;
+			link.click();
+			URL.revokeObjectURL(link.href);
+		});
+
 		// ---------- 构建源码 ----------
 		buildBtn.addEventListener('click', async () => {
 			// if (!agreeCheck.checked) {
@@ -571,6 +642,7 @@
 				// 启用写入按钮
 				writeBtn.disabled = false;
 				document.getElementById('outfile').disabled = false;
+				exportNetBtn.disabled = false;
 			} catch (error) {
 				console.error('构建源码失败:', error);
 				updateProgress(0, `错误: ${error.message}`);
@@ -965,7 +1037,7 @@
 								for (let pinId in pinById) {
 									const pin = pinById[pinId];
 									if (pin.number) {
-										pinsByNumber[pin.number] = { x: pin.x, y: pin.y, angle: pin.angle };
+										pinsByNumber[pin.number] = { x: pin.x, y: pin.y, angle: pin.angle, name: pin.name };
 										// 更新包围盒
 										if (pin.x < minX) minX = pin.x;
 										if (pin.x > maxX) maxX = pin.x;
@@ -1002,7 +1074,8 @@
 								y: y,
 								length: length,
 								angle: angle,
-								number: null
+								number: null,
+								name: null
 							};
 						} else if (type === 'ATTR' && currentPart) {
 							// 解析 ATTR 行，寻找 NUMBER 属性
@@ -1012,6 +1085,9 @@
 							const attrValue = data[4];
 							if (attrName === 'NUMBER' && pinById[parentId]) {
 								pinById[parentId].number = attrValue;
+							}
+							if (attrName === 'NAME' && pinById[parentId]) {
+								pinById[parentId].name = attrValue;
 							}
 						}
 					} catch (e) {
@@ -1027,7 +1103,7 @@
 					for (let pinId in pinById) {
 						const pin = pinById[pinId];
 						if (pin.number) {
-							pinsByNumber[pin.number] = { x: pin.x, y: pin.y, angle: pin.angle };
+							pinsByNumber[pin.number] = { x: pin.x, y: pin.y, angle: pin.angle, name: pin.name };
 							if (pin.x < minX) minX = pin.x;
 							if (pin.x > maxX) maxX = pin.x;
 							if (pin.y < minY) minY = pin.y;

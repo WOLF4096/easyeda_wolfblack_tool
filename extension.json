@@ -3,7 +3,7 @@
 	"uuid": "345f2952d65b1a5ca2f11721b90309c9",
 	"displayName": "狼黑工具",
 	"description": "提高工作效率的实用插件合集",
-	"version": "1.15.7",
+	"version": "1.16.0",
 	"publisher": "wolfblack",
 	"engines": {
 		"eda": "^2.2.45"
@@ -14,7 +14,7 @@
 		"url": "https://github.com/WOLF4096/easyeda_wolfblack_tool"
 	},
 	"categories": ["PCB", "Schematic", "Other"],
-	"keywords": ["PCB", "BOM", "原理图", "二维码", "网表", "器件", "位号", "3D模型", "导线", "线条", "焊盘", "过孔", "图片"],
+	"keywords": ["PCB", "BOM", "原理图", "二维码", "网表", "器件", "位号", "3D模型", "导线", "线条", "焊盘", "过孔", "图片", "引脚排序"],
 	"images": {
 		"logo": "./images/logo.png"
 	},
@@ -48,6 +48,28 @@
 				"title": "狼黑工具",
 				"menuItems": [
 					{
+						"id": "WorkingHours",
+						"title": "工作时间统计",
+						"registerFn": "WorkingHours"
+					},
+					{
+						"id": "About",
+						"title": "关于",
+						"registerFn": "About"
+					}
+				]
+			}
+		],
+		"symbol": [
+			{
+				"id": "wolfblacksymbol",
+				"title": "狼黑工具",
+				"menuItems": [
+					{
+						"id": "PinSorting",
+						"title": "引脚排序",
+						"registerFn": "PinSorting"
+					},{
 						"id": "WorkingHours",
 						"title": "工作时间统计",
 						"registerFn": "WorkingHours"
@@ -235,6 +257,11 @@
 						"id": "WorkingHours",
 						"title": "工作时间统计",
 						"registerFn": "WorkingHours"
+					},
+					{
+						"id": "EDABridge",
+						"title": "EDA桥",
+						"registerFn": "EDABridge"
 					},
 					{
 						"id": "About",

@@ -170,10 +170,21 @@ export async function ModifyNet() {
 // 	eda.sys_IFrame.openIFrame('/iframe/ExportFile.html', 600, 600, 'ExportFile');
 // }
 
+// 引脚排序
+export async function PinSorting() {
+	eda.sys_IFrame.openIFrame('/iframe/PinSorting.html', 200, 168, 'PinSorting');
+}
+
 // API基准测试
 export function APITest() {
 	eda.sys_IFrame.openIFrame('/iframe/APITest.html', 512, 640, 'APITest');
 }
+
+// EDA桥
+export function EDABridge() {
+	eda.sys_IFrame.openIFrame('/iframe/EDABridge.html', 300, 37, 'EDABridge');
+}
+
 // 关于
 export function About() {
 	eda.sys_IFrame.openIFrame('/iframe/About.html', 860, 720, 'About');
