@@ -547,6 +547,34 @@
         }));
     }
 
+    /** 圆弧 → 折线段（约 22.5° 一段）。
+     *  圆弧只取「弦」会与真实弧差一个矢高（90° 弧 ≈ 0.29r），造成相邻却判不相接 / 隔开却判相接。*/
+    function expandArcLines(prim) {
+        const out = [];
+        const x1 = prim.x1, y1 = prim.y1, x2 = prim.x2, y2 = prim.y2, w = prim.w;
+        const angle = Number(prim.angle || 0);
+        const ch = Math.hypot(x2 - x1, y2 - y1);
+        const th = Math.min(Math.abs(angle) * Math.PI / 180, Math.PI * 2);
+        if (!(ch > 1e-9) || !(th > 1e-9)) { out.push(prim); return out; }
+        const r = ch / (2 * Math.sin(th / 2));
+        const mx = (x1 + x2) / 2, my = (y1 + y2) / 2;
+        const nx = -(y2 - y1) / ch, ny = (x2 - x1) / ch;
+        const h = Math.sqrt(Math.max(0, r * r - (ch / 2) * (ch / 2)));
+        const sgn = angle >= 0 ? 1 : -1;
+        const cx = mx + nx * h * sgn, cy = my + ny * h * sgn;
+        const a0 = Math.atan2(y1 - cy, x1 - cx);
+        const sweep = sgn * th;
+        const N = Math.max(2, Math.min(12, Math.ceil(Math.abs(sweep) / (Math.PI / 8))));
+        let px = x1, py = y1;
+        for (let k = 1; k <= N; k++) {
+            const a = a0 + sweep * (k / N);
+            const qx = cx + r * Math.cos(a), qy = cy + r * Math.sin(a);
+            out.push({ id: prim.id + '_' + k, type: 'ARC', net: prim.net, layer: prim.layer, shape: 'line', x1: px, y1: py, x2: qx, y2: qy, w: w });
+            px = qx; py = qy;
+        }
+        return out;
+    }
+
     function getEdges(shape) {
         let lines = [];
         if (shape.shape === "POLY" || shape.vertices) {
@@ -558,6 +586,18 @@
             }
         } else if (shape.shape === "line") {
             lines.push([shape.x1, shape.y1, shape.x2, shape.y2]);
+        } else if (shape.shape === 'ROUND') {
+            // ⚠️ 圆形不能用「包围盒四边」近似：方角在对角方向比真实半径远 √2 倍，
+            //    会把「圆心距边界 1.27mm、半径仅 0.955mm」的焊盘判成与覆铜相接 →
+            //    不同网络被焊接在一起。改用内接正十二边形，顶点严格落在圆周上。
+            let r0 = shape.r || 0, N = 12;
+            for (let i = 0; i < N; i++) {
+                let a1 = i / N * Math.PI * 2, a2 = (i + 1) / N * Math.PI * 2;
+                lines.push([
+                    shape.x + r0 * Math.cos(a1), shape.y + r0 * Math.sin(a1),
+                    shape.x + r0 * Math.cos(a2), shape.y + r0 * Math.sin(a2)
+                ]);
+            }
         } else {
             let hw = shape.w/2, hh = shape.h/2;
             let l=shape.x-hw, r=shape.x+hw, t=shape.y-hh, b=shape.y+hh;
@@ -820,7 +860,7 @@
                     let dia = Number(item[8]);
                     primitives.push({ id: item[1], type: "VIA", net: item[3], layer: LAYER_MULTI, _rawRange: item[4], shape: "ROUND", x: Number(item[5]), y: Number(item[6]), w: dia, h: dia, r: dia / 2 });
                 } else if (type === "ARC") {
-                    primitives.push({ id: item[1], type: "ARC", net: item[3], layer: item[4], shape: "line", x1: Number(item[5]), y1: Number(item[6]), x2: Number(item[7]), y2: Number(item[8]), w: Number(item[9]) });
+                    primitives.push.apply(primitives, expandArcLines({ id: item[1], net: item[3], layer: item[4], x1: Number(item[5]), y1: Number(item[6]), x2: Number(item[7]), y2: Number(item[8]), angle: Number(item[9]), w: Number(item[10]) || 0.15 }));
                 } else if (type === "FILL" || type === "POLY") {
 					if (type === "FILL" && item[4] === 12) return;
                     let shapeData = item[7];
@@ -994,19 +1034,17 @@
 
 			// ---------- ARC ----------
 			if (type === 'ARC') {
-				primitives.push({
+				primitives.push.apply(primitives, expandArcLines({
 					id: mergedItem.id,
-					ticket: mergedItem.ticket,
-					type: 'ARC',
 					net: mergedItem.netName,
 					layer: mergedItem.layerId,
-					shape: 'line',
 					x1: mergedItem.startX,
 					y1: mergedItem.startY,
 					x2: mergedItem.endX,
 					y2: mergedItem.endY,
-					w: mergedItem.width,
-				});
+					angle: mergedItem.angle,
+					w: mergedItem.width
+				}));
 				continue;
 			}
 
@@ -1264,9 +1302,10 @@
 				let group = clusters[rootId];
 				if (group.length === 1) continue;
 				let existingNets = new Set();
+				let netVotes = new Map();
 				group.forEach(p => {
 					if (p.net && p.net !== '' && p.net !== 'null' && p.net !== 'undefined') {
-						existingNets.add(p.net);
+						existingNets.add(p.net); netVotes.set(p.net, (netVotes.get(p.net) || 0) + 1);
 					}
 				});
 
@@ -1274,12 +1313,17 @@
 				if (existingNets.size > 0) {
 					let sortedNets = Array.from(existingNets);
 					sortedNets.sort((a, b) => {
-						let aGen = isGenericNet(a), bGen = isGenericNet(b);
-						if (!aGen && bGen) return -1;
-						if (aGen && !bGen) return 1;
-						if (a.length !== b.length) return a.length - b.length;
-						return a.localeCompare(b);
-					});
+                        // ⚠️ 不能按「名字长短」定名：分量里混进 1 个异物时，短名会顶掉正确的多数名
+                        //   （实测：GND 覆铜被误连 1 个 DP 焊盘 → 整块覆铜被命名成 DP）。
+                        // 改为 ① 票数多者优先 ② 真实名优先于通用 NET* ③ 名字短 ④ 字典序
+                        let wa = netVotes.get(a) || 0, wb = netVotes.get(b) || 0;
+                        if (wa !== wb) return wb - wa;
+                        let aGen = isGenericNet(a), bGen = isGenericNet(b);
+                        if (!aGen && bGen) return -1;
+                        if (aGen && !bGen) return 1;
+                        if (a.length !== b.length) return a.length - b.length;
+                        return a.localeCompare(b);
+                    });
 					finalNetName = sortedNets[0];
 				} else {
 					while (true) {
@@ -1351,9 +1395,10 @@
 				let group = clusters[rootId];
 				if (group.length === 1) continue;
 				let existingNets = new Set();
+				let netVotes = new Map();
 				group.forEach(p => {
 					if (p.net && p.net !== '' && p.net !== 'null' && p.net !== 'undefined') {
-						existingNets.add(p.net);
+						existingNets.add(p.net); netVotes.set(p.net, (netVotes.get(p.net) || 0) + 1);
 					}
 				});
 
@@ -1361,12 +1406,17 @@
 				if (existingNets.size > 0) {
 					let sortedNets = Array.from(existingNets);
 					sortedNets.sort((a, b) => {
-						let aGen = isGenericNet(a), bGen = isGenericNet(b);
-						if (!aGen && bGen) return -1;
-						if (aGen && !bGen) return 1;
-						if (a.length !== b.length) return a.length - b.length;
-						return a.localeCompare(b);
-					});
+                        // ⚠️ 不能按「名字长短」定名：分量里混进 1 个异物时，短名会顶掉正确的多数名
+                        //   （实测：GND 覆铜被误连 1 个 DP 焊盘 → 整块覆铜被命名成 DP）。
+                        // 改为 ① 票数多者优先 ② 真实名优先于通用 NET* ③ 名字短 ④ 字典序
+                        let wa = netVotes.get(a) || 0, wb = netVotes.get(b) || 0;
+                        if (wa !== wb) return wb - wa;
+                        let aGen = isGenericNet(a), bGen = isGenericNet(b);
+                        if (!aGen && bGen) return -1;
+                        if (aGen && !bGen) return 1;
+                        if (a.length !== b.length) return a.length - b.length;
+                        return a.localeCompare(b);
+                    });
 					finalNetName = sortedNets[0];
 				} else {
 					while (true) {
