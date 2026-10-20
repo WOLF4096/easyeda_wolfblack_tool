@@ -7,6 +7,8 @@
  * 3. Toggle: 根据选中类型自动互相转换
  */
 
+import { loadApiConfig } from './common/apiConfig';
+
 // 默认 API 配置兜底（防止用户首次使用时没有本地缓存导致 JSON 解析报错）
 const DEFAULT_API_CONFIG = {
     "创建过孔": { "坐标": 1, "内径": 1, "外径": 1, "阻焊": 1 },
@@ -36,16 +38,8 @@ export const PadViaConverter = {
      */
     async _process(mode) {
         try {
-            // 1. 安全读取并解析 API 校准配置
-            let api = DEFAULT_API_CONFIG;
-            const rawApiData = await eda.sys_Storage.getExtensionUserConfig('APITest');
-            if (rawApiData) {
-                try {
-                    api = JSON.parse(rawApiData);
-                } catch (e) {
-                    console.warn('API 校准数据解析失败，将使用默认比例 1:1', e);
-                }
-            }
+            // 1. 安全读取并解析 API 校准配置（复用公共工具，解析失败回退默认 1:1）
+            const api = await loadApiConfig(DEFAULT_API_CONFIG);
 
             // 2. 获取当前选中的图元
             const selections = await eda.pcb_SelectControl.getAllSelectedPrimitives();
@@ -86,10 +80,10 @@ export const PadViaConverter = {
         const rawHoleDiameter = (Array.isArray(pad.hole) && pad.hole.length >= 3) ? Math.min(pad.hole[1], pad.hole[2]) : 0;
 
         // --- 2. 提取校准缩放系数 ---
-        const coordScale  = api["获取焊盘"]["坐标"] * api["创建过孔"]["坐标"];
-        const outerScale  = api["获取焊盘"]["外径"] * api["创建过孔"]["外径"];
-        const holeScale   = api["获取焊盘"]["内径"] * api["创建过孔"]["内径"];
-        const solderScale = api["获取焊盘"]["阻焊"] * api["创建过孔"]["阻焊"];
+        const coordScale  = (api["获取焊盘"]?.["坐标"] ?? 1) * (api["创建过孔"]?.["坐标"] ?? 1);
+        const outerScale  = (api["获取焊盘"]?.["外径"] ?? 1) * (api["创建过孔"]?.["外径"] ?? 1);
+        const holeScale   = (api["获取焊盘"]?.["内径"] ?? 1) * (api["创建过孔"]?.["内径"] ?? 1);
+        const solderScale = (api["获取焊盘"]?.["阻焊"] ?? 1) * (api["创建过孔"]?.["阻焊"] ?? 1);
 
         // --- 3. 构造阻焊参数 (安全处理 Null) ---
         let targetSolderMask = { topSolderMask: -1000, bottomSolderMask: -1000, topPasteMask: 0, bottomPasteMask: 0 };
@@ -122,10 +116,10 @@ export const PadViaConverter = {
         console.log('开始转换过孔到焊盘:', via);
 
         // --- 1. 提取校准缩放系数 ---
-        const coordScale  = api["获取过孔"]["坐标"] * api["创建焊盘"]["坐标"];
-        const outerScale  = api["获取过孔"]["外径"] * api["创建焊盘"]["外径"];
-        const holeScale   = api["获取过孔"]["内径"] * api["创建焊盘"]["内径"];
-        const solderScale = api["获取过孔"]["阻焊"] * api["创建焊盘"]["阻焊"];
+        const coordScale  = (api["获取过孔"]?.["坐标"] ?? 1) * (api["创建焊盘"]?.["坐标"] ?? 1);
+        const outerScale  = (api["获取过孔"]?.["外径"] ?? 1) * (api["创建焊盘"]?.["外径"] ?? 1);
+        const holeScale   = (api["获取过孔"]?.["内径"] ?? 1) * (api["创建焊盘"]?.["内径"] ?? 1);
+        const solderScale = (api["获取过孔"]?.["阻焊"] ?? 1) * (api["创建焊盘"]?.["阻焊"] ?? 1);
 
         // --- 2. 构造阻焊参数 (安全处理 Null) ---
         let targetTopSolder = -1000;

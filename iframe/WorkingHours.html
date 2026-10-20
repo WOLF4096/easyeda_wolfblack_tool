@@ -666,25 +666,19 @@
         // ==========================================
         // [3] 安全导出机制 (异步 Base64 提升性能)
         // ==========================================
-        async function encryptPayloadAES(jsonObject) {
+        async function packPayload(jsonObject) {
 			const jsonStr = JSON.stringify(jsonObject);
 			const enc = new TextEncoder();
 			const plainBuffer = enc.encode(jsonStr);
 
-			// 将明文 Buffer 进行 GZIP 最高级别压缩
+			// 将明文 Buffer 进行 GZIP 最高级别压缩（同时起到轻量混淆作用）
 			const compressedBuffer = fflate.gzipSync(plainBuffer, { level: 9 });
 
-			const keyMaterial = await crypto.subtle.generateKey(
-				{ name: "AES-GCM", length: 256 }, true, ["encrypt", "decrypt"]
-			);
-			const iv = crypto.getRandomValues(new Uint8Array(12));
-			
-			// 这里传入的是 compressedBuffer，而不是 plainBuffer
-			const cipherBuffer = await crypto.subtle.encrypt(
-				{ name: "AES-GCM", iv: iv }, keyMaterial, compressedBuffer
-			);
-			const exportedKey = await crypto.subtle.exportKey("raw", keyMaterial);
-			
+			// 计算压缩数据的 SHA-256 校验和，用于打开时检测数据是否被篡改。
+			// 说明：本机制仅为轻量防篡改（非安全加密），校验和随数据一同下发，
+			// 目标是抵御普通用户的随手篡改，而非对抗专业技术手段。
+			const hashBuffer = await crypto.subtle.digest('SHA-256', compressedBuffer);
+
 			const toB64 = (buf) => {
 				return new Promise((resolve) => {
 					const blob = new Blob([buf]);
@@ -695,9 +689,8 @@
 			};
 
 			return {
-				ct: await toB64(cipherBuffer),
-				iv: await toB64(iv),
-				k: await toB64(exportedKey)
+				data: await toB64(compressedBuffer),
+				hash: await toB64(new Uint8Array(hashBuffer))
 			};
 		}
 
@@ -1813,9 +1806,9 @@
 
         async function triggerSecureExport(payloadObj, fileNameBase) {
             let securePack;
-            try { securePack = await encryptPayloadAES(payloadObj); } 
+            try { securePack = await packPayload(payloadObj); } 
             catch (e) {
-                if(window.eda && eda.sys_Message) eda.sys_Message.showToastMessage('底层加密引擎调用失败', 'error'); return;
+                if(window.eda && eda.sys_Message) eda.sys_Message.showToastMessage('数据打包失败', 'error'); return;
             }
 
             const htmlContent = `<!DOCTYPE html>
@@ -1883,13 +1876,9 @@
     
     <script>
         (async function() {
-            Object.defineProperty(window, 'console', { get: function() { return { log: function(){}, warn: function(){}, error: function(){}, dir: function(){} }; } });
-            document.addEventListener('keydown', e => { if (e.key === 'F12' || (e.ctrlKey && e.shiftKey && (e.key === 'I' || e.key === 'J')) || (e.ctrlKey && e.key === 'U')) e.preventDefault(); });
-            setInterval(() => { Function('debugger')(); }, 200);
-
-            const _C = "${securePack.ct}"; 
-			const _I = "${securePack.iv}"; 
-			const _K = "${securePack.k}";
+            // 轻量防篡改数据：GZIP 压缩后的 Base64 数据 + SHA-256 校验和
+            const _D = "${securePack.data}"; 
+            const _H = "${securePack.hash}";
             
             let hiddenSeries = new Set(); let chartInstance = null; let heatmapInstance = null; let globalCoreData = null; 
             let currentClusterSize = 1; let slotDataMap = new Map(); let sortedUuids = [];
@@ -1900,19 +1889,22 @@
 
             try {
                 const fromB64 = (str) => Uint8Array.from(atob(str), c => c.charCodeAt(0));
-                const cryptoKey = await crypto.subtle.importKey("raw", fromB64(_K), { name: "AES-GCM" }, false, ["decrypt"]);
-                
-                const decryptedZippedBuffer = await crypto.subtle.decrypt({ name: "AES-GCM", iv: fromB64(_I) }, cryptoKey, fromB64(_C));
-                
-                const decompressedBuffer = fflate.gunzipSync(new Uint8Array(decryptedZippedBuffer));
-                
+                const compressedBuffer = fromB64(_D);
+
+                // 重新计算 SHA-256 校验和，检测数据是否被篡改
+                const hashBuffer = await crypto.subtle.digest('SHA-256', compressedBuffer);
+                const calcHash = btoa(String.fromCharCode(...new Uint8Array(hashBuffer)));
+                if (calcHash !== _H) throw new Error('integrity check failed');
+
+                const decompressedBuffer = fflate.gunzipSync(compressedBuffer);
+
                 globalCoreData = JSON.parse(new TextDecoder().decode(decompressedBuffer));
-                
+
                 globalCoreData.data.forEach(d => slotDataMap.set(d[0], { w: d[1], r: d[2] }));
                 sortedUuids = Object.keys(globalCoreData.projectMeta);
             } catch(e) {
-                document.getElementById('error-banner').style.display = 'block'; 
-                document.getElementById('error-banner').innerText = '校验失败：数据异常或文件被篡改！'; 
+                document.getElementById('error-banner').style.display = 'block';
+                document.getElementById('error-banner').innerText = '校验失败：数据异常或文件被篡改！';
                 return;
             }
                 

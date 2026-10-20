@@ -8,6 +8,8 @@
  * 3. toggle(): 智能判断，互相转换
  */
 
+import { loadApiConfig } from './common/apiConfig';
+
 // 默认 API 配置兜底（防止解析失败导致崩溃）
 const DEFAULT_API_CONFIG = {
     "创建折线": { "坐标": 1, "线宽": 1 },
@@ -67,16 +69,7 @@ export const WireConverter = {
      * 安全获取 API 配置
      */
     async _getApiConfig() {
-        let api = DEFAULT_API_CONFIG;
-        const rawData = await eda.sys_Storage.getExtensionUserConfig('APITest');
-        if (rawData) {
-            try {
-                api = JSON.parse(rawData);
-            } catch (e) {
-                console.warn('API 校准数据解析失败，将使用默认比例 1:1', e);
-            }
-        }
-        return api;
+        return loadApiConfig(DEFAULT_API_CONFIG);
     },
 
     /**
@@ -136,38 +129,8 @@ export const WireConverter = {
 
         await eda.pcb_PrimitivePolyline.delete(polyItem.primitiveId);
 
-        let startX = arr[0] * coordScale;
-        let startY = arr[1] * coordScale;
-        let currentMode = 'L';
-        let i = 2;
-
-        while (i < arr.length) {
-            const val = arr[i];
-            if (typeof val === 'string') {
-                currentMode = val;
-                i++;
-                continue;
-            }
-
-            if (currentMode === 'L') {
-                const endX = arr[i] * coordScale;
-                const endY = arr[i + 1] * coordScale;
-                await eda.pcb_PrimitiveLine.create(net, layer, startX, startY, endX, endY, targetWidth, false);
-                startX = endX;
-                startY = endY;
-                i += 2;
-            } else if (currentMode === 'ARC' || currentMode === 'CARC') {
-                const angle = arr[i] * angleScale;
-                const endX = arr[i + 1] * coordScale;
-                const endY = arr[i + 2] * coordScale;
-                await eda.pcb_PrimitiveArc.create(net, layer, startX, startY, endX, endY, angle, targetWidth, 1, false);
-                startX = endX;
-                startY = endY;
-                i += 3;
-            } else {
-                i++;
-            }
-        }
+        // 复用公共发射逻辑，逐段生成 Line/Arc
+        await this._emitLinesFromPath(arr, net, layer, targetWidth, coordScale, angleScale);
     },
 
     /**
@@ -198,37 +161,8 @@ export const WireConverter = {
         // --- 场景 A: 通用多边形 ---
         if (typeof firstVal === 'number') {
             if (arr.length < 2) return;
-            let startX = arr[0] * coordScale;
-            let startY = arr[1] * coordScale;
-            let currentMode = 'L';
-            let i = 2;
-
-            while (i < arr.length) {
-                const val = arr[i];
-                if (typeof val === 'string') {
-                    currentMode = val;
-                    i++;
-                    continue;
-                }
-                if (currentMode === 'L') {
-                    const endX = arr[i] * coordScale;
-                    const endY = arr[i + 1] * coordScale;
-                    await eda.pcb_PrimitiveLine.create(net, layer, startX, startY, endX, endY, targetWidth, false);
-                    startX = endX;
-                    startY = endY;
-                    i += 2;
-                } else if (currentMode === 'ARC' || currentMode === 'CARC') {
-                    const angle = arr[i] * angleScale;
-                    const endX = arr[i + 1] * coordScale;
-                    const endY = arr[i + 2] * coordScale;
-                    await eda.pcb_PrimitiveArc.create(net, layer, startX, startY, endX, endY, angle, targetWidth, 1, false);
-                    startX = endX;
-                    startY = endY;
-                    i += 3;
-                } else {
-                    i++;
-                }
-            }
+            // 复用公共发射逻辑，逐段生成 Line/Arc
+            await this._emitLinesFromPath(arr, net, layer, targetWidth, coordScale, angleScale);
             return;
         }
 
@@ -282,6 +216,52 @@ export const WireConverter = {
             if (r > 0)     await eda.pcb_PrimitiveArc.create(net, layer, p5_end.x, p5_end.y, p6_end.x, p6_end.y, -90, targetWidth, 1, false);
             if (Math.abs(h_vector) > 2 * r) await eda.pcb_PrimitiveLine.create(net, layer, p6_end.x, p6_end.y, p7_end.x, p7_end.y, targetWidth, false);
             if (r > 0)     await eda.pcb_PrimitiveArc.create(net, layer, p7_end.x, p7_end.y, p1_start.x, p1_start.y, -90, targetWidth, 1, false);
+        }
+    },
+
+    /**
+     * 遍历 path 数组并逐段发射导线（Line/Arc）
+     * 这是 Polyline 与 Region 转为导线的公共发射逻辑，消除重复代码
+     *
+     * @param {Array} arr - 折线路径数组，格式 [x0,y0,'L',x1,y1,'ARC',angle,x,y,...]
+     * @param {string} net - 网络名
+     * @param {number} layer - 图层
+     * @param {number} targetWidth - 目标线宽
+     * @param {number} coordScale - 坐标缩放倍率
+     * @param {number} angleScale - 圆弧角度缩放倍率
+     */
+    async _emitLinesFromPath(arr, net, layer, targetWidth, coordScale, angleScale) {
+        let startX = arr[0] * coordScale;
+        let startY = arr[1] * coordScale;
+        let currentMode = 'L';
+        let i = 2;
+
+        while (i < arr.length) {
+            const val = arr[i];
+            if (typeof val === 'string') {
+                currentMode = val;
+                i++;
+                continue;
+            }
+
+            if (currentMode === 'L') {
+                const endX = arr[i] * coordScale;
+                const endY = arr[i + 1] * coordScale;
+                await eda.pcb_PrimitiveLine.create(net, layer, startX, startY, endX, endY, targetWidth, false);
+                startX = endX;
+                startY = endY;
+                i += 2;
+            } else if (currentMode === 'ARC' || currentMode === 'CARC') {
+                const angle = arr[i] * angleScale;
+                const endX = arr[i + 1] * coordScale;
+                const endY = arr[i + 2] * coordScale;
+                await eda.pcb_PrimitiveArc.create(net, layer, startX, startY, endX, endY, angle, targetWidth, 1, false);
+                startX = endX;
+                startY = endY;
+                i += 3;
+            } else {
+                i++;
+            }
         }
     },
 
