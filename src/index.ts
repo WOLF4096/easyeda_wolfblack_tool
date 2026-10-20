@@ -22,13 +22,13 @@ export async function PcbToSch() {
 
 // 从PCB获取引脚信息放置导线
 export async function AutoWirePlacerPCB() {
-	const { placeWires } = await import('./js/AutoWirePlacer');
+	const { placeWires } = await import('./js/autoWire/index');
 	await placeWires('PCB');
 }
 
 // 从网表获取引脚信息放置导线
 export async function AutoWirePlacerNET() {
-	const { placeWires } = await import('./js/AutoWirePlacer');
+	const { placeWires } = await import('./js/autoWire/index');
 	await placeWires('NET');
 }
 

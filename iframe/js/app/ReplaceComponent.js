@@ -1,0 +1,1025 @@
+// 获取编辑器版本
+        let ver = eda.sys_Environment.getEditorCurrentVersion();
+
+        // 核心数据模型
+        let groupedData = [];
+
+		// --- 新增：状态栏管理器 ---
+        const statusBar = {
+            setText: (text) => {
+                document.getElementById('statusText').innerText = text;
+            },
+            setProgress: (current, total, supplierId) => {
+                const percent = total === 0 ? 0 : Math.floor((current / total) * 100);
+                document.getElementById('statusText').innerText = `器件总数：${current} / ${total} ${percent}%，当前获取：${supplierId}`;
+                document.getElementById('progressBg').style.width = `${percent}%`;
+            },
+            clearProgress: () => {
+                document.getElementById('progressBg').style.width = `0%`;
+            },
+            reset: () => {
+                statusBar.clearProgress();
+                statusBar.setText('准备就绪，待粘贴数据，格式：位号|C编号（必须从Excel复制粘贴）');
+            },
+            // 【修改这里】：支持传入耗时参数
+            readyToReplace: (costTime) => {
+                statusBar.clearProgress();
+                if (costTime) {
+                    statusBar.setText(`获取数据完成，耗时${costTime}秒，待替换`);
+                } else {
+                    statusBar.setText('获取数据完成，待替换');
+                }
+            }
+        };
+
+        // --- 新增：排序状态记录 ---
+        let currentSortKey = null;
+        let sortAscending = true;
+
+        // --- 新增：排序核心逻辑 ---
+        function handleSort(key) {
+            // 如果点击的是当前已排序的列，则反转排序方向；否则默认为升序
+            if (currentSortKey === key) {
+                sortAscending = !sortAscending;
+            } else {
+                currentSortKey = key;
+                sortAscending = true;
+            }
+
+            groupedData.sort((a, b) => {
+                let valA = "";
+                let valB = "";
+
+                // 根据不同的列取对应的值进行比较
+                switch(key) {
+                    case 'designator':
+                        // 位号取数组中的第一个进行比较
+                        valA = a.designators[0] || "";
+                        valB = b.designators[0] || "";
+                        // 位号使用自然排序 (例如 C2 排在 C10 前面)
+                        return sortAscending 
+                            ? valA.localeCompare(valB, undefined, { numeric: true })
+                            : valB.localeCompare(valA, undefined, { numeric: true });
+                    
+                    case 'name':
+                        // 优先按目标值排序，没有目标值则按原始值排序
+                        valA = a.target.name || a.original.name || "";
+                        valB = b.target.name || b.original.name || "";
+                        break;
+                    case 'footprint':
+                        valA = a.target.footprint || a.original.footprint || "";
+                        valB = b.target.footprint || b.original.footprint || "";
+                        break;
+                    case 'supplierId':
+                        valA = a.target.supplierId || a.original.supplierId || "";
+                        valB = b.target.supplierId || b.original.supplierId || "";
+                        break;
+                }
+
+                // 字符串标准比较
+                if (valA < valB) return sortAscending ? -1 : 1;
+                if (valA > valB) return sortAscending ? 1 : -1;
+                return 0;
+            });
+
+            // 更新 UI 表头箭头
+            document.querySelectorAll('.sortable-header .sort-icon').forEach(icon => {
+                icon.textContent = ''; // 先清空所有箭头
+            });
+            const activeHeaderIcon = document.querySelector(`.sortable-header[data-sort="${key}"] .sort-icon`);
+            if (activeHeaderIcon) {
+                activeHeaderIcon.textContent = sortAscending ? '▲' : '▼'; // 根据状态赋予箭头
+            }
+
+            // 重新渲染表格
+            renderTable();
+        }
+
+        // 工具函数：解析 ={xxx} 格式的动态模板字符串，带有 Device 兜底机制
+        const resolveDynamicString = (str, properties, fallbackDevice = "") => {
+            if (!str || typeof str !== 'string') return str;
+            
+            let hasTemplate = false;
+            let hasMissingValue = false;
+
+            const result = str.replace(/=\{([^}]+)\}/g, (match, propName) => {
+                hasTemplate = true;
+                // 如果属性存在且不为空，正常替换
+                if (properties[propName] !== undefined && properties[propName] !== "") {
+                    return properties[propName];
+                } else {
+                    // 标记为找不到对应的值
+                    hasMissingValue = true; 
+                    return match;
+                }
+            });
+
+            // 核心逻辑：如果原字符串包含 ={xxx}，但没有在属性表里找到对应的值，就使用 fallbackDevice 兜底
+            if (hasTemplate && hasMissingValue && fallbackDevice) {
+                return fallbackDevice;
+            }
+
+            return result; // 比如原本就是 "10K" 这种普通字符串，直接原样返回
+        };
+
+        // 修改：从原始画布元件数据中提取属性
+        const extractProps = (comp) => {
+            const rawName = comp.name || (comp.component && comp.component.name) || "";
+            const props = comp.otherProperty || {}; 
+            
+            // 提前提取 Device 或 manufacturerId 属性用于兜底
+            const deviceName = props["Device"] || comp.manufacturerId || ""; 
+            
+            // 【核心修改】：合并根节点属性和 otherProperty，确保 ={Value} 和 ={manufacturerId} 都能被字典找到
+            const mergedProps = { ...comp, ...props };
+
+            // 传入 rawName, 合并后的字典, 和兜底的 deviceName
+            const name = resolveDynamicString(rawName, mergedProps, deviceName);
+            
+			// --- 修改后 (兼容 V2 和 V3) ---
+			const footprint = (mergedProps && mergedProps["Footprint"]) || 
+							(comp.otherProperty && comp.otherProperty["Footprint"]) || 
+							(comp.footprint && comp.footprint.name) || 
+							(typeof comp.footprint === 'string' ? comp.footprint : "") || 
+							"";
+        
+            const supplierId = comp.supplierId || "";
+                            
+            return { name, footprint, supplierId };
+        };
+
+        // 1. 初始化并获取画布元件
+        async function initData() {
+            try {
+                console.log("[Debug] 开始获取画布全局元件...");
+                // 确保在沙箱环境中 eda 对象存在
+                if (typeof eda === 'undefined') {
+                    console.warn("[Debug] 未检测到 eda 对象，等待环境注入或在独立浏览器中运行...");
+                    return;
+                }
+
+                const rawComponents = await eda.pcb_PrimitiveComponent.getAll();
+                console.log(rawComponents);
+
+                const groupMap = new Map();
+
+                rawComponents.forEach(comp => {
+                    if (!comp.designator) return; // 忽略没有位号的图元
+
+                    const { name, footprint, supplierId } = extractProps(comp);
+                    // 根据 名称+封装+立创编号 进行合并
+                    const key = `${name}|${footprint}|${supplierId}`;
+
+                    if (!groupMap.has(key)) {
+                        groupMap.set(key, {
+                            key: key,
+                            designators: [],
+                            primitiveId: [],
+                            original: { name, footprint, supplierId },
+                            target: { name: null, footprint: null, supplierId: null },
+                            options: { preserveName: true, preserveFootprint: true, preserve3D: true },
+                            selected: false,
+                            ComponentsSource: [] 
+                        });
+                    }
+                    const group = groupMap.get(key);
+                    group.designators.push(comp.designator);
+                    group.primitiveId.push(comp.primitiveId);
+                    group.ComponentsSource.push(comp);
+                });
+
+                // 位号自然排序 (例如 C1, C2, C10 而不是 C1, C10, C2)
+                for (let group of groupMap.values()) {
+                    group.designators.sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+                }
+
+                groupedData = Array.from(groupMap.values());
+                console.log("[Debug] 合并后数据分组:", groupedData);
+                renderTable();
+
+            } catch (error) {
+                console.error("[Debug] 初始化数据失败:", error);
+            }
+        }
+
+        // 2. 粘贴逻辑
+        async function handlePaste() {
+            try {
+                const text = await navigator.clipboard.readText();
+                console.log("[Debug] 剪贴板内容读取成功:\n", text);
+                
+                const lines = text.split('\n');
+                
+                // 将剪贴板数据解析为 位号 -> 新立创编号 的 Map
+                const pasteMap = new Map();
+                lines.forEach(line => {
+                    line = line.trim();
+                    if (!line) return;
+
+                    // 使用正则 /[\t\s]+/ 切分，兼容制表符(Tab)和多个空格的混合情况
+                    const parts = line.split(/[\t\s]+/);
+                    
+                    if (parts.length >= 2) {
+                        // 取数组的最后一部分作为立创编号 (例如: "C100042")
+                        const newSupplierId = parts.pop().trim();
+                        
+                        // 把前面剩下的部分拼接起来，然后按逗号分割提取出单独的位号 
+                        // (这样兼容 "C106,C111" 以及带空格的 "C106, C111")
+                        const designatorsStr = parts.join('');
+                        const designators = designatorsStr.split(',').map(d => d.trim()).filter(d => d);
+                        
+                        // 遍历位号，将它们一对一映射到新的立创编号上
+                        designators.forEach(d => {
+                            pasteMap.set(d, newSupplierId);
+                        });
+                    }
+                });
+
+                if (pasteMap.size === 0) return;
+
+                let updateCount = 0;
+
+                // 步骤 1: 将当前的分组数据展平 (Flatten)，打散成独立的元件个体
+                let flatItems = [];
+                groupedData.forEach(group => {
+                    group.designators.forEach((desig, idx) => {
+                        flatItems.push({
+                            designator: desig,
+                            primitiveId: group.primitiveId[idx],
+                            sourceComp: group.ComponentsSource[idx],
+                            // 深拷贝原始、目标和选项状态，避免引用污染
+                            original: { ...group.original },
+                            target: { ...group.target },
+                            options: { ...group.options },
+                            selected: group.selected,
+                            ComponentsTarget: group.ComponentsTarget
+                        });
+                    });
+                });
+
+                // 在 handlePaste() 函数的步骤 2 (flatItems.forEach) 遍历中修改：
+				flatItems.forEach(item => {
+					const newSupplierId = pasteMap.get(item.designator);
+					
+					// 如果剪贴板有值，且和当前的目标立创编号不一致（需要更新）
+					if (newSupplierId && item.target.supplierId !== newSupplierId) {
+						item.target.supplierId = newSupplierId;
+						item.selected = true; // <--- 新增：侦测到变更，自动勾选此项
+						
+						// 既然编号变了，清空之前获取到的名称和封装等缓存，等待重新 Fetch
+						item.target.name = null;
+						item.target.footprint = null;
+						item.target.footprintuuid = null;
+						item.target.uuid = null;
+						item.ComponentsTarget = null;
+						updateCount++;
+					}
+				});
+
+                // 步骤 3: 重新分组 (Regroup)
+                // 现在的合并条件更加严格：原始属性相同 + 目标立创编号相同 + 状态相同 才会合并在一行
+                const groupMap = new Map();
+                flatItems.forEach(item => {
+                    const key = `${item.original.name}|${item.original.footprint}|${item.original.supplierId}|${item.target.supplierId}`;
+
+                    if (!groupMap.has(key)) {
+                        groupMap.set(key, {
+                            key: key,
+                            designators: [],
+                            primitiveId: [],
+                            original: item.original,
+                            target: item.target,
+                            options: item.options,
+                            selected: item.selected,
+                            ComponentsSource: [],
+                            ComponentsTarget: item.ComponentsTarget
+                        });
+                    }
+                    
+                    const group = groupMap.get(key);
+                    group.designators.push(item.designator);
+                    group.primitiveId.push(item.primitiveId);
+                    group.ComponentsSource.push(item.sourceComp);
+                });
+
+                // 位号自然排序还原 (比如 C1, C2 而不是 C10, C2)
+                for (let group of groupMap.values()) {
+                    group.designators.sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+                }
+
+                // 将最新的 Map 还原给全局变量，完成数据流闭环
+                groupedData = Array.from(groupMap.values());
+
+                console.log(`[Debug] 匹配并更新了 ${updateCount} 条记录的立创编号`);
+
+				// === 新增：如果成功匹配到需要更新的数据，解锁“获取”按钮 ===
+                if (updateCount > 0) {
+                    document.getElementById('btnFetch').disabled = false;
+                }
+                renderTable();
+            } catch (err) {
+                console.error("[Debug] 读取剪贴板失败:", err);
+                console.log("读取剪贴板失败，请检查浏览器权限或确认是否在安全上下文(https)中！");
+            }
+        }
+
+
+        // --- 新增：用于防抖和清理的全局定时器变量 ---
+        let fetchPollInterval = null;
+
+        // --- 修改后：工具函数 1：调用搜索 API (修复网络请求卡顿) ---
+        async function fetchProductInfo(supplierId) {
+            // 【修改1】：将相对路径放在前面（优先匹配 Web 网页端），桌面端专用的 https://client 放后面
+            // const urls = ['/api/v2/eda/product/search', 'https://client/api/v2/eda/product/search'];
+            
+            // for (let url of urls) {
+            //     try {
+            //         // 【修改2】：引入 AbortController，强制 1.5 秒超时，防止 DNS 解析死等阻塞进程
+            //         const controller = new AbortController();
+            //         const timeoutId = setTimeout(() => controller.abort(), 1500);
+
+            //         const res = await fetch(url, {
+            //             method: 'POST',
+            //             headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            //             body: 'codes=' + encodeURIComponent(supplierId),
+            //             signal: controller.signal // 绑定超时信号
+            //         });
+                    
+            //         clearTimeout(timeoutId); // 如果成功返回，清除定时器
+
+            //         if (res.ok) {
+            //             const data = await res.json();
+            //             if (data && data.success && data.result && data.result.productList.length > 0) {
+            //                 return data.result.productList[0]; // 成功获取，直接返回跳出循环
+            //             }
+            //         }
+            //     } catch (e) {
+            //         // 如果跨域、超时(AbortError)或报错，静默尝试下一个 URL
+            //         // console.warn(`[Debug] URL ${url} 尝试失败:`, e.name);
+            //     }
+            // }
+            // console.warn(`[Debug] 无法通过 API 获取 ${supplierId} 的详细属性，将使用基础残缺属性。`);
+            return null;
+        }
+
+        // --- 新增工具函数 2：将 API 获取的详尽属性注入到画布获取的图元对象中 ---
+        function enrichComponentData(sel, pInfo) {
+            if (!pInfo || !pInfo.device_info) return sel;
+            
+            const attrs = pInfo.device_info.attributes || {};
+            
+            // 1. 补充根节点关键属性
+            sel.manufacturer = pInfo.brandName || attrs["Manufacturer"] || sel.manufacturer;
+            sel.manufacturerId = pInfo.model || attrs["Manufacturer Part"] || sel.manufacturerId;
+            sel.supplier = attrs["Supplier"] || sel.supplier || "LCSC";
+            sel.supplierId = pInfo.code || sel.supplierId;
+            
+            // 2. 补充 otherProperty 内的所有文本属性
+            sel.otherProperty = sel.otherProperty || {};
+            for (let k in attrs) {
+                // 跳过系统强关联的结构字段，只合并文本属性
+                if (!['Footprint', 'Symbol', '3D Model', 'Designator'].includes(k)) {
+                    sel.otherProperty[k] = attrs[k];
+                }
+            }
+            
+            // 3. 专门处理 3D 模型字段 (拼接 uri 和库 uuid)
+            const fpInfo = pInfo.device_info.footprint_info;
+            if (fpInfo && fpInfo.model_3d) {
+                const libUuid = fpInfo.creator ? fpInfo.creator.uuid : "";
+                sel.otherProperty['3D Model'] = sel.otherProperty['3D Model'] || (libUuid ? `${fpInfo.model_3d.uri}|${libUuid}` : fpInfo.model_3d.uri);
+                sel.otherProperty['3D Model Title'] = sel.otherProperty['3D Model Title'] || fpInfo.model_3d.title;
+                sel.otherProperty['3D Model Transform'] = sel.otherProperty['3D Model Transform'] || fpInfo.model_3d.transform;
+            }
+            
+            return sel;
+        }
+
+        
+		// 3. 获取新器件数据并关联本地库逻辑 (支持 V2/V3，分片并发优化版，解决UI假死)
+        async function handleFetch() {
+            const totalFetchStart = performance.now();
+            console.log("--------------------------------------------------");
+            console.log("[性能打点] 🚀 开始执行 handleFetch 流程 (分片并发优化版)...");
+
+            statusBar.setText("正在检查待获取器件...");
+            
+            if (fetchPollInterval) {
+                clearInterval(fetchPollInterval);
+                fetchPollInterval = null;
+            }
+
+            const sysLibUuid = await eda.lib_LibrariesList.getSystemLibraryUuid();
+            
+            const pendingSupplierIds = new Set();
+            groupedData.forEach(g => {
+                if (g.selected && g.target.supplierId && !g.target.uuid) {
+                    pendingSupplierIds.add(g.target.supplierId);
+                }
+            });
+
+            if (pendingSupplierIds.size === 0) {
+                statusBar.setText("数据已获取");
+                setTimeout(() => statusBar.readyToReplace(), 3000);
+                return;
+            }
+
+            let placeCount = 0;
+            const autoFetchMap = new Map();     
+            const manualPendingIds = new Set(); 
+            
+            // 【核心优化 1】：设置分批处理的大小（每次处理 10 个）
+            const CHUNK_SIZE = 10;
+            const pendingArray = Array.from(pendingSupplierIds);
+            const totalPreload = pendingArray.length;
+            let preloadCount = 0;
+
+            statusBar.clearProgress();
+            
+            // ====== 阶段 0：分批向画布放置器件 ======
+            const stepPreloadStart = performance.now();
+            
+            for (let i = 0; i < totalPreload; i += CHUNK_SIZE) {
+                const chunk = pendingArray.slice(i, i + CHUNK_SIZE);
+                
+                await Promise.all(chunk.map(async (supplierId) => {
+                    try {
+                        const t = await eda.lib_Device.getByLcscIds(supplierId);
+                        if (t && t.length > 0) {
+                            const h = await eda.pcb_PrimitiveComponent.create(
+                                { 'libraryUuid': sysLibUuid, 'uuid': t[0].uuid },
+                                1, -10000, -10000, 0, false
+                            );
+
+                            let createdId = null;
+                            if (h) {
+                                if (Array.isArray(h) && h.length > 0) createdId = h[0];
+                                else if (typeof h === 'string') createdId = h;
+                                else if (h.primitiveId) createdId = h.primitiveId;
+                            }
+
+                            if (createdId) {
+                                autoFetchMap.set(supplierId, createdId);
+                            } else {
+                                manualPendingIds.add(supplierId);
+                            }
+                            placeCount++;
+                        }
+                    } catch (err) {
+                        manualPendingIds.add(supplierId); 
+                        placeCount++;
+                    }
+                    
+                    // 【核心优化 2】：在预载阶段加入进度条更新
+                    preloadCount++;
+                    statusBar.setProgress(preloadCount, totalPreload, supplierId);
+                }));
+                
+                // 【核心优化 3】：休眠 10ms，强制交出主线程，让浏览器有机会重绘进度条 UI
+                await new Promise(resolve => setTimeout(resolve, 10));
+            }
+
+            console.log(`[性能打点] 🚩 阶段0 (分批预载 ${placeCount} 个器件) 总耗时: ${((performance.now() - stepPreloadStart) / 1000).toFixed(3)} 秒`);
+
+            if (placeCount === 0) {
+                statusBar.setText("未能在库中找到对应的器件");
+                setTimeout(() => statusBar.readyToReplace(), 3000);
+                return;
+            }
+
+            // ====== 阶段 1：分批提取图元信息 ======
+            if (autoFetchMap.size > 0) {
+                console.log(`[Debug] 开始分批提取 ${autoFetchMap.size} 个器件的信息...`);
+                const toDeleteIds = [];
+                
+                const autoFetchArray = Array.from(autoFetchMap.entries());
+                const totalAuto = autoFetchArray.length;
+                let processCount = 0;
+                const step1Start = performance.now();
+
+                statusBar.clearProgress(); // 重置进度条给阶段 1 使用
+
+                for (let i = 0; i < totalAuto; i += CHUNK_SIZE) {
+                    const chunk = autoFetchArray.slice(i, i + CHUNK_SIZE);
+                    
+                    await Promise.all(chunk.map(async ([supplierId, pId]) => {
+                        try {
+                            const [sel, pInfo] = await Promise.all([
+                                eda.pcb_PrimitiveComponent.get(pId).catch(() => null),
+                                fetchProductInfo(supplierId)
+                            ]);
+
+                            if (sel) {
+                                const enrichedSel = enrichComponentData(sel, pInfo);
+
+                                const rawName = (pInfo && pInfo.device_info && pInfo.device_info.attributes && pInfo.device_info.attributes["Name"]) 
+                                                || enrichedSel.name || (enrichedSel.component && enrichedSel.component.name) || "";
+                                const props = enrichedSel.otherProperty || {};
+                                const mergedProps = { ...enrichedSel, ...props };
+                                const fallbackDevice = props["Device"] || props["Manufacturer Part"] || enrichedSel.manufacturerId || "";
+                                
+                                let finalName = resolveDynamicString(rawName, mergedProps, fallbackDevice);
+                                if (finalName.includes("={")) finalName = props["Value"] || enrichedSel.manufacturerId || finalName;
+
+                                const fpInfo = pInfo ? pInfo.device_info.footprint_info : null;
+                                const finalFootprint = (fpInfo && (fpInfo.display_title || fpInfo.title)) || 
+                                                    (enrichedSel.otherProperty && enrichedSel.otherProperty.Footprint) || 
+                                                    (enrichedSel.footprint && enrichedSel.footprint.name) || 
+                                                    "未知封装";
+
+                                groupedData.forEach(g => {
+                                    if (g.selected && g.target.supplierId === supplierId) {
+                                        g.target.name = finalName;
+                                        g.target.footprint = finalFootprint;
+                                        g.target.footprintuuid = enrichedSel.footprint ? enrichedSel.footprint.uuid : null;
+                                        g.target.uuid = enrichedSel.component ? enrichedSel.component.uuid : null;
+                                        g.ComponentsTarget = enrichedSel;
+                                    }
+                                });
+
+                                toDeleteIds.push(pId); 
+                            }
+                        } catch (getErr) {}
+
+                        // 更新阶段 1 的进度条
+                        processCount++;
+                        statusBar.setProgress(processCount, totalAuto, `获取属性: ${supplierId}`);
+                    }));
+                    
+                    // 休眠 10ms，渲染进度条
+                    await new Promise(resolve => setTimeout(resolve, 10));
+                }
+
+                const cleanupStart = performance.now();
+                if (toDeleteIds.length > 0) {
+                    try { await eda.pcb_PrimitiveComponent.delete(toDeleteIds); } catch (delErr) {}
+                }
+                renderTable();
+                
+                console.log(`[性能打点] 🚩 阶段1 (分批提取数据并清理) 总耗时: ${((performance.now() - step1Start) / 1000).toFixed(3)} 秒`);
+
+                statusBar.clearProgress();
+                if (manualPendingIds.size === 0) {
+                    const costTime = ((performance.now() - totalFetchStart) / 1000).toFixed(2);
+                    statusBar.setText(`获取完成，耗时${costTime}秒`);
+					
+					// === 新增：自动获取完成，解锁“替换”按钮 ===
+                    document.getElementById('btnReplace').disabled = false;
+
+                    setTimeout(() => statusBar.readyToReplace(costTime), 3000);
+                    
+                    console.log(`[性能打点] 🎉 handleFetch 完整生命周期 总耗时: ${costTime} 秒`);
+                    console.log("--------------------------------------------------");
+                }
+            }
+
+            // ====== 阶段 2：处理没有返回图元 ID 的器件（V2 手动框选兜底机制） ======
+            if (manualPendingIds.size === 0) return;
+
+            console.log(`由于API限制，有 ${manualPendingIds.size} 种器件需要手动辅助。\n请在画布中将它们【全部框选】，工具将自动提取参数并删除！`);
+            statusBar.setText(`由于API限制，需手动辅助，请在画布(-10000,-10000)中【框选】新增的 ${manualPendingIds.size} 个器件，工具将自动提取参数并删除！`);
+
+            fetchPollInterval = setInterval(async () => {
+                const pollStart = performance.now();
+                const selectedItems = await eda.pcb_SelectControl.getAllSelectedPrimitives() || [];
+                if (selectedItems.length !== manualPendingIds.size) return; 
+
+                console.log("[性能打点] ⏱️ 检测到框选完毕，开始执行阶段2兜底提取...");
+                let hasUpdate = false;
+                let validMatchCount = 0;
+
+                // V2兜底阶段也使用分片并发 (如果框选了上百个也能防卡死)
+                for (let i = 0; i < selectedItems.length; i += CHUNK_SIZE) {
+                    const chunk = selectedItems.slice(i, i + CHUNK_SIZE);
+                    
+                    await Promise.all(chunk.map(async (sel) => {
+                        const selSupplierId = sel.supplierId || 
+                                            (sel.otherProperty && (sel.otherProperty["Supplier Part"] || 
+                                            sel.otherProperty["supplierId"])) || "";
+                        
+                        if (selSupplierId && manualPendingIds.has(selSupplierId)) {
+                            validMatchCount++;
+                            
+                            const pInfo = await fetchProductInfo(selSupplierId);
+                            enrichComponentData(sel, pInfo);
+
+                            const rawName = (pInfo && pInfo.device_info && pInfo.device_info.attributes && pInfo.device_info.attributes["Name"]) 
+                                            || sel.name || (sel.component && sel.component.name) || "";
+                            const props = sel.otherProperty || {};
+                            const mergedProps = { ...sel, ...props };
+                            const fallbackDevice = props["Device"] || props["Manufacturer Part"] || sel.manufacturerId || "";
+                            
+                            let finalName = resolveDynamicString(rawName, mergedProps, fallbackDevice);
+                            if (finalName.includes("={")) finalName = props["Value"] || sel.manufacturerId || finalName;
+
+                            const fpInfo = pInfo ? pInfo.device_info.footprint_info : null;
+                            const finalFootprint = (fpInfo && (fpInfo.display_title || fpInfo.title)) || 
+                                                (sel.otherProperty && sel.otherProperty.Footprint) || 
+                                                (sel.footprint && sel.footprint.name) || 
+                                                "未知封装";
+                            
+                            groupedData.forEach(g => {
+                                if (g.selected && g.target.supplierId === selSupplierId) {
+                                    g.target.name = finalName;                 
+                                    g.target.footprint = finalFootprint;       
+                                    g.target.footprintuuid = sel.footprint ? sel.footprint.uuid : null; 
+                                    g.target.uuid = sel.component ? sel.component.uuid : null;          
+                                    g.ComponentsTarget = sel; 
+                                }
+                            });
+
+                            manualPendingIds.delete(selSupplierId); 
+                            hasUpdate = true;
+                        }
+                    }));
+                }
+
+                if (validMatchCount === selectedItems.length && hasUpdate) {
+                    clearInterval(fetchPollInterval); 
+                    fetchPollInterval = null;
+                    
+                    const toDeleteIds = selectedItems.map(item => item.primitiveId).filter(id => id);
+                    if (toDeleteIds.length > 0) {
+                        try { await eda.pcb_PrimitiveComponent.delete(toDeleteIds); } catch (delErr) {}
+                    }
+                    renderTable();
+
+                    const costTime = ((performance.now() - totalFetchStart) / 1000).toFixed(2);
+                    statusBar.clearProgress();
+                    statusBar.setText(`获取完成，耗时${costTime}秒 (已自动删除临时器件)`);
+                    setTimeout(() => statusBar.readyToReplace(costTime), 3000);
+                    
+                    console.log(`[性能打点] 🚩 阶段2 (分批兜底提取) 总耗时: ${((performance.now() - pollStart) / 1000).toFixed(3)} 秒`);
+                    console.log(`[性能打点] 🎉 handleFetch 完整生命周期 总耗时: ${costTime} 秒`);
+                    console.log("--------------------------------------------------");
+                }
+            }, 1000);
+        }
+
+
+        // 4. 表格渲染逻辑 (数据驱动)
+        function renderTable() {
+            const tbody = document.getElementById('tableBody');
+            tbody.innerHTML = "";
+
+            // 格式化单元格内容 (包含 HTML 绿色箭头)
+            const formatCell = (oldVal, newVal) => {
+                if (newVal && newVal !== oldVal) {
+                    return `${oldVal || '-'} <span class="change-arrow">→</span> ${newVal}`;
+                }
+                return oldVal || '-';
+            };
+
+            // 【新增】格式化 title 属性文本 (纯文本，用于悬浮提示，不包含 HTML 标签)
+            const formatTitle = (oldVal, newVal) => {
+                if (newVal && newVal !== oldVal) {
+                    return `${oldVal || '-'} → ${newVal}`;
+                }
+                return String(oldVal || '-');
+            };
+
+            groupedData.forEach((group, index) => {
+                const tr = document.createElement('tr');
+                if (!group.selected) tr.classList.add('disabled-row');
+
+                const desigStr = group.designators.join("、");
+                
+                // 【新增】安全转义，防止名称中含有双引号截断了 HTML 属性
+                const safeTitle = (str) => String(str).replace(/"/g, '&quot;');
+
+                tr.innerHTML = `
+                    <td><input type="checkbox" class="row-selector" data-index="${index}" ${group.selected ? 'checked' : ''}></td>
+                    
+                    <td title="${safeTitle(desigStr)}">${desigStr}</td>
+                    
+                    <td title="${safeTitle(formatTitle(group.original.name, group.target.name))}">${formatCell(group.original.name, group.target.name)}</td>
+                    
+                    <td title="${safeTitle(formatTitle(group.original.footprint, group.target.footprint))}">${formatCell(group.original.footprint, group.target.footprint)}</td>
+                    
+                    <td title="${safeTitle(formatTitle(group.original.supplierId, group.target.supplierId))}">${formatCell(group.original.supplierId, group.target.supplierId)}</td>
+                    
+                    <td><input type="checkbox" class="opt-cb" data-index="${index}" data-key="preserveName" ${group.options.preserveName ? 'checked' : ''} ${!group.selected ? 'disabled' : ''}></td>
+                    <td><input type="checkbox" class="opt-cb" data-index="${index}" data-key="preserveFootprint" ${group.options.preserveFootprint ? 'checked' : ''} ${!group.selected ? 'disabled' : ''}></td>
+                    <td><input type="checkbox" class="opt-cb" data-index="${index}" data-key="preserve3D" ${group.options.preserve3D ? 'checked' : ''} ${!group.selected ? 'disabled' : ''}></td>
+                `;
+                tbody.appendChild(tr);
+            });
+
+            syncSelectAllState();
+        }
+
+        // 5. 执行替换源码核心逻辑
+        async function executeReplace() {
+            // 【新增：启动计时器并更新状态】
+            const startTime = performance.now();
+            statusBar.setText("正在执行替换...");
+            
+            console.log("[Debug] 开始执行替换操作...");
+            const targetMap = new Map();
+            let replaceCount = 0;
+
+            // 1. 收集所有需要替换的图元及对应操作
+            groupedData.forEach(group => {
+                if (group.selected && group.ComponentsTarget) {
+                    group.primitiveId.forEach((pId, index) => {
+                        const sourceComp = group.ComponentsSource[index];
+                        const targetComp = group.ComponentsTarget;
+
+                        targetMap.set(pId, {
+                            preserveName: group.options.preserveName,
+                            preserveFootprint: group.options.preserveFootprint,
+                            preserve3D: group.options.preserve3D,
+                            sourceComp: sourceComp,
+                            targetComp: targetComp,
+                            targetDeviceUuid: targetComp.component ? targetComp.component.uuid : "",
+                            sourceName: sourceComp.name || "",
+                            targetName: targetComp.name || "",
+                            sourceFootprintUuid: sourceComp.footprint ? sourceComp.footprint.uuid : "",
+                            targetFootprintUuid: targetComp.footprint ? targetComp.footprint.uuid : "",
+                            designator: group.designators[index],
+                            sourceFootprintName: (sourceComp.footprint && sourceComp.footprint.name) || (sourceComp.otherProperty && sourceComp.otherProperty["Footprint"]) || ""
+                        });
+                        replaceCount++;
+                    });
+                }
+            });
+
+            if (targetMap.size === 0) {
+                console.warn("[Debug] 没有需要替换的有效图元，请检查是否勾选并成功获取了目标数据");
+                return;
+            }
+
+            try {
+                // 2. 获取当前画布源码并解析
+                const rawSource = await eda.sys_FileManager.getDocumentSource();
+                const lines = rawSource.split('\n');
+
+                // 3. 逐行解析并修改源码 (处理名称和封装)
+                const modifiedLines = lines.map(line => {
+                    if (!line.trim()) return line;
+
+                    // 处理 V2 格式 ["ATTR",...]
+                    if (line.startsWith('[')) {
+                        try {
+                            const arr = JSON.parse(line);
+                            if (arr[0] === "ATTR") {
+                                const parentId = arr[3];
+                                if (targetMap.has(parentId)) {
+                                    const action = targetMap.get(parentId);
+                                    const key = arr[7];
+
+                                    if (key === "Device") {
+                                        arr[8] = action.targetDeviceUuid; // 器件始终替换为目标的
+                                        return JSON.stringify(arr);
+                                    } else if (key === "Name") {
+                                        // 【修复】：只有在“不保留”时，才去覆盖目标名称
+                                        if (!action.preserveName) {
+                                            arr[8] = action.targetName;
+                                            return JSON.stringify(arr);
+                                        }
+                                    } else if (key === "Footprint") {
+                                        // 【修复】：只有在“不保留”时，才去覆盖目标封装
+                                        if (!action.preserveFootprint) {
+                                            arr[8] = action.targetFootprintUuid;
+                                            return JSON.stringify(arr);
+                                        }
+                                    }
+                                    // 注意：如果勾选了保留，代码会直接无视上面的 if，走到最后的 return line; 保持源码原封不动！
+                                }
+                            }
+                        } catch (e) {}
+                    }
+                    // 处理 V3 格式 {...}||{...}|
+                    else if (line.startsWith('{') && line.includes('||')) {
+                        try {
+                            const hasTrailingPipe = line.endsWith('|');
+                            const cleanLine = hasTrailingPipe ? line.slice(0, -1) : line;
+                            const parts = cleanLine.split('||');
+                            
+                            if (parts.length === 2) {
+                                const head = JSON.parse(parts[0]);
+                                if (head.type === "ATTR") {
+                                    const tail = JSON.parse(parts[1]);
+                                    const parentId = tail.parentId;
+
+                                    if (targetMap.has(parentId)) {
+                                        const action = targetMap.get(parentId);
+                                        const key = tail.key;
+                                        let modified = false;
+
+                                        if (key === "Device") {
+                                            tail.value = action.targetDeviceUuid;
+                                            modified = true;
+                                        } else if (key === "Name") {
+                                            if (!action.preserveName) {
+                                                tail.value = action.targetName;
+                                                modified = true;
+                                            }
+                                        } else if (key === "Footprint") {
+                                            if (!action.preserveFootprint) {
+                                                tail.value = action.targetFootprintUuid;
+                                                modified = true;
+                                            }
+                                        }
+
+                                        // 只有真正发生了修改，才重组字符串
+                                        if (modified) {
+                                            return JSON.stringify(head) + '||' + JSON.stringify(tail) + (hasTrailingPipe ? '|' : '');
+                                        }
+                                    }
+                                }
+                            }
+                        } catch (e) {}
+                    }
+                    return line; // 未修改的行原样返回
+                });
+
+                // 4. 写回修改后的源码
+                console.log("[Debug] 源码处理完成，开始写入...");
+                await eda.sys_FileManager.setDocumentSource(modifiedLines.join('\n'));
+
+                // 5. 使用 API 更新 3D 模型属性
+                console.log("[Debug] 开始同步 3D 模型属性...");
+                for (let [pId, action] of targetMap.entries()) {
+                    const modelDataObj = action.preserve3D ? action.sourceComp : action.targetComp;
+                    const props = modelDataObj.otherProperty || {};
+                    
+                    let rawUri = props['3D Model'] || "";
+                    let modelUri = rawUri.includes('|') ? rawUri.split('|')[0] : rawUri;
+
+                    await eda.pcb_PrimitiveComponent.modify(pId, {
+                        otherProperty: {
+                            '3D Model': modelUri,
+                            '3D Model Title': props['3D Model Title'] || "",
+                            '3D Model Transform': props['3D Model Transform'] || ""
+                        }
+                    });
+                }
+
+                // 6. 获取并更新网表 (【核心改动】：兼容 V2/V3 格式动态识别)
+                console.log("[Debug] 开始同步网表属性...");
+				// BUG 在V2版本下，替换完器件后无法获取网表。返回值为{}
+                try {
+                    const getNetlist = await eda.pcb_ManufactureData.getNetlistFile('JLCEDA');
+                    const NetList = await getNetlist.text();
+                    const jsonData = JSON.parse(NetList);
+					// console.log(jsonData);
+
+                    const desigMap = new Map();
+                    for (let action of targetMap.values()) {
+                        desigMap.set(action.designator, action);
+                    }
+
+                    const preserveKeys = new Set([
+                        "Footprint", "Designator", "Add into BOM", 
+                        "3D Model", "3D Model Title", "3D Model Transform", 
+                        "Device", "Unique ID", "Reuse Block", 
+                        "Group ID", "Channel ID", "Convert to PCB"
+                    ]);
+
+                    // 【核心识别逻辑】
+                    // 如果存在 components 字段，说明是 V3；否则直接把根节点当做组件容器（兼容 V2）
+                    const targetComponentsNode = jsonData.components ? jsonData.components : jsonData;
+
+                    if (targetComponentsNode) {
+                        for (let compKey in targetComponentsNode) {
+                            const compItem = targetComponentsNode[compKey];
+                            
+                            // 防御性拦截：确保当前遍历项是一个有效对象，并拥有 props 属性
+                            if (!compItem || typeof compItem !== 'object' || !compItem.props) continue;
+                            
+                            const props = compItem.props;
+                            if (!props.Designator) continue;
+
+                            const desig = props.Designator;
+                            if (desigMap.has(desig)) {
+                                const action = desigMap.get(desig);
+                                const targetComp = action.targetComp;
+
+                                if (targetComp.otherProperty) {
+                                    for (let key in targetComp.otherProperty) {
+                                        if (!preserveKeys.has(key)) {
+                                            props[key] = targetComp.otherProperty[key];
+                                        }
+                                    }
+                                }
+
+                                if (targetComp.supplier) props["Supplier"] = targetComp.supplier;
+                                if (targetComp.supplierId) props["Supplier Part"] = targetComp.supplierId;
+                                if (targetComp.manufacturer) props["Manufacturer"] = targetComp.manufacturer;
+                                if (targetComp.manufacturerId) props["Manufacturer Part"] = targetComp.manufacturerId;
+
+                                props["Name"] = action.preserveName ? action.sourceName : action.targetName;
+                                props["FootprintName"] = action.preserveFootprint 
+                                    ? action.sourceFootprintName 
+                                    : (targetComp.footprint ? targetComp.footprint.name : "");
+                                props["DeviceName"] = targetComp.manufacturerId || "";
+                            }
+                        }
+                    }
+					// console.log(JSON.stringify(jsonData, null, 2));//在V2版本上内容为{}
+                    await eda.pcb_Net.setNetlist('JLCEDA', JSON.stringify(jsonData, null, 2));
+                    console.log("[Debug] 网表同步更新完成！");
+
+                } catch (netErr) {
+                    console.error("[Debug] 网表更新阶段发生异常:", netErr);
+                }
+                            
+                console.log(`[Debug] 替换完成，共处理 ${replaceCount} 个图元。`);
+                console.log("替换成功！");
+
+				// 【新增：计算耗时并显示】
+                const costTime = ((performance.now() - startTime) / 1000).toFixed(2);
+                statusBar.setText(`替换完成，耗时${costTime}秒`);
+                // 可选：3秒后恢复默认状态
+                setTimeout(() => statusBar.reset(), 3000);
+
+            } catch (err) {
+				console.error("[Debug] 替换过程中发生致命错误:", err);
+                console.log("替换失败，请查看控制台日志。");
+                statusBar.setText("替换失败，请查看控制台日志"); // 失败状态
+            }
+        }
+
+        // 6. 事件委托与绑定
+        function bindEvents() {
+            const tbody = document.getElementById('tableBody');
+            const selectAllCb = document.getElementById('selectAll');
+
+            // 按钮事件
+            document.getElementById('btnPaste').addEventListener('click', handlePaste);     // 粘贴数据
+            document.getElementById('btnFetch').addEventListener('click', handleFetch);     // 获取数据
+            document.getElementById('btnReplace').addEventListener('click', executeReplace);// 替换元件
+
+            // --- 绑定排序表头的点击事件 ---
+            document.querySelectorAll('.sortable-header').forEach(header => {
+                header.addEventListener('click', () => {
+                    const sortKey = header.getAttribute('data-sort');
+                    handleSort(sortKey);
+                });
+            });
+
+            // 表格内复选框点击 (事件委托)
+            tbody.addEventListener('change', (e) => {
+                const target = e.target;
+                if (target.type !== 'checkbox') return;
+
+                const index = parseInt(target.getAttribute('data-index'));
+                const group = groupedData[index];
+
+                if (target.classList.contains('row-selector')) {
+                    // 行选中状态切换
+                    group.selected = target.checked;
+                    renderTable(); // 重新渲染以更新置灰状态和禁用状态
+                } else if (target.classList.contains('opt-cb')) {
+                    // 保留选项切换
+                    const key = target.getAttribute('data-key');
+                    group.options[key] = target.checked;
+                    // 不需要重绘，只修改数据即可
+                }
+            });
+
+            // 表头全选
+            selectAllCb.addEventListener('change', (e) => {
+                const isChecked = e.target.checked;
+                groupedData.forEach(g => g.selected = isChecked);
+                renderTable();
+            });
+
+            // 表头可点击列 (批量选中/取消保留选项)
+            document.querySelectorAll('.clickable-header').forEach(header => {
+                header.addEventListener('click', () => {
+                    const key = header.getAttribute('data-key');
+                    // 仅判断当前被选中的(未置灰的)行
+                    const activeGroups = groupedData.filter(g => g.selected);
+                    if (activeGroups.length === 0) return;
+
+                    // 判断是否已经全部勾选
+                    const isAllChecked = activeGroups.every(g => g.options[key]);
+                    const targetState = !isAllChecked;
+
+                    activeGroups.forEach(g => g.options[key] = targetState);
+                    renderTable();
+                });
+            });
+        }
+
+        // 同步总全选框的状态 (半选等)
+        function syncSelectAllState() {
+            const selectAllCb = document.getElementById('selectAll');
+            if (groupedData.length === 0) {
+                selectAllCb.checked = false;
+                selectAllCb.indeterminate = false;
+                return;
+            }
+            const allChecked = groupedData.every(g => g.selected);
+            const someChecked = groupedData.some(g => g.selected);
+            selectAllCb.checked = allChecked;
+            selectAllCb.indeterminate = someChecked && !allChecked;
+        }
+
+        // 启动
+        document.addEventListener('DOMContentLoaded', () => {
+            bindEvents();
+            initData();
+        });

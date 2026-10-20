@@ -1,0 +1,314 @@
+:root {
+            --bg-base: #1e1e1e;
+            --bg-sidebar: #252526;
+            --bg-hover: #2a2d2e;
+            --bg-active: #37373d;
+            --bg-input: #3c3c3c;
+            --border-main: #2d2d2d;
+            --border-light: #3c3c3c;
+            --text-main: #cccccc;
+            --text-light: #ffffff;
+            --text-muted: #858585;
+            --accent-blue: #007acc;
+            --accent-green: #16a34a;
+            --accent-green-hover: #15803d;
+            --accent-red: #902020;
+            --chart-rest: #b0b0b0;
+        }
+
+        * { box-sizing: border-box; }
+        body, html {
+            margin: 0; padding: 0;
+            width: 960px; height: 600px;
+            background-color: var(--bg-base);
+            color: var(--text-main);
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            overflow: hidden;
+            user-select: none;
+        }
+        
+        .vscode-container { display: flex; width: 960px; height: 600px; }
+
+        /* 左侧标签栏 Sidebar */
+        .sidebar {
+            width: 100px; background-color: var(--bg-sidebar); border-right: 1px solid var(--border-main);
+            display: flex; flex-direction: column; padding-top: 10px; flex-shrink: 0;
+        }
+        .sidebar-item {
+            padding: 12px 15px; font-size: 13px; color: #969696; cursor: pointer;
+            border-left: 3px solid transparent; transition: all 0.15s ease;
+        }
+        .sidebar-item:hover { background-color: var(--bg-hover); color: #e0e0e0; }
+        .sidebar-item.active { background-color: var(--bg-active); color: var(--text-light); border-left-color: var(--accent-blue); font-weight: bold; }
+
+        /* 右侧主内容区 */
+        .main-content {
+            flex: 1; background-color: var(--bg-base); display: flex; flex-direction: column;
+            position: relative; height: 100%; min-width: 0;
+        }
+
+        /* 统一头部信息栏 */
+        .main-header {
+            height: 42px; background-color: var(--bg-base); border-bottom: 1px solid var(--border-main);
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 0 15px; flex-shrink: 0;
+        }
+        .header-title { font-size: 13px; font-weight: 600; color: var(--text-light); }
+        .header-stats { font-size: 12px; color: var(--text-muted); }
+        .highlight { color: var(--accent-blue); font-weight: bold; margin-left: 4px; }
+
+        /* 视图容器包装器 */
+        .view-container { flex: 1; height: calc(100% - 42px); position: relative; overflow: hidden; }
+        .view-container.hidden { display: none !important; }
+
+        /* === 图表与悬浮窗组件样式 (统一复用) === */
+        #wrapper, .chart-wrapper-style { position: relative; width: 100%; height: 100%; background-color: var(--bg-base); }
+        .chart-box-elem { width: 100%; height: 100%; }
+        
+        .legend-panel {
+            position: absolute; top: 10px; right: 10px;
+            background: rgba(37, 37, 38, 0.94); border: 1px solid #454545;
+            border-radius: 4px; padding: 10px; box-shadow: 0 4px 12px rgba(0,0,0,0.4);
+            z-index: 10; max-height: calc(100% - 20px); width: 200px;
+            box-sizing: border-box; display: flex; flex-direction: column;
+        }
+        .legend-title {
+            font-weight: bold; margin-bottom: 6px; font-size: 12px; padding-bottom: 4px;
+            border-bottom: 1px solid var(--border-light); cursor: pointer;
+            display: flex; justify-content: space-between; align-items: center; color: var(--text-light);
+        }
+        .legend-title:hover { color: var(--accent-blue); }
+        .legend-list { overflow-y: auto; max-height: 180px; padding-right: 2px; }
+        .legend-item { display: flex; align-items: center; margin-bottom: 6px; cursor: pointer; transition: opacity 0.2s; }
+        .legend-item:hover { opacity: 0.8; }
+        .legend-item.hidden { opacity: 0.25; text-decoration: line-through; }
+        .color-block { display: inline-block; width: 11px; height: 11px; border-radius: 2px; margin-right: 8px; flex-shrink: 0; }
+        .legend-detail {
+            margin-top: 8px; padding-top: 6px; border-top: 1px dashed var(--border-light);
+            font-size: 11px; color: #aaaaaa; line-height: 1.5; word-break: break-all;
+        }
+        .legend-panel.collapsed .legend-list, .legend-panel.collapsed .legend-detail { display: none; }
+        .legend-panel.collapsed .legend-title { margin-bottom: 0; border-bottom: none; padding-bottom: 0; }
+
+        /* === 工程管理表格样式 === */
+        .table-wrapper {
+            width: 100%; overflow-y: auto; border: 1px solid var(--border-main);
+            background-color: var(--bg-sidebar); border-radius: 4px;
+        }
+        .vscode-table { width: 100%; border-collapse: collapse; font-size: 12px; text-align: left; table-layout: fixed; }
+        .vscode-table th {
+            background-color: var(--bg-sidebar); color: var(--text-light); padding: 8px 6px; position: sticky;
+            top: 0; border-bottom: 2px solid var(--border-main); user-select: none; font-weight: 500; z-index: 2;
+        }
+        .vscode-table th.sortable:hover { background-color: var(--bg-hover); cursor: pointer; }
+        .vscode-table td { padding: 7px 6px; border-bottom: 1px solid var(--border-main); color: var(--text-main); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .vscode-table tr:hover { background-color: var(--bg-hover); }
+
+        /* === 消息提醒专用样式 === */
+        .reminder-card {
+            display: flex; flex-direction: column; background: var(--bg-sidebar);
+            border: 1px solid var(--border-main); border-radius: 4px; padding: 12px;
+        }
+
+        /* === 周报视图专用样式 === */
+        .weekly-report-container {
+            display: flex; flex-direction: column; height: 100%; padding: 15px; gap: 15px;
+            background: var(--bg-base); overflow-y: auto;
+        }
+        .weekly-header {
+            display: flex; justify-content: space-between; align-items: center;
+            background: var(--bg-sidebar); padding: 10px 15px; border-radius: 4px; border: 1px solid var(--border-main);
+        }
+        .weekly-nav-btn {
+            background: var(--bg-input); border: 1px solid var(--border-light); color: var(--text-main);
+            padding: 4px 10px; border-radius: 2px; cursor: pointer; font-size: 12px;
+        }
+        .weekly-nav-btn:hover { background: var(--bg-hover); color: #fff; }
+        .weekly-summary-cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; }
+        .summary-card {
+            background: var(--bg-sidebar); border: 1px solid var(--border-main); border-radius: 4px;
+            padding: 12px; display: flex; flex-direction: column; align-items: center; gap: 5px;
+        }
+        .card-label { font-size: 11px; color: var(--text-muted); }
+        .card-value { font-size: 18px; font-weight: bold; color: var(--accent-blue); }
+        .weekly-charts-row { display: grid; grid-template-columns: 1.5fr 1fr; gap: 15px; flex: 1; min-height: 280px; }
+        .chart-card {
+            background: var(--bg-sidebar); border: 1px solid var(--border-main); border-radius: 4px;
+            padding: 10px; position: relative;
+        }
+        .chart-title { font-size: 12px; font-weight: bold; color: var(--text-light); margin-bottom: 8px; }
+        .scroll-wrapper {
+            flex: 1; overflow-y: auto; background: var(--bg-base); border: 1px solid var(--border-main);
+            border-radius: 4px; padding: 10px; margin-bottom: 10px;
+        }
+        .reminder-list { display: flex; flex-direction: column; gap: 6px; }
+        .reminder-item {
+            display: flex; justify-content: space-between; align-items: center;
+            background: var(--border-main); padding: 6px 12px; border-radius: 4px; font-size: 12px; border: 1px solid var(--border-light);
+        }
+        .reminder-content { flex: 1; margin: 0 15px; color: #e0e0e0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .reminder-input-zone { border-top: 1px solid var(--border-main); padding-top: 8px; }
+        .input-tip { font-size: 11px; color: var(--text-muted); margin-bottom: 6px; }
+        .input-row { display: flex; gap: 8px; align-items: center; }
+
+        /* === VSCode 风格基础组件 === */
+        .vscode-input {
+            background-color: var(--bg-input); border: 1px solid #6b6b6b; color: var(--text-main);
+            padding: 4px 8px; border-radius: 2px; outline: none; font-size: 12px; height: 26px;
+        }
+        .vscode-input:focus { border-color: var(--accent-blue); }
+        .vscode-btn {
+            background-color: #0e639c; border: none; color: var(--text-light); padding: 0 12px;
+            height: 26px; border-radius: 2px; cursor: pointer; font-size: 12px;
+        }
+        .vscode-btn:hover { background-color: #1177bb; }
+        .vscode-btn.success { background-color: var(--accent-green); }
+        .vscode-btn.success:hover { background-color: var(--accent-green-hover); }
+        .small-btn {
+            background: var(--bg-input); border: 1px solid #555; color: #ccc;
+            padding: 2px 6px; border-radius: 2px; cursor: pointer; font-size: 11px;
+        }
+        .small-btn:hover { background: #4c4c4c; color: #fff; }
+        .small-btn.del:hover { background: var(--accent-red); color: #fff; border-color: var(--accent-red); }
+        .small-btn.export:hover { background: var(--accent-blue); color: #fff; border-color: var(--accent-blue); }
+
+        /* 全局滚动条美化 */
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-thumb { background: #424242; border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: #4f4f4f; }
+        ::-webkit-scrollbar-track { background: transparent; }
+
+        /* 去除原生数字输入框箭头 */
+        input[type=number]::-webkit-inner-spin-button,
+        input[type=number]::-webkit-outer-spin-button {
+            -webkit-appearance: none; margin: 0;
+        }
+        input[type=number] { -moz-appearance: textfield; }
+
+        /* 步进器样式 */
+        .stepper {
+            display: flex; align-items: center; background: var(--bg-input);
+            border: 1px solid #6b6b6b; border-radius: 2px; height: 26px; overflow: hidden;
+        }
+        .stepper button {
+            background: none; border: none; color: var(--text-muted); width: 22px;
+            height: 100%; cursor: pointer; font-size: 14px; display: flex;
+            align-items: center; justify-content: center; transition: all 0.2s;
+        }
+        .stepper button:hover { background: var(--bg-hover); color: var(--text-light); }
+        .stepper input {
+            background: none; border: none; color: #b5cea8; width: 26px;
+            text-align: center; font-size: 12px; outline: none; padding: 0; font-family: Consolas;
+        }
+
+        /* 列表内联编辑样式 */
+        .list-input {
+            background: transparent; border: 1px solid transparent; color: inherit;
+            padding: 2px 4px; border-radius: 2px; outline: none; font-size: 11px;
+        }
+        .list-input:hover { border-color: var(--border-light); background: var(--bg-input); }
+        .list-input:focus { border-color: var(--accent-blue); background: var(--bg-input); }
+
+		/* === 节律分析专用样式 === */
+        .rhythm-mode-block {
+            border: 1px solid var(--border-main);
+            border-radius: 4px;
+            padding: 10px;
+            cursor: pointer;
+            transition: all 0.2s;
+            background: var(--bg-base);
+        }
+        .rhythm-mode-block.active {
+            border-color: var(--accent-blue);
+            background: rgba(0, 122, 204, 0.05);
+        }
+        .rhythm-mode-title {
+            font-weight: bold;
+            color: var(--text-light);
+            font-size: 13px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .rhythm-mode-title::before {
+            content: '';
+            display: inline-block;
+            width: 12px; height: 12px;
+            border-radius: 50%;
+            border: 2px solid var(--text-muted);
+            box-sizing: border-box;
+        }
+        .rhythm-mode-block.active .rhythm-mode-title::before {
+            border-color: var(--accent-blue);
+            background: var(--accent-blue);
+            box-shadow: inset 0 0 0 2px var(--bg-base);
+        }
+        .rhythm-mode-block:not(.active) .rhythm-mode-content {
+            display: none !important;
+        }
+        .rhythm-mode-content {
+            margin-top: 12px;
+            padding-top: 12px;
+            border-top: 1px dashed var(--border-main);
+            cursor: default;
+        }
+        .rhythm-radio-group {
+            display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px;
+        }
+        .rhythm-radio-group label {
+            font-size: 12px; color: var(--text-main); cursor: pointer; display: flex; align-items: center; gap: 4px;
+        }
+
+		/* 修改原有的 loading-mask，建议直接用 bg-base 纯色盖住底层白屏或未排版内容 */
+		#loading-mask {
+			position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+			background: var(--bg-base); /* 使用主题底色完全遮挡 */
+			z-index: 999;
+			display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 15px;
+			color: var(--text-muted); font-size: 13px; font-weight: bold;
+		}
+
+		/* 新增：CSS 旋转动画引擎 */
+		.loading-spinner {
+			width: 28px; height: 28px;
+			border: 3px solid rgba(0, 122, 204, 0.2);
+			border-top-color: var(--accent-blue);
+			border-radius: 50%;
+			animation: loading-spin 0.8s linear infinite;
+		}
+
+		@keyframes loading-spin {
+			0% { transform: rotate(0deg); }
+			100% { transform: rotate(360deg); }
+		}
+
+		/* === 节律分析：时间子模式互斥块样式 === */
+        .time-sub-block {
+            background: rgba(0, 0, 0, 0.15);
+            border: 1px solid var(--border-main);
+            border-radius: 4px;
+            padding: 10px;
+        }
+        .sub-block-title {
+            font-size: 12px; color: var(--text-light);
+            display: flex; align-items: center; gap: 6px;
+            cursor: pointer; margin-bottom: 8px; font-weight: bold;
+        }
+        /* 隐藏原生单选框，改造成方块按钮 */
+        .rhythm-quick-buttons { display: flex; gap: 5px; width: 100%; }
+        .rhythm-quick-buttons label { flex: 1; margin: 0; }
+        .rhythm-quick-buttons input[type="radio"] { display: none; }
+        .rhythm-quick-buttons span {
+            display: block; text-align: center;
+            background: var(--bg-sidebar); border: 1px solid var(--border-light);
+            color: var(--text-main); padding: 5px 0; border-radius: 2px;
+            font-size: 11px; cursor: pointer; transition: all 0.2s; white-space: nowrap;
+        }
+        .rhythm-quick-buttons input[type="radio"]:checked + span {
+            background: var(--accent-blue); color: #fff; border-color: var(--accent-blue);
+        }
+        /* 自定义时间段：同行显示 */
+        .rhythm-custom-row { display: flex; align-items: center; gap: 6px; }
+        .rhythm-custom-row input {
+            flex: 1; min-width: 0; padding: 2px 4px; font-size: 11px; height: 26px;
+        }

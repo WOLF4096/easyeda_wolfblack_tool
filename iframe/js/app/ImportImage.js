@@ -1,0 +1,865 @@
+// ======================== 配置常量 ========================
+			const CONFIG = {
+				TILE_SIZE: 1800,                // 切片像素尺寸（正方形）
+				JPEG_QUALITY: 0.8,              // JPEG 压缩质量 (0-1)
+				DPI_PRESETS: [300, 600, 900, 1200, 2400, 4800],
+				MM_TO_MIL: 39.37007874015748,
+				MIL_TO_MM: 0.0254,
+				MOUSE_FOLLOW_INTERVAL_MS: 50    // 鼠标跟随刷新间隔(ms)
+			};
+
+			// ======================== DOM 元素引用 ========================
+			const dpiSlider = document.getElementById('dpiSlider');
+			const widthInput = document.getElementById('widthInput');
+			const heightInput = document.getElementById('heightInput');
+			const unitOptions = document.querySelectorAll('.unit-option');
+			const placeImageBtn = document.getElementById('placeImageBtn');
+			const layerOptions = document.querySelectorAll('.layer-option');
+			const selectImageBtn = document.getElementById('selectImageBtn');
+			const customDpiInput = document.getElementById('customDpiInput');
+			const dpiValueItems = document.querySelectorAll('.dpi-value-item');
+			const sliceimportCheckbox = document.getElementById('sliceimport');
+			const aspectRatioCheckbox = document.getElementById('aspectRatioCheckbox');
+
+
+			// ======================== 全局变量 ========================
+			// 单位与尺寸
+			let currentUnit = 'mil';            // 当前单位 'mm' 或 'mil'
+			let currentDpi = 1200;              // 当前DPI值
+			let currentLayer = 'DOC';           // 当前图层 'TS','BS','DOC'
+			let originalAspectRatio = 1;        // 当前图片宽高比
+			let originalImageWidth = 0;			// 当前图片原始宽
+			let originalImageHeight = 0; 		// 当前图片原始高
+			
+			// 图片数据
+			let currentImage = null;             // 当前用于尺寸计算的图片File对象
+			let imagesArray = [];                // 所有选中的File对象
+			let objectUrls = [];                 // 网格预览用的objectURLs，用于释放内存
+			
+			// 放置流程控制
+			let isPlacingActive = false;          // 是否正在放置过程中
+			let isProcessing = false;             // 是否正在处理图片（防止重复点击）
+			let currentPlacedId = null;           // 当前正在跟随鼠标的图元ID
+			let followInterval = null;            // 鼠标跟随定时器ID
+			let lastPlacedX = 0;				  // 记录最后放置的X坐标（mil）
+			let lastPlacedY = 0; 				  // 记录最后放置的Y坐标（mil）
+			
+			// 切片相关
+			let isSliceEnabled = false;            // 切片开关状态
+			let createdPrimitives = [];            // 存储已创建的图元 { primitiveId, imgIndex }
+			
+			// DPI计算防递归标志
+			let isCalculatingFromDpi = false;
+			// 窗口状态标志（未使用，保留原逻辑）
+			let status = false;
+			let specialLayoutMap = null;      // 存储每个文件索引对应的列和行号
+			let useSpecialLayout = false;     // 是否启用特殊布局
+
+			// ======================== 辅助函数 ========================
+			
+			/** 显示消息提示 */
+			function showMessage(msg, type = "info") {
+				eda.sys_Message.showToastMessage(msg, type);
+			}
+
+			/** 计算网格大小（用于预览和自动布局） */
+			function getGridSize(count) {
+				return Math.ceil(Math.sqrt(count));
+			}
+
+			/** 释放所有预览用的 ObjectURL，防止内存泄漏 */
+			function revokeAllObjectUrls() {
+				objectUrls.forEach(url => URL.revokeObjectURL(url));
+				objectUrls = [];
+			}
+
+			/** 渲染图片网格预览 */
+			function renderGrid(files, twoColumns = false) {
+				const gridContainer = document.getElementById('gridPreview');
+				gridContainer.innerHTML = '';
+				if (!files.length) {
+					gridContainer.style.display = 'none';
+					return;
+				}
+				const count = files.length;
+				gridContainer.style.display = 'grid';
+				if (twoColumns) {
+					gridContainer.style.gridTemplateColumns = `repeat(2, minmax(0, 1fr))`;
+				} else {
+					const gridSize = getGridSize(count);
+					gridContainer.style.gridTemplateColumns = `repeat(${gridSize}, minmax(0, 1fr))`;
+				}
+				files.forEach((file) => {
+					const url = URL.createObjectURL(file);
+					objectUrls.push(url);
+					const itemDiv = document.createElement('div');
+					itemDiv.className = 'grid-item';
+					const img = document.createElement('img');
+					img.src = url;
+					img.alt = file.name;
+					img.onerror = () => console.error(`图片加载失败: ${file.name}`);
+					itemDiv.appendChild(img);
+					gridContainer.appendChild(itemDiv);
+				});
+			}
+
+			/** 更新所有预览网格项的宽高比（使用当前图片比例） */
+			function updateGridItemAspectRatio(aspectRatio) {
+				const gridItems = document.querySelectorAll('.grid-item');
+				gridItems.forEach(item => {
+					item.style.aspectRatio = aspectRatio;
+				});
+			}
+
+			/** 加载图片到编辑区，用于尺寸计算和DPI同步 */
+			function loadImageToCurrent(file) {
+				if (!file) return;
+				currentImage = file;
+				const img = new Image();
+				const url = URL.createObjectURL(file);
+				img.onload = function () {
+					URL.revokeObjectURL(url);
+					originalImageWidth = img.width;
+					originalImageHeight = img.height;
+					originalAspectRatio = originalImageWidth / originalImageHeight;
+					updateGridItemAspectRatio(originalAspectRatio);
+					
+					const dpi = currentDpi || 1200;
+					const widthInch = originalImageWidth / dpi;
+					const heightInch = originalImageHeight / dpi;
+					if (currentUnit === 'mm') {
+						widthInput.value = (widthInch * 25.4).toFixed(2);
+						heightInput.value = (heightInch * 25.4).toFixed(2);
+					} else {
+						widthInput.value = (widthInch * 1000).toFixed(2);
+						heightInput.value = (heightInch * 1000).toFixed(2);
+					}
+					customDpiInput.value = dpi;
+					currentDpi = dpi;
+					syncDpiUi(dpi);
+					if (aspectRatioCheckbox.checked) {
+						const width = parseFloat(widthInput.value);
+						if (!isNaN(width)) {
+							const height = width / originalAspectRatio;
+							heightInput.value = height.toFixed(2);
+						}
+					}
+					placeImageBtn.disabled = false;
+				};
+				img.onerror = () => {
+					URL.revokeObjectURL(url);
+					console.error('无法加载图片获取尺寸');
+				};
+				img.src = url;
+			}
+
+			/** 根据当前宽高和图片原始像素计算DPI（保持横纵比开启时调用） */
+			function calculateDpi() {
+				if (!aspectRatioCheckbox.checked) return;
+				if (!currentImage || !widthInput.value || !heightInput.value) return;
+				const img = new Image();
+				img.onload = function () {
+					const width = parseFloat(widthInput.value);
+					const height = parseFloat(heightInput.value);
+					let widthInch, heightInch;
+					if (currentUnit === 'mm') {
+						widthInch = width * (1 / 25.4);
+						heightInch = height * (1 / 25.4);
+					} else {
+						widthInch = width * (1 / 1000);
+						heightInch = height * (1 / 1000);
+					}
+					const dpiX = Math.round(img.width / widthInch);
+					const dpiY = Math.round(img.height / heightInch);
+					const avgDpi = Math.round((dpiX + dpiY) / 2);
+					customDpiInput.value = avgDpi;
+					currentDpi = avgDpi;
+					syncDpiUi(avgDpi);
+				};
+				img.src = URL.createObjectURL(currentImage);
+			}
+
+			/** 根据DPI计算并更新宽度/高度输入框的值 */
+			function calculateDimensionsFromDpi() {
+				if (!currentImage || !currentDpi) return;
+				isCalculatingFromDpi = true;
+				const img = new Image();
+				img.onload = function () {
+					const widthInch = img.width / currentDpi;
+					const heightInch = img.height / currentDpi;
+					if (currentUnit === 'mm') {
+						widthInput.value = (widthInch * 25.4).toFixed(2);
+						heightInput.value = (heightInch * 25.4).toFixed(2);
+					} else {
+						widthInput.value = (widthInch * 1000).toFixed(2);
+						heightInput.value = (heightInch * 1000).toFixed(2);
+					}
+					isCalculatingFromDpi = false;
+					if (currentDpi) syncDpiUi(currentDpi);
+				};
+				img.src = URL.createObjectURL(currentImage);
+			}
+
+			/** 同步DPI控件（滑块高亮、自定义输入框） */
+			function syncDpiUi(dpiValue) {
+				const index = CONFIG.DPI_PRESETS.indexOf(dpiValue);
+				if (index !== -1) {
+					const sliderValue = 5 - index;  // 滑块最大值5，最小值0
+					dpiSlider.value = sliderValue;
+					dpiValueItems.forEach((item, i) => {
+						if (i === index) item.classList.add('active');
+						else item.classList.remove('active');
+					});
+				} else {
+					dpiValueItems.forEach(item => item.classList.remove('active'));
+				}
+				customDpiInput.value = dpiValue;
+			}
+
+			/** 设置DPI并重新计算尺寸 */
+			function setCurrentDpiAndRecalc(dpi) {
+				if (!currentImage || !aspectRatioCheckbox.checked) return;
+				currentDpi = dpi;
+				syncDpiUi(currentDpi);
+				calculateDimensionsFromDpi();
+			}
+
+			/** 将File对象转为Base64字符串 */
+			function convertToBase64(file) {
+				return new Promise((resolve, reject) => {
+					const reader = new FileReader();
+					reader.onload = () => resolve(reader.result);
+					reader.onerror = error => reject(error);
+					reader.readAsDataURL(file);
+				});
+			}
+
+			/** 获取当前图层对应的PCB图层ID */
+			function getCurrentLayerId() {
+				switch (currentLayer) {
+					case 'TS': return EPCB_LayerId.TOP_SILKSCREEN;
+					case 'BS': return EPCB_LayerId.BOTTOM_SILKSCREEN;
+					default: return EPCB_LayerId.DOCUMENT;
+				}
+			}
+
+			/** 获取当前放置尺寸（mil单位） */
+			function getCurrentPlaceSize() {
+				let width = parseFloat(widthInput.value);
+				let height = parseFloat(heightInput.value);
+				if (isNaN(width)) width = 0;
+				if (isNaN(height)) height = 0;
+				if (currentUnit === 'mm') {
+					width = width * CONFIG.MM_TO_MIL;
+					height = height * CONFIG.MM_TO_MIL;
+				}
+				return { width, height };
+			}
+
+			/** 停止鼠标跟随定时器 */
+			function stopFollowing() {
+				if (followInterval) {
+					clearInterval(followInterval);
+					followInterval = null;
+				}
+			}
+
+			// ======================== 切片核心函数 ========================
+			
+			/**
+			 * 从原图中裁剪一块区域，转为 JPEG base64
+			 * @param {HTMLImageElement} img - 原图对象
+			 * @param {number} sx - 起始X（像素）
+			 * @param {number} sy - 起始Y（像素）
+			 * @param {number} sw - 宽度（像素）
+			 * @param {number} sh - 高度（像素）
+			 * @returns {Promise<string>} base64 数据
+			 */
+			function cropImageToBase64(img, sx, sy, sw, sh) {
+				return new Promise((resolve, reject) => {
+					const canvas = document.createElement('canvas');
+					canvas.width = sw;
+					canvas.height = sh;
+					const ctx = canvas.getContext('2d');
+					ctx.drawImage(img, sx, sy, sw, sh, 0, 0, sw, sh);
+					canvas.toBlob(blob => {
+						const reader = new FileReader();
+						reader.onloadend = () => resolve(reader.result);
+						reader.onerror = reject;
+						reader.readAsDataURL(blob);
+					}, 'image/jpeg', CONFIG.JPEG_QUALITY);
+				});
+			}
+
+			/**
+			 * 对单张图片生成 tiles（切片或整图）
+			 * @param {File} file - 图片文件
+			 * @param {number} pcbWidth - 用户在PCB上设置的宽度（mil）
+			 * @param {number} pcbHeight - 用户在PCB上设置的高度（mil）
+			 * @returns {Promise<Array>} tiles数组，每个元素包含 { base64, relX, relY, width, height }
+			 */
+			async function generateTilesForFile(file, pcbWidth, pcbHeight) {
+				// 加载原图
+				const img = await new Promise((resolve, reject) => {
+					const image = new Image();
+					image.onload = () => resolve(image);
+					image.onerror = reject;
+					image.src = URL.createObjectURL(file);
+				});
+				const pxWidth = img.width;
+				const pxHeight = img.height;
+				
+				if (!isSliceEnabled) {
+					// 不切片：整张图作为一个 tile
+					const base64 = await convertToBase64(file);
+					URL.revokeObjectURL(img.src);
+					return [{
+						base64: base64,
+						relX: 0,
+						relY: 0,
+						width: pcbWidth,
+						height: pcbHeight
+					}];
+				}
+				
+				// 切片模式：计算行列数，并行生成所有 tiles
+				const cols = Math.ceil(pxWidth / CONFIG.TILE_SIZE);
+				const rows = Math.ceil(pxHeight / CONFIG.TILE_SIZE);
+				const tilePromises = [];
+				
+				for (let row = 0; row < rows; row++) {
+					for (let col = 0; col < cols; col++) {
+						const sx = col * CONFIG.TILE_SIZE;
+						const sy = row * CONFIG.TILE_SIZE;
+						const sw = Math.min(CONFIG.TILE_SIZE, pxWidth - sx);
+						const sh = Math.min(CONFIG.TILE_SIZE, pxHeight - sy);
+						tilePromises.push(
+							cropImageToBase64(img, sx, sy, sw, sh).then(base64 => ({
+								base64,
+								relX: (sx / pxWidth) * pcbWidth,
+								relY: (sy / pxHeight) * pcbHeight,
+								width: (sw / pxWidth) * pcbWidth,
+								height: (sh / pxHeight) * pcbHeight
+							}))
+						);
+					}
+				}
+				
+				const tiles = await Promise.all(tilePromises);
+				URL.revokeObjectURL(img.src);
+				return tiles;
+			}
+
+			/**
+			 * 预处理所有图片，生成完整的 tiles 列表
+			 * @param {Array} files - 图片文件数组
+			 * @param {number} pcbWidth - 统一PCB宽度（mil）
+			 * @param {number} pcbHeight - 统一PCB高度（mil）
+			 * @returns {Promise<Object>} { tilesList, totalImages }
+			 */
+			async function prepareAllTiles(files, pcbWidth, pcbHeight) {
+				const allTiles = [];
+				for (let idx = 0; idx < files.length; idx++) {
+					const file = files[idx];
+					// 如果 file 有 originalIndex 属性则使用它，否则使用 idx
+					const originalIdx = file.originalIndex !== undefined ? file.originalIndex : idx;
+					const tiles = await generateTilesForFile(file, pcbWidth, pcbHeight);
+					tiles.forEach(tile => {
+						allTiles.push({
+							...tile,
+							imgIndex: originalIdx
+						});
+					});
+				}
+				return { tilesList: allTiles, totalImages: files.length };
+			}
+
+			// ======================== PCB 放置相关函数 ========================
+			
+			/**
+			 * 放置单个 tile（跟随鼠标）
+			 * @param {Object} tile - { base64, relX, relY, width, height, imgIndex }
+			 * @param {number} imgIndex - 所属原图索引
+			 */
+			async function startPlaceTile(tile, imgIndex) {
+				try {
+					const layerId = getCurrentLayerId();
+					const colorObj = await eda.pcb_PrimitiveObject.create(
+						layerId, 0, 0, tile.base64,
+						tile.width.toFixed(2), tile.height.toFixed(2), 0, false, 'img', false
+					);
+					const primitiveId = colorObj.getState_PrimitiveId();
+					currentPlacedId = primitiveId;
+					
+					// 记录图元信息（用于后续组合）
+					createdPrimitives.push({ primitiveId: primitiveId, imgIndex: imgIndex });
+					
+					stopFollowing();
+					// 启动鼠标跟随，每隔固定时间更新图元位置
+					followInterval = setInterval(async () => {
+						try {
+							const currentPoint = await eda.pcb_SelectControl.getCurrentMousePosition();
+							await eda.pcb_PrimitiveObject.modify(currentPlacedId, {
+								topLeftX: currentPoint.x,
+								topLeftY: currentPoint.y,
+							});
+							lastPlacedX = currentPoint.x;
+							lastPlacedY = currentPoint.y;
+						} catch (error) {
+							console.error('更新 tile 位置失败:', error);
+							stopFollowing();
+						}
+					}, CONFIG.MOUSE_FOLLOW_INTERVAL_MS);
+					return true;
+				} catch (err) {
+					console.error('放置 tile 失败:', err);
+					showMessage('放置失败，请重试', "error");
+					return false;
+				}
+			}
+
+			/** 完成当前图片放置，并自动放置剩余所有 tile */
+			async function finishCurrentPlaceAndContinue() {
+				stopFollowing();
+				if (!currentPlacedId) {
+					cleanUpAndClose();
+					return;
+				}
+
+				const firstTile = window.pendingTiles[0];
+				const mouseX = lastPlacedX;
+				const mouseY = lastPlacedY;
+
+				// 计算第一张原图左上角在 PCB 上的坐标（Y轴翻转适配 PCB 坐标系）
+				const originX = mouseX - firstTile.relX;
+				const originY = mouseY + firstTile.relY;
+
+				const totalImages = window.totalImagesCount;
+				const { width: imgWidth, height: imgHeight } = getCurrentPlaceSize();
+				let originCoords = [];
+
+				if (useSpecialLayout && specialLayoutMap) {
+					// 特殊布局：根据映射计算每张图片的原点坐标
+					const indexToCoord = new Array(totalImages);
+					for (let i = 0; i < totalImages; i++) {
+						const pos = specialLayoutMap.get(i);
+						if (pos) {
+							const x = originX + (pos.col === 'right' ? imgWidth : 0);
+							const y = originY - pos.row * imgHeight;
+							indexToCoord[i] = { x, y };
+						} else {
+							// 理论上不会发生，若发生则放在原点
+							indexToCoord[i] = { x: originX, y: originY };
+						}
+					}
+					originCoords = indexToCoord;
+				} else {
+					// 原网格布局（正方形网格，间距取长边）
+					const gridSize = Math.ceil(Math.sqrt(totalImages));
+					const side = Math.max(imgWidth, imgHeight);
+					for (let idx = 0; idx < totalImages; idx++) {
+						const row = Math.floor(idx / gridSize);
+						const col = idx % gridSize;
+						const x = originX + col * side;
+						const y = originY - row * side;
+						originCoords.push({ x, y });
+					}
+				}
+
+				// 批量创建剩余的所有 tile（跳过第一个）
+				const layerId = getCurrentLayerId();
+				for (let i = 1; i < window.pendingTiles.length; i++) {
+					const tile = window.pendingTiles[i];
+					const imgOrigin = originCoords[tile.imgIndex];
+					const absX = imgOrigin.x + tile.relX;
+					const absY = imgOrigin.y - tile.relY;
+					try {
+						const colorObj = await eda.pcb_PrimitiveObject.create(
+							layerId, absX, absY, tile.base64,
+							tile.width.toFixed(2), tile.height.toFixed(2), 0, false, 'img', false
+						);
+						const primitiveId = colorObj.getState_PrimitiveId();
+						createdPrimitives.push({ primitiveId: primitiveId, imgIndex: tile.imgIndex });
+					} catch (err) {
+						console.error(`创建 tile 失败 (imgIndex=${tile.imgIndex}):`, err);
+					}
+				}
+
+				cleanUpAndClose();
+			}
+						/** 清理资源并关闭插件窗口 */
+			function cleanUpAndClose() {
+				currentPlacedId = null;
+				isPlacingActive = false;
+				window.pendingTiles = null;
+				window.totalImagesCount = 0;
+				createdPrimitives = [];
+				specialLayoutMap = null;      // 新增
+				useSpecialLayout = false;     // 新增
+				enableUiAfterPlace(true);
+				eda.sys_IFrame.closeIFrame('ImportImage');
+			}
+
+			/** 启用/禁用放置过程中的UI控件 */
+			function enableUiAfterPlace(enable) {
+				// selectImageBtn.disabled = !enable;
+				// placeImageBtn.disabled = !enable;
+				if (enable && imagesArray.length === 0) {
+					placeImageBtn.disabled = true;
+				}
+			}
+
+			// ======================== 主入口：开始放置 ========================
+			
+			async function handlePlaceImage() {
+				// 防止重复点击或处理中
+				if (isPlacingActive) {
+					showMessage('正在放置中，请先完成当前操作', "warn");
+					return;
+				}
+				if (isProcessing) {
+					showMessage('正在处理图片，请稍候...', "warn");
+					return;
+				}
+				if (!imagesArray.length) {
+					showMessage('请先选择图片', "error");
+					return;
+				}
+				const { width, height } = getCurrentPlaceSize();
+				if (width <= 0 || height <= 0) {
+					showMessage('请输入有效的宽度和高度', "error");
+					return;
+				}
+				
+				// 读取切片开关状态
+				isSliceEnabled = sliceimportCheckbox.checked;
+				isProcessing = true;
+				showMessage('正在处理图片，请稍候...', "info");
+				
+				let tilesData;
+				try {
+					tilesData = await prepareAllTiles(imagesArray, width, height);
+				} catch (err) {
+					console.error('图片处理失败:', err);
+					showMessage('图片处理失败，请重试', "error");
+					isProcessing = false;
+					return;
+				}
+				
+				// 保存到全局变量供放置流程使用
+				window.pendingTiles = tilesData.tilesList;
+				window.totalImagesCount = tilesData.totalImages;
+				
+				isPlacingActive = true;
+				enableUiAfterPlace(false);
+				isProcessing = false;
+				eda.sys_IFrame.hideIFrame('ImportImage');  // 隐藏插件窗口，等待用户点击画布
+				
+				// 开始放置第一个 tile
+				const firstTile = window.pendingTiles[0];
+				await startPlaceTile(firstTile, firstTile.imgIndex);
+			}
+
+			// ======================== 选择图片 ========================
+			async function handleImageSelect() {
+				if (isPlacingActive) {
+					showMessage('请先完成当前图片放置', "warn");
+					return;
+				}
+				createdPrimitives = [];
+				stopFollowing();
+				try {
+					const files = await new Promise((resolve) => {
+						const input = document.createElement('input');
+						input.type = 'file';
+						input.multiple = true;
+						input.accept = '.png,.jpg,.jpeg,.bmp';
+						input.onchange = () => resolve(Array.from(input.files));
+						input.click();
+					});
+					if (!files.length) return;
+
+					const validTypes = ['image/png', 'image/jpeg', 'image/bmp'];
+					const invalidFiles = files.filter(f => !validTypes.includes(f.type.toLowerCase()));
+					if (invalidFiles.length) {
+						showMessage('仅支持 PNG、JPG、JPEG、BMP 格式', "error");
+						return;
+					}
+
+					revokeAllObjectUrls();
+
+					// ---------- 增强版文件名解析与别名处理 ----------
+					const pattern = /^(T|B|L)(\d+|S).*\.(png|jpg|jpeg|bmp)$/i;
+					const aliasPattern = /^(TOP|BOT).*\.(png|jpg|jpeg|bmp)$/i;
+
+					// 第一步：解析所有文件，收集信息
+					const parsed = files.map((file, idx) => {
+						const name = file.name;
+						let match = name.match(pattern);
+						if (match) {
+							const prefix = match[1].toUpperCase();
+							const suffix = match[2].toUpperCase();
+							return { idx, type: 'normal', prefix, suffix, valid: true };
+						}
+						match = name.match(aliasPattern);
+						if (match) {
+							const alias = match[1].toUpperCase(); // TOP 或 BOT
+							return { idx, type: 'alias', alias, valid: true };
+						}
+						return { idx, valid: false };
+					});
+
+					const allValid = parsed.every(p => p.valid);
+					let layoutMap = null;
+					let canUseSpecial = false;
+					let orderedFiles = files; // 默认保持原顺序
+
+					if (allValid) {
+						// 收集所有 L 数字，用于计算 BOT 对应的最大 L 编号
+						const lNumbers = parsed
+							.filter(p => p.type === 'normal' && p.prefix === 'L' && p.suffix !== 'S')
+							.map(p => parseInt(p.suffix, 10))
+							.filter(num => !isNaN(num));
+						const maxL = lNumbers.length > 0 ? Math.max(...lNumbers) : 1;
+
+						// 第二步：将别名转换为等效的 normal 条目
+						const tempItems = parsed.map(p => {
+							if (p.type === 'normal') {
+								return { idx: p.idx, prefix: p.prefix, suffix: p.suffix };
+							} else {
+								if (p.alias === 'TOP') {
+									return { idx: p.idx, prefix: 'L', suffix: '1' };
+								} else {
+									return { idx: p.idx, prefix: 'L', suffix: String(maxL) };
+								}
+							}
+						});
+
+						// 分组
+						const tGroup = tempItems.filter(p => p.prefix === 'T' && p.suffix !== 'S');
+						const bGroup = tempItems.filter(p => p.prefix === 'B' && p.suffix !== 'S');
+						const lGroup = tempItems.filter(p => p.prefix === 'L');
+						const tsFile = tempItems.find(p => p.prefix === 'T' && p.suffix === 'S');
+						const bsFile = tempItems.find(p => p.prefix === 'B' && p.suffix === 'S');
+
+						// 排序：T、B 降序，L 升序
+						tGroup.sort((a, b) => parseInt(b.suffix) - parseInt(a.suffix));
+						bGroup.sort((a, b) => parseInt(b.suffix) - parseInt(a.suffix));
+						lGroup.sort((a, b) => parseInt(a.suffix) - parseInt(b.suffix));
+
+						const lCount = lGroup.length;
+						const lValid = (lCount === 0) || (lCount >= 2 && lCount % 2 === 0);
+
+						if (lValid) {
+							// 构建左右列顺序（从上到下）
+							const leftOrder = [...tGroup];
+							if (tsFile) leftOrder.push(tsFile);
+							let leftL = [], rightL = [];
+							if (lCount > 0) {
+								const half = lCount / 2;
+								leftL = lGroup.slice(0, half);
+								rightL = lGroup.slice(half).reverse(); // 右列 L 降序
+							}
+							leftOrder.push(...leftL);
+
+							const rightOrder = [...bGroup];
+							if (bsFile) rightOrder.push(bsFile);
+							rightOrder.push(...rightL);
+
+							// 按行优先顺序构建有序文件数组（用于预览网格）
+							const maxRows = Math.max(leftOrder.length, rightOrder.length);
+							const newOrderedFiles = [];
+							const newMap = new Map();
+
+							for (let row = 0; row < maxRows; row++) {
+								// 左列
+								if (row < leftOrder.length) {
+									const item = leftOrder[row];
+									const file = files[item.idx];
+									const newIdx = newOrderedFiles.length;
+									newOrderedFiles.push(file);
+									newMap.set(newIdx, { col: 'left', row });
+								}
+								// 右列
+								if (row < rightOrder.length) {
+									const item = rightOrder[row];
+									const file = files[item.idx];
+									const newIdx = newOrderedFiles.length;
+									newOrderedFiles.push(file);
+									newMap.set(newIdx, { col: 'right', row });
+								}
+							}
+
+							orderedFiles = newOrderedFiles;
+							layoutMap = newMap;
+							canUseSpecial = true;
+						}
+					}
+
+					// 保存布局信息
+					specialLayoutMap = layoutMap;
+					useSpecialLayout = canUseSpecial;
+					imagesArray = orderedFiles; // 更新为有序数组
+
+					// 渲染预览网格（若为特殊布局则显示两列）
+					renderGrid(imagesArray, useSpecialLayout);
+					document.querySelector('.preview-placeholder').style.display = 'none';
+					document.getElementById('previewImage').style.display = 'none';
+
+					// 加载第一张图片用于尺寸计算
+					loadImageToCurrent(imagesArray[0]);
+
+					isPlacingActive = false;
+					enableUiAfterPlace(true);
+				} catch (error) {
+					console.error('选择图像时出错:', error);
+				}
+			}
+
+			// ======================== 事件绑定与初始化 ========================
+			
+			// 窗口失去焦点时，认为当前图片已放置完成（用户点击了画布）
+			window.onblur = async function () {
+				if (isPlacingActive && followInterval) {
+					await finishCurrentPlaceAndContinue();
+				} else if (!isPlacingActive && status) {
+					if (followInterval) clearInterval(followInterval);
+					eda.sys_IFrame.closeIFrame('ImportImage');
+				}
+			};
+
+			// 单位切换
+			unitOptions.forEach((option) => {
+				option.addEventListener('click', function () {
+					if (this.classList.contains('active')) return;
+					unitOptions.forEach(opt => opt.classList.remove('active'));
+					this.classList.add('active');
+					const oldUnit = currentUnit;
+					currentUnit = this.dataset.unit;
+					if (currentImage && widthInput.value && heightInput.value) {
+						if (oldUnit === 'mm' && currentUnit === 'mil') {
+							widthInput.value = (parseFloat(widthInput.value) * CONFIG.MM_TO_MIL).toFixed(2);
+							heightInput.value = (parseFloat(heightInput.value) * CONFIG.MM_TO_MIL).toFixed(2);
+						} else if (oldUnit === 'mil' && currentUnit === 'mm') {
+							widthInput.value = (parseFloat(widthInput.value) * CONFIG.MIL_TO_MM).toFixed(2);
+							heightInput.value = (parseFloat(heightInput.value) * CONFIG.MIL_TO_MM).toFixed(2);
+						}
+						calculateDpi();
+					}
+				});
+			});
+
+			// 图层切换
+			layerOptions.forEach((option) => {
+				option.addEventListener('click', function () {
+					if (this.classList.contains('active')) return;
+					layerOptions.forEach(opt => opt.classList.remove('active'));
+					this.classList.add('active');
+					currentLayer = this.dataset.layer;
+				});
+			});
+
+			// 尺寸输入事件
+			widthInput.addEventListener('input', function () {
+				if (!isCalculatingFromDpi) {
+					calculateDpi();
+					if (aspectRatioCheckbox.checked && currentImage) {
+						const width = parseFloat(this.value);
+						if (!isNaN(width)) {
+							const height = width / originalAspectRatio;
+							heightInput.value = height.toFixed(2);
+						}
+					}
+				}
+			});
+			heightInput.addEventListener('input', function () {
+				if (!isCalculatingFromDpi) {
+					calculateDpi();
+					if (aspectRatioCheckbox.checked && currentImage) {
+						const height = parseFloat(this.value);
+						if (!isNaN(height)) {
+							const width = height * originalAspectRatio;
+							widthInput.value = width.toFixed(2);
+						}
+					}
+				}
+			});
+
+			// 保持横纵比开关
+			function toggleAspectRatio() {
+				const isChecked = aspectRatioCheckbox.checked;
+				if (isChecked) {
+					customDpiInput.disabled = false;
+					dpiSlider.disabled = false;
+					dpiValueItems.forEach(item => item.style.pointerEvents = 'auto');
+					if (currentImage) {
+						const img = new Image();
+						img.onload = function () {
+							originalAspectRatio = img.width / img.height;
+							if (widthInput.value && heightInput.value) {
+								const width = parseFloat(widthInput.value);
+								const height = width / originalAspectRatio;
+								heightInput.value = height.toFixed(2);
+							}
+							calculateDpi();
+						};
+						img.src = URL.createObjectURL(currentImage);
+					}
+				} else {
+					customDpiInput.disabled = true;
+					dpiSlider.disabled = true;
+					dpiValueItems.forEach(item => item.style.pointerEvents = 'none');
+					dpiValueItems.forEach(item => item.classList.remove('active'));
+					customDpiInput.value = '';
+					currentDpi = null;
+				}
+			}
+			aspectRatioCheckbox.addEventListener('change', toggleAspectRatio);
+
+			// DPI滑块事件
+			dpiSlider.addEventListener('input', function() {
+				const rawIdx = parseInt(this.value, 10);
+				const idx = 5 - rawIdx;
+				const selectedDpi = CONFIG.DPI_PRESETS[idx];
+				setCurrentDpiAndRecalc(selectedDpi);
+			});
+			// 右侧列表点击
+			dpiValueItems.forEach((item, idx) => {
+				item.addEventListener('click', () => {
+					const dpi = CONFIG.DPI_PRESETS[idx];
+					setCurrentDpiAndRecalc(dpi);
+				});
+			});
+			// 自定义DPI输入
+			customDpiInput.addEventListener('input', function() {
+				let dpiValue = parseInt(this.value, 10);
+				if (isNaN(dpiValue) || dpiValue <= 0) return;
+				currentDpi = dpiValue;
+				const index = CONFIG.DPI_PRESETS.indexOf(currentDpi);
+				if (index !== -1) {
+					const sliderValue = 5 - index;
+					dpiSlider.value = sliderValue;
+					dpiValueItems.forEach((item, i) => {
+						if (i === index) item.classList.add('active');
+						else item.classList.remove('active');
+					});
+				} else {
+					dpiValueItems.forEach(item => item.classList.remove('active'));
+				}
+				if (aspectRatioCheckbox.checked && currentImage) {
+					calculateDimensionsFromDpi();
+				}
+			});
+
+			// 切片开关监听
+			sliceimportCheckbox.addEventListener('change', function() {
+				isSliceEnabled = this.checked;
+			});
+			isSliceEnabled = sliceimportCheckbox.checked;
+			
+			// 按钮绑定
+			selectImageBtn.addEventListener('click', handleImageSelect);
+			placeImageBtn.addEventListener('click', handlePlaceImage);
+			
+			// 初始禁用放置按钮
+			placeImageBtn.disabled = true;

@@ -1,0 +1,97 @@
+/* VS Code 深色主题风格 */
+			body {
+				margin: 0;
+				padding: 0;
+				width: 300px;
+				height: 120px;
+				overflow: hidden;
+				font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+				background-color: #1e1e1e;
+				color: #cccccc;
+				font-size: 13px;
+			}
+			.container {
+				width: 300px;
+				height: 100px;
+				box-sizing: border-box;
+				padding: 0px 14px;
+				display: flex;
+				flex-direction: column;
+				justify-content: center;
+				gap: 12px;
+			}
+			.input-group {
+				width: 100%;
+				display: flex;
+    			gap: 12px;
+			}
+			input[type='text'] {
+				/* width: 100%; */
+				padding: 5px;
+				background-color: #3c3c3c;
+				color: #cccccc;
+				border: 1px solid #3c3c3c;
+				border-radius: 2px;
+				font-size: 13px;
+				outline: none;
+				box-sizing: border-box;
+				transition: border-color 0.1s ease;
+			}
+			input[type='text']::placeholder {
+				color: #808080;
+			}
+			input[type='text']:focus {
+				border-color: #007fd4;
+			}
+			.footer {
+				display: flex;
+				flex-direction: row;
+				align-items: center;
+				gap: 12px;
+				width: 100%;
+			}
+			.footer label {
+				white-space: nowrap;
+				color: #cccccc;
+			}
+			select {
+				width: 135px;
+				flex: 1;
+				padding: 4px;
+				background-color: #3c3c3c;
+				color: #cccccc;
+				border: 1px solid #3c3c3c;
+				border-radius: 2px;
+				font-size: 13px;
+				outline: none;
+				cursor: pointer;
+			}
+			select:focus {
+				border-color: #007fd4;
+			}
+			select option {
+				background-color: #252526;
+				color: #cccccc;
+			}
+			button {
+				padding: 3px 10px;
+				background-color: #0e639c;
+				color: #ffffff;
+				border: 1px solid transparent;
+				border-radius: 2px;
+				font-size: 13px;
+				cursor: pointer;
+				white-space: nowrap;
+				transition: background-color 0.1s ease;
+			}
+			button:hover:not(:disabled) {
+				background-color: #1177bb;
+			}
+			button:active:not(:disabled) {
+				background-color: #094771;
+			}
+			button:disabled {
+				background-color: #4d4d4d;
+				color: #aaaaaa;
+				cursor: not-allowed;
+			}

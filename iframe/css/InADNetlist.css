@@ -1,0 +1,233 @@
+/* 基础重置 + VSCode Dark+ 风格 */
+		* {
+			margin: 0;
+			padding: 0;
+			box-sizing: border-box;
+		}
+
+		body {
+			font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+			background: #1e1e1e; /* VSCode Editor Background */
+			color: #cccccc;      /* VSCode Default Foreground */
+			height: 100vh;
+			width: 100%;
+			overflow: hidden;
+			display: flex;
+			flex-direction: column;
+		}
+
+		/* 主容器 */
+		.app-container {
+			display: flex;
+			flex-direction: column;
+			height: 100%;
+			width: 100%;
+			background: #1e1e1e;
+		}
+
+		/* 工具栏 - 类似 VSCode 顶部菜单/面板头 */
+		.toolbar {
+			display: flex;
+			justify-content: space-between;
+			align-items: center;
+			padding: 8px 14px;
+			background: #252526; /* VSCode Panel Background */
+			border-bottom: 1px solid #333333; /* VSCode Border */
+			flex-wrap: wrap;
+			gap: 12px;
+		}
+
+		.toolbar-left, .toolbar-right {
+			display: flex;
+			gap: 8px;
+			align-items: center;
+		}
+
+		/* 按钮样式 - 直角、扁平化 */
+		.btn {
+			padding: 4px 12px;
+			font-size: 12px;
+			font-weight: normal;
+			border-radius: 2px; /* 统一为2px直角 */
+			cursor: pointer;
+			transition: background 0.1s;
+			border: 1px solid transparent;
+			display: inline-flex;
+			align-items: center;
+			gap: 6px;
+			font-family: inherit;
+		}
+
+		.btn-primary {
+			background: #0e639c; /* VSCode Primary Button */
+			color: #ffffff;
+		}
+
+		.btn-primary:hover {
+			background: #1177bb;
+		}
+
+		.btn-outline {
+			background: #3a3d41; /* VSCode Secondary Button */
+			color: #cccccc;
+		}
+
+		.btn-outline:hover {
+			background: #45494e;
+		}
+
+		/* 信息条 - 类似状态栏或二级面包屑 */
+		.info-bar {
+			background: #1e1e1e;
+			padding: 6px 14px;
+			font-size: 12px;
+			color: #858585; /* VSCode Comment Color */
+			border-bottom: 1px solid #333333;
+			display: flex;
+			justify-content: space-between;
+			align-items: center;
+		}
+
+		.status-msg {
+			display: flex;
+			align-items: center;
+			gap: 12px;
+		}
+
+		.badge {
+			background: #2d2d30; /* VSCode Badge/Input Background */
+			padding: 2px 6px;
+			border-radius: 2px;
+			font-size: 11px;
+			color: #d4d4d4;
+			border: 1px solid #3c3c3c;
+		}
+
+		/* 表格容器 */
+		.table-wrapper {
+			flex: 1;
+			overflow: auto;
+			background: #1e1e1e;
+		}
+
+		.net-table {
+			width: 100%;
+			border-collapse: collapse;
+			font-size: 13px;
+			/* min-width: 560px; */
+		}
+
+		.net-table th {
+			text-align: left;
+			padding: 8px 14px;
+			background-color: #252526;
+			font-weight: normal;
+			color: #cccccc;
+			/* 使用 box-shadow 替代 border-bottom 保证 sticky 时的边框效果 */
+			box-shadow: 0 1px 0 #333333; 
+			position: sticky;
+			top: 0;
+			z-index: 10;
+			font-size: 12px;
+		}
+
+		.net-table td {
+			padding: 6px 14px;
+			border-bottom: 1px solid #2b2b2b;
+			color: #d4d4d4;
+			/* 表格数据强制等宽字体，更具代码感 */
+			font-family: Consolas, "Courier New", monospace; 
+			font-size: 13px;
+		}
+
+		.net-table tr:hover td {
+			background-color: #2a2d2e; /* VSCode List Hover */
+		}
+
+		.net-table .warning-row td {
+			background-color: rgba(204, 167, 0, 0.1); /* VSCode 警告色的极淡背景 */
+			color: #cca700; /* VSCode Warning Color */
+		}
+		
+		.net-table .warning-row:hover td {
+			background-color: rgba(204, 167, 0, 0.15);
+		}
+
+		/* 位号列加高亮色 */
+		.net-table td:first-child strong {
+			color: #569cd6; /* VSCode 关键字蓝色 */
+			font-weight: normal;
+		}
+
+		.old-net {
+			color: #858585; /* 旧网络用注释灰，弱化显示 */
+		}
+
+		.new-net {
+			color: #4ec9b0; /* 新网络用 VSCode 类型青色，突出显示 */
+		}
+
+		.diff-badge {
+			background: rgba(78, 201, 176, 0.15);
+			color: #4ec9b0;
+			border: 1px solid rgba(78, 201, 176, 0.3);
+			font-size: 11px;
+			padding: 0px 4px;
+			border-radius: 2px;
+			margin-left: 8px;
+			font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+		}
+
+		.empty-table-msg td {
+			text-align: center;
+			padding: 48px 20px !important;
+			color: #858585;
+			font-size: 13px;
+			font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif !important;
+			font-style: italic;
+		}
+
+		
+		/* ================= 滚动条全局美化 ================= */
+        /* 支持 Chrome, Edge, Safari 等 Webkit 内核浏览器 */
+        
+        /* 滚动条整体宽度/高度 */
+        ::-webkit-scrollbar {
+            width: 12px;  /* 垂直滚动条的宽度 */
+            height: 12px; /* 水平滚动条的高度 */
+        }
+
+        /* 滚动条轨道（背景） */
+        ::-webkit-scrollbar-track {
+            background: transparent; /* 轨道背景透明 */
+        }
+
+        /* 滚动条滑块（拖动的部分） */
+        ::-webkit-scrollbar-thumb {
+            background-color: #424242; 
+            border-radius: 0px;        /* 去除圆角，更加极客 */
+            border: 2px solid var(--bg); /* 使用正确的背景变量隔离 */
+        }
+        ::-webkit-scrollbar-thumb:hover { background-color: #4f4f4f; }
+
+        /* 滚动条两端的按钮（上下/左右箭头），这里将其隐藏 */
+        ::-webkit-scrollbar-button {
+            display: none;
+        }
+
+        /* 支持 Firefox 浏览器 */
+        * {
+            scrollbar-width: thin; /* 变细 */
+            scrollbar-color: #424242 transparent; /* 滑块颜色 轨道颜色 */
+        }
+
+
+		/* 移动端适配 */
+		@media (max-width: 640px) {
+			.toolbar {
+				padding: 8px 10px;
+			}
+			.net-table th, .net-table td {
+				padding: 6px 10px;
+			}
+		}

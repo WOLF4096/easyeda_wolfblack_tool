@@ -1,0 +1,221 @@
+/* VSCode 深色主题全局变量与重置 */
+        :root {
+            --bg-color: #1e1e1e;
+            --header-bg: #252526;
+            --border-color: #3c3c3c;
+            --text-main: #cccccc;
+            --text-muted: #858585;
+            --text-disabled: #666666;
+            --btn-bg: #3c3c3c;
+            --btn-hover: #4d4d4d;
+            --accent-blue: #3794ff;
+            --change-color: #4CAF50; /* 变化时的绿色高亮，更直观 */
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: var(--bg-color);
+            color: var(--text-main);
+            font-family: Consolas, "Courier New", monospace;
+            font-size: 13px;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        /* 顶部工具栏 */
+        .toolbar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px 12px;
+            background-color: var(--header-bg);
+            border-bottom: 1px solid var(--border-color);
+            flex-shrink: 0;
+        }
+
+        .warning-text { color: var(--text-main); font-size: 12px; }
+        .button-group { display: flex; gap: 6px; }
+
+        button {
+            background-color: var(--btn-bg);
+            color: var(--text-main);
+            border: 1px solid transparent;
+            padding: 4px 11px;
+            cursor: pointer;
+            font-family: inherit;
+            font-size: 13px;
+            border-radius: 2px;
+            transition: background-color 0.1s;
+        }
+        button:hover { background-color: var(--btn-hover); }
+        
+        /* === 新增：按钮禁用状态样式 === */
+        button:disabled { 
+            background-color: #333333; 
+            cursor: not-allowed; 
+            color: #666666; 
+        }
+
+        /* 确保 table-container 能正常滚动 */
+        .table-container {
+            flex: 1;
+            overflow-y: auto;
+            padding: 0;
+            position: relative; /* 增加相对定位作为参考系 */
+        }
+
+        /* 给 thead 增加一层防呆的粘性定位 */
+        thead {
+            position: sticky;
+            top: 0;
+            z-index: 20;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            table-layout: fixed;
+        }
+
+        th, td {
+            padding: 4px 0px;
+            text-align: left;
+            border-bottom: 1px solid var(--border-color);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        /* 修改 th 样式 */
+        th {
+            background-color: #2d2d30;
+            position: sticky;
+            top: 0;
+            z-index: 10;
+            font-weight: normal;
+            color: #eeeeee;
+            /* 关键修复：使用 box-shadow 代替 border-bottom 确保滚动时底边框不会跟着滑走 */
+            box-shadow: 0 1px 0 var(--border-color);
+            border-bottom: none; 
+            padding: 4px 0px;
+            text-align: left;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .clickable-header {
+            cursor: pointer;
+            user-select: none;
+            transition: color 0.1s;
+        }
+        .clickable-header:hover { color: var(--accent-blue); }
+
+        /* 排序图标样式 */
+        .sortable-header {
+            position: relative;
+        }
+        .sort-icon {
+            display: inline-block;
+            font-size: 10px;
+            margin-left: 4px;
+            color: var(--accent-blue);
+            width: 10px; /* 固定宽度防止文字抖动 */
+        }
+
+        /* --- 列宽分配 --- */
+        th:nth-child(1), td:nth-child(1) { width: 40px; text-align: center; } /* 多选框 */
+        th:nth-child(2), td:nth-child(2) { width: 80px; }
+        th:nth-child(6), th:nth-child(7), th:nth-child(8) { text-align: center; width: 60px; }
+        td:nth-child(6), td:nth-child(7), td:nth-child(8) { text-align: center; }
+
+        /* 复选框样式 */
+        input[type="checkbox"] {
+            accent-color: var(--accent-blue);
+            cursor: pointer;
+            width: 14px; height: 14px;
+            margin: 0; vertical-align: middle;
+        }
+
+        /* 状态样式 */
+        .disabled-row {
+            color: var(--text-disabled);
+            background-color: rgba(0, 0, 0, 0.1);
+        }
+        .disabled-row input[type="checkbox"]:not(.row-selector) {
+            opacity: 0.3; cursor: not-allowed;
+        }
+        
+        .change-arrow {
+            color: var(--change-color);
+            margin: 0 4px;
+            font-weight: bold;
+        }
+
+		/* --- 新增：VSCode 风格底部状态栏与进度条 --- */
+        .status-bar {
+            height: 22px;
+            background-color: #007acc; /* VSCode 经典蓝 */
+            color: #ffffff;
+            font-size: 12px;
+            display: flex;
+            align-items: center;
+            padding: 0 10px;
+            flex-shrink: 0;
+            position: relative;
+            overflow: hidden;
+            box-shadow: 0 -1px 2px rgba(0,0,0,0.2);
+        }
+        /* 进度条的填充层 */
+        .progress-bg {
+            position: absolute;
+            left: 0;
+            top: 0;
+            bottom: 0;
+            background-color: rgba(255, 255, 255, 0.2); /* 半透明白色作为进度填充 */
+            width: 0%;
+            transition: width 0.2s ease;
+            z-index: 1;
+        }
+        /* 状态栏文字需要浮在进度条上方 */
+        .status-text {
+            position: relative;
+            z-index: 2;
+            white-space: nowrap;
+        }
+		
+		/* ================= 滚动条全局美化 ================= */
+        /* 支持 Chrome, Edge, Safari 等 Webkit 内核浏览器 */
+        
+        /* 滚动条整体宽度/高度 */
+        ::-webkit-scrollbar {
+            width: 12px;  /* 垂直滚动条的宽度 */
+            height: 12px; /* 水平滚动条的高度 */
+        }
+
+        /* 滚动条轨道（背景） */
+        ::-webkit-scrollbar-track {
+            background: transparent; /* 轨道背景透明 */
+        }
+
+        /* 滚动条滑块（拖动的部分） */
+        ::-webkit-scrollbar-thumb {
+            background-color: #424242; 
+            border-radius: 0px;        /* 去除圆角，更加极客 */
+            border: 2px solid var(--bg); /* 使用正确的背景变量隔离 */
+        }
+        ::-webkit-scrollbar-thumb:hover { background-color: #4f4f4f; }
+
+        /* 滚动条两端的按钮（上下/左右箭头），这里将其隐藏 */
+        ::-webkit-scrollbar-button {
+            display: none;
+        }
+
+        /* 支持 Firefox 浏览器 */
+        * {
+            scrollbar-width: thin; /* 变细 */
+            scrollbar-color: #424242 transparent; /* 滑块颜色 轨道颜色 */
+        }
