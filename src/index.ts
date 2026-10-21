@@ -1,243 +1,276 @@
 /**
- * 入口文件
+ * 狼黑工具 · 扩展入口
  *
- * 本文件为默认扩展入口文件，如果你想要配置其它文件作为入口文件，
- * 请修改 `extension.json` 中的 `entry` 字段；
+ * 本文件只做三件事，**功能实现都不在这里**：
+ *   1. 导出函数，供 `extension.json` 的 `headerMenus[].registerFn` 按名字引用
+ *      （函数名 = 菜单项，改名/删除必须同步改 `extension.json`，否则菜单点了没反应）；
+ *   2. 打开各功能的 iframe 页面（统一走 `openPage`）；
+ *   3. 模块加载时执行一次性初始化 + 注册快捷键（V3 / V4 才有快捷键 API）。
  *
- * 请在此处使用 `export`  导出所有你希望在 `headerMenus` 中引用的方法，
- * 方法通过方法名与 `headerMenus` 关联。
+ * 功能代码的位置：
+ *   - 有界面：`iframe/<页面>.html` + `iframe/js/app/<页面>.js`（页面自己读写网表 / 图元）；
+ *   - 无界面：`src/js/<模块>.js`，**按需 `import()`** —— 不要在入口静态引入，
+ *     否则每次打开 EDA 都要先把所有功能加载进内存。
  *
- * 如需了解更多开发细节，请阅读：
- * https://prodocs.lceda.cn/cn/api/guide/
+ * 开发文档：https://prodocs.lceda.cn/cn/api/guide/
  */
 import * as extensionConfig from '../extension.json';
 
+/* ===== 一、公共工具 ===== */
+
+/**
+ * 打开功能页面
+ *
+ * @param name - 页面名，对应 `iframe/<name>.html`
+ * @param width - 宽（px）
+ * @param height - 高（px）
+ * @param id - iframe 标识
+ */
+function openPage(name: string, width: number, height: number, id: string = name): void {
+	eda.sys_IFrame.openIFrame(`/iframe/${name}.html`, width, height, id);
+}
+
+/* ===== 二、生命周期 ===== */
+
+/**
+ * 扩展激活钩子（由 EDA 调用）
+ *
+ * `extension.json` 的 `activationEvents` 为空，表示不随启动自动激活，只在用户点菜单时激活，
+ * 因此这里不需要做任何事；保留空实现是因为入口必须导出它。
+ */
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 export function activate(status?: 'onStartupFinished', arg?: string): void {}
 
-// PCB转SCH
-export async function PcbToSch() {
-	eda.sys_IFrame.openIFrame('/iframe/PcbToSch.html', 640, 540, 'tosch');
+/* ===== 三、有界面的功能（打开 iframe） ===== */
+
+/** 工作时间统计（界面；数据由下面的后台记录持续累积） */
+export function WorkingHours(): void {
+	openPage('WorkingHours', 960, 600);
 }
 
-// 从PCB获取引脚信息放置导线
-export async function AutoWirePlacerPCB() {
-	const { placeWires } = await import('./js/autoWire/index');
-	await placeWires('PCB');
+/** 引脚排序（符号编辑器） */
+export function PinSorting(): void {
+	openPage('PinSorting', 200, 168);
 }
 
-// 从网表获取引脚信息放置导线
-export async function AutoWirePlacerNET() {
-	const { placeWires } = await import('./js/autoWire/index');
-	await placeWires('NET');
+/** 关于 */
+export function About(): void {
+	openPage('About', 860, 720);
 }
 
-// 清除属性
-export async function ClearEmptySupplierProperties() {
-	eda.sys_IFrame.openIFrame('/iframe/ClearEmptyProperties.html', 800, 480, 'ClearEmptyProperties');
+/** 从 PCB 转原理图 */
+export function PcbToSch(): void {
+	// 该页面的 iframe 标识沿用历史的 'tosch'（页面内部按此标识关闭自己）
+	openPage('PcbToSch', 640, 540, 'tosch');
 }
 
-// 刷新网表
-export async function RefreshNetlist() {
-	const { RefreshNetlist } = await import('./js/RefreshNetlist');
-	await RefreshNetlist();
+/** 导入 BOM（原理图 / PCB 都挂，用于批量改器件属性） */
+export function ImportBom(): void {
+	openPage('ImportBom', 1024, 540);
 }
 
-// 位号查重
-export async function CheckDesignators() {
+/** 丝印代码转换（E96 阻值 ↔ 丝印） */
+export function CodeConvert(): void {
+	openPage('CodeConvert', 540, 540);
+}
+
+/** 清空多余属性（供应商 / 厂商等空属性） */
+export function ClearEmptySupplierProperties(): void {
+	openPage('ClearEmptyProperties', 800, 480);
+}
+
+/** 导入图片 */
+export function ImportImage(): void {
+	openPage('ImportImage', 860, 540);
+}
+
+/** 导入二维码 */
+export function ImportQrcode(): void {
+	openPage('ImportQrcode', 820, 700);
+}
+
+/** 创建封装 */
+export function CreateFootprint(): void {
+	openPage('CreateFootprint', 300, 100);
+}
+
+/** 批量替换器件 */
+export function ReplaceComponent(): void {
+	openPage('ReplaceComponent', 810, 480);
+}
+
+/** 3D 模型批量更新与恢复 */
+export function NetlistUpdate3DModels(): void {
+	openPage('NetlistUpdate3DModels', 960, 480);
+}
+
+/** 生成物理网络（纯几何聚类，把「有连接关系的图元」归到同一网络） */
+export function GenerateNet(): void {
+	openPage('GenerateNet', 540, 540);
+}
+
+/** 导入 AD 网表 */
+export function InADNetlist(): void {
+	openPage('InADNetlist', 540, 540);
+}
+
+/** 导出引脚网络 */
+export function OutPinNet(): void {
+	openPage('OutPinNet', 540, 540);
+}
+
+/** 批量修改网络 */
+export function ModifyNet(): void {
+	openPage('ModifyNet', 540, 540);
+}
+
+/** API 基准测试（坐标 / 尺寸校准，转换类功能的倍率来源） */
+export function APITest(): void {
+	openPage('APITest', 512, 640);
+}
+
+/** EDA 桥（本地调试通道，见 tools/eda-bridge） */
+export function EDABridge(): void {
+	openPage('EDABridge', 300, 37);
+}
+
+/* ===== 四、无界面的功能（直接执行，按需加载） ===== */
+
+// ---------------------------- 导线 / 图元转换 ----------------------------
+
+/** 焊盘 ⇄ 过孔（按选中类型自动判方向） */
+export async function PadViaToggle(): Promise<void> {
+	const { PadViaConverter } = await import('./js/PadViaConverter');
+	await PadViaConverter.toggle();
+}
+
+/** 导线 ⇄ 线条（按选中类型自动判方向；多段首尾相接时合并为一条折线） */
+export async function WirePolylinetoggle(): Promise<void> {
+	const { WireConverter } = await import('./js/WireConverter');
+	await WireConverter.toggle();
+}
+
+/** 填充 ⇄ 图片 */
+export async function RegionImageConverter(): Promise<void> {
+	const { ImageFillConverter } = await import('./js/RegionImageConverter');
+	await ImageFillConverter.toggle();
+}
+
+// ---------------------------- 网表 / 器件 ----------------------------
+
+/** 刷新网表 */
+export async function RefreshNetlist(): Promise<void> {
+	const mod = await import('./js/RefreshNetlist');
+	await mod.RefreshNetlist();
+}
+
+/** 位号查重 */
+export async function CheckDesignators(): Promise<void> {
 	const { checkDuplicateDesignators } = await import('./js/CheckDesignators');
 	await checkDuplicateDesignators();
 }
 
-// 3D模型批量更新与恢复
-export async function NetlistUpdate3DModels() {
-	eda.sys_IFrame.openIFrame('/iframe/NetlistUpdate3DModels.html', 960, 480, 'NetlistUpdate3DModels');
+/** 从 PCB 创建导线 */
+export async function AutoWirePlacerPCB(): Promise<void> {
+	const { placeWires } = await import('./js/autoWire/index');
+	await placeWires('PCB');
 }
 
-// // 焊盘 ⇒ 过孔
-// export async function PadToVia() {
-// 	const module = await import('./js/PadViaConverter');
-// 	await module.PadViaConverter.toVia();
-// }
-// // 过孔 ⇒ 焊盘
-// export async function ViaToPad() {
-// 	const module = await import('./js/PadViaConverter');
-// 	await module.PadViaConverter.toPad();
-// }
-// 焊盘 ⇄ 过孔
-export async function PadViaToggle() {
-	const module = await import('./js/PadViaConverter');
-	await module.PadViaConverter.toggle();
+/** 从网表创建导线 */
+export async function AutoWirePlacerNET(): Promise<void> {
+	const { placeWires } = await import('./js/autoWire/index');
+	await placeWires('NET');
 }
 
-// // 线条 ⇒ 导线
-// export async function PolylinetoWire() {
-// 	const module = await import('./js/WireConverter');
-// 	await module.WireConverter.toWire();
-// }
-// // 导线 ⇒ 线条
-// export async function WiretoPolyline() {
-// 	const module = await import('./js/WireConverter');
-// 	await module.WireConverter.toPolyline();
-// }
-// 导线 ⇄ 线条
-export async function WirePolylinetoggle() {
-	const module = await import('./js/WireConverter');
-	await module.WireConverter.toggle();
-}
-// 填充 ⇄ 图片
-export async function RegionImageConverter() {
-	const module = await import('./js/RegionImageConverter');
-	await module.ImageFillConverter.toggle();
+// ---------------------------- 后台任务（不挂菜单） ----------------------------
+
+/**
+ * 工作时间统计 —— 后台记录
+ *
+ * @internal 不挂在菜单上，只由下面的 `initializeOnce()` 调用。
+ * 保留 `export` 只是为了兼容历史调用方；新代码请直接用 `initializeOnce`。
+ */
+export async function WorkingHoursJs(): Promise<void> {
+	const { WorkingHours: startRecorder } = await import('./js/WorkingHours');
+	await startRecorder();
 }
 
-// 创建封装
-export async function CreateFootprint() {
-	eda.sys_IFrame.openIFrame('/iframe/CreateFootprint.html', 300, 100, 'CreateFootprint');
-}
+/* ===== 五、模块加载时执行 ===== */
 
-// 批量替换器件
-export async function ReplaceComponent() {
-	eda.sys_IFrame.openIFrame('/iframe/ReplaceComponent.html', 810, 480, 'ReplaceComponent');
-}
-
-// 导入图片
-export async function ImportImage() {
-	eda.sys_IFrame.openIFrame('/iframe/ImportImage.html', 860, 540, 'ImportImage');
-}
-
-// 导入BOM
-export async function ImportBom() {
-	eda.sys_IFrame.openIFrame('/iframe/ImportBom.html', 1024, 540, 'ImportBom');
-}
-
-// 导入二维码
-export async function ImportQrcode() {
-	eda.sys_IFrame.openIFrame('/iframe/ImportQrcode.html', 820, 700, 'ImportQrcode');
-}
-
-// 导入Gerber
-// export async function ImportGerber() {
-// 	eda.sys_IFrame.openIFrame('/iframe/ImportGerber.html', 1280, 800, 'ImportGerber');
-// }
-
-// 丝印代码转换
-export function CodeConvert() {
-	eda.sys_IFrame.openIFrame('/iframe/CodeConvert.html', 540, 540, 'CodeConvert');
-}
-
-// 工作时间统计 - 前端界面
-// export async function WorkingHours() {
-// 	eda.sys_IFrame.openIFrame('/iframe/WorkingHours.html', 540, 680, 'WorkingHours');
-// }
-// 工作时间统计 - 前端界面
-export async function WorkingHours() {
-	eda.sys_IFrame.openIFrame('/iframe/WorkingHours.html', 960, 600, 'WorkingHours');
-}
-// 工作时间统计 - 后台记录
-export async function WorkingHoursJs() {
-	const module = await import('./js/WorkingHours');
-	await module.WorkingHours();
-}
-
-// 生成物理网络
-export async function GenerateNet() {
-	eda.sys_IFrame.openIFrame('/iframe/GenerateNet.html', 540, 540, 'GenerateNet');
-}
-
-// 导入 AD 网表
-export async function InADNetlist() {
-	eda.sys_IFrame.openIFrame('/iframe/InADNetlist.html', 540, 540, 'InADNetlist');
-}
-
-// 导出引脚网络
-export async function OutPinNet() {
-	eda.sys_IFrame.openIFrame('/iframe/OutPinNet.html', 540, 540, 'OutPinNet');
-}
-
-// 批量修改网络
-export async function ModifyNet() {
-	eda.sys_IFrame.openIFrame('/iframe/ModifyNet.html', 540, 540, 'ModifyNet');
-}
-
-// 导出工程文件
-// export async function ExportFile() {
-// 	eda.sys_IFrame.openIFrame('/iframe/ExportFile.html', 600, 600, 'ExportFile');
-// }
-
-// 引脚排序
-export async function PinSorting() {
-	eda.sys_IFrame.openIFrame('/iframe/PinSorting.html', 200, 168, 'PinSorting');
-}
-
-// API基准测试
-export function APITest() {
-	eda.sys_IFrame.openIFrame('/iframe/APITest.html', 512, 640, 'APITest');
-}
-
-// EDA桥
-export function EDABridge() {
-	eda.sys_IFrame.openIFrame('/iframe/EDABridge.html', 300, 37, 'EDABridge');
-}
-
-// 关于
-export function About() {
-	eda.sys_IFrame.openIFrame('/iframe/About.html', 860, 720, 'About');
-}
-
-// 启动软件时执行
+/** 一次性初始化的标记：EDA 可能重复加载入口，重复启动后台记录会重复计时 */
 const INIT_FLAG_KEY = `__EXTENSION_${extensionConfig.name}_INITIALIZED__`;
-if (!globalThis[INIT_FLAG_KEY]) {
+
+/** `globalThis` 上挂的自定义标记（用索引签名访问，避免 TS7053） */
+const globalFlags = globalThis as typeof globalThis & Record<string, boolean | undefined>;
+
+/** 首次加载时启动「工作时间」后台记录 */
+function initializeOnce(): void {
+	if (globalFlags[INIT_FLAG_KEY]) return;
 	console.log(`======= [${extensionConfig.name}] 插件首次加载，执行初始化 =======`);
-	WorkingHoursJs(); // 后台记录工作时间
-	globalThis[INIT_FLAG_KEY] = true;
-
+	globalFlags[INIT_FLAG_KEY] = true;
+	// 后台记录不阻塞入口加载；失败只记日志，不影响其它功能
+	WorkingHoursJs().catch((error) => console.error('[系统] 启动工作时间记录失败:', error));
 }
 
-
-// 注册快捷键
-// 检测版本
-let editorVersion = '2.2.x';
-try {
-	editorVersion = eda.sys_Environment.getEditorCurrentVersion() || '2.2.x';
-} catch (e) {}
-console.log(`[系统] 检测到编辑器版本: ${editorVersion}`);
-
-// 版本族判断：V3 与 V4 都是「新格式」客户端，快捷键 API 从 V3 起提供。
-// 注意不要写回 `startsWith('3.')` —— V4 的版本号是 4.x，会被判成「不支持」而全部不注册。
-const editorMajorVersion = Number.parseInt(String(editorVersion).trim().split('.')[0], 10);
-const shortcutSupported = Number.isFinite(editorMajorVersion) && editorMajorVersion >= 3;
-
-// 条件判断：V2.2 不提供快捷键 API（不注册也不报错），V3 / V4 正常注册
-if (shortcutSupported) {
-	// 导入图片
-	eda.sys_ShortcutKey.unregisterShortcutKey(['Ctrl+Shift+C']);
-	eda.sys_ShortcutKey.registerShortcutKey(
-		['Ctrl+Shift+C'],'导入图片',
-		() => ImportImage(),[4],[1, 2, 3, 4, 5]
-	);
-	// 位号查重
-	// eda.sys_ShortcutKey.unregisterShortcutKey(['Ctrl+Alt+W']);
-	// eda.sys_ShortcutKey.registerShortcutKey(
-	// 	['Ctrl+Alt+W'],'位号查重',
-	// 	() => CheckDesignators(),[4],[1, 2, 3, 4, 5]
-	// );
-	// 导线 ⇄ 线条
-	eda.sys_ShortcutKey.unregisterShortcutKey(['Ctrl+Shift+X']);
-	eda.sys_ShortcutKey.registerShortcutKey(
-		['Ctrl+Shift+X'],'导线 ⇄ 线条',
-		() => WirePolylinetoggle(),[4, 5],[1, 2, 3, 4, 5]
-	);
-	// 焊盘 ⇄ 过孔
-	eda.sys_ShortcutKey.unregisterShortcutKey(['Ctrl+Shift+G']);
-	eda.sys_ShortcutKey.registerShortcutKey(
-		['Ctrl+Shift+G'],'焊盘 ⇄ 过孔',
-		() => PadViaToggle(),[4, 5],[1, 2, 3, 4, 5]
-	);
-	// 图片 ⇄ 填充
-	eda.sys_ShortcutKey.unregisterShortcutKey(['Ctrl+Shift+F']);
-	eda.sys_ShortcutKey.registerShortcutKey(
-		['Ctrl+Shift+F'],'填充 ⇄ 图片',
-		() => RegionImageConverter(),[4, 5],[1, 2, 3, 4, 5]
-	);
+/** 读取编辑器版本号；不在 EDA 环境（或 API 异常）时返回兜底值 */
+function getEditorVersion(): string {
+	try {
+		return eda.sys_Environment.getEditorCurrentVersion() || '2.2.x';
+	} catch (e) {
+		return '2.2.x';
+	}
 }
+
+/** 快捷键生效的文档类型：4 = PCB，5 = 封装 */
+const SHORTCUT_DOC_TYPES = [4, 5];
+
+/** 快捷键生效的场景：非画布 / 画布选中 / 画布未选中 / 画布绘制 / 画布放置 */
+const SHORTCUT_SCENES = [1, 2, 3, 4, 5];
+
+/**
+ * 快捷键参数的类型
+ *
+ * 官方类型声明写的是「按键名数组」（`['CONTROL', 'SHIFT', 'C']`），但运行时也接受
+ * `'Ctrl+Shift+C'` 这种组合键字符串，且现网一直用后者（见发布版快捷键实际可用）。
+ * 类型放宽只发生在这一个地方，方便将来官方类型修正后统一调整。
+ */
+type ShortcutKeys = Parameters<typeof eda.sys_ShortcutKey.registerShortcutKey>[0];
+
+/**
+ * 注册一个快捷键
+ *
+ * @param keys - 组合键
+ * @param title - 快捷键显示名
+ * @param run - 触发时的回调
+ * @param docTypes - 生效的文档类型，默认 PCB + 封装
+ */
+function bindShortcut(keys: string[], title: string, run: () => void, docTypes: number[] = SHORTCUT_DOC_TYPES): void {
+	const keyList = keys as unknown as ShortcutKeys;
+	// 先注销再注册：EDA 会记住上次会话注册的快捷键，不注销会报「快捷键已存在」
+	eda.sys_ShortcutKey.unregisterShortcutKey(keyList);
+	eda.sys_ShortcutKey
+		.registerShortcutKey(keyList, title, run, docTypes, SHORTCUT_SCENES)
+		.catch((error) => console.warn(`[系统] 注册快捷键「${title}」失败:`, error));
+}
+
+/**
+ * 注册快捷键
+ *
+ * 版本策略：快捷键 API 从 V3 起提供，**V2.2 没有**（调用会抛错），所以按主版本号判断。
+ * 注意不要写成 `startsWith('3.')` —— V4 的版本号是 4.x，会被误判成「不支持」而一个都不注册。
+ */
+function registerShortcuts(): void {
+	const editorVersion = getEditorVersion();
+	console.log(`[系统] 检测到编辑器版本: ${editorVersion}`);
+
+	const major = Number.parseInt(editorVersion.trim().split('.')[0], 10);
+	if (!Number.isFinite(major) || major < 3) return;
+
+	bindShortcut(['Ctrl+Shift+C'], '导入图片', () => ImportImage(), [4]);
+	bindShortcut(['Ctrl+Shift+X'], '导线 ⇄ 线条', () => WirePolylinetoggle());
+	bindShortcut(['Ctrl+Shift+G'], '焊盘 ⇄ 过孔', () => PadViaToggle());
+	bindShortcut(['Ctrl+Shift+F'], '填充 ⇄ 图片', () => RegionImageConverter());
+}
+
+initializeOnce();
+registerShortcuts();

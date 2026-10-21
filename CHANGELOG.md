@@ -9,6 +9,15 @@
 - 已知的 V4 适配待验证项：V4 的 PCB 坐标单位改为 mil（网格尺寸 ×10），`生成物理网络` 的点合并容差、`从PCB转原理图` 的坐标搬运需在 V4 实机复核
 - ⚠️ **V4 待处理**：V4 下 `sys_FileManager.setDocumentSource()` 整份写回会丢掉 `POURED`（铜皮已计算填充）行 —— 实测同一份原文写回后 45,557 → 43,119 字节，`POUR` 本体仍在、填充缓存消失（V2.2 逐字节一致）。受影响：`生成物理网络`（源码方式）、`从PCB转原理图` 等整份重写源码的功能；重算铜皮可恢复。处理方案待定
 
+## v1.17.8 `2026-10-21`
+- 重构 入口 `src/index.ts` 整理为五段式：**公共工具 / 生命周期 / 有界面的功能 / 无界面的功能 / 模块加载时执行**，26 个导出按「原理图 / PCB / 通用 / 转换 / 网表」分组，每段一句话说明用途
+- 清理 入口里的死代码：`PadToVia`、`ViaToPad`、`PolylinetoWire`、`WiretoPolyline`、`ImportGerber`、`ExportFile` 六段注释代码（前两对已被 `*Toggle` 取代，后两个页面文件根本不存在），以及重复的 `WorkingHours` 注释块
+- 优化 统一用 `openPage(name, w, h, id?)` 打开页面，去掉 17 处重复的 `openIFrame('/iframe/Xxx.html', …)`；`PcbToSch` 的历史 iframe 标识 `tosch` 单独注明
+- 优化 快捷键注册抽成 `bindShortcut()`，并把「生效文档类型 / 生效场景」提为具名常量（4=PCB、5=封装；场景 1~5），`Ctrl+Shift+C` 只在 PCB 生效这一点在调用处写清
+- 优化 「工作时间」后台记录改为显式 `initializeOnce()`，fire-and-forget 的 Promise 补上 `.catch`（此前失败会被静默丢弃）
+- 类型 修掉入口 3 处 TS 报错：`globalThis[动态键]` 改用带索引签名的别名；快捷键字符串与官方类型声明（要求按键名数组）不一致处，集中做一次类型放宽并注明原因
+- 说明 **纯重构，无行为变更**：`npm test` 108 用例全绿、样本 10/10 通过；构建后 `dist/index.js` 导出表 27 项与 `extension.json` 的 25 个 `registerFn` 一一对应
+
 ## v1.17.7 `2026-10-21`
 - 修复 **V4 下全部快捷键失效**：`src/index.ts` 的注册条件从 `editorVersion.startsWith('3.')` 改为「主版本号 ≥ 3」，V2.2 仍不注册（该版本没有快捷键 API）
 - 新增 **导线转线条自动合并连续段**：框选多段首尾相接的导线时合并成**一条连续折线**（此前是每段一条两点碎折线）。新增 `src/js/common/wireChain.js`（纯函数：拼链 / 反向 / 路径拼装），按 `layer + net + 线宽` 分组，支持弧线反向时角度取负
