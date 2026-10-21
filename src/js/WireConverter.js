@@ -8,6 +8,7 @@
  * 3. toggle(): 智能判断，互相转换
  */
 
+import { isCopperLayer } from './common/pcbConstants.js';
 import { loadApiConfig } from './common/apiConfig.js';
 
 // 默认 API 配置兜底（防止解析失败导致崩溃）
@@ -99,7 +100,7 @@ export const WireConverter = {
      * 检查是否在铜层
      */
     _checkCopperLayer(layer, primitiveId) {
-        const isCopper = (layer === 1 || layer === 2) || (layer >= 15 && layer <= 46);
+        const isCopper = isCopperLayer(layer);
         if (!isCopper) {
             eda.sys_Log.add(`当前图元 ${primitiveId} 不在铜层，不可转为导线`, 'warn');
             eda.sys_PanelControl.openBottomPanel('log');

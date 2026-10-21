@@ -230,8 +230,7 @@ async function switchToPCB() {
 // 2. 切换回原来的原理图界面
 async function switchToSchematic() {
     try {
-        console.log(_lastSchematicTabId); //没有输出
-        await eda.dmt_EditorControl.activateDocument(_lastSchematicTabId); //没有跳转回原来的页面
+        await eda.dmt_EditorControl.activateDocument(_lastSchematicTabId);
     } catch (error) {
         console.error('切换原理图失败:', error);
     }

@@ -86,19 +86,108 @@
 	}
 
 	/**
-	 * 是否 V3 系列（3.x）
+	 * PCB 图层常量（官方层定义，与 src/js/common/pcbConstants.js 保持一致）
 	 *
-	 * 统一采用 `startsWith('3')`：历史上各处混用 `startsWith('3')` 与
-	 * `startsWith('3.')`，对真实版本号（3.0.x / 3.1.x…）判定结果一致。
-	 *
-	 * @returns {boolean}
+	 * MULTI(12) 是「多层」，通孔焊盘与过孔都落在这一层；铜层为 TOP/BOTTOM/内层。
 	 */
-	function isV3() {
-		return getEditorVersion().startsWith('3');
+	const LAYER = Object.freeze({
+		TOP: 1,
+		BOTTOM: 2,
+		TOP_SILKSCREEN: 3,
+		BOTTOM_SILKSCREEN: 4,
+		TOP_SOLDER_MASK: 5,
+		BOTTOM_SOLDER_MASK: 6,
+		TOP_PASTE_MASK: 7,
+		BOTTOM_PASTE_MASK: 8,
+		TOP_ASSEMBLY: 9,
+		BOTTOM_ASSEMBLY: 10,
+		BOARD_OUTLINE: 11,
+		MULTI: 12, // 多层：通孔焊盘 / 过孔
+		DOCUMENT: 13,
+		MECHANICAL: 14,
+		INNER_1: 15,
+		INNER_30: 44,
+		HOLE: 47,
+		COMPONENT_SHAPE: 48,
+		COMPONENT_MARKING: 49,
+		CUSTOM_1: 71,
+		CUSTOM_30: 100,
+	});
+
+	/** 内层（铜层）区间：官方口径 15~46 */
+	const COPPER_LAYER_MIN = 15;
+	const COPPER_LAYER_MAX = 46;
+
+	/** 是否内层 */
+	function isInnerLayer(layer) {
+		const value = Number(layer);
+		return value >= COPPER_LAYER_MIN && value <= COPPER_LAYER_MAX;
+	}
+
+	/** 是否铜层（顶层 / 底层 / 内层），不含 MULTI */
+	function isCopperLayer(layer) {
+		const value = Number(layer);
+		return value === LAYER.TOP || value === LAYER.BOTTOM || isInnerLayer(value);
+	}
+
+	/** 是否导电层（铜层 + MULTI 多层），用于「哪些图元参与电气连通」这类判断 */
+	function isConductiveLayer(layer) {
+		const value = Number(layer);
+		return isCopperLayer(value) || value === LAYER.MULTI;
 	}
 
 	/**
-	 * 是否 V2.2 系列（2.2.x）
+	 * 取版本族（'V2' | 'V2.2' | 'V3' | 'V4' | ''）
+	 *
+	 * 为什么要单独有「族」的概念：
+	 * EDA 已进入 V4，而文件格式在 V3→V4 之间是**同构**的（日志式增量存储、`||` 分隔、
+	 * 行尾 `|`、ticket 机制都一致，差异见 docs/FORMATLOG.md）。因此判断「用新格式还是
+	 * 旧 V2 格式」必须用「3 或 4」，否则 V4 会被误判成 V2、按 V2 数组格式写入，
+	 * 直接写坏文档。
+	 *
+	 * @returns {'V2'|'V2.2'|'V3'|'V4'|''}
+	 */
+	function getVersionFamily() {
+		const version = getEditorVersion();
+		if (!version) return '';
+		if (version.startsWith('4')) return 'V4';
+		if (version.startsWith('3')) return 'V3';
+		if (version.startsWith('2.2')) return 'V2.2';
+		if (version.startsWith('2')) return 'V2';
+		return '';
+	}
+
+	/**
+	 * 是否 V3 系列（3.x）
+	 * @returns {boolean}
+	 */
+	function isV3() {
+		return getVersionFamily() === 'V3';
+	}
+
+	/**
+	 * 是否 V4 系列（4.x）
+	 * @returns {boolean}
+	 */
+	function isV4() {
+		return getVersionFamily() === 'V4';
+	}
+
+	/**
+	 * 是否「新格式」客户端（V3 或 V4）
+	 *
+	 * 所有「写源码 / 选解析器」的分支都应该用它，而不是 isV3()。
+	 * 仅当逻辑确实只对 3.x 成立（而不是对格式成立）时才用 isV3()。
+	 *
+	 * @returns {boolean}
+	 */
+	function isModern() {
+		const family = getVersionFamily();
+		return family === 'V3' || family === 'V4';
+	}
+
+	/**
+	 * 是否 V2 系列（2.x，含 2.2）
 	 *
 	 * 注意：`2.2.43` / `2.2.45` 这类**具体小版本**的 API 能力判断不要用本函数，
 	 * 那是「某补丁版本才有的行为」，需要各自精确匹配。
@@ -106,7 +195,8 @@
 	 * @returns {boolean}
 	 */
 	function isV2() {
-		return getEditorVersion().startsWith('2.2');
+		const family = getVersionFamily();
+		return family === 'V2' || family === 'V2.2';
 	}
 
 	/**
@@ -221,11 +311,18 @@
 
 	global.WolfCommon = {
 		NETLIST_KEY: NETLIST_KEY,
+		LAYER: LAYER,
 		getEda: getEda,
 		hasEda: hasEda,
 		getEditorVersion: getEditorVersion,
-		isV3: isV3,
+		getVersionFamily: getVersionFamily,
 		isV2: isV2,
+		isV3: isV3,
+		isV4: isV4,
+		isModern: isModern,
+		isInnerLayer: isInnerLayer,
+		isCopperLayer: isCopperLayer,
+		isConductiveLayer: isConductiveLayer,
 		getComponentsContainer: getComponentsContainer,
 		escapeHtml: escapeHtml,
 		getNetlist: getNetlist,

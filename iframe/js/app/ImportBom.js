@@ -1,4 +1,4 @@
-const { getEditorVersion, isV3, getNetlist, setNetlist, getComponentsContainer } = window.WolfCommon;
+const { getEditorVersion, getVersionFamily, getNetlist, setNetlist, getComponentsContainer, escapeHtml } = window.WolfCommon;
 
         // 全局变量
         let jsonData = {};
@@ -67,21 +67,21 @@ const { getEditorVersion, isV3, getNetlist, setNetlist, getComponentsContainer }
         function renderTable() {
             tableBody.innerHTML = '';
 
+            // innerHTML 专用：两个值都转义，只保留箭头标签本身
             const formatCell = (oldVal, newVal) => {
                 if (newVal && newVal !== oldVal) {
-                    return `${oldVal || '-'} <span class="change-arrow">→</span> ${newVal}`;
+                    return `${escapeHtml(oldVal || '-')} <span class="change-arrow">→</span> ${escapeHtml(newVal)}`;
                 }
-                return oldVal || '-';
+                return escapeHtml(oldVal || '-');
             };
 
+            // title 专用：赋给 DOM 属性，不需要 HTML 转义（转义反而会显示成 &quot;）
             const formatTitle = (oldVal, newVal) => {
                 if (newVal && newVal !== oldVal) {
                     return `${oldVal || '-'} → ${newVal}`;
                 }
                 return String(oldVal || '-');
             };
-
-            const safeTitle = (str) => String(str).replace(/"/g, '&quot;');
 
             // 1. 动态对数据进行分组 (除位号以外的所有参数相同的分到一组)
             const groupedMap = {};
@@ -176,32 +176,32 @@ const { getEditorVersion, isV3, getNetlist, setNetlist, getComponentsContainer }
 
                 // 名称列
                 const nameCell = document.createElement('td');
-                nameCell.innerHTML = group.changed && group.name !== group.original.name ? formatCell(group.original.name, group.name) : (group.original.name || '-');
-                nameCell.title = group.changed && group.name !== group.original.name ? safeTitle(formatTitle(group.original.name, group.name)) : safeTitle(group.original.name || '-');
+                nameCell.innerHTML = group.changed && group.name !== group.original.name ? formatCell(group.original.name, group.name) : escapeHtml(group.original.name || '-');
+                nameCell.title = group.changed && group.name !== group.original.name ? formatTitle(group.original.name, group.name) : group.original.name || '-';
                 row.appendChild(nameCell);
 
                 // 制造商编号列 (提前到这里)
                 const manufacturerPartCell = document.createElement('td');
-                manufacturerPartCell.innerHTML = group.changed && group.manufacturerPart !== group.original.manufacturerPart ? formatCell(group.original.manufacturerPart, group.manufacturerPart) : (group.original.manufacturerPart || '-');
-                manufacturerPartCell.title = group.changed && group.manufacturerPart !== group.original.manufacturerPart ? safeTitle(formatTitle(group.original.manufacturerPart, group.manufacturerPart)) : safeTitle(group.original.manufacturerPart || '-');
+                manufacturerPartCell.innerHTML = group.changed && group.manufacturerPart !== group.original.manufacturerPart ? formatCell(group.original.manufacturerPart, group.manufacturerPart) : escapeHtml(group.original.manufacturerPart || '-');
+                manufacturerPartCell.title = group.changed && group.manufacturerPart !== group.original.manufacturerPart ? formatTitle(group.original.manufacturerPart, group.manufacturerPart) : group.original.manufacturerPart || '-';
                 row.appendChild(manufacturerPartCell);
 
                 // 制造商名称列 (提前到这里)
                 const manufacturerCell = document.createElement('td');
-                manufacturerCell.innerHTML = group.changed && group.manufacturer !== group.original.manufacturer ? formatCell(group.original.manufacturer, group.manufacturer) : (group.original.manufacturer || '-');
-                manufacturerCell.title = group.changed && group.manufacturer !== group.original.manufacturer ? safeTitle(formatTitle(group.original.manufacturer, group.manufacturer)) : safeTitle(group.original.manufacturer || '-');
+                manufacturerCell.innerHTML = group.changed && group.manufacturer !== group.original.manufacturer ? formatCell(group.original.manufacturer, group.manufacturer) : escapeHtml(group.original.manufacturer || '-');
+                manufacturerCell.title = group.changed && group.manufacturer !== group.original.manufacturer ? formatTitle(group.original.manufacturer, group.manufacturer) : group.original.manufacturer || '-';
                 row.appendChild(manufacturerCell);
 
                 // 供应商编号(立创编号)列 (往后挪)
                 const supplierPartCell = document.createElement('td');
-                supplierPartCell.innerHTML = group.changed && group.supplierPart !== group.original.supplierPart ? formatCell(group.original.supplierPart, group.supplierPart) : (group.original.supplierPart || '-');
-                supplierPartCell.title = group.changed && group.supplierPart !== group.original.supplierPart ? safeTitle(formatTitle(group.original.supplierPart, group.supplierPart)) : safeTitle(group.original.supplierPart || '-');
+                supplierPartCell.innerHTML = group.changed && group.supplierPart !== group.original.supplierPart ? formatCell(group.original.supplierPart, group.supplierPart) : escapeHtml(group.original.supplierPart || '-');
+                supplierPartCell.title = group.changed && group.supplierPart !== group.original.supplierPart ? formatTitle(group.original.supplierPart, group.supplierPart) : group.original.supplierPart || '-';
                 row.appendChild(supplierPartCell);
 
                 // 供应商列 (放在最后)
                 const supplierCell = document.createElement('td');
-                supplierCell.innerHTML = group.changed && group.supplier !== group.original.supplier ? formatCell(group.original.supplier, group.supplier) : (group.original.supplier || '-');
-                supplierCell.title = group.changed && group.supplier !== group.original.supplier ? safeTitle(formatTitle(group.original.supplier, group.supplier)) : safeTitle(group.original.supplier || '-');
+                supplierCell.innerHTML = group.changed && group.supplier !== group.original.supplier ? formatCell(group.original.supplier, group.supplier) : escapeHtml(group.original.supplier || '-');
+                supplierCell.title = group.changed && group.supplier !== group.original.supplier ? formatTitle(group.original.supplier, group.supplier) : group.original.supplier || '-';
                 row.appendChild(supplierCell);
 
                 tableBody.appendChild(row);
@@ -225,7 +225,7 @@ const { getEditorVersion, isV3, getNetlist, setNetlist, getComponentsContainer }
                 statusBar.className = 'status-bar warning';
                 importBtn.disabled = false;
             } else {
-                statusBar.textContent = `数据加载成功 (${isV3() ? 'V3模式' : 'V2模式'})，可以粘贴并导入`;
+                statusBar.textContent = `数据加载成功 (${(getVersionFamily() || 'V2') + '模式'})，可以粘贴并导入`;
                 statusBar.className = 'status-bar success';
                 importBtn.disabled = false;
             }
@@ -457,7 +457,7 @@ const { getEditorVersion, isV3, getNetlist, setNetlist, getComponentsContainer }
             try {
                 const version = getEditorVersion();
                 console.log('[Debug] 当前EDA版本:', version);
-                versionTag.textContent = version ? (isV3() ? 'V3模式' : 'V2模式') : 'V2模式 (默认)';
+                versionTag.textContent = version ? (getVersionFamily() || 'V2') + '模式' : 'V2模式 (默认)';
             } catch (e) {
                 console.warn('[Debug] 版本检测失败', e);
                 versionTag.textContent = '模式未知';

@@ -7,6 +7,7 @@
  * 3. Toggle: 根据选中类型自动互相转换
  */
 
+import { LAYER, MASK_DEFAULT_EXPANSION, isThroughHoleLayer } from './common/pcbConstants.js';
 import { loadApiConfig } from './common/apiConfig.js';
 
 // 默认 API 配置兜底（防止用户首次使用时没有本地缓存导致 JSON 解析报错）
@@ -50,8 +51,8 @@ export const PadViaConverter = {
 
             // 3. 遍历分发处理
             for (const item of selections) {
-                // Pad ⇒ Via (仅处理通孔焊盘 layer = 12)
-                if (item.primitiveType === 'Pad' && item.layer === 12) {
+                // Pad ⇒ Via (仅处理通孔焊盘，即落在 MULTI(12) 层的焊盘)
+                if (item.primitiveType === 'Pad' && isThroughHoleLayer(item.layer)) {
                     if (mode === 1 || mode === 3) {
                         await this._convertPadToVia(item, api);
                     }
@@ -86,7 +87,7 @@ export const PadViaConverter = {
         const solderScale = (api["获取焊盘"]?.["阻焊"] ?? 1) * (api["创建过孔"]?.["阻焊"] ?? 1);
 
         // --- 3. 构造阻焊参数 (安全处理 Null) ---
-        let targetSolderMask = { topSolderMask: -1000, bottomSolderMask: -1000, topPasteMask: 0, bottomPasteMask: 0 };
+        let targetSolderMask = { topSolderMask: MASK_DEFAULT_EXPANSION, bottomSolderMask: MASK_DEFAULT_EXPANSION, topPasteMask: 0, bottomPasteMask: 0 };
         if (pad.solderMaskAndPasteMaskExpansion) {
             targetSolderMask = { ...pad.solderMaskAndPasteMaskExpansion };
             targetSolderMask.topSolderMask *= solderScale;
@@ -122,8 +123,8 @@ export const PadViaConverter = {
         const solderScale = (api["获取过孔"]?.["阻焊"] ?? 1) * (api["创建焊盘"]?.["阻焊"] ?? 1);
 
         // --- 2. 构造阻焊参数 (安全处理 Null) ---
-        let targetTopSolder = -1000;
-        let targetBotSolder = -1000;
+        let targetTopSolder = MASK_DEFAULT_EXPANSION;
+        let targetBotSolder = MASK_DEFAULT_EXPANSION;
         const hasSolder = via.solderMaskExpansion !== null;
 
         if (hasSolder) {
@@ -146,7 +147,7 @@ export const PadViaConverter = {
 
         // --- 4. 创建焊盘并删除原过孔 ---
         const newPad = await eda.pcb_PrimitivePad.create(
-            12, '1',                            // layer(通孔层), 默认网格名
+            LAYER.MULTI, '1',                  // layer(多层/通孔), 默认网格名
             via.x * coordScale,                 // 坐标 X
             via.y * coordScale,                 // 坐标 Y
             0, padShape, via.net, holeShape,    // 旋转角度, 外形, 网络, 孔形

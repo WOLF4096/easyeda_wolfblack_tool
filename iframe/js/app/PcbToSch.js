@@ -1,5 +1,5 @@
 // ---------- 全局状态 ----------
-		const { getEditorVersion, isV3, isV2, escapeHtml } = window.WolfCommon;
+		const { getEditorVersion, isV2, isModern, escapeHtml } = window.WolfCommon;
 
 		let zip = null;                  // 解压后的工程文件
 		let projectJson = null;          // project.json 内容
@@ -42,7 +42,7 @@
 			if (isV2()) {
 				versionSpan.textContent = `当前EDA版本：${version} 功能可用`;
 				yvalueCheck.checked = false;
-			}else if(isV3()){
+			}else if(isModern()){
 				versionSpan.textContent = `当前EDA版本：${version} 功能可用`;
 				yvalueCheck.checked = true;
 			}
@@ -1033,7 +1033,7 @@
 					if (isV2()) {
 						rawPinY = compY + pinInfo.y; // V2版本 Y 坐标（向上为正）
 						y = 1;
-					} else if (isV3()) {
+					} else if (isModern()) {
 						rawPinY = compY - pinInfo.y; // V3版本 Y 坐标（向下为正）
 						y = -1;
 					}
@@ -1083,7 +1083,7 @@
 						const wireId = 'e' + wireTicket;
 						wireLines.push(`["WIRE","${wireId}",[[${pinX},${outPinY},${endX},${outEndY}]],"st1",0]`);
 						wireLines.push(`["ATTR","e${idCounter++}","${wireId}","NET","${netName}",0,1,${centerX},${outCenterY},${netT},"st1",0]`);
-					} else if (isV3()) {
+					} else if (isModern()) {
 						// V3 版本
 						const wireTicket = idCounter++;
 						const lineTicket = idCounter++;
@@ -1280,7 +1280,7 @@
 
 				return lines.join('\n');
 
-			} else if (isV3()) {
+			} else if (isModern()) {
 				// V3 版本源码生成
 				// 生成唯一 client 和 uuid（保证文件内唯一）
 				const uniqueClient = 'client_' + Date.now() + '_' + Math.random().toString(36).substr(2, 8);

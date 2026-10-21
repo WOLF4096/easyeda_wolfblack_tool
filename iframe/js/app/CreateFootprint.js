@@ -2,15 +2,15 @@ function showMsg(msg, type = 'info') {
 				eda.sys_Message.showToastMessage(msg, type);
 			}
 
-			const { getEditorVersion, isV3 } = window.WolfCommon;
+			const { getEditorVersion, isModern } = window.WolfCommon;
 
 			(async function initLibList() {
 				const select = document.getElementById('libSelect');
 				const btn = document.getElementById('runBtn');
 
 				try {
-					// 判断是否为 V3 版本
-					if (isV3()) {
+					// V3 起底层源码写入 API 有缺陷，V4 同源问题，一并拦截
+					if (isModern()) {
 						// 获取主容器
 						const container = document.querySelector('.container');
 						// 清空所有控件，替换为居中提示文字

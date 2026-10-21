@@ -1,0 +1,43 @@
+# 项目长期记忆（wolfblack-tool / pro-api-sdk）
+
+> 只记录跨会话仍然成立的约定与事实。日志见 `YYYY-MM-DD.md`。
+
+## 版本支持策略（2026-10-21 由用户明确）
+
+- 适配目标是 EDA **V3 / V4**；**V2.2 官方已停止更新**，其 API 功能残缺且官方不再修复。
+  → 遇到 V2.2 的功能异常，先判断是不是平台缺陷，不要当插件 bug 去改。
+- **V4 与 V3 的文件格式同构**：日志式增量存储、行 `{type,id,ticket}||{...}|`、ticket 判优一致。
+  逐项差异见 `docs/FORMATLOG.md`（DOCHEAD 增加 updateTime/version、新增 EDIT_HEAD、
+  PCB 坐标改 mil 且网格 ×10、ARC/CARC 合并为 ARC+arcType、布尔统一 true/false、
+  原理图颜色 null=主题默认 等）。
+- **判断"用新格式还是 V2 格式"必须用 `isModern()`（V3 或 V4），不能用 `isV3()`**。
+  历史上 `isV3()` 只认 3.x，会把 V4 误判成 V2 并按数组格式写源码 → 写坏文档。
+  `isV3()` 现在只用于"确实只对 3.x 成立"的判断。
+
+## 已知非插件问题（不要在插件侧修）
+
+- `生成物理网络` V2.2 源码写入后重开会丢弧线导线 → EDA V2.2 平台缺陷。
+- `批量替换器件` V2.2 替换后网表取空 / 参数补全失败 → EDA V2.2 API 缺陷。
+- `从PCB创建导线` 的"切回原理图"注释写着不生效，但**实测正常**，属陈旧注释（已清理）。
+
+## 官方图层与常量定义
+
+- `MULTI = 12` 是"多层"，**通孔焊盘 / 过孔落在该层**（不是"通孔层"这个专名）。
+- 铜层 = 顶层 1 / 底层 2 / 内层 15~46（官方层表把 15~44 定义为内层 1~30，45~46 为保留）。
+- 阻焊默认值 `-1000` 是 EDA 内置默认（表示不额外扩展）。
+- 完整层表：TOP=1、BOTTOM=2、丝印 3/4、阻焊 5/6、锡膏 7/8、装配 9/10、板框 11、
+  MULTI=12、DOCUMENT=13、MECHANICAL=14、INNER_1..30=15..44、HOLE=47、
+  COMPONENT_SHAPE=48、COMPONENT_MARKING=49、DRILL_DRAWING=56、RATLINE=57、
+  CUSTOM_1..30=71..100、SUBSTRATE_1=101。
+- 代码中的唯一来源：`src/js/common/pcbConstants.js`（后端 ESM）与
+  `iframe/js/common.js` 的 `WolfCommon.LAYER`（前端 IIFE，两套 bundle 无法共享，改动要同步）。
+
+## 工程约定
+
+- 前端页面统一 `const { ... } = window.WolfCommon;` 引入公共模块（`iframe/js/common.js`），
+  HTML 里必须先引 `common.js` 再引页面脚本。
+- 样式：公共样式在 `iframe/css/common.css`，页面专属样式写在各 HTML 的 `<style>`。
+  不要把 `* { margin:0;padding:0;box-sizing }` 或 `body { font-family/font-size }` 放进公共样式
+  （会改变 About 等页面的版式）。
+- 测试：`npm test`（node:test，`.mjs`），改 `common.js` / `src/js` 后必须跑；新增前端公共能力要补用例。
+- 改完必须 `npm run build`，产物在 `build/dist/wolfblack-tool_v<version>.eext`。

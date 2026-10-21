@@ -118,6 +118,74 @@ describe('版本判断与缓存', () => {
 	});
 });
 
+describe('版本族与 V4 兼容（V3→V4 文件格式同构）', () => {
+	it('V4：isV4 / isModern 为真，isV3 / isV2 为假', () => {
+		makeEda('4.0.3');
+		const WC = loadCommon();
+		assert.equal(WC.getVersionFamily(), 'V4');
+		assert.equal(WC.isV4(), true);
+		assert.equal(WC.isModern(), true);
+		assert.equal(WC.isV3(), false);
+		assert.equal(WC.isV2(), false);
+	});
+
+	it('V3：isModern 为真（写源码/选解析器必须按新格式走）', () => {
+		makeEda('3.2.1');
+		const WC = loadCommon();
+		assert.equal(WC.getVersionFamily(), 'V3');
+		assert.equal(WC.isModern(), true);
+		assert.equal(WC.isV4(), false);
+	});
+
+	it('V2.2：isModern 为假，isV2 为真', () => {
+		makeEda('2.2.45.1');
+		const WC = loadCommon();
+		assert.equal(WC.getVersionFamily(), 'V2.2');
+		assert.equal(WC.isModern(), false);
+		assert.equal(WC.isV2(), true);
+	});
+
+	it('取不到版本时版本族为空、所有判断为假', () => {
+		const WC = loadCommon();
+		assert.equal(WC.getVersionFamily(), '');
+		assert.equal(WC.isV4(), false);
+		assert.equal(WC.isModern(), false);
+	});
+});
+
+describe('图层常量与判定', () => {
+	it('关键图层号与官方定义一致', () => {
+		const WC = loadCommon();
+		assert.equal(WC.LAYER.TOP, 1);
+		assert.equal(WC.LAYER.BOTTOM, 2);
+		assert.equal(WC.LAYER.BOARD_OUTLINE, 11);
+		assert.equal(WC.LAYER.MULTI, 12);
+		assert.equal(WC.LAYER.INNER_1, 15);
+		assert.equal(WC.LAYER.HOLE, 47);
+	});
+
+	it('isCopperLayer：顶层/底层/内层为真，MULTI 与丝印阻焊为假', () => {
+		const WC = loadCommon();
+		[1, 2, 15, 20, 44, 46].forEach((l) => assert.equal(WC.isCopperLayer(l), true, `layer ${l}`));
+		[3, 5, 12, 13, 14, 47].forEach((l) => assert.equal(WC.isCopperLayer(l), false, `layer ${l}`));
+	});
+
+	it('isConductiveLayer：在铜层基础上把 MULTI(12) 也算进来', () => {
+		const WC = loadCommon();
+		assert.equal(WC.isConductiveLayer(12), true);
+		assert.equal(WC.isConductiveLayer(1), true);
+		assert.equal(WC.isConductiveLayer(47), false);
+	});
+
+	it('isInnerLayer 只认 15~46（顶层底层不算内层）', () => {
+		const WC = loadCommon();
+		assert.equal(WC.isInnerLayer(15), true);
+		assert.equal(WC.isInnerLayer(46), true);
+		assert.equal(WC.isInnerLayer(1), false);
+		assert.equal(WC.isInnerLayer(14), false);
+	});
+});
+
 describe('getComponentsContainer', () => {
 	it('V3：取 components 容器', () => {
 		const WC = loadCommon();

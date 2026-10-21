@@ -1,5 +1,5 @@
 (function() {
-        const { hasEda, isV3, getNetlist, setNetlist, getComponentsContainer } = window.WolfCommon;
+        const { hasEda, getVersionFamily, isModern, getNetlist, setNetlist, getComponentsContainer } = window.WolfCommon;
 
         const resultOutput = document.getElementById('resultOutput');
         const executeBtn = document.getElementById('executeBtn');
@@ -16,7 +16,8 @@
                 status.className = 'status';
                 if (hasEda()) {
                     try {
-                        verLabel.textContent = isV3() ? 'V3模式' : 'V2.2模式';
+                        // 显示实际版本族：V2.2 / V3 / V4
+                        verLabel.textContent = (getVersionFamily() || 'V2.2') + '模式';
                     } catch (e) {
                         verLabel.textContent = 'Error';
                     }
@@ -26,7 +27,7 @@
 
                     status.textContent = '✅ 网表已加载，可直接输入位号查询或粘贴数据替换。';
                     status.className = 'status info';
-                    console.log('网表已缓存', isV3() ? 'V3' : 'V2');
+                    console.log('网表已缓存', getVersionFamily() || 'V2');
                 } else {
                     status.textContent = '⚠️ 未检测到EDA环境，请在嘉立创EDA中运行。';
                     status.className = 'status error';
@@ -67,7 +68,7 @@
 
             // 格式化输出
             if (foundComponent) {
-                if (isV3()) {
+                if (isModern()) {
                     if (foundComponent.pinInfoMap) {
                         const pinKeys = Object.keys(foundComponent.pinInfoMap).sort((a, b) => {
                             return isNaN(a) || isNaN(b) ? a.localeCompare(b) : parseInt(a) - parseInt(b);
@@ -137,7 +138,7 @@
 
                 let totalReplacements = 0;
 
-                if (isV3()) {
+                if (isModern()) {
                     const componentContainer = getComponentsContainer(jsonData);
                     for (const componentKey in componentContainer) {
                         const component = componentContainer[componentKey];

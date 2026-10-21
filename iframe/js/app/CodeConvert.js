@@ -1,4 +1,4 @@
-const { getEditorVersion, isV3, getNetlist, setNetlist, getComponentsContainer } = window.WolfCommon;
+const { getEditorVersion, getVersionFamily, getNetlist, setNetlist, getComponentsContainer } = window.WolfCommon;
 
 			let componentsData = [];
 			let groupedComponentsData = [];
@@ -684,7 +684,7 @@ const { getEditorVersion, isV3, getNetlist, setNetlist, getComponentsContainer }
 				try {
 					const version = getEditorVersion();
 					console.log('当前EDA版本:', version);
-					verTag.textContent = isV3() ? 'V3模式' : 'V2模式';
+					verTag.textContent = (getVersionFamily() || 'V2') + '模式';
 				} catch (e) {
 					console.warn('版本检测失败，默认使用V2模式', e);
 					verTag.textContent = 'V2模式';

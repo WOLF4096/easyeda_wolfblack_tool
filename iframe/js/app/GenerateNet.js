@@ -1,5 +1,14 @@
 // ========================= 1. 全局变量 =========================
-    const { getEditorVersion, isV3, isV2, getNetlist, setNetlist, getComponentsContainer } = window.WolfCommon;
+    const {
+        getEditorVersion,
+        isV2,
+        isModern,
+        getNetlist,
+        setNetlist,
+        getComponentsContainer,
+        isInnerLayer,
+        isConductiveLayer,
+    } = window.WolfCommon;
 
     let g_pendingOperations = [];       // 当前待执行的操作列表
     let g_isAnalyzing = false;
@@ -448,7 +457,7 @@
                 if (item[3] && typeof item[3] === 'string' && item[3] !== "") allUsedNetNames.add(item[3]);
                 if (type === "LAYER") {
                     let lid = Number(item[1]), status = Number(item[4]);
-                    if (lid >= 15 && lid <= 46 && status === 3) innerLayerIds.push(lid);
+                    if (isInnerLayer(lid) && status === 3) innerLayerIds.push(lid);
                 } else if (type === "LINE") {
                     primitives.push({ id: item[1], type: "LINE", net: item[3], layer: item[4], shape: "line", x1: Number(item[5]), y1: Number(item[6]), x2: Number(item[7]), y2: Number(item[8]), w: Number(item[9]) });
                 } else if (type === "VIA") {
@@ -539,7 +548,7 @@
 			if (type === 'LAYER') {
 				const lid = mergedItem.layerId;
 				const isUsed = mergedItem.use === true;
-				if (lid >= 15 && lid <= 46 && isUsed && !innerLayerIds.includes(lid)) {
+				if (isInnerLayer(lid) && isUsed && !innerLayerIds.includes(lid)) {
 					innerLayerIds.push(lid);
 				}
 				continue;
@@ -734,7 +743,7 @@
         const allPrimitives = primitives.concat(allPads);
         const copperPrimitives = allPrimitives.filter(p => {
             const lid = Number(p.layer);
-            return lid === 1 || lid === 2 || lid === 12 || (lid >= 15 && lid <= 46);
+            return isConductiveLayer(lid);
         });
 
         let uf = new UnionFind();
@@ -801,7 +810,7 @@
 
             const lines = rawSource.split('\n');
             let parseResult;
-            if (isV3()) {
+            if (isModern()) {
                 parseResult = parseV3Primitives(lines, allUsedNetNames, padIdToPinInfo);
             } else if (isV2()) {
                 parseResult = parseV2Primitives(lines, allUsedNetNames, padIdToPinInfo);
@@ -835,7 +844,7 @@
 			let allUsedNetNames = new Set();
 			const lines = rawSource.split('\n');
 
-			if (isV3()) {
+			if (isModern()) {
 				const parseRes = parseV3Primitives(lines, allUsedNetNames, padIdToPinInfo);
 				primitives = parseRes.primitives;
 				innerLayerIds = parseRes.innerLayerIds;
@@ -1409,8 +1418,8 @@
 								}
 							}
 						} catch(e) { modifiedLines.push(line); }
-					} else if (isV3()) {
-						// V3 格式
+					} else if (isModern()) {
+						// V3/V4 格式（同构）
 						let hasTrailingPipe = line.endsWith('|');
 						let cleanLine = hasTrailingPipe ? line.slice(0, -1) : line;
 						const parts = cleanLine.split('||');

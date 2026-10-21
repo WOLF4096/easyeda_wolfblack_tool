@@ -1061,7 +1061,7 @@
                         <button class="small-btn export" onclick="exportProjectChart('${item.uuid}')">导出</button>
                     </td>
                     <td style="text-align: center;" onclick="event.stopPropagation();">
-                        <button class="small-btn del" onclick="confirmDeleteProject('${item.uuid}', '${escapeHtml(item.name)}')">删除</button>
+                        <button class="small-btn del" onclick="confirmDeleteProject('${item.uuid}')">删除</button>
                     </td>
                 `;
                 tbody.appendChild(tr);
@@ -1208,6 +1208,24 @@
             }
         }
 
+        /**
+         * 读取扩展内置的第三方库源码，用于内联进导出文件
+         *
+         * 导出报告必须能脱离网络打开（经常是发给别人看），原先从 jsdelivr 加载
+         * echarts/fflate，离线时图表全空。这里优先内联本地文件，取不到才回退 CDN。
+         */
+        async function loadLibForInline(fileName) {
+            try {
+                const res = await fetch(`/iframe/js/${fileName}`);
+                if (!res.ok) return '';
+                const code = await res.text();
+                // 库源码里若出现 </script 会提前闭合标签，转义后再内联
+                return code.replace(/<\/script/gi, '<\\/script');
+            } catch (e) {
+                return '';
+            }
+        }
+
         async function triggerSecureExport(payloadObj, fileNameBase) {
             let securePack;
             try { securePack = await packPayload(payloadObj); } 
@@ -1215,13 +1233,18 @@
                 if(window.eda && eda.sys_Message) eda.sys_Message.showToastMessage('数据打包失败', 'error'); return;
             }
 
+            // 内联本地库；任一取不到就整体回退 CDN（保持原有行为）
+            const [echartsCode, fflateCode] = await Promise.all([loadLibForInline('echarts.min.js'), loadLibForInline('fflate.js')]);
+            const libTags = echartsCode && fflateCode
+                ? `<script>${echartsCode}<\/script>\n\t<script>${fflateCode}<\/script>`
+                : '<script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"><\/script>\n\t<script src="https://cdn.jsdelivr.net/npm/fflate@0.8.2/umd/index.js"><\/script>';
+
             const htmlContent = `<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>狼黑工具 - ${escapeHtml(fileNameBase)}</title>
-    <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"><\/script>
-	<script src="https://cdn.jsdelivr.net/npm/fflate@0.8.2/umd/index.js"><\/script>
+    ${libTags}
     <style>
         /* 整体背景改为暗色，使用 Flex 居中 */
         body { 
@@ -1595,6 +1618,8 @@
         }
 
         function confirmDeleteProject(uuid, name) {
+            // 名字不通过 onclick 传入（避免引号破坏 JS 字符串），统一从元数据里取
+            name = name || globalProjectMeta[uuid] || '未命名工程';
             eda.sys_Dialog.showConfirmationMessage(
                 `确认彻底删除 “${name}” 的全部时间记录？\n(此操作无法恢复)`, '确认清除时间片记录', '确认删除', '取消',
                 async (mainButtonClicked) => { if (mainButtonClicked) await deleteProjectData(uuid); }
