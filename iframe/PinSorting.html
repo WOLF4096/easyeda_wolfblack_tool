@@ -1,39 +1,136 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="zh-CN">
-<head>
-    <meta charset="UTF-8">
-    <title>引脚排序工具</title>
-    <link rel="stylesheet" href="/iframe/css/PinSorting.css">
-</head>
-<body>
-    <div class="row">
-        <span>选中引脚数量：</span>
-        <span id="pin-count">0</span>
-    </div>
+	<head>
+		<meta charset="UTF-8" />
+		<title>引脚排序工具</title>
+		<link rel="stylesheet" href="/iframe/css/common.css" />
+		<style>
+			/* ===== PinSorting 页面专属样式 ===== */
+			body {
+				width: 200px;
+				height: 168px;
+				margin: 0;
+				padding: 8px;
+				background-color: var(--vscode-bg);
+				color: var(--vscode-text);
+				font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+				font-size: 12px;
+				box-sizing: border-box;
+				display: flex;
+				flex-direction: column;
+				justify-content: space-between;
+				overflow: hidden;
+				user-select: none;
+			}
 
-    <div class="row">
-        <span>排序对象：</span>
-        <div class="group">
-            <label><input type="radio" name="sortTarget" value="pinName" checked>名称</label>
-            <label><input type="radio" name="sortTarget" value="pinNumber">编号</label>
-        </div>
-    </div>
+			.row {
+				display: flex;
+				align-items: center;
+				justify-content: space-between;
+				width: 100%;
+			}
 
-    <div class="row">  
-        <label><input type="checkbox" id="splitSort" checked>拆分排序</label>
-        <span>间距：</span>
-        <input type="number" id="spacing" value="10"> 
-    </div>
+			#pin-count {
+				color: #4fc1ff;
+				font-weight: bold;
+			}
 
-    <div class="row">  
-        <label><input type="checkbox" id="endSort">末尾排序</label>
-    </div>
+			input[type='number'] {
+				width: 36px;
+				background-color: var(--vscode-border);
+				color: var(--vscode-text);
+				border: 1px solid var(--vscode-border);
+				padding: 2px 4px;
+				border-radius: 2px;
+				outline: none;
+				font-size: 12px;
+			}
 
-    <div class="btn-group">
-        <button id="btn-asc">升序</button>
-        <button id="btn-desc">降序</button>
-    </div>
+			input[type='number']:focus {
+				border-color: var(--vscode-focus);
+			}
 
-    <script src="/iframe/js/app/PinSorting.js"></script>
-</body>
+			.group {
+				display: flex;
+				gap: 8px;
+				align-items: center;
+			}
+
+			label {
+				display: flex;
+				align-items: center;
+				cursor: pointer;
+			}
+
+			input[type='radio'],
+			input[type='checkbox'] {
+				margin: 0 4px 0 0;
+				accent-color: var(--vscode-focus);
+			}
+
+			.btn-group {
+				display: flex;
+				gap: 8px;
+				margin-top: 4px;
+			}
+
+			button {
+				flex: 1;
+				background-color: var(--vscode-button-bg);
+				color: var(--vscode-text-bright);
+				border: none;
+				padding: 6px 0;
+				cursor: pointer;
+				border-radius: 2px;
+				font-size: 12px;
+				transition: background-color 0.2s;
+			}
+
+			button:hover {
+				background-color: var(--vscode-button-hover);
+			}
+
+			button:active {
+				background-color: var(--vscode-button-active);
+			}
+
+			input[type='number']::-webkit-outer-spin-button,
+			input[type='number']::-webkit-inner-spin-button {
+				-webkit-appearance: none;
+				margin: 0;
+			}
+		</style>
+	</head>
+	<body>
+		<div class="row">
+			<span>选中引脚数量：</span>
+			<span id="pin-count">0</span>
+		</div>
+
+		<div class="row">
+			<span>排序对象：</span>
+			<div class="group">
+				<label><input type="radio" name="sortTarget" value="pinName" checked />名称</label>
+				<label><input type="radio" name="sortTarget" value="pinNumber" />编号</label>
+			</div>
+		</div>
+
+		<div class="row">
+			<label><input type="checkbox" id="splitSort" checked />拆分排序</label>
+			<span>间距：</span>
+			<input type="number" id="spacing" value="10" />
+		</div>
+
+		<div class="row">
+			<label><input type="checkbox" id="endSort" />末尾排序</label>
+		</div>
+
+		<div class="btn-group">
+			<button id="btn-asc">升序</button>
+			<button id="btn-desc">降序</button>
+		</div>
+
+		<script src="/iframe/js/common.js"></script>
+		<script src="/iframe/js/app/PinSorting.js"></script>
+	</body>
 </html>

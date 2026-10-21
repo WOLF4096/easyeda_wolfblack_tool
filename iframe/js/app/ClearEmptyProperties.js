@@ -1,5 +1,6 @@
 // 获取 EDA 环境上下文
         const sys_eda = window.parent.eda || window.eda;
+        const { getNetlist, setNetlist, getComponentsContainer } = window.WolfCommon;
 
         // 全局状态
         let rawNetlistData = null; 
@@ -46,20 +47,11 @@
                 btnRefresh.disabled = true;
                 btnRefresh.textContent = "获取中...";
                 
-                let getNetlist, netlistStr;
-                try {
-                    getNetlist = await sys_eda.pcb_ManufactureData.getNetlistFile('JLCEDA');
-                    netlistStr = await getNetlist.text();
-                    dataSourceMode = 'PCB';
-                } catch (pcbErr) {
-                    getNetlist = await sys_eda.sch_ManufactureData.getNetlistFile('JLCEDA');
-                    netlistStr = await getNetlist.text();
-                    dataSourceMode = 'SCH';
-                }
+                const netlist = await getNetlist('AUTO');
+                dataSourceMode = netlist.page;
+                rawNetlistData = netlist.json;
 
-                rawNetlistData = JSON.parse(netlistStr);
-                
-                let componentsSource = rawNetlistData.components ? rawNetlistData.components : rawNetlistData;
+                let componentsSource = getComponentsContainer(rawNetlistData);
                 
                 appData = [];
                 for (const key in componentsSource) {
@@ -183,12 +175,8 @@
                 });
 
                 const updatedJsonString = JSON.stringify(rawNetlistData, null, 2);
-                
-                if (dataSourceMode === 'SCH') {
-                    await sys_eda.sch_Netlist.setNetlist('JLCEDA', updatedJsonString);
-                } else {
-                    await sys_eda.pcb_Net.setNetlist('JLCEDA', updatedJsonString);
-                }
+
+                await setNetlist(dataSourceMode, updatedJsonString);
 
                 sys_eda.sys_Message.showToastMessage(`成功处理 ${processCount} 个元件`, 'success');
                 // await fetchNetlist();

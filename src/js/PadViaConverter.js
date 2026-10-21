@@ -7,7 +7,7 @@
  * 3. Toggle: 根据选中类型自动互相转换
  */
 
-import { loadApiConfig } from './common/apiConfig';
+import { loadApiConfig } from './common/apiConfig.js';
 
 // 默认 API 配置兜底（防止用户首次使用时没有本地缓存导致 JSON 解析报错）
 const DEFAULT_API_CONFIG = {

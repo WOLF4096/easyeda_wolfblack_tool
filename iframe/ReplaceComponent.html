@@ -1,46 +1,255 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="zh-CN">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>狼黑工具 - 批量替换器件</title>
-    <link rel="stylesheet" href="/iframe/css/ReplaceComponent.css">
-</head>
-<body>
+	<head>
+		<meta charset="UTF-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+		<title>狼黑工具 - 批量替换器件</title>
+		<link rel="stylesheet" href="/iframe/css/common.css" />
+		<style>
+			/* ===== ReplaceComponent 页面专属样式 ===== */
+			body {
+				margin: 0;
+				padding: 0;
+				background-color: var(--vscode-bg);
+				color: var(--vscode-text);
+				font-family: Consolas, 'Courier New', monospace;
+				font-size: 13px;
+				height: 100vh;
+				display: flex;
+				flex-direction: column;
+				overflow: hidden;
+			}
 
-    <div class="toolbar">
-        <div class="warning-text">由于没有替换元件的API，本工具将直接修改源码，需要确保没有重复位号，使用前务必做好备份!!!</div>
-        <div class="button-group">
-            <button id="btnPaste">粘贴</button>
-            <button id="btnFetch" disabled>获取</button>
-            <button id="btnReplace" disabled>替换</button>
-        </div>
-    </div>
+			.toolbar {
+				display: flex;
+				justify-content: space-between;
+				align-items: center;
+				padding: 8px 12px;
+				background-color: var(--vscode-panel);
+				border-bottom: 1px solid var(--vscode-border);
+				flex-shrink: 0;
+			}
 
-    <div class="table-container">
-        <table id="dataTable">
-            <thead>
-                <tr>
-                    <th><input type="checkbox" id="selectAll" title="全选/取消全选"></th>
-                    <th class="clickable-header sortable-header" data-sort="designator" title="点击按位号排序">位号<span class="sort-icon"></span></th>
-                    <th class="clickable-header sortable-header" data-sort="name" title="点击按名称排序">名称<span class="sort-icon"></span></th>
-                    <th class="clickable-header sortable-header" data-sort="footprint" title="点击按封装排序">封装<span class="sort-icon"></span></th>
-                    <th class="clickable-header sortable-header" data-sort="supplierId" title="点击按立创编号排序">立创编号<span class="sort-icon"></span></th>
-                    <th class="clickable-header" data-key="preserveName" title="点击全选/取消全选此列">保留名称</th>
-                    <th class="clickable-header" data-key="preserveFootprint" title="点击全选/取消全选此列">保留封装</th>
-                    <th class="clickable-header" data-key="preserve3D" title="点击全选/取消全选此列">保留模型</th>
-                </tr>
-            </thead>
-            <tbody id="tableBody">
-                </tbody>
-        </table>
-    </div>
+			.warning-text {
+				color: var(--vscode-text);
+				font-size: 12px;
+			}
 
-	</div> <div class="status-bar" id="statusBar">
-        <div class="progress-bg" id="progressBg"></div>
-        <span class="status-text" id="statusText">准备就绪，待粘贴数据，格式：位号|C编号（必须从Excel复制粘贴）</span>
-    </div>
+			.button-group {
+				display: flex;
+				gap: 6px;
+			}
 
-    <script src="/iframe/js/app/ReplaceComponent.js"></script>
-</body>
+			button {
+				background-color: var(--vscode-button-secondary);
+				color: var(--vscode-text);
+				border: 1px solid transparent;
+				padding: 4px 11px;
+				cursor: pointer;
+				font-family: inherit;
+				font-size: 13px;
+				border-radius: 2px;
+				transition: background-color 0.1s;
+			}
+
+			button:hover {
+				background-color: var(--vscode-button-secondary-hover);
+			}
+
+			button:disabled {
+				background-color: var(--vscode-border);
+				cursor: not-allowed;
+				color: var(--vscode-text-disabled);
+			}
+
+			.table-container {
+				flex: 1;
+				overflow-y: auto;
+				padding: 0;
+				position: relative;
+			}
+
+			thead {
+				position: sticky;
+				top: 0;
+				z-index: 20;
+			}
+
+			table {
+				width: 100%;
+				border-collapse: collapse;
+				table-layout: fixed;
+			}
+
+			th,
+			td {
+				padding: 4px 0px;
+				text-align: left;
+				border-bottom: 1px solid var(--vscode-border);
+				white-space: nowrap;
+				overflow: hidden;
+				text-overflow: ellipsis;
+			}
+
+			th {
+				background-color: #2d2d30;
+				position: sticky;
+				top: 0;
+				z-index: 10;
+				font-weight: normal;
+				color: #eeeeee;
+				box-shadow: 0 1px 0 var(--vscode-border);
+				border-bottom: none;
+				padding: 4px 0px;
+				text-align: left;
+				white-space: nowrap;
+				overflow: hidden;
+				text-overflow: ellipsis;
+			}
+
+			.clickable-header {
+				cursor: pointer;
+				user-select: none;
+				transition: color 0.1s;
+			}
+
+			.clickable-header:hover {
+				color: var(--vscode-link);
+			}
+
+			.sortable-header {
+				position: relative;
+			}
+
+			.sort-icon {
+				display: inline-block;
+				font-size: 10px;
+				margin-left: 4px;
+				color: var(--vscode-link);
+				width: 10px;
+			}
+
+			th:nth-child(1),
+			td:nth-child(1) {
+				width: 40px;
+				text-align: center;
+			}
+
+			th:nth-child(2),
+			td:nth-child(2) {
+				width: 80px;
+			}
+
+			th:nth-child(6),
+			th:nth-child(7),
+			th:nth-child(8) {
+				text-align: center;
+				width: 60px;
+			}
+
+			td:nth-child(6),
+			td:nth-child(7),
+			td:nth-child(8) {
+				text-align: center;
+			}
+
+			input[type='checkbox'] {
+				accent-color: var(--vscode-link);
+				cursor: pointer;
+				width: 14px;
+				height: 14px;
+				margin: 0;
+				vertical-align: middle;
+			}
+
+			.disabled-row {
+				color: var(--vscode-text-disabled);
+				background-color: rgba(0, 0, 0, 0.1);
+			}
+
+			.disabled-row input[type='checkbox']:not(.row-selector) {
+				opacity: 0.3;
+				cursor: not-allowed;
+			}
+
+			.change-arrow {
+				color: var(--vscode-change);
+				margin: 0 4px;
+				font-weight: bold;
+			}
+
+			.status-bar {
+				height: 22px;
+				background-color: var(--vscode-accent);
+				color: var(--vscode-text-bright);
+				font-size: 12px;
+				display: flex;
+				align-items: center;
+				padding: 0 10px;
+				flex-shrink: 0;
+				position: relative;
+				overflow: hidden;
+				box-shadow: 0 -1px 2px rgba(0, 0, 0, 0.2);
+			}
+
+			.progress-bg {
+				position: absolute;
+				left: 0;
+				top: 0;
+				bottom: 0;
+				background-color: rgba(255, 255, 255, 0.2);
+				width: 0%;
+				transition: width 0.2s ease;
+				z-index: 1;
+			}
+
+			.status-text {
+				position: relative;
+				z-index: 2;
+				white-space: nowrap;
+			}
+		</style>
+	</head>
+	<body>
+		<div class="toolbar">
+			<div class="warning-text">由于没有替换元件的API，本工具将直接修改源码，需要确保没有重复位号，使用前务必做好备份!!!</div>
+			<div class="button-group">
+				<button id="btnPaste">粘贴</button>
+				<button id="btnFetch" disabled>获取</button>
+				<button id="btnReplace" disabled>替换</button>
+			</div>
+		</div>
+
+		<div class="table-container">
+			<table id="dataTable">
+				<thead>
+					<tr>
+						<th><input type="checkbox" id="selectAll" title="全选/取消全选" /></th>
+						<th class="clickable-header sortable-header" data-sort="designator" title="点击按位号排序">
+							位号<span class="sort-icon"></span>
+						</th>
+						<th class="clickable-header sortable-header" data-sort="name" title="点击按名称排序">名称<span class="sort-icon"></span></th>
+						<th class="clickable-header sortable-header" data-sort="footprint" title="点击按封装排序">
+							封装<span class="sort-icon"></span>
+						</th>
+						<th class="clickable-header sortable-header" data-sort="supplierId" title="点击按立创编号排序">
+							立创编号<span class="sort-icon"></span>
+						</th>
+						<th class="clickable-header" data-key="preserveName" title="点击全选/取消全选此列">保留名称</th>
+						<th class="clickable-header" data-key="preserveFootprint" title="点击全选/取消全选此列">保留封装</th>
+						<th class="clickable-header" data-key="preserve3D" title="点击全选/取消全选此列">保留模型</th>
+					</tr>
+				</thead>
+				<tbody id="tableBody"></tbody>
+			</table>
+		</div>
+
+		<div class="status-bar" id="statusBar">
+			<div class="progress-bg" id="progressBg"></div>
+			<span class="status-text" id="statusText">准备就绪，待粘贴数据，格式：位号|C编号（必须从Excel复制粘贴）</span>
+		</div>
+
+		<script src="/iframe/js/common.js"></script>
+		<script src="/iframe/js/app/ReplaceComponent.js"></script>
+	</body>
 </html>

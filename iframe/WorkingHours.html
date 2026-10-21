@@ -1,276 +1,1176 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="zh-CN">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>狼黑工具 - 工作时间统计</title>
-    <script src="/iframe/js/echarts.min.js"></script>
-	<script src="/iframe/js/fflate.js"></script>
-    <link rel="stylesheet" href="/iframe/css/WorkingHours.css">
-</head>
-<body>
+	<head>
+		<meta charset="UTF-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+		<title>狼黑工具 - 工作时间统计</title>
+		<script src="/iframe/js/echarts.min.js"></script>
+		<script src="/iframe/js/fflate.js"></script>
+		<link rel="stylesheet" href="/iframe/css/common.css" />
+		<style>
+			/* ===== WorkingHours 页面专属样式 ===== */
+			* {
+				box-sizing: border-box;
+			}
 
-    <div class="vscode-container">
-        <div class="sidebar">
-            <div class="sidebar-item active" onclick="switchTab('total')">总趋势</div>
-            <div class="sidebar-item" onclick="switchTab('project')">工程详情</div>
-			<div class="sidebar-item" onclick="switchTab('manage')">工程管理</div>
-            <div class="sidebar-item" onclick="switchTab('weekly')">周报生成</div>
-			<div class="sidebar-item" onclick="switchTab('rhythm')">节律分析</div>
-            <div class="sidebar-item" onclick="switchTab('reminder')">消息提醒</div>
-			<div class="sidebar-item" onclick="switchTab('more')">更多选项</div>
-        </div>
+			body,
+			html {
+				margin: 0;
+				padding: 0;
+				width: 960px;
+				height: 600px;
+				background-color: var(--vscode-bg);
+				color: var(--vscode-text);
+				font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+				overflow: hidden;
+				user-select: none;
+			}
 
-        <div class="main-content">
-            <div id="loading-mask">
-				<div class="loading-spinner"></div>
-				<span>数据获取中...</span>
+			.vscode-container {
+				display: flex;
+				width: 960px;
+				height: 600px;
+			}
+
+			.sidebar {
+				width: 100px;
+				background-color: var(--vscode-panel);
+				border-right: 1px solid var(--vscode-border);
+				display: flex;
+				flex-direction: column;
+				padding-top: 10px;
+				flex-shrink: 0;
+			}
+
+			.sidebar-item {
+				padding: 12px 15px;
+				font-size: 13px;
+				color: var(--vscode-text-muted);
+				cursor: pointer;
+				border-left: 3px solid transparent;
+				transition: all 0.15s ease;
+			}
+
+			.sidebar-item:hover {
+				background-color: var(--vscode-list-hover);
+				color: #e0e0e0;
+			}
+
+			.sidebar-item.active {
+				background-color: var(--vscode-active);
+				color: var(--vscode-text-bright);
+				border-left-color: var(--vscode-link);
+				font-weight: bold;
+			}
+
+			.main-content {
+				flex: 1;
+				background-color: var(--vscode-bg);
+				display: flex;
+				flex-direction: column;
+				position: relative;
+				height: 100%;
+				min-width: 0;
+			}
+
+			.main-header {
+				height: 42px;
+				background-color: var(--vscode-bg);
+				border-bottom: 1px solid var(--vscode-border);
+				display: flex;
+				justify-content: space-between;
+				align-items: center;
+				padding: 0 15px;
+				flex-shrink: 0;
+			}
+
+			.header-title {
+				font-size: 13px;
+				font-weight: 600;
+				color: var(--vscode-text-bright);
+			}
+
+			.header-stats {
+				font-size: 12px;
+				color: var(--vscode-text-muted);
+			}
+
+			.highlight {
+				color: var(--vscode-link);
+				font-weight: bold;
+				margin-left: 4px;
+			}
+
+			.view-container {
+				flex: 1;
+				height: calc(100% - 42px);
+				position: relative;
+				overflow: hidden;
+			}
+
+			.view-container.hidden {
+				display: none !important;
+			}
+
+			#wrapper,
+			.chart-wrapper-style {
+				position: relative;
+				width: 100%;
+				height: 100%;
+				background-color: var(--vscode-bg);
+			}
+
+			.chart-box-elem {
+				width: 100%;
+				height: 100%;
+			}
+
+			.legend-panel {
+				position: absolute;
+				top: 10px;
+				right: 10px;
+				background: rgba(37, 37, 38, 0.94);
+				border: 1px solid #454545;
+				border-radius: 4px;
+				padding: 10px;
+				box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+				z-index: 10;
+				max-height: calc(100% - 20px);
+				width: 200px;
+				box-sizing: border-box;
+				display: flex;
+				flex-direction: column;
+			}
+
+			.legend-title {
+				font-weight: bold;
+				margin-bottom: 6px;
+				font-size: 12px;
+				padding-bottom: 4px;
+				border-bottom: 1px solid var(--vscode-border);
+				cursor: pointer;
+				display: flex;
+				justify-content: space-between;
+				align-items: center;
+				color: var(--vscode-text-bright);
+			}
+
+			.legend-title:hover {
+				color: var(--vscode-link);
+			}
+
+			.legend-list {
+				overflow-y: auto;
+				max-height: 180px;
+				padding-right: 2px;
+			}
+
+			.legend-item {
+				display: flex;
+				align-items: center;
+				margin-bottom: 6px;
+				cursor: pointer;
+				transition: opacity 0.2s;
+			}
+
+			.legend-item:hover {
+				opacity: 0.8;
+			}
+
+			.legend-item.hidden {
+				opacity: 0.25;
+				text-decoration: line-through;
+			}
+
+			.color-block {
+				display: inline-block;
+				width: 11px;
+				height: 11px;
+				border-radius: 2px;
+				margin-right: 8px;
+				flex-shrink: 0;
+			}
+
+			.legend-detail {
+				margin-top: 8px;
+				padding-top: 6px;
+				border-top: 1px dashed var(--vscode-border);
+				font-size: 11px;
+				color: var(--vscode-text-disabled);
+				line-height: 1.5;
+				word-break: break-all;
+			}
+
+			.legend-panel.collapsed .legend-list,
+			.legend-panel.collapsed .legend-detail {
+				display: none;
+			}
+
+			.legend-panel.collapsed .legend-title {
+				margin-bottom: 0;
+				border-bottom: none;
+				padding-bottom: 0;
+			}
+
+			.table-wrapper {
+				width: 100%;
+				overflow-y: auto;
+				border: 1px solid var(--vscode-border);
+				background-color: var(--vscode-panel);
+				border-radius: 4px;
+			}
+
+			.vscode-table {
+				width: 100%;
+				border-collapse: collapse;
+				font-size: 12px;
+				text-align: left;
+				table-layout: fixed;
+			}
+
+			.vscode-table th {
+				background-color: var(--vscode-panel);
+				color: var(--vscode-text-bright);
+				padding: 8px 6px;
+				position: sticky;
+				top: 0;
+				border-bottom: 2px solid var(--vscode-border);
+				user-select: none;
+				font-weight: 500;
+				z-index: 2;
+			}
+
+			.vscode-table th.sortable:hover {
+				background-color: var(--vscode-list-hover);
+				cursor: pointer;
+			}
+
+			.vscode-table td {
+				padding: 7px 6px;
+				border-bottom: 1px solid var(--vscode-border);
+				color: var(--vscode-text);
+				overflow: hidden;
+				text-overflow: ellipsis;
+				white-space: nowrap;
+			}
+
+			.vscode-table tr:hover {
+				background-color: var(--vscode-list-hover);
+			}
+
+			.reminder-card {
+				display: flex;
+				flex-direction: column;
+				background: var(--vscode-panel);
+				border: 1px solid var(--vscode-border);
+				border-radius: 4px;
+				padding: 12px;
+			}
+
+			.weekly-report-container {
+				display: flex;
+				flex-direction: column;
+				height: 100%;
+				padding: 15px;
+				gap: 15px;
+				background: var(--vscode-bg);
+				overflow-y: auto;
+			}
+
+			.weekly-header {
+				display: flex;
+				justify-content: space-between;
+				align-items: center;
+				background: var(--vscode-panel);
+				padding: 10px 15px;
+				border-radius: 4px;
+				border: 1px solid var(--vscode-border);
+			}
+
+			.weekly-nav-btn {
+				background: var(--vscode-input-bg);
+				border: 1px solid var(--vscode-border);
+				color: var(--vscode-text);
+				padding: 4px 10px;
+				border-radius: 2px;
+				cursor: pointer;
+				font-size: 12px;
+			}
+
+			.weekly-nav-btn:hover {
+				background: var(--vscode-list-hover);
+				color: var(--vscode-text-bright);
+			}
+
+			.weekly-summary-cards {
+				display: grid;
+				grid-template-columns: repeat(3, 1fr);
+				gap: 15px;
+			}
+
+			.summary-card {
+				background: var(--vscode-panel);
+				border: 1px solid var(--vscode-border);
+				border-radius: 4px;
+				padding: 12px;
+				display: flex;
+				flex-direction: column;
+				align-items: center;
+				gap: 5px;
+			}
+
+			.card-label {
+				font-size: 11px;
+				color: var(--vscode-text-muted);
+			}
+
+			.card-value {
+				font-size: 18px;
+				font-weight: bold;
+				color: var(--vscode-link);
+			}
+
+			.weekly-charts-row {
+				display: grid;
+				grid-template-columns: 1.5fr 1fr;
+				gap: 15px;
+				flex: 1;
+				min-height: 280px;
+			}
+
+			.chart-card {
+				background: var(--vscode-panel);
+				border: 1px solid var(--vscode-border);
+				border-radius: 4px;
+				padding: 10px;
+				position: relative;
+			}
+
+			.chart-title {
+				font-size: 12px;
+				font-weight: bold;
+				color: var(--vscode-text-bright);
+				margin-bottom: 8px;
+			}
+
+			.scroll-wrapper {
+				flex: 1;
+				overflow-y: auto;
+				background: var(--vscode-bg);
+				border: 1px solid var(--vscode-border);
+				border-radius: 4px;
+				padding: 10px;
+				margin-bottom: 10px;
+			}
+
+			.reminder-list {
+				display: flex;
+				flex-direction: column;
+				gap: 6px;
+			}
+
+			.reminder-item {
+				display: flex;
+				justify-content: space-between;
+				align-items: center;
+				background: var(--vscode-border);
+				padding: 6px 12px;
+				border-radius: 4px;
+				font-size: 12px;
+				border: 1px solid var(--vscode-border);
+			}
+
+			.reminder-content {
+				flex: 1;
+				margin: 0 15px;
+				color: #e0e0e0;
+				overflow: hidden;
+				text-overflow: ellipsis;
+				white-space: nowrap;
+			}
+
+			.reminder-input-zone {
+				border-top: 1px solid var(--vscode-border);
+				padding-top: 8px;
+			}
+
+			.input-tip {
+				font-size: 11px;
+				color: var(--vscode-text-muted);
+				margin-bottom: 6px;
+			}
+
+			.input-row {
+				display: flex;
+				gap: 8px;
+				align-items: center;
+			}
+
+			.vscode-input {
+				background-color: var(--vscode-input-bg);
+				border: 1px solid #6b6b6b;
+				color: var(--vscode-text);
+				padding: 4px 8px;
+				border-radius: 2px;
+				outline: none;
+				font-size: 12px;
+				height: 26px;
+			}
+
+			.vscode-input:focus {
+				border-color: var(--vscode-link);
+			}
+
+			.vscode-btn {
+				background-color: var(--vscode-button-bg);
+				border: none;
+				color: var(--vscode-text-bright);
+				padding: 0 12px;
+				height: 26px;
+				border-radius: 2px;
+				cursor: pointer;
+				font-size: 12px;
+			}
+
+			.vscode-btn:hover {
+				background-color: var(--vscode-button-hover);
+			}
+
+			.vscode-btn.success {
+				background-color: var(--vscode-success-fill);
+			}
+
+			.vscode-btn.success:hover {
+				background-color: var(--vscode-success-fill-hover);
+			}
+
+			.small-btn {
+				background: var(--vscode-input-bg);
+				border: 1px solid #555;
+				color: #ccc;
+				padding: 2px 6px;
+				border-radius: 2px;
+				cursor: pointer;
+				font-size: 11px;
+			}
+
+			.small-btn:hover {
+				background: #4c4c4c;
+				color: var(--vscode-text-bright);
+			}
+
+			.small-btn.del:hover {
+				background: var(--vscode-danger);
+				color: var(--vscode-text-bright);
+				border-color: var(--vscode-danger);
+			}
+
+			.small-btn.export:hover {
+				background: var(--vscode-link);
+				color: var(--vscode-text-bright);
+				border-color: var(--vscode-link);
+			}
+
+			input[type='number']::-webkit-inner-spin-button,
+			input[type='number']::-webkit-outer-spin-button {
+				-webkit-appearance: none;
+				margin: 0;
+			}
+
+			input[type='number'] {
+				-moz-appearance: textfield;
+			}
+
+			.stepper {
+				display: flex;
+				align-items: center;
+				background: var(--vscode-input-bg);
+				border: 1px solid #6b6b6b;
+				border-radius: 2px;
+				height: 26px;
+				overflow: hidden;
+			}
+
+			.stepper button {
+				background: none;
+				border: none;
+				color: var(--vscode-text-muted);
+				width: 22px;
+				height: 100%;
+				cursor: pointer;
+				font-size: 14px;
+				display: flex;
+				align-items: center;
+				justify-content: center;
+				transition: all 0.2s;
+			}
+
+			.stepper button:hover {
+				background: var(--vscode-list-hover);
+				color: var(--vscode-text-bright);
+			}
+
+			.stepper input {
+				background: none;
+				border: none;
+				color: var(--vscode-syntax-number);
+				width: 26px;
+				text-align: center;
+				font-size: 12px;
+				outline: none;
+				padding: 0;
+				font-family: Consolas;
+			}
+
+			.list-input {
+				background: transparent;
+				border: 1px solid transparent;
+				color: inherit;
+				padding: 2px 4px;
+				border-radius: 2px;
+				outline: none;
+				font-size: 11px;
+			}
+
+			.list-input:hover {
+				border-color: var(--vscode-border);
+				background: var(--vscode-input-bg);
+			}
+
+			.list-input:focus {
+				border-color: var(--vscode-link);
+				background: var(--vscode-input-bg);
+			}
+
+			.rhythm-mode-block {
+				border: 1px solid var(--vscode-border);
+				border-radius: 4px;
+				padding: 10px;
+				cursor: pointer;
+				transition: all 0.2s;
+				background: var(--vscode-bg);
+			}
+
+			.rhythm-mode-block.active {
+				border-color: var(--vscode-link);
+				background: rgba(0, 122, 204, 0.05);
+			}
+
+			.rhythm-mode-title {
+				font-weight: bold;
+				color: var(--vscode-text-bright);
+				font-size: 13px;
+				display: flex;
+				align-items: center;
+				gap: 8px;
+			}
+
+			.rhythm-mode-title::before {
+				content: '';
+				display: inline-block;
+				width: 12px;
+				height: 12px;
+				border-radius: 50%;
+				border: 2px solid var(--vscode-text-muted);
+				box-sizing: border-box;
+			}
+
+			.rhythm-mode-block.active .rhythm-mode-title::before {
+				border-color: var(--vscode-link);
+				background: var(--vscode-link);
+				box-shadow: inset 0 0 0 2px var(--vscode-bg);
+			}
+
+			.rhythm-mode-block:not(.active) .rhythm-mode-content {
+				display: none !important;
+			}
+
+			.rhythm-mode-content {
+				margin-top: 12px;
+				padding-top: 12px;
+				border-top: 1px dashed var(--vscode-border);
+				cursor: default;
+			}
+
+			.rhythm-radio-group {
+				display: flex;
+				flex-wrap: wrap;
+				gap: 8px;
+				margin-bottom: 12px;
+			}
+
+			.rhythm-radio-group label {
+				font-size: 12px;
+				color: var(--vscode-text);
+				cursor: pointer;
+				display: flex;
+				align-items: center;
+				gap: 4px;
+			}
+
+			#loading-mask {
+				position: absolute;
+				top: 0;
+				left: 0;
+				width: 100%;
+				height: 100%;
+				background: var(--vscode-bg);
+				z-index: 999;
+				display: flex;
+				flex-direction: column;
+				justify-content: center;
+				align-items: center;
+				gap: 15px;
+				color: var(--vscode-text-muted);
+				font-size: 13px;
+				font-weight: bold;
+			}
+
+			.loading-spinner {
+				width: 28px;
+				height: 28px;
+				border: 3px solid rgba(0, 122, 204, 0.2);
+				border-top-color: var(--vscode-link);
+				border-radius: 50%;
+				animation: loading-spin 0.8s linear infinite;
+			}
+
+			@keyframes loading-spin {
+				0% {
+					transform: rotate(0deg);
+				}
+				100% {
+					transform: rotate(360deg);
+				}
+			}
+
+			.time-sub-block {
+				background: rgba(0, 0, 0, 0.15);
+				border: 1px solid var(--vscode-border);
+				border-radius: 4px;
+				padding: 10px;
+			}
+
+			.sub-block-title {
+				font-size: 12px;
+				color: var(--vscode-text-bright);
+				display: flex;
+				align-items: center;
+				gap: 6px;
+				cursor: pointer;
+				margin-bottom: 8px;
+				font-weight: bold;
+			}
+
+			.rhythm-quick-buttons {
+				display: flex;
+				gap: 5px;
+				width: 100%;
+			}
+
+			.rhythm-quick-buttons label {
+				flex: 1;
+				margin: 0;
+			}
+
+			.rhythm-quick-buttons input[type='radio'] {
+				display: none;
+			}
+
+			.rhythm-quick-buttons span {
+				display: block;
+				text-align: center;
+				background: var(--vscode-panel);
+				border: 1px solid var(--vscode-border);
+				color: var(--vscode-text);
+				padding: 5px 0;
+				border-radius: 2px;
+				font-size: 11px;
+				cursor: pointer;
+				transition: all 0.2s;
+				white-space: nowrap;
+			}
+
+			.rhythm-quick-buttons input[type='radio']:checked + span {
+				background: var(--vscode-link);
+				color: var(--vscode-text-bright);
+				border-color: var(--vscode-link);
+			}
+
+			.rhythm-custom-row {
+				display: flex;
+				align-items: center;
+				gap: 6px;
+			}
+
+			.rhythm-custom-row input {
+				flex: 1;
+				min-width: 0;
+				padding: 2px 4px;
+				font-size: 11px;
+				height: 26px;
+			}
+		</style>
+	</head>
+	<body>
+		<div class="vscode-container">
+			<div class="sidebar">
+				<div class="sidebar-item active" onclick="switchTab('total')">总趋势</div>
+				<div class="sidebar-item" onclick="switchTab('project')">工程详情</div>
+				<div class="sidebar-item" onclick="switchTab('manage')">工程管理</div>
+				<div class="sidebar-item" onclick="switchTab('weekly')">周报生成</div>
+				<div class="sidebar-item" onclick="switchTab('rhythm')">节律分析</div>
+				<div class="sidebar-item" onclick="switchTab('reminder')">消息提醒</div>
+				<div class="sidebar-item" onclick="switchTab('more')">更多选项</div>
 			</div>
 
-            <div class="main-header">
-				<div style="display: flex; align-items: center; gap: 10px;">
-					<select id="project-selector" class="vscode-input" style="display: none; height: 26px; padding: 2px 6px;" onchange="onProjectSelectorChange()"></select>
-					<div class="header-title" id="page-title">总趋势</div>
+			<div class="main-content">
+				<div id="loading-mask">
+					<div class="loading-spinner"></div>
+					<span>数据获取中...</span>
 				</div>
-				<div class="header-stats" id="headerStatsArea" ondblclick="ReminderApp.toggleDebug()">
-                    <span id="headerScope">今日已工作</span>
-                    <span id="headerVal" class="highlight">0时0分</span>
-                </div>
-            </div>
 
-            <div id="view-chart" class="view-container" style="display: flex; flex-direction: column;">
-                <div id="heatmap-container" style="width: 100%; height: 155px; flex-shrink: 0; background-color: var(--bg-base); border-bottom: 1px solid var(--border-main); padding-top: 10px; box-sizing: border-box;"></div>
-                
-                <div id="wrapper" style="flex: 1; min-height: 0;">
-                    <div id="custom-legend" class="legend-panel">
-                        <div class="legend-title" id="legend-title-main">当前视图工程 <span id="legend-toggle-icon">▼</span></div>
-                        <div class="legend-list" id="legend-list">加载中...</div>
-                        <div class="legend-detail">把鼠标悬浮在工程上查看详情</div>
-                    </div>
-                    <div id="chart-container" class="chart-box-elem"></div>
-                </div>
-            </div>
+				<div class="main-header">
+					<div style="display: flex; align-items: center; gap: 10px">
+						<select
+							id="project-selector"
+							class="vscode-input"
+							style="display: none; height: 26px; padding: 2px 6px"
+							onchange="onProjectSelectorChange()"
+						></select>
+						<div class="header-title" id="page-title">总趋势</div>
+					</div>
+					<div class="header-stats" id="headerStatsArea" ondblclick="ReminderApp.toggleDebug()">
+						<span id="headerScope">今日已工作</span>
+						<span id="headerVal" class="highlight">0时0分</span>
+					</div>
+				</div>
 
-            <div id="project-empty-tip" class="view-container hidden" style="display:flex; flex-direction:column; justify-content:center; align-items:center; color:var(--text-muted); font-size:13px;">
-                <div style="margin-bottom:8px; font-weight: bold; color:#e0e0e0;">当前未打开工程</div>
-                <div style="font-size:11px; color:#666;">当前视图不包含任何数据。请在 EDA 中打开有效的项目。</div>
-            </div>
+				<div id="view-chart" class="view-container" style="display: flex; flex-direction: column">
+					<div
+						id="heatmap-container"
+						style="
+							width: 100%;
+							height: 155px;
+							flex-shrink: 0;
+							background-color: var(--vscode-bg);
+							border-bottom: 1px solid var(--vscode-border);
+							padding-top: 10px;
+							box-sizing: border-box;
+						"
+					></div>
 
-            <div id="view-weekly" class="view-container hidden">
-                <div class="weekly-report-container" id="weekly-report-body">
-                    <div class="weekly-header">
-                        <button class="weekly-nav-btn" onclick="changeWeek(-1)">◀ 上一周</button>
-                        <div id="weekly-range-text" style="font-weight: bold; color: var(--text-light); font-size: 14px;">2023 第 42 周</div>
-                        <div style="display: flex; gap: 8px;">
-                            <button class="weekly-nav-btn" onclick="exportWeeklyReport()">导出图片</button>
-                            <button class="weekly-nav-btn" onclick="changeWeek(1)">下一周 ▶</button>
-                        </div>
-                    </div>
+					<div id="wrapper" style="flex: 1; min-height: 0">
+						<div id="custom-legend" class="legend-panel">
+							<div class="legend-title" id="legend-title-main">当前视图工程 <span id="legend-toggle-icon">▼</span></div>
+							<div class="legend-list" id="legend-list">加载中...</div>
+							<div class="legend-detail">把鼠标悬浮在工程上查看详情</div>
+						</div>
+						<div id="chart-container" class="chart-box-elem"></div>
+					</div>
+				</div>
 
-                    <div class="weekly-summary-cards">
-                        <div class="summary-card">
-                            <span class="card-label">本周总投入</span>
-                            <span class="card-value" id="weekly-total-work">0h</span>
-                        </div>
-                        <div class="summary-card">
-                            <span class="card-label">日均工时</span>
-                            <span class="card-value" id="weekly-avg-work">0h</span>
-                        </div>
-                        <div class="summary-card">
-                            <span class="card-label">最专注工程</span>
-                            <span class="card-value" id="weekly-top-project" style="font-size: 14px; text-align: center;">--</span>
-                        </div>
-                    </div>
+				<div
+					id="project-empty-tip"
+					class="view-container hidden"
+					style="
+						display: flex;
+						flex-direction: column;
+						justify-content: center;
+						align-items: center;
+						color: var(--vscode-text-muted);
+						font-size: 13px;
+					"
+				>
+					<div style="margin-bottom: 8px; font-weight: bold; color: #e0e0e0">当前未打开工程</div>
+					<div style="font-size: 11px; color: var(--vscode-text-disabled)">当前视图不包含任何数据。请在 EDA 中打开有效的项目。</div>
+				</div>
 
-                    <div class="weekly-charts-row">
-                        <div class="chart-card">
-                            <div class="chart-title">每日工时分布</div>
-                            <div id="weekly-bar-chart" style="width: 100%; height: calc(100% - 25px);"></div>
-                        </div>
-                        <div class="chart-card">
-                            <div class="chart-title">项目占比情况</div>
-                            <div id="weekly-pie-chart" style="width: 100%; height: calc(100% - 25px);"></div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <div id="view-manage" class="view-container hidden" style="display: flex; flex-direction: column; gap: 10px;">
-                <div class="table-wrapper" style="height: 240px; flex-shrink: 0;">
-                    <table class="vscode-table">
-                        <thead>
-                            <tr>
-                                <th class="sortable" onclick="sortTable('name')">工程名称<span id="sort-name"></span></th>
-                                <th class="sortable" onclick="sortTable('start')" style="width: 111px;">开始时间<span id="sort-start"></span></th>
-                                <th class="sortable" onclick="sortTable('end')" style="width: 111px;">最后时间<span id="sort-end"></span></th>
-                                <th class="sortable" onclick="sortTable('work')" style="width: 80px; text-align: center;">工作时间<span id="sort-work"></span></th>
-                                <th class="sortable" onclick="sortTable('rest')" style="width: 80px; text-align: center;">空闲时间<span id="sort-rest"></span></th>
-                                <th style="width: 64px; text-align: center;">导出图表</th>
-                                <th style="width: 64px; text-align: center;">删除记录</th>
-                            </tr>
-                        </thead>
-                        <tbody id="project-table-body"></tbody>
-                    </table>
-                </div>
-                <div id="manage-chart-wrapper" class="chart-wrapper-style" style="flex: 1; min-height: 0; border: 1px solid var(--border-main); border-radius: 4px; padding: 10px;">
-                    <div id="manage-chart-title" style="font-size: 12px; font-weight: bold; color: var(--text-light); position: absolute; top: 8px; left: 70px; z-index: 5;">请点击上方工程行查看对应工程时间轴</div>
-                    
-                    <div id="manage-custom-legend" class="legend-panel">
-                        <div class="legend-title" id="legend-title-manage">目标工程数据 <span id="m-legend-toggle-icon">▼</span></div>
-                        <div class="legend-list" id="m-legend-list">加载中...</div>
-                        <div class="legend-detail">把鼠标悬浮在工程上查看详情</div>
-                    </div>
-
-                    <div id="manage-chart-container" style="width: 100%; height: 100%;"></div>
-                </div>
-            </div>
-
-			<div id="view-rhythm" class="view-container hidden" style="display: flex; gap: 10px;">
-				<div style="width: 300px; background: var(--bg-sidebar); border: 1px solid var(--border-main); border-radius: 4px; padding: 15px; display: flex; flex-direction: column; overflow-y: auto; flex-shrink: 0;">
-					<h3 style="margin:0 0 15px 0; font-size: 14px; color: var(--text-light); border-bottom: 1px solid var(--border-main); padding-bottom: 8px;">节律分析维度</h3>
-
-					<div style="display: flex; flex-direction: column; gap: 10px;">
-						<div id="rhythm-mode-time" class="rhythm-mode-block active" onclick="setRhythmMode('time')">
-							<div class="rhythm-mode-title">按时间范围</div>
-							<div class="rhythm-mode-content" onclick="event.stopPropagation()">
-								
-								<div class="time-sub-block">
-									<label class="sub-block-title">
-										<input type="radio" name="time-submode" value="quick" checked onchange="renderRhythmChart()"> 快速选择
-									</label>
-									<div class="rhythm-quick-buttons">
-										<label><input type="radio" name="rhythm-time-radio" value="day" onchange="onQuickTimeChange()"><span>1天</span></label>
-										<label><input type="radio" name="rhythm-time-radio" value="week" onchange="onQuickTimeChange()"><span>1周</span></label>
-										<label><input type="radio" name="rhythm-time-radio" value="month" onchange="onQuickTimeChange()"><span>1月</span></label>
-										<label><input type="radio" name="rhythm-time-radio" value="year" onchange="onQuickTimeChange()"><span>1年</span></label>
-										<label><input type="radio" name="rhythm-time-radio" value="all" checked onchange="onQuickTimeChange()"><span>全部</span></label>
-									</div>
-								</div>
-
-								<div class="time-sub-block" style="margin-top: 10px;">
-									<label class="sub-block-title">
-										<input type="radio" name="time-submode" value="custom" onchange="renderRhythmChart()"> 自定义时间段
-									</label>
-									<div class="rhythm-custom-row">
-										<input type="date" id="rhythm-start-date" class="vscode-input" onchange="onCustomDateChange()">
-										<span style="color: var(--text-muted); font-weight: bold;">~</span>
-										<input type="date" id="rhythm-end-date" class="vscode-input" onchange="onCustomDateChange()">
-									</div>
-								</div>
-
+				<div id="view-weekly" class="view-container hidden">
+					<div class="weekly-report-container" id="weekly-report-body">
+						<div class="weekly-header">
+							<button class="weekly-nav-btn" onclick="changeWeek(-1)">◀ 上一周</button>
+							<div id="weekly-range-text" style="font-weight: bold; color: var(--vscode-text-bright); font-size: 14px">
+								2023 第 42 周
+							</div>
+							<div style="display: flex; gap: 8px">
+								<button class="weekly-nav-btn" onclick="exportWeeklyReport()">导出图片</button>
+								<button class="weekly-nav-btn" onclick="changeWeek(1)">下一周 ▶</button>
 							</div>
 						</div>
 
-						<div id="rhythm-mode-project" class="rhythm-mode-block" onclick="setRhythmMode('project')">
-							<div class="rhythm-mode-title">按指定工程</div>
-							<div class="rhythm-mode-content" onclick="event.stopPropagation()">
-								<div style="font-size: 11px; color: var(--text-muted); margin-bottom: 6px;">选择工程聚合历史作息:</div>
-								<select id="rhythm-project-select" class="vscode-input" style="width: 100%;" onchange="renderRhythmChart()">
-									</select>
+						<div class="weekly-summary-cards">
+							<div class="summary-card">
+								<span class="card-label">本周总投入</span>
+								<span class="card-value" id="weekly-total-work">0h</span>
+							</div>
+							<div class="summary-card">
+								<span class="card-label">日均工时</span>
+								<span class="card-value" id="weekly-avg-work">0h</span>
+							</div>
+							<div class="summary-card">
+								<span class="card-label">最专注工程</span>
+								<span class="card-value" id="weekly-top-project" style="font-size: 14px; text-align: center">--</span>
+							</div>
+						</div>
+
+						<div class="weekly-charts-row">
+							<div class="chart-card">
+								<div class="chart-title">每日工时分布</div>
+								<div id="weekly-bar-chart" style="width: 100%; height: calc(100% - 25px)"></div>
+							</div>
+							<div class="chart-card">
+								<div class="chart-title">项目占比情况</div>
+								<div id="weekly-pie-chart" style="width: 100%; height: calc(100% - 25px)"></div>
 							</div>
 						</div>
 					</div>
 				</div>
 
-				<div style="flex: 1; background: var(--bg-sidebar); border: 1px solid var(--border-main); border-radius: 4px; position: relative;">
-                    <div id="rhythm-custom-legend" class="legend-panel collapsed">
-						<div class="legend-title" id="legend-title-rhythm">作息图例 <span id="r-legend-toggle-icon">▶</span></div>
-						<div class="legend-list" id="r-legend-list">加载中...</div>
-						<div class="legend-detail">把鼠标悬浮在图例上查看详情</div>
+				<div id="view-manage" class="view-container hidden" style="display: flex; flex-direction: column; gap: 10px">
+					<div class="table-wrapper" style="height: 240px; flex-shrink: 0">
+						<table class="vscode-table">
+							<thead>
+								<tr>
+									<th class="sortable" onclick="sortTable('name')">工程名称<span id="sort-name"></span></th>
+									<th class="sortable" onclick="sortTable('start')" style="width: 111px">开始时间<span id="sort-start"></span></th>
+									<th class="sortable" onclick="sortTable('end')" style="width: 111px">最后时间<span id="sort-end"></span></th>
+									<th class="sortable" onclick="sortTable('work')" style="width: 80px; text-align: center">
+										工作时间<span id="sort-work"></span>
+									</th>
+									<th class="sortable" onclick="sortTable('rest')" style="width: 80px; text-align: center">
+										空闲时间<span id="sort-rest"></span>
+									</th>
+									<th style="width: 64px; text-align: center">导出图表</th>
+									<th style="width: 64px; text-align: center">删除记录</th>
+								</tr>
+							</thead>
+							<tbody id="project-table-body"></tbody>
+						</table>
+					</div>
+					<div
+						id="manage-chart-wrapper"
+						class="chart-wrapper-style"
+						style="flex: 1; min-height: 0; border: 1px solid var(--vscode-border); border-radius: 4px; padding: 10px"
+					>
+						<div
+							id="manage-chart-title"
+							style="
+								font-size: 12px;
+								font-weight: bold;
+								color: var(--vscode-text-bright);
+								position: absolute;
+								top: 8px;
+								left: 70px;
+								z-index: 5;
+							"
+						>
+							请点击上方工程行查看对应工程时间轴
+						</div>
+
+						<div id="manage-custom-legend" class="legend-panel">
+							<div class="legend-title" id="legend-title-manage">目标工程数据 <span id="m-legend-toggle-icon">▼</span></div>
+							<div class="legend-list" id="m-legend-list">加载中...</div>
+							<div class="legend-detail">把鼠标悬浮在工程上查看详情</div>
+						</div>
+
+						<div id="manage-chart-container" style="width: 100%; height: 100%"></div>
+					</div>
+				</div>
+
+				<div id="view-rhythm" class="view-container hidden" style="display: flex; gap: 10px">
+					<div
+						style="
+							width: 300px;
+							background: var(--vscode-panel);
+							border: 1px solid var(--vscode-border);
+							border-radius: 4px;
+							padding: 15px;
+							display: flex;
+							flex-direction: column;
+							overflow-y: auto;
+							flex-shrink: 0;
+						"
+					>
+						<h3
+							style="
+								margin: 0 0 15px 0;
+								font-size: 14px;
+								color: var(--vscode-text-bright);
+								border-bottom: 1px solid var(--vscode-border);
+								padding-bottom: 8px;
+							"
+						>
+							节律分析维度
+						</h3>
+
+						<div style="display: flex; flex-direction: column; gap: 10px">
+							<div id="rhythm-mode-time" class="rhythm-mode-block active" onclick="setRhythmMode('time')">
+								<div class="rhythm-mode-title">按时间范围</div>
+								<div class="rhythm-mode-content" onclick="event.stopPropagation()">
+									<div class="time-sub-block">
+										<label class="sub-block-title">
+											<input type="radio" name="time-submode" value="quick" checked onchange="renderRhythmChart()" /> 快速选择
+										</label>
+										<div class="rhythm-quick-buttons">
+											<label
+												><input type="radio" name="rhythm-time-radio" value="day" onchange="onQuickTimeChange()" /><span
+													>1天</span
+												></label
+											>
+											<label
+												><input type="radio" name="rhythm-time-radio" value="week" onchange="onQuickTimeChange()" /><span
+													>1周</span
+												></label
+											>
+											<label
+												><input type="radio" name="rhythm-time-radio" value="month" onchange="onQuickTimeChange()" /><span
+													>1月</span
+												></label
+											>
+											<label
+												><input type="radio" name="rhythm-time-radio" value="year" onchange="onQuickTimeChange()" /><span
+													>1年</span
+												></label
+											>
+											<label
+												><input
+													type="radio"
+													name="rhythm-time-radio"
+													value="all"
+													checked
+													onchange="onQuickTimeChange()"
+												/><span>全部</span></label
+											>
+										</div>
+									</div>
+
+									<div class="time-sub-block" style="margin-top: 10px">
+										<label class="sub-block-title">
+											<input type="radio" name="time-submode" value="custom" onchange="renderRhythmChart()" /> 自定义时间段
+										</label>
+										<div class="rhythm-custom-row">
+											<input type="date" id="rhythm-start-date" class="vscode-input" onchange="onCustomDateChange()" />
+											<span style="color: var(--vscode-text-muted); font-weight: bold">~</span>
+											<input type="date" id="rhythm-end-date" class="vscode-input" onchange="onCustomDateChange()" />
+										</div>
+									</div>
+								</div>
+							</div>
+
+							<div id="rhythm-mode-project" class="rhythm-mode-block" onclick="setRhythmMode('project')">
+								<div class="rhythm-mode-title">按指定工程</div>
+								<div class="rhythm-mode-content" onclick="event.stopPropagation()">
+									<div style="font-size: 11px; color: var(--vscode-text-muted); margin-bottom: 6px">选择工程聚合历史作息:</div>
+									<select
+										id="rhythm-project-select"
+										class="vscode-input"
+										style="width: 100%"
+										onchange="renderRhythmChart()"
+									></select>
+								</div>
+							</div>
+						</div>
 					</div>
 
-					<div id="rhythm-chart-container" style="width: 100%; height: 100%;"></div>
+					<div
+						style="
+							flex: 1;
+							background: var(--vscode-panel);
+							border: 1px solid var(--vscode-border);
+							border-radius: 4px;
+							position: relative;
+						"
+					>
+						<div id="rhythm-custom-legend" class="legend-panel collapsed">
+							<div class="legend-title" id="legend-title-rhythm">作息图例 <span id="r-legend-toggle-icon">▶</span></div>
+							<div class="legend-list" id="r-legend-list">加载中...</div>
+							<div class="legend-detail">把鼠标悬浮在图例上查看详情</div>
+						</div>
+
+						<div id="rhythm-chart-container" style="width: 100%; height: 100%"></div>
+					</div>
+				</div>
+
+				<div
+					id="view-reminder"
+					class="view-container hidden"
+					style="padding: 12px; display: flex; flex-direction: column; gap: 10px; overflow-y: auto"
+				>
+					<!-- 顶部：欢迎语与挂机配置 -->
+					<div class="reminder-card" style="flex: 0 0 auto; gap: 10px">
+						<div style="display: flex; flex-direction: column; gap: 8px">
+							<div style="display: flex; align-items: center; gap: 10px">
+								<input type="checkbox" id="welcome-enabled" class="checkbox" onchange="ReminderApp.save()" />
+								<span style="font-size: 12px; color: var(--vscode-text-bright); width: 80px; font-weight: bold">启动欢迎</span>
+								<input
+									id="welcome-text-input"
+									type="text"
+									class="vscode-input"
+									style="flex: 1"
+									onchange="ReminderApp.save()"
+									placeholder="使用 <time> 代表时间..."
+								/>
+							</div>
+							<div style="display: flex; align-items: center; gap: 10px">
+								<input type="checkbox" id="idle-enabled" class="checkbox" onchange="ReminderApp.save()" />
+								<span style="font-size: 12px; color: var(--vscode-text-bright); width: 80px; font-weight: bold">挂机返回</span>
+								<div style="display: flex; align-items: center; gap: 5px">
+									<span style="font-size: 11px; color: var(--vscode-text-muted)">超过</span>
+									<input id="idle-min-input" type="number" class="vscode-input" style="width: 50px" onchange="ReminderApp.save()" />
+									<span style="font-size: 11px; color: var(--vscode-text-muted)">分钟后</span>
+								</div>
+								<input
+									id="idle-text-input"
+									type="text"
+									class="vscode-input"
+									style="flex: 1"
+									onchange="ReminderApp.save()"
+									placeholder="返回时提醒文本..."
+								/>
+							</div>
+						</div>
+					</div>
+
+					<!-- 下部：双列提醒规则 -->
+					<div style="flex: 1; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; min-height: 0">
+						<!-- 左列：累计时长 -->
+						<div class="reminder-card" style="display: flex; flex-direction: column">
+							<div
+								style="
+									font-size: 12px;
+									font-weight: bold;
+									color: var(--vscode-link);
+									margin-bottom: 8px;
+									border-bottom: 1px solid var(--vscode-border);
+									padding-bottom: 5px;
+								"
+							>
+								工作时长提醒 (每日)
+							</div>
+							<div class="scroll-wrapper" style="flex: 1; margin-bottom: 8px">
+								<div id="list-duration" class="reminder-list"></div>
+							</div>
+							<div class="reminder-input-zone" style="border-top: none; padding-top: 0">
+								<div class="input-row" style="gap: 4px">
+									<input id="add-dur-m" type="text" class="vscode-input" style="width: 55px" placeholder="时间" />
+									<input id="add-dur-msg" type="text" class="vscode-input" style="flex: 1" placeholder="提醒内容..." />
+									<div class="stepper" title="提醒次数：触发时显示几条提醒">
+										<button onclick="const el=document.getElementById('add-dur-c'); el.value=Math.max(1,parseInt(el.value)-1)">
+											-
+										</button>
+										<input id="add-dur-c" type="number" value="1" readonly />
+										<button onclick="const el=document.getElementById('add-dur-c'); el.value=parseInt(el.value)+1">+</button>
+									</div>
+									<button
+										class="small-btn export"
+										style="
+											height: 26px;
+											background: var(--vscode-link);
+											color: var(--vscode-text-bright);
+											border-color: var(--vscode-link);
+										"
+										onclick="ReminderApp.add('duration')"
+									>
+										添加
+									</button>
+								</div>
+							</div>
+						</div>
+
+						<!-- 右列：固定间隔 -->
+						<div class="reminder-card" style="display: flex; flex-direction: column">
+							<div
+								style="
+									font-size: 12px;
+									font-weight: bold;
+									color: var(--vscode-success-fill);
+									margin-bottom: 8px;
+									border-bottom: 1px solid var(--vscode-border);
+									padding-bottom: 5px;
+								"
+							>
+								固定间隔提醒 (循环)
+							</div>
+							<div class="scroll-wrapper" style="flex: 1; margin-bottom: 8px">
+								<div id="list-interval" class="reminder-list"></div>
+							</div>
+							<div class="reminder-input-zone" style="border-top: none; padding-top: 0">
+								<div class="input-row" style="gap: 4px">
+									<input id="add-int-m" type="text" class="vscode-input" style="width: 55px" placeholder="时间" />
+									<input id="add-int-msg" type="text" class="vscode-input" style="flex: 1" placeholder="提醒内容..." />
+									<div class="stepper" title="提醒次数：触发时显示几条提醒">
+										<button onclick="const el=document.getElementById('add-int-c'); el.value=Math.max(1,parseInt(el.value)-1)">
+											-
+										</button>
+										<input id="add-int-c" type="number" value="1" readonly />
+										<button onclick="const el=document.getElementById('add-int-c'); el.value=parseInt(el.value)+1">+</button>
+									</div>
+									<button
+										class="small-btn export"
+										style="
+											height: 26px;
+											background: var(--vscode-success-fill);
+											color: var(--vscode-text-bright);
+											border-color: var(--vscode-success-fill);
+										"
+										onclick="ReminderApp.add('interval')"
+									>
+										添加
+									</button>
+								</div>
+							</div>
+						</div>
+					</div>
+				</div>
+
+				<div id="view-more" class="view-container hidden">
+					<div class="reminder-card" style="gap: 20px">
+						<div>
+							<h3
+								style="
+									color: var(--vscode-text-bright);
+									margin: 0 0 10px 0;
+									font-size: 14px;
+									border-bottom: 1px solid var(--vscode-border);
+									padding-bottom: 8px;
+								"
+							>
+								导出数据
+							</h3>
+							<div style="display: flex; gap: 10px">
+								<button class="vscode-btn" onclick="exportTotalChart()">导出总趋势图表</button>
+								<button class="vscode-btn" onclick="exportAllDataJson()">导出全部数据</button>
+							</div>
+						</div>
+
+						<div>
+							<h3
+								style="
+									color: var(--vscode-text-bright);
+									margin: 0 0 10px 0;
+									font-size: 14px;
+									border-bottom: 1px solid var(--vscode-border);
+									padding-bottom: 8px;
+								"
+							>
+								清除数据
+							</h3>
+							<div>
+								<button class="vscode-btn" style="background-color: var(--vscode-danger)" onclick="clearAllDataConfirm()">
+									清除工程耗时数据
+								</button>
+							</div>
+							<div style="font-size: 11px; color: var(--vscode-text-muted); margin-top: 6px">
+								警告：此操作不可逆，将彻底删除所有本地记录的工程耗时数据。
+							</div>
+						</div>
+					</div>
 				</div>
 			</div>
+		</div>
 
-            <div id="view-reminder" class="view-container hidden" style="padding: 12px; display: flex; flex-direction: column; gap: 10px; overflow-y: auto;">
-                <!-- 顶部：欢迎语与挂机配置 -->
-                <div class="reminder-card" style="flex: 0 0 auto; gap: 10px;">
-                    <div style="display: flex; flex-direction: column; gap: 8px;">
-                        <div style="display: flex; align-items: center; gap: 10px;">
-                            <input type="checkbox" id="welcome-enabled" class="checkbox" onchange="ReminderApp.save()" />
-                            <span style="font-size:12px; color:var(--text-light); width: 80px; font-weight: bold;">启动欢迎</span>
-                            <input id="welcome-text-input" type="text" class="vscode-input" style="flex: 1" onchange="ReminderApp.save()" placeholder="使用 <time> 代表时间..." />
-                        </div>
-                        <div style="display: flex; align-items: center; gap: 10px;">
-                            <input type="checkbox" id="idle-enabled" class="checkbox" onchange="ReminderApp.save()" />
-                            <span style="font-size:12px; color:var(--text-light); width: 80px; font-weight: bold;">挂机返回</span>
-                            <div style="display: flex; align-items: center; gap: 5px;">
-                                <span style="font-size:11px; color:var(--text-muted);">超过</span>
-                                <input id="idle-min-input" type="number" class="vscode-input" style="width: 50px" onchange="ReminderApp.save()" />
-                                <span style="font-size:11px; color:var(--text-muted);">分钟后</span>
-                            </div>
-                            <input id="idle-text-input" type="text" class="vscode-input" style="flex: 1" onchange="ReminderApp.save()" placeholder="返回时提醒文本..." />
-                        </div>
-                    </div>
-                </div>
-
-                <!-- 下部：双列提醒规则 -->
-                <div style="flex: 1; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; min-height: 0;">
-                    <!-- 左列：累计时长 -->
-                    <div class="reminder-card" style="display: flex; flex-direction: column;">
-                        <div style="font-size:12px; font-weight:bold; color:var(--accent-blue); margin-bottom:8px; border-bottom:1px solid var(--border-main); padding-bottom:5px;">工作时长提醒 (每日)</div>
-                        <div class="scroll-wrapper" style="flex:1; margin-bottom:8px;">
-                            <div id="list-duration" class="reminder-list"></div>
-                        </div>
-                        <div class="reminder-input-zone" style="border-top:none; padding-top:0;">
-                            <div class="input-row" style="gap:4px;">
-                                <input id="add-dur-m" type="text" class="vscode-input" style="width: 55px" placeholder="时间" />
-                                <input id="add-dur-msg" type="text" class="vscode-input" style="flex: 1" placeholder="提醒内容..." />
-                                <div class="stepper" title="提醒次数：触发时显示几条提醒">
-                                    <button onclick="const el=document.getElementById('add-dur-c'); el.value=Math.max(1,parseInt(el.value)-1)">-</button>
-                                    <input id="add-dur-c" type="number" value="1" readonly>
-                                    <button onclick="const el=document.getElementById('add-dur-c'); el.value=parseInt(el.value)+1">+</button>
-                                </div>
-                                <button class="small-btn export" style="height:26px; background:var(--accent-blue); color:#fff; border-color:var(--accent-blue);" onclick="ReminderApp.add('duration')">添加</button>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- 右列：固定间隔 -->
-                    <div class="reminder-card" style="display: flex; flex-direction: column;">
-                        <div style="font-size:12px; font-weight:bold; color:var(--accent-green); margin-bottom:8px; border-bottom:1px solid var(--border-main); padding-bottom:5px;">固定间隔提醒 (循环)</div>
-                        <div class="scroll-wrapper" style="flex:1; margin-bottom:8px;">
-                            <div id="list-interval" class="reminder-list"></div>
-                        </div>
-                        <div class="reminder-input-zone" style="border-top:none; padding-top:0;">
-                            <div class="input-row" style="gap:4px;">
-                                <input id="add-int-m" type="text" class="vscode-input" style="width: 55px" placeholder="时间" />
-                                <input id="add-int-msg" type="text" class="vscode-input" style="flex: 1" placeholder="提醒内容..." />
-                                <div class="stepper" title="提醒次数：触发时显示几条提醒">
-                                    <button onclick="const el=document.getElementById('add-int-c'); el.value=Math.max(1,parseInt(el.value)-1)">-</button>
-                                    <input id="add-int-c" type="number" value="1" readonly>
-                                    <button onclick="const el=document.getElementById('add-int-c'); el.value=parseInt(el.value)+1">+</button>
-                                </div>
-                                <button class="small-btn export" style="height:26px; background:var(--accent-green); color:#fff; border-color:var(--accent-green);" onclick="ReminderApp.add('interval')">添加</button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-			<div id="view-more" class="view-container hidden">
-                <div class="reminder-card" style="gap: 20px;">
-                    <div>
-                        <h3 style="color:var(--text-light); margin:0 0 10px 0; font-size:14px; border-bottom:1px solid var(--border-light); padding-bottom:8px;">导出数据</h3>
-                        <div style="display:flex; gap:10px;">
-                            <button class="vscode-btn" onclick="exportTotalChart()">导出总趋势图表</button>
-                            <button class="vscode-btn" onclick="exportAllDataJson()">导出全部数据</button>
-                        </div>
-                    </div>
-                    
-                    <div>
-                        <h3 style="color:var(--text-light); margin:0 0 10px 0; font-size:14px; border-bottom:1px solid var(--border-light); padding-bottom:8px;">清除数据</h3>
-                        <div>
-                            <button class="vscode-btn" style="background-color:var(--accent-red);" onclick="clearAllDataConfirm()">清除工程耗时数据</button>
-                        </div>
-                        <div style="font-size:11px; color:var(--text-muted); margin-top:6px;">警告：此操作不可逆，将彻底删除所有本地记录的工程耗时数据。</div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <script src="/iframe/js/app/WorkingHours.js"></script>
-</body>
+		<script src="/iframe/js/common.js"></script>
+		<script src="/iframe/js/app/WorkingHours.js"></script>
+	</body>
 </html>

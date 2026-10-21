@@ -1,5 +1,6 @@
 // 获取 EDA 环境上下文 (适配 iframe)
         const sys_eda = window.parent.eda || window.eda;
+        const { getNetlist, getComponentsContainer } = window.WolfCommon;
 
         // 全局状态 (默认使用 mm)
         let appState = {
@@ -31,24 +32,16 @@
                 statusText.textContent = '正在获取当前PCB网表...';
 
                 // 2. 获取 PCB 网表数据
-                let getNetlist;
+                let netlistData;
                 try {
                     // 只获取 PCB 网表，按照你提供的脚本 API 规范
-                    getNetlist = await sys_eda.pcb_ManufactureData.getNetlistFile('JLCEDA');
+                    netlistData = (await getNetlist('PCB')).json;
                 } catch (apiError) {
                     console.error("API 调用失败:", apiError);
                     throw new Error("无法读取 PCB 网表，请确保当前处于 PCB 编辑页面");
                 }
 
-                if (!getNetlist) {
-                    throw new Error("返回的网表数据为空");
-                }
-
-                // 3. 提取文本并解析 JSON
-                const netlistText = await getNetlist.text();
-                const netlistData = JSON.parse(netlistText);
-
-                // 4. 交给已有的解析函数处理 
+                // 3. 交给已有的解析函数处理 
                 // (注：原有的 parseNetlist 函数已经包含了 V2/V3 components 路径的兼容处理)
                 parseNetlist(netlistData);
                 
@@ -85,7 +78,7 @@
         function parseNetlist(netlistData) {
             console.log(netlistData);
             appState.data = [];
-            let componentsSource = netlistData.components ? netlistData.components : netlistData;
+            let componentsSource = getComponentsContainer(netlistData);
 
             for (const key in componentsSource) {
                 const component = componentsSource[key];

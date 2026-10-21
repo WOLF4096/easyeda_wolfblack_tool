@@ -4,6 +4,11 @@
  * 将样式抽到 iframe/css/<name>.css，脚本抽到 iframe/js/app/<name>.js，
  * HTML 仅保留结构 + 引用（纯搬运，不改逻辑）。
  *
+ * 【v1.17.2 起已废弃——仅作历史参考】
+ * 自 v1.17.2 起样式改为「公共样式 iframe/css/common.css + 页面专属 <style>」，
+ * 不再生成 iframe/css/<name>.css。本脚本若再次执行，会重新产出已被删除的
+ * 独立 CSS 文件并覆盖页面内联样式，请勿在生产分支运行。
+ *
  * 注意：不适用于 WorkingHours.html（其主脚本内含生成导出 HTML 的模板字符串，
  * 需手动拆分）。用法：node scripts/split-iframe.js <html文件名> [...]
  */

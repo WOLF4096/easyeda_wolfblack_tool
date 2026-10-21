@@ -1,43 +1,241 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>狼黑工具 - 导出引脚网络工具</title>
-	<link rel="stylesheet" href="/iframe/css/OutPinNet.css">
-</head>
-<body>
-<div class="app-window">
-    <!-- 顶部工具栏 -->
-    <div class="toolbar">
-        <div class="select-group">
-            <!-- <label>类型</label> -->
-            <select id="typeSelect">
-                <option value="FootprintName"selected>封装</option>
-                <option value="DeviceName">器件</option>
-            </select>
-        </div>
+	<head>
+		<meta charset="UTF-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+		<title>狼黑工具 - 导出引脚网络工具</title>
+		<link rel="stylesheet" href="/iframe/css/common.css" />
+		<style>
+			/* ===== OutPinNet 页面专属样式 ===== */
+			* {
+				margin: 0;
+				padding: 0;
+				box-sizing: border-box;
+				font-family:
+					-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji',
+					'Segoe UI Symbol';
+			}
 
-        <div class="select-group">
-            <!-- <label>属性</label> -->
-            <select id="propSelect">
-                <option value="ALL">所有</option>
-            </select>
-        </div>
+			html,
+			body {
+				height: 100%;
+				background-color: var(--vscode-bg);
+			}
 
-        <div class="btn-group">
-            <button class="btn" id="exportPinNetBtn" title="导出当前视图为CSV">导出引脚网络</button>
-            <button class="btn btn-primary" id="exportAllNetBtn" title="导出全部网络列表">导出全部网络</button>
-        </div>
-    </div>
+			.app-window {
+				width: 100%;
+				height: 100%;
+				background-color: var(--vscode-bg);
+				display: flex;
+				flex-direction: column;
+				overflow: hidden;
+				color: var(--vscode-text);
+			}
 
-    <!-- 表格区域 -->
-    <div class="table-container" id="tableContainer">
-        <table class="net-table" id="netTable">
-            <!-- 动态渲染 -->
-        </table>
-    </div>
-</div>
-<script src="/iframe/js/app/OutPinNet.js"></script>
-</body>
+			.toolbar {
+				padding: 8px 12px;
+				background: var(--vscode-panel);
+				border-bottom: 1px solid var(--vscode-border);
+				display: flex;
+				align-items: center;
+				gap: 12px;
+				flex-shrink: 0;
+				flex-wrap: nowrap;
+			}
+
+			.select-group {
+				display: flex;
+				align-items: center;
+				gap: 6px;
+				background: var(--vscode-border);
+				padding: 4px 8px;
+				border-radius: 2px;
+				border: 1px solid transparent;
+				white-space: nowrap;
+				min-width: 0;
+			}
+
+			.select-group:focus-within {
+				border-color: var(--vscode-focus);
+			}
+
+			.select-group label {
+				font-size: 12px;
+				color: var(--vscode-text);
+			}
+
+			.select-group select {
+				border: none;
+				background: transparent;
+				font-size: 13px;
+				color: var(--vscode-text);
+				outline: none;
+				cursor: pointer;
+				padding-right: 4px;
+			}
+
+			.select-group select option {
+				background: var(--vscode-panel);
+				color: var(--vscode-text);
+			}
+
+			#propSelect {
+				width: 120px;
+				white-space: nowrap;
+				overflow: hidden;
+				text-overflow: ellipsis;
+			}
+
+			.btn-group {
+				display: flex;
+				gap: 8px;
+				margin-left: auto;
+				flex-shrink: 0;
+			}
+
+			.btn {
+				background: var(--vscode-button-secondary);
+				border: 1px solid transparent;
+				padding: 4px 12px;
+				border-radius: 2px;
+				font-size: 12px;
+				color: var(--vscode-text-bright);
+				display: inline-flex;
+				align-items: center;
+				gap: 6px;
+				cursor: pointer;
+				transition: background 0.1s;
+				white-space: nowrap;
+			}
+
+			.btn:hover {
+				background: var(--vscode-button-secondary-hover);
+			}
+
+			.btn-primary {
+				background: var(--vscode-button-bg);
+				color: var(--vscode-text-bright);
+			}
+
+			.btn-primary:hover {
+				background: var(--vscode-button-hover);
+			}
+
+			.table-container {
+				flex: 1;
+				overflow: auto;
+				background: var(--vscode-bg);
+				scrollbar-width: thin;
+				scrollbar-color: var(--vscode-scrollbar) transparent;
+			}
+
+			.net-table {
+				border-collapse: collapse;
+				min-width: 100%;
+				white-space: nowrap;
+				font-size: 13px;
+				background: var(--vscode-bg);
+				color: var(--vscode-text);
+				font-family: Consolas, 'Courier New', monospace;
+			}
+
+			.net-table th,
+			.net-table td {
+				padding: 6px 12px;
+				text-align: left;
+				border-bottom: 1px solid #2b2b2b;
+				border-right: 1px solid #2b2b2b;
+			}
+
+			.net-table thead th {
+				background-color: var(--vscode-panel);
+				font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+				font-weight: normal;
+				font-size: 12px;
+				color: var(--vscode-text);
+				border-bottom: 1px solid var(--vscode-border);
+				position: sticky;
+				top: 0;
+				z-index: 10;
+				box-shadow: 0 1px 0 var(--vscode-border);
+			}
+
+			.net-table tbody td:first-child {
+				max-width: 128px;
+				overflow: hidden;
+				text-overflow: ellipsis;
+				white-space: nowrap;
+				background-color: var(--vscode-panel);
+				color: var(--vscode-syntax-type);
+				border-right: 1px solid var(--vscode-border);
+				position: sticky;
+				left: 0;
+				z-index: 5;
+			}
+
+			.net-table thead th:first-child {
+				width: 100px;
+				max-width: 100px;
+				overflow: hidden;
+				text-overflow: ellipsis;
+				white-space: nowrap;
+				position: sticky;
+				left: 0;
+				background: var(--vscode-panel);
+				z-index: 20;
+				border-right: 1px solid var(--vscode-border);
+			}
+
+			.net-table tbody tr:hover td {
+				background-color: var(--vscode-list-hover);
+			}
+
+			.net-table tbody tr:hover td:first-child {
+				background-color: var(--vscode-list-hover);
+			}
+
+			.loading-message {
+				padding: 40px;
+				text-align: center;
+				color: var(--vscode-text-muted);
+				font-style: italic;
+				background: transparent;
+			}
+		</style>
+	</head>
+	<body>
+		<div class="app-window">
+			<!-- 顶部工具栏 -->
+			<div class="toolbar">
+				<div class="select-group">
+					<!-- <label>类型</label> -->
+					<select id="typeSelect">
+						<option value="FootprintName" selected>封装</option>
+						<option value="DeviceName">器件</option>
+					</select>
+				</div>
+
+				<div class="select-group">
+					<!-- <label>属性</label> -->
+					<select id="propSelect">
+						<option value="ALL">所有</option>
+					</select>
+				</div>
+
+				<div class="btn-group">
+					<button class="btn" id="exportPinNetBtn" title="导出当前视图为CSV">导出引脚网络</button>
+					<button class="btn btn-primary" id="exportAllNetBtn" title="导出全部网络列表">导出全部网络</button>
+				</div>
+			</div>
+
+			<!-- 表格区域 -->
+			<div class="table-container" id="tableContainer">
+				<table class="net-table" id="netTable">
+					<!-- 动态渲染 -->
+				</table>
+			</div>
+		</div>
+		<script src="/iframe/js/common.js"></script>
+		<script src="/iframe/js/app/OutPinNet.js"></script>
+	</body>
 </html>

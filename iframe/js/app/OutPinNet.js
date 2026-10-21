@@ -1,4 +1,5 @@
 // ---------- 全局变量 ----------
+    const { getNetlist, getComponentsContainer } = window.WolfCommon;
     let allComponents = [];              // 存储所有器件（扁平化）
     let sortedPins = [];                 // 所有出现的引脚编号（排序后）
     // let netlistData = null;
@@ -265,21 +266,12 @@
         // 显示加载中
         netTable.innerHTML = `<div class="loading-message">加载网表中...</div>`;
 		
-		let getNetlistFile = '';
-		try {
-			getNetlistFile = await eda.pcb_ManufactureData.getNetlistFile();
-		} catch (error) {}
-		// 如果 pcb 返回空或出错，则尝试 sch
-		if (!getNetlistFile) {
-			getNetlistFile = await eda.sch_ManufactureData.getNetlistFile();
-		}
-		// console.log(getNetlistFile);
-		const netdataRaw = await getNetlistFile.text();
-		let jsonData = JSON.parse(netdataRaw);
+		// 与原逻辑一致：PCB 优先、失败回退 SCH；两侧都失败时异常向上抛
+		const jsonData = (await getNetlist('AUTO')).json;
 
 		try {
 			// 兼容新格式：如果有 components 字段则使用它，否则使用整个 jsonData
-			const componentsDict = jsonData.components || jsonData;
+			const componentsDict = getComponentsContainer(jsonData);
 
 			// 构建组件列表和引脚
 			const { components, sortedPins: pins } = buildComponents(componentsDict);

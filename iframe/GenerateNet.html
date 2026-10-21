@@ -1,58 +1,342 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="zh-CN">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>狼黑工具 - 物理网络生成</title>
-	<link rel="stylesheet" href="/iframe/css/GenerateNet.css">
-</head>
-<body>
-<div class="app-container">
-    <header>
-        <div class="header-left">
-            <span>通过</span>
-            <select id="method-select">
-                <option value="netlist">网表</option>
-                <option value="source">源码</option>
-                <option value="api">API</option>
-            </select>
-            <span>更新物理网络</span>
-            <span id="api-warning" style="color: #dc3545; font-size: 12px; margin-left: 10px; display: none;">(此操作可能无法撤销)</span>
-        </div>
-        <div class="header-right">
-            <button id="btn-refresh" class="btn btn-secondary">计算拓扑</button>
-            <button id="btn-execute" class="btn btn-primary" disabled>写入</button>
-        </div>
-    </header>
+	<head>
+		<meta charset="UTF-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+		<title>狼黑工具 - 物理网络生成</title>
+		<link rel="stylesheet" href="/iframe/css/common.css" />
+		<style>
+			/* ===== GenerateNet 页面专属样式 ===== */
+			* {
+				margin: 0;
+				padding: 0;
+				box-sizing: border-box;
+				font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+			}
 
-    <div class="table-wrapper">
-        <div class="grid-header grid-row-layout" id="grid-header">
-            <div>图元ID</div>
-            <div>类型</div>
-            <div>旧网络</div>
-            <div>新网络</div>
-            <div>状态</div>
-        </div>
+			html,
+			body {
+				height: 100%;
+				background-color: var(--vscode-bg);
+				color: var(--vscode-text);
+				font-size: 13px;
+				overflow: hidden;
+				line-height: 1.5;
+			}
 
-        <div class="grid-body" id="result-list"></div>
+			.app-container {
+				display: flex;
+				flex-direction: column;
+				height: 100vh;
+				max-width: 100%;
+			}
 
-        <div id="loading-mask">
-            <div class="spinner"></div>
-            <div id="loading-text"></div>
-        </div>
-    </div>
+			header {
+				height: 48px;
+				background-color: var(--vscode-panel);
+				border-bottom: 1px solid var(--vscode-border);
+				display: flex;
+				align-items: center;
+				justify-content: space-between;
+				padding: 0 16px;
+				flex-shrink: 0;
+			}
 
-    <footer>
-        <div class="progress-track">
-            <div class="progress-fill" id="progress-bar"></div>
-        </div>
-        <div class="footer-info">
-            <span id="status-left">就绪</span>
-            <span id="status-right">-- / --</span>
-        </div>
-    </footer>
-</div>
+			.header-left {
+				display: flex;
+				align-items: center;
+				gap: 8px;
+			}
 
-<script src="/iframe/js/app/GenerateNet.js"></script>
-</body>
+			.header-left span {
+				color: var(--vscode-text);
+				font-size: 13px;
+			}
+
+			.header-left select {
+				background-color: var(--vscode-input-bg);
+				color: var(--vscode-text);
+				border: 1px solid transparent;
+				border-radius: 2px;
+				padding: 4px 24px 4px 8px;
+				font-size: 13px;
+				cursor: pointer;
+				appearance: none;
+				background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23cccccc' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+				background-repeat: no-repeat;
+				background-position: right 6px center;
+				background-size: 12px;
+				outline: none;
+			}
+
+			.header-left select:focus {
+				border-color: var(--vscode-focus);
+			}
+
+			.header-right {
+				display: flex;
+				gap: 8px;
+			}
+
+			.btn {
+				border: 1px solid transparent;
+				border-radius: 2px;
+				padding: 4px 14px;
+				font-size: 12px;
+				cursor: pointer;
+				transition: background 0.1s ease;
+				display: inline-flex;
+				align-items: center;
+				justify-content: center;
+				min-width: 60px;
+			}
+
+			.btn-primary:hover:not(:disabled) {
+				background-color: var(--vscode-button-hover);
+			}
+
+			.btn-secondary:hover:not(:disabled) {
+				background-color: var(--vscode-button-secondary-hover);
+			}
+
+			.btn:disabled {
+				background-color: var(--vscode-disabled-bg);
+				color: var(--vscode-text-disabled);
+				cursor: not-allowed;
+			}
+
+			.table-wrapper {
+				flex: 1;
+				display: flex;
+				flex-direction: column;
+				overflow: hidden;
+				position: relative;
+				background-color: var(--vscode-bg);
+			}
+
+			.grid-row-layout {
+				display: grid;
+				grid-template-columns: 150px 85px 1fr 1fr 70px;
+				gap: 12px;
+				align-items: center;
+				padding: 0 16px;
+			}
+
+			.grid-header {
+				height: 32px;
+				background-color: var(--vscode-panel);
+				border-bottom: 1px solid var(--vscode-border);
+				font-weight: normal;
+				color: var(--vscode-text);
+				font-size: 12px;
+				flex-shrink: 0;
+				box-shadow: 0 1px 0 var(--vscode-border);
+			}
+
+			.grid-body {
+				flex: 1;
+				overflow-y: auto;
+				overflow-x: hidden;
+				padding: 0;
+			}
+
+			.row-item {
+				height: 32px;
+				border-bottom: 1px solid #2b2b2b;
+				font-size: 13px;
+				cursor: default;
+				background-color: var(--vscode-bg);
+				font-family: Consolas, 'Courier New', monospace;
+			}
+
+			.row-item:hover {
+				background-color: var(--vscode-list-hover);
+			}
+
+			.row-item.active {
+			}
+
+			.cell-truncate {
+				white-space: nowrap;
+				overflow: hidden;
+				text-overflow: ellipsis;
+				color: var(--vscode-text);
+			}
+
+			.st-pending,
+			.st-done,
+			.st-err {
+				font-size: 11px;
+				padding: 2px 6px;
+				border-radius: 2px;
+				display: inline-block;
+				text-align: center;
+				width: fit-content;
+				font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+				border: 1px solid transparent;
+			}
+
+			.st-pending {
+				color: var(--vscode-text-muted);
+				border-color: var(--vscode-button-secondary-hover);
+			}
+
+			.st-done {
+				color: var(--vscode-success);
+				background-color: rgba(115, 201, 145, 0.1);
+				border-color: rgba(115, 201, 145, 0.3);
+			}
+
+			.st-err {
+				color: var(--vscode-error);
+				background-color: rgba(241, 76, 76, 0.1);
+				border-color: rgba(241, 76, 76, 0.3);
+			}
+
+			.new-net {
+				color: var(--vscode-syntax-type);
+			}
+
+			.empty-state {
+				height: 100%;
+				display: flex;
+				flex-direction: column;
+				align-items: center;
+				justify-content: center;
+				color: var(--vscode-text-muted);
+				gap: 16px;
+			}
+
+			.empty-state svg {
+				stroke: #555;
+				width: 48px;
+				height: 48px;
+			}
+
+			footer {
+				height: 24px;
+				background-color: var(--vscode-accent);
+				position: relative;
+				flex-shrink: 0;
+				overflow: hidden;
+				display: flex;
+				align-items: center;
+			}
+
+			.progress-track {
+				position: absolute;
+				top: 0;
+				left: 0;
+				width: 100%;
+				height: 2px;
+				background-color: rgba(0, 0, 0, 0.2);
+				z-index: 0;
+			}
+
+			.progress-fill {
+				height: 100%;
+				width: 0%;
+				background-color: var(--vscode-text-bright);
+				opacity: 1;
+				transition: width 0.2s ease;
+			}
+
+			.footer-info {
+				position: relative;
+				z-index: 1;
+				display: flex;
+				align-items: center;
+				justify-content: space-between;
+				width: 100%;
+				padding: 0 10px;
+				font-size: 12px;
+				color: var(--vscode-text-bright);
+			}
+
+			#loading-mask {
+				position: absolute;
+				top: 0;
+				left: 0;
+				right: 0;
+				bottom: 0;
+				background: rgba(30, 30, 30, 0.8);
+				display: none;
+				flex-direction: column;
+				justify-content: center;
+				align-items: center;
+				z-index: 100;
+			}
+
+			.spinner {
+				width: 24px;
+				height: 24px;
+				border: 2px solid rgba(255, 255, 255, 0.1);
+				border-top-color: var(--vscode-button-bg);
+				border-radius: 50%;
+				animation: spin 0.8s linear infinite;
+				margin-bottom: 12px;
+			}
+
+			@keyframes spin {
+				to {
+					transform: rotate(360deg);
+				}
+			}
+
+			#loading-text {
+				color: var(--vscode-text);
+				font-size: 12px;
+			}
+		</style>
+	</head>
+	<body>
+		<div class="app-container">
+			<header>
+				<div class="header-left">
+					<span>通过</span>
+					<select id="method-select">
+						<option value="netlist">网表</option>
+						<option value="source">源码</option>
+						<option value="api">API</option>
+					</select>
+					<span>更新物理网络</span>
+					<span id="api-warning" style="color: #dc3545; font-size: 12px; margin-left: 10px; display: none">(此操作可能无法撤销)</span>
+				</div>
+				<div class="header-right">
+					<button id="btn-refresh" class="btn btn-secondary">计算拓扑</button>
+					<button id="btn-execute" class="btn btn-primary" disabled>写入</button>
+				</div>
+			</header>
+
+			<div class="table-wrapper">
+				<div class="grid-header grid-row-layout" id="grid-header">
+					<div>图元ID</div>
+					<div>类型</div>
+					<div>旧网络</div>
+					<div>新网络</div>
+					<div>状态</div>
+				</div>
+
+				<div class="grid-body" id="result-list"></div>
+
+				<div id="loading-mask">
+					<div class="spinner"></div>
+					<div id="loading-text"></div>
+				</div>
+			</div>
+
+			<footer>
+				<div class="progress-track">
+					<div class="progress-fill" id="progress-bar"></div>
+				</div>
+				<div class="footer-info">
+					<span id="status-left">就绪</span>
+					<span id="status-right">-- / --</span>
+				</div>
+			</footer>
+		</div>
+
+		<script src="/iframe/js/common.js"></script>
+		<script src="/iframe/js/app/GenerateNet.js"></script>
+	</body>
 </html>

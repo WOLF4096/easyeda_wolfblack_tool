@@ -1,6 +1,6 @@
 {
 	"name": "pro-api-sdk",
-	"version": "1.17.1",
+	"version": "1.17.2",
 	"description": "嘉立创EDA & EasyEDA 专业版扩展 API 开发工具",
 	"author": "JLCEDA <support@lceda.cn>",
 	"license": "Apache-2.0",
@@ -11,7 +11,8 @@
 		"prettier:all": "prettier --write .",
 		"eslint:all": "eslint --ext .ts --fix .",
 		"fix": "npm run prettier:all && npm run eslint:all",
-		"build": "npm run compile && ts-node ./build/packaged.ts"
+		"build": "npm run compile && ts-node ./build/packaged.ts",
+		"test": "node --test"
 	},
 	"devDependencies": {
 		"@jlceda/pro-api-types": "^0.1.175",

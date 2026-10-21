@@ -5,8 +5,18 @@
 // 职责：编排选中器件 → 获取网表 → 比对差异 → 生成导线源码 → 批量写入
 // 依赖：performanceMonitor.js（性能统计）、netlistParser.js（网表解析）
 //
-import { PerformanceMonitor } from './performanceMonitor';
-import { formatSchematicNetlist, formatPCBNetlist, formatFileNetlist, processNetlistData } from './netlistParser';
+// --- 模块边界 ---
+// 本文件是「编排层 + EDA 调用层」：所有 `eda.*` 调用都集中在这里，
+// 因此不做单元测试，由 test/edaParams.test.mjs 覆盖被调用的底层图元 API 契约。
+//
+//   netlistParser.js  → 纯解析/比对，不依赖 eda，可直接测
+//   common/apiConfig.js → 读校准配置，依赖 eda（mock 测）
+//   autoWire/index.js → 编排 + EDA 调用，不测
+//
+// 导入路径统一带 `.js` 后缀，以便 Node 原生 ESM（node --test）能直接解析。
+//
+import { PerformanceMonitor } from './performanceMonitor.js';
+import { formatSchematicNetlist, formatPCBNetlist, formatFileNetlist, processNetlistData } from './netlistParser.js';
 
 // 导线长度
 const WIRE_LENGTH = 40;

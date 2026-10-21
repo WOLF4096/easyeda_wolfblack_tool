@@ -2,14 +2,15 @@ function showMsg(msg, type = 'info') {
 				eda.sys_Message.showToastMessage(msg, type);
 			}
 
+			const { getEditorVersion, isV3 } = window.WolfCommon;
+
 			(async function initLibList() {
 				const select = document.getElementById('libSelect');
 				const btn = document.getElementById('runBtn');
 
 				try {
-					const currentVersion = eda.sys_Environment.getEditorCurrentVersion();
 					// 判断是否为 V3 版本
-					if (currentVersion && currentVersion.startsWith('3')) {
+					if (isV3()) {
 						// 获取主容器
 						const container = document.querySelector('.container');
 						// 清空所有控件，替换为居中提示文字
@@ -413,9 +414,9 @@ function showMsg(msg, type = 'info') {
 					// 8. 使用API放置器件
 
 					// 如果是2.2.43，执行这一段，2.2.45跳过
-					// 1. 版本检测
-					const currentVersion = eda.sys_Environment.getEditorCurrentVersion();
-					if (currentVersion && currentVersion.startsWith('2.2.43')) {
+					// 1. 版本检测（这里判断的是具体补丁版本 2.2.43 的 API 行为差异，不能用 isV2() 代替）
+					const currentVersion = getEditorVersion();
+					if (currentVersion.startsWith('2.2.43')) {
 						let primitiveIds;
 						// 这个API放置的器件保存后会丢失，但是不用这个API的话原理图符号就会出问题
 						// 解决办法，先创建一个后删除，用另一个API放置器件

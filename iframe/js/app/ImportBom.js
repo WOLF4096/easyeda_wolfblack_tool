@@ -1,9 +1,10 @@
-// 全局变量
+const { getEditorVersion, isV3, getNetlist, setNetlist, getComponentsContainer } = window.WolfCommon;
+
+        // 全局变量
         let jsonData = {};
         let componentsMap = {}; 
         let tableData = [];
         let Page;
-        let isV3 = false;
 		let currentSortKey = null; // 当前排序的列名
         let currentSortAsc = true; // 是否升序
 
@@ -224,7 +225,7 @@
                 statusBar.className = 'status-bar warning';
                 importBtn.disabled = false;
             } else {
-                statusBar.textContent = `数据加载成功 (${isV3 ? 'V3模式' : 'V2模式'})，可以粘贴并导入`;
+                statusBar.textContent = `数据加载成功 (${isV3() ? 'V3模式' : 'V2模式'})，可以粘贴并导入`;
                 statusBar.className = 'status-bar success';
                 importBtn.disabled = false;
             }
@@ -411,11 +412,7 @@
 
                 const listjson = JSON.stringify(jsonData, null, 2);
 
-                if (Page === 'PCB') {
-                    await eda.pcb_Net.setNetlist('JLCEDA', listjson);
-                } else {
-                    await eda.sch_Netlist.setNetlist('JLCEDA', listjson);
-                }
+                await setNetlist(Page, listjson);
 
                 statusBar.textContent = `成功导入并写回了 ${successCount} 个组件的属性`;
                 statusBar.className = 'status-bar success';
@@ -458,43 +455,20 @@
             });
 
             try {
-                if (typeof eda !== 'undefined' && eda.sys_Environment && eda.sys_Environment.getEditorCurrentVersion) {
-                    const version = eda.sys_Environment.getEditorCurrentVersion();
-                    console.log('[Debug] 当前EDA版本:', version);
-                    if (version && version.toString().startsWith('3')) {
-                        isV3 = true;
-                        versionTag.textContent = 'V3模式';
-                    } else {
-                        versionTag.textContent = 'V2模式';
-                    }
-                } else {
-                    versionTag.textContent = 'V2模式 (默认)';
-                }
+                const version = getEditorVersion();
+                console.log('[Debug] 当前EDA版本:', version);
+                versionTag.textContent = version ? (isV3() ? 'V3模式' : 'V2模式') : 'V2模式 (默认)';
             } catch (e) {
                 console.warn('[Debug] 版本检测失败', e);
                 versionTag.textContent = '模式未知';
             }
 
             try {
-                let getNetlist;
-                let NetList;
-                try {
-                    getNetlist = await eda.pcb_ManufactureData.getNetlistFile('JLCEDA');
-                    NetList = await getNetlist.text();
-                    Page = 'PCB';
-                } catch (error) {
-                    getNetlist = await eda.sch_ManufactureData.getNetlistFile('JLCEDA');
-                    NetList = await getNetlist.text();
-                    Page = 'SCH';
-                }
-                
-                jsonData = JSON.parse(NetList);
+                const netlist = await getNetlist('AUTO');
+                Page = netlist.page;
+                jsonData = netlist.json;
 
-                if (isV3 && jsonData.components) {
-                    componentsMap = jsonData.components;
-                } else {
-                    componentsMap = jsonData;
-                }
+                componentsMap = getComponentsContainer(jsonData);
 
                 await loadBOMData();
                 updateStatusBar();

@@ -1,78 +1,472 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="zh-CN">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>狼黑工具 - 关于</title>
-    <link rel="stylesheet" href="/iframe/css/About.css">
-</head>
-<body>
+	<head>
+		<meta charset="UTF-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+		<title>狼黑工具 - 关于</title>
+		<link rel="stylesheet" href="/iframe/css/common.css" />
+		<style>
+			/* ===== About 页面专属样式 ===== */
+			.env-stack {
+				display: flex;
+				flex-direction: column;
+				gap: 4px;
+				align-items: flex-start;
+			}
 
-<div class="container">
-    <div class="header-title">
-        <img src="../images/logo.png" alt="Logo" class="logo" />
-        <h1>狼黑工具 (WolfBlack Tool) - 嘉立创EDA专业版辅助扩展</h1>
-    </div>
+			.tag-row {
+				display: flex;
+				flex-direction: row;
+				gap: 4px;
+			}
 
-    <div class="links-container">
-        <a href="https://github.com/WOLF4096/easyeda_wolfblack_tool" target="_blank" class="link-card">
-            <span class="link-icon icon-github"></span>Github 主页
-        </a>
-        <a href="https://github.com/WOLF4096/easyeda_wolfblack_tool/blob/main/CHANGELOG.md" target="_blank" class="link-card">
-            <span class="link-icon icon-doc"></span>更新日志
-        </a>
-        <a href="https://ext.lceda.cn/item/darksteel/wolfblack-tool" target="_blank" class="link-card">
-            <span class="link-icon icon-link"></span>嘉立创EDA扩展广场
-        </a>
-		<a href="#" class="link-card popup-trigger" data-img="../images/wx.png">
-			<span class="link-icon icon-link"></span>联系开发者
-		</a>
-		<a href="#" class="link-card popup-trigger" data-img="../images/reward_qrcode.png">
-			<span class="link-icon icon-link"></span>请开发者喝咖啡
-		</a>
-    </div>
+			.tag {
+				font-size: 11px;
+				padding: 0px 4px;
+				border-radius: 2px;
+				line-height: 1.4;
+				display: inline-block;
+				font-family: Consolas, 'Courier New', monospace;
+				border: 1px solid transparent;
+			}
 
-    <h2>项目简介</h2>
-    <p>狼黑工具 (WolfBlack Tool) 是一款针对嘉立创EDA专业版（EasyEDA Pro）开发的辅助扩展插件。</p>
-    <p>本插件最初是基于特定的日常开发需求与工作流痛点编写而成，旨在简化一些较为繁琐的重复性操作。需要说明的是，由于开发初衷具有较强的针对性，插件中的部分功能设计、操作逻辑以及默认参数可能并不一定适用于所有用户的设计习惯和应用场景。</p>
-    <p>本项目以开源形式分享，希望能为有类似需求的用户提供一些便利。插件大部分功能兼容 V2.2 与 V3 EDA 版本。</p>
+			.tag-scope.pcb {
+				color: var(--vscode-syntax-keyword);
+				border-color: rgba(86, 156, 214, 0.3);
+				background: rgba(86, 156, 214, 0.1);
+			}
 
-    <div class="notice-box">
-        <strong>提示：</strong> 初次安装后，建议新建一个空白PCB并运行一次“基准测试”，以校准坐标与尺寸参数。
-    </div>
+			.tag-scope.sch {
+				color: var(--vscode-syntax-string);
+				border-color: rgba(206, 145, 120, 0.3);
+				background: rgba(206, 145, 120, 0.1);
+			}
 
-    <h2>功能列表</h2>
-    
-    <table id="featureTable">
-        <thead>
-            <tr>
-                <th width="144px">功能名称</th>
-                <th>功能简述</th>
-                <th width="86px">适用范围</th>
-                <th width="80px">演示</th>
-            </tr>
-        </thead>
-        <tbody>
-            </tbody>
-    </table>
+			.tag-scope.global {
+				color: var(--vscode-syntax-type);
+				border-color: rgba(78, 201, 176, 0.3);
+				background: rgba(78, 201, 176, 0.1);
+			}
 
-    <div class="danger-box">
-        <h2 style="margin-top: 0; border: none;">声明与数据风险提示（重要）</h2>
-        <ol>
-            <li><strong>兼容性与局限性</strong>：由于插件包含高度定制化的处理逻辑，且官方底层的API处于不断调整中，部分功能在不同项目环境或未来软件版本中可能会表现异常。建议您先在测试工程中熟悉功能表现，再用于正式项目。</li>
-            <li><strong>数据安全建议</strong>：本插件底层涉及对工程源数据的解析与批量覆写。在执行如网络重组、批量替换、格式转换等全局操作前，<strong>强烈建议您手动备份当前工程文件</strong>。</li>
-            <li><strong>免责声明</strong>：本扩展工具按“现状”免费提供。它源于特定的开发需求，并非经过全面商业化测试的通用产品。开发者不对因使用本插件所导致的任何数据损坏、工程丢失、生产失误或其它相关损失承担连带责任。<strong>开始使用本插件即表示您已知晓上述情况，并愿意自行承担相关数据风险。</strong></li>
-        </ol>
-    </div>
+			.tag-scope.warning {
+				color: var(--vscode-error);
+				border-color: rgba(241, 76, 76, 0.3);
+				background: rgba(241, 76, 76, 0.1);
+			}
 
-</div>
-<div id="imageModal" class="modal">
-    <div class="modal-content">
-        <span class="close-btn">&times;</span>
-        <img id="modalImage" src="" alt="二维码/图片">
-    </div>
-</div>
-<script src="/iframe/js/app/About.js"></script>
+			.ver-text {
+				font-size: 11px;
+				color: var(--vscode-syntax-number);
+				font-family: Consolas, 'Courier New', monospace;
+				border: 1px solid var(--vscode-border);
+				padding: 0px 4px;
+				border-radius: 2px;
+			}
 
-</body>
+			body {
+				font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+				line-height: 1.6;
+				color: var(--vscode-text);
+				background-color: var(--vscode-bg);
+				margin: 0;
+			}
+
+			.container {
+				max-width: 1000px;
+				margin: 0 auto;
+				background-color: var(--vscode-panel);
+				padding: 20px;
+				box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+				border: 1px solid var(--vscode-border);
+			}
+
+			.header-title {
+				display: flex;
+				align-items: center;
+				border-bottom: 2px solid var(--vscode-accent);
+				padding-bottom: 15px;
+				margin-bottom: 25px;
+			}
+
+			.logo {
+				height: 48px;
+				margin-right: 15px;
+				border-radius: 4px;
+			}
+
+			h1 {
+				margin: 0;
+				color: var(--vscode-text-bright);
+				border: none;
+				padding: 0;
+				font-size: 1.8em;
+			}
+
+			h2,
+			h3 {
+				color: var(--vscode-text-bright);
+				border-bottom: 1px solid var(--vscode-border);
+				padding-bottom: 10px;
+				margin-top: 1.5em;
+			}
+
+			p {
+				margin-bottom: 1em;
+			}
+
+			a {
+				color: var(--vscode-link);
+				text-decoration: none;
+			}
+
+			a:hover {
+				text-decoration: underline;
+			}
+
+			.links-container {
+				display: flex;
+				gap: 12px;
+				margin: 20px 0;
+				flex-wrap: wrap;
+			}
+
+			.link-card {
+				display: inline-flex;
+				align-items: center;
+				background-color: var(--vscode-border);
+				color: var(--vscode-text);
+				padding: 8px 16px;
+				border-radius: 4px;
+				border: 1px solid var(--vscode-border);
+				font-size: 0.9em;
+				transition: all 0.2s ease;
+			}
+
+			.link-card:hover {
+				background-color: var(--vscode-border);
+				border-color: var(--vscode-accent);
+				color: var(--vscode-text-bright);
+				text-decoration: none;
+			}
+
+			.link-icon {
+				margin-right: 8px;
+				font-weight: bold;
+			}
+
+			.icon-github::before {
+				content: '</>';
+			}
+
+			.icon-doc::before {
+				content: '≡';
+			}
+
+			.icon-link::before {
+				content: '↗';
+			}
+
+			.notice-box {
+				background-color: rgba(204, 167, 0, 0.1);
+				border-left: 4px solid var(--vscode-warning);
+				padding: 15px;
+				margin: 20px 0;
+				font-size: 0.95em;
+				color: var(--vscode-text);
+			}
+
+			.danger-box {
+				background-color: rgba(241, 76, 76, 0.1);
+				border-left: 4px solid var(--vscode-error);
+				padding: 15px;
+				margin: 20px 0;
+				color: var(--vscode-text);
+			}
+
+			.danger-box h2 {
+				color: var(--vscode-error);
+				border-bottom: none;
+			}
+
+			table {
+				width: 100%;
+				border-collapse: collapse;
+				margin-top: 20px;
+				font-size: 0.95em;
+			}
+
+			th,
+			td {
+				padding: 8px 6px;
+				text-align: left;
+				border-bottom: 1px solid var(--vscode-border);
+			}
+
+			th {
+				background-color: #2d2d30;
+				font-weight: 600;
+				color: var(--vscode-text-bright);
+				white-space: nowrap;
+			}
+
+			th:nth-child(4),
+			td:nth-child(4) {
+				text-align: center;
+			}
+
+			.main-row {
+				transition: background-color 0.2s ease;
+				cursor: pointer;
+			}
+
+			.main-row:hover {
+				background-color: var(--vscode-list-hover);
+			}
+
+			.main-row .name-col {
+				font-weight: 600;
+				color: #4fc1ff;
+				position: relative;
+				padding-left: 30px;
+			}
+
+			.main-row .name-col::before {
+				content: '▶';
+				position: absolute;
+				left: 10px;
+				top: 50%;
+				transform: translateY(-50%);
+				font-size: 10px;
+				color: var(--vscode-text-muted);
+				transition: transform 0.2s;
+			}
+
+			.main-row.active .name-col::before {
+				transform: translateY(-50%) rotate(90deg);
+			}
+
+			.main-row.active {
+				background-color: var(--vscode-active);
+				border-bottom: none;
+			}
+
+			.details-row {
+				display: none;
+				background-color: var(--vscode-bg);
+			}
+
+			.details-row.show {
+				display: table-row;
+			}
+
+			.details-content {
+				padding: 20px;
+				border-left: 4px solid var(--vscode-accent);
+				margin: 0 10px 15px 10px;
+				background: var(--vscode-panel);
+				border: 1px solid var(--vscode-border);
+				border-left: 4px solid var(--vscode-accent);
+				border-radius: 0 4px 4px 0;
+			}
+
+			.details-content h4 {
+				margin: 0 0 10px 0;
+				color: var(--vscode-text-bright);
+				font-size: 1em;
+				border-bottom: none;
+				padding-bottom: 0;
+			}
+
+			.details-content p {
+				margin: 0 0 15px 0;
+				color: var(--vscode-text-muted);
+				font-size: 0.95em;
+			}
+
+			.details-content p:last-child {
+				margin-bottom: 0;
+			}
+
+			.usage-tag {
+				display: inline-block;
+				background: rgba(0, 122, 204, 0.2);
+				color: #4fc1ff;
+				padding: 2px 6px;
+				border-radius: 4px;
+				font-size: 0.85em;
+				margin-right: 5px;
+				font-weight: 500;
+				border: 1px solid rgba(0, 122, 204, 0.4);
+			}
+
+			.purpose-tag {
+				display: inline-block;
+				background: rgba(35, 209, 96, 0.2);
+				color: var(--vscode-syntax-type);
+				padding: 2px 6px;
+				border-radius: 4px;
+				font-size: 0.85em;
+				margin-right: 5px;
+				font-weight: 500;
+				border: 1px solid rgba(35, 209, 96, 0.4);
+			}
+
+			.scope-cell {
+				line-height: 1.3;
+			}
+
+			.scope-version {
+				font-size: 0.85em;
+				color: var(--vscode-text-muted);
+			}
+
+			.modal {
+				display: none;
+				position: fixed;
+				z-index: 9999;
+				left: 0;
+				top: 0;
+				width: 100%;
+				height: 100%;
+				background-color: rgba(0, 0, 0, 0.7);
+				backdrop-filter: blur(4px);
+				justify-content: center;
+				align-items: center;
+				animation: fadeIn 0.2s ease-out;
+			}
+
+			.modal-content {
+				width: 512px;
+				position: relative;
+				background-color: var(--vscode-panel);
+				padding: 15px;
+				border-radius: 8px;
+				border: 1px solid var(--vscode-border);
+				box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+				max-width: 90vw;
+				max-height: 90vh;
+				display: flex;
+				justify-content: center;
+				align-items: center;
+			}
+
+			.modal-content img {
+				max-width: 100%;
+				max-height: 80vh;
+				object-fit: contain;
+				border-radius: 4px;
+			}
+
+			.close-btn {
+				position: absolute;
+				top: -12px;
+				right: -12px;
+				background: var(--vscode-error);
+				color: var(--vscode-text-bright);
+				width: 28px;
+				height: 28px;
+				border-radius: 50%;
+				display: flex;
+				justify-content: center;
+				align-items: center;
+				font-size: 20px;
+				font-weight: bold;
+				cursor: pointer;
+				border: 2px solid var(--vscode-panel);
+				transition:
+					background-color 0.2s,
+					transform 0.1s;
+				line-height: 1;
+			}
+
+			.close-btn:hover {
+				background: #c53030;
+				transform: scale(1.1);
+			}
+
+			@keyframes fadeIn {
+				from {
+					opacity: 0;
+				}
+				to {
+					opacity: 1;
+				}
+			}
+		</style>
+	</head>
+	<body>
+		<div class="container">
+			<div class="header-title">
+				<img src="../images/logo.png" alt="Logo" class="logo" />
+				<h1>狼黑工具 (WolfBlack Tool) - 嘉立创EDA专业版辅助扩展</h1>
+			</div>
+
+			<div class="links-container">
+				<a href="https://github.com/WOLF4096/easyeda_wolfblack_tool" target="_blank" class="link-card">
+					<span class="link-icon icon-github"></span>Github 主页
+				</a>
+				<a href="https://github.com/WOLF4096/easyeda_wolfblack_tool/blob/main/CHANGELOG.md" target="_blank" class="link-card">
+					<span class="link-icon icon-doc"></span>更新日志
+				</a>
+				<a href="https://ext.lceda.cn/item/darksteel/wolfblack-tool" target="_blank" class="link-card">
+					<span class="link-icon icon-link"></span>嘉立创EDA扩展广场
+				</a>
+				<a href="#" class="link-card popup-trigger" data-img="../images/wx.png"> <span class="link-icon icon-link"></span>联系开发者 </a>
+				<a href="#" class="link-card popup-trigger" data-img="../images/reward_qrcode.png">
+					<span class="link-icon icon-link"></span>请开发者喝咖啡
+				</a>
+			</div>
+
+			<h2>项目简介</h2>
+			<p>狼黑工具 (WolfBlack Tool) 是一款针对嘉立创EDA专业版（EasyEDA Pro）开发的辅助扩展插件。</p>
+			<p>
+				本插件最初是基于特定的日常开发需求与工作流痛点编写而成，旨在简化一些较为繁琐的重复性操作。需要说明的是，由于开发初衷具有较强的针对性，插件中的部分功能设计、操作逻辑以及默认参数可能并不一定适用于所有用户的设计习惯和应用场景。
+			</p>
+			<p>本项目以开源形式分享，希望能为有类似需求的用户提供一些便利。插件大部分功能兼容 V2.2 与 V3 EDA 版本。</p>
+
+			<div class="notice-box"><strong>提示：</strong> 初次安装后，建议新建一个空白PCB并运行一次“基准测试”，以校准坐标与尺寸参数。</div>
+
+			<h2>功能列表</h2>
+
+			<table id="featureTable">
+				<thead>
+					<tr>
+						<th width="144px">功能名称</th>
+						<th>功能简述</th>
+						<th width="86px">适用范围</th>
+						<th width="80px">演示</th>
+					</tr>
+				</thead>
+				<tbody></tbody>
+			</table>
+
+			<div class="danger-box">
+				<h2 style="margin-top: 0; border: none">声明与数据风险提示（重要）</h2>
+				<ol>
+					<li>
+						<strong>兼容性与局限性</strong
+						>：由于插件包含高度定制化的处理逻辑，且官方底层的API处于不断调整中，部分功能在不同项目环境或未来软件版本中可能会表现异常。建议您先在测试工程中熟悉功能表现，再用于正式项目。
+					</li>
+					<li>
+						<strong>数据安全建议</strong
+						>：本插件底层涉及对工程源数据的解析与批量覆写。在执行如网络重组、批量替换、格式转换等全局操作前，<strong>强烈建议您手动备份当前工程文件</strong>。
+					</li>
+					<li>
+						<strong>免责声明</strong
+						>：本扩展工具按“现状”免费提供。它源于特定的开发需求，并非经过全面商业化测试的通用产品。开发者不对因使用本插件所导致的任何数据损坏、工程丢失、生产失误或其它相关损失承担连带责任。<strong
+							>开始使用本插件即表示您已知晓上述情况，并愿意自行承担相关数据风险。</strong
+						>
+					</li>
+				</ol>
+			</div>
+		</div>
+		<div id="imageModal" class="modal">
+			<div class="modal-content">
+				<span class="close-btn">&times;</span>
+				<img id="modalImage" src="" alt="二维码/图片" />
+			</div>
+		</div>
+		<script src="/iframe/js/common.js"></script>
+		<script src="/iframe/js/app/About.js"></script>
+	</body>
 </html>

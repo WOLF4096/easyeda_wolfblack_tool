@@ -1,9 +1,10 @@
-let componentsData = [];
+const { getEditorVersion, isV3, getNetlist, setNetlist, getComponentsContainer } = window.WolfCommon;
+
+			let componentsData = [];
 			let groupedComponentsData = [];
 			let jsonData = null;
 			let componentsMap = null; // 指向实际的组件对象集合（V2指向根，V3指向components属性）
 			let Page;
-			let isV3 = false;
 
 			// E96系列电阻代码映射表 (标准E96系列值)
 			const E96_VALUES = {
@@ -659,11 +660,7 @@ let componentsData = [];
 
 					const listjson = JSON.stringify(jsonData);
 
-					if (Page === 'PCB') {
-						await eda.pcb_Net.setNetlist('JLCEDA', listjson);
-					} else {
-						await eda.sch_Netlist.setNetlist('JLCEDA', listjson);
-					}
+					await setNetlist(Page, listjson);
 
 					eda.sys_IFrame.closeIFrame('CodeConvert');
 				} catch (error) {
@@ -685,45 +682,22 @@ let componentsData = [];
 
 				// 检测版本
 				try {
-					if (typeof eda !== 'undefined' && eda.sys_Environment && eda.sys_Environment.getEditorCurrentVersion) {
-						const version = eda.sys_Environment.getEditorCurrentVersion();
-						console.log('当前EDA版本:', version);
-						if (version && version.toString().startsWith('3')) {
-							isV3 = true;
-							verTag.textContent = 'V3模式';
-						} else {
-							verTag.textContent = 'V2模式';
-						}
-					} else {
-						verTag.textContent = 'V2模式';
-					}
+					const version = getEditorVersion();
+					console.log('当前EDA版本:', version);
+					verTag.textContent = isV3() ? 'V3模式' : 'V2模式';
 				} catch (e) {
 					console.warn('版本检测失败，默认使用V2模式', e);
 					verTag.textContent = 'V2模式';
 				}
 
 				try {
-					let getNetlist;
-					let NetList;
-					try {
-						getNetlist = await eda.pcb_ManufactureData.getNetlistFile('JLCEDA');
-						NetList = await getNetlist.text();
-						Page = 'PCB';
-					} catch (error) {
-						getNetlist = await eda.sch_ManufactureData.getNetlistFile('JLCEDA');
-						NetList = await getNetlist.text();
-						Page = 'SCH';
-					}
-					jsonData = JSON.parse(NetList);
+					const netlist = await getNetlist('AUTO');
+					Page = netlist.page;
+					jsonData = netlist.json;
 					console.log(jsonData);
 
-					// 关键点：确定组件数据源
-					if (isV3 && jsonData.components) {
-						componentsMap = jsonData.components;
-					} else {
-						// V2 或 V3结构不匹配回退
-						componentsMap = jsonData;
-					}
+					// 关键点：确定组件数据源（V3 在 components 内，V2 直接用根对象）
+					componentsMap = getComponentsContainer(jsonData);
 
 					// 改进的检查唯一ID是否为空或者重复的代码
 					let hasEmptyUniqueId = false;

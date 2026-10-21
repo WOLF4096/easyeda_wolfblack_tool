@@ -8,7 +8,7 @@
  * 3. toggle(): 智能判断，互相转换
  */
 
-import { loadApiConfig } from './common/apiConfig';
+import { loadApiConfig } from './common/apiConfig.js';
 
 // 默认 API 配置兜底（防止解析失败导致崩溃）
 const DEFAULT_API_CONFIG = {

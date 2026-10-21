@@ -1,4 +1,6 @@
 // 1. 原始测试源码数据集 (常量)
+    const { getEditorVersion } = window.WolfCommon;
+
     const RAW_SOURCE = {
         "Via": ["VIA","e1",0,"","",105,110,12,24,0,10,5,0,[]],
         "Pad": ["PAD","e2",0,"",12,"1",50,110,0,["ROUND",12,12],["ELLIPSE",24,24],[],0,0,0,1,0,10,5,0,0,0,null,null,null,null,[]],
@@ -24,7 +26,7 @@
     // 初始化加载
     window.onload = async () => {
         if(window.eda) {
-            const v = await eda.sys_Environment.getEditorCurrentVersion();
+            const v = getEditorVersion();
             document.getElementById('ver-info').innerText = `EDA版本: ${v}`;
         }
         render(); // 必须先渲染DOM，生成输入框
@@ -84,7 +86,7 @@
                         <tbody>
                             ${p.params.map((name, i) => `
                                 <tr>
-                                    <td style="color:var(--dim)">${name}</td>
+                                    <td style="color:var(--vscode-text-muted)">${name}</td>
                                     <td><input class="val-input" id="set_${p.id}_${i}" value="${defaults[i] || ''}"></td>
                                     <td><input class="val-input" id="act_${p.id}_${i}" readonly></td>
                                     <td><input class="val-input" id="cal_${p.id}_${i}" placeholder="*1"></td>
@@ -413,11 +415,11 @@
         const card = document.getElementById(`card_${p.id}`);
         if(!allPass) {
             stat.innerText = "错误"; 
-            stat.style.color = "var(--error)";
+            stat.style.color = "var(--vscode-error)";
             card.classList.remove('collapsed');
         } else {
             stat.innerText = anyCal ? "已校准" : "通过";
-            stat.style.color = anyCal ? "var(--warn)" : "var(--success)";
+            stat.style.color = anyCal ? "var(--vscode-warning)" : "var(--vscode-success)";
             card.classList.add('collapsed');
         }
     }

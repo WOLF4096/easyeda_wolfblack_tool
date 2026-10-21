@@ -1,5 +1,4 @@
-// 获取编辑器版本
-        let ver = eda.sys_Environment.getEditorCurrentVersion();
+const { getNetlist, setNetlist, getComponentsContainer } = window.WolfCommon;
 
         // 核心数据模型
         let groupedData = [];
@@ -860,9 +859,7 @@
                 console.log("[Debug] 开始同步网表属性...");
 				// BUG 在V2版本下，替换完器件后无法获取网表。返回值为{}
                 try {
-                    const getNetlist = await eda.pcb_ManufactureData.getNetlistFile('JLCEDA');
-                    const NetList = await getNetlist.text();
-                    const jsonData = JSON.parse(NetList);
+                    const jsonData = (await getNetlist('PCB')).json;
 					// console.log(jsonData);
 
                     const desigMap = new Map();
@@ -877,9 +874,8 @@
                         "Group ID", "Channel ID", "Convert to PCB"
                     ]);
 
-                    // 【核心识别逻辑】
-                    // 如果存在 components 字段，说明是 V3；否则直接把根节点当做组件容器（兼容 V2）
-                    const targetComponentsNode = jsonData.components ? jsonData.components : jsonData;
+                    // 【核心识别逻辑】V3 在 components 容器内，V2 直接把根节点当做组件容器
+                    const targetComponentsNode = getComponentsContainer(jsonData);
 
                     if (targetComponentsNode) {
                         for (let compKey in targetComponentsNode) {
@@ -918,7 +914,7 @@
                         }
                     }
 					// console.log(JSON.stringify(jsonData, null, 2));//在V2版本上内容为{}
-                    await eda.pcb_Net.setNetlist('JLCEDA', JSON.stringify(jsonData, null, 2));
+                    await setNetlist('PCB', JSON.stringify(jsonData, null, 2));
                     console.log("[Debug] 网表同步更新完成！");
 
                 } catch (netErr) {

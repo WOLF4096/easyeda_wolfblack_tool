@@ -4,14 +4,28 @@
  * 从原理图/PCB/文件网表中提取引脚与网络映射关系，
  * 供「从PCB创建导线」功能比对差异、生成缺失网络的导线。
  * 以下函数均为纯函数，不依赖模块级状态，便于单独测试。
+ *
+ * --- 模块边界 ---
+ * 本模块属于「纯解析层」：输入输出全部是字符串 / 普通对象，
+ * **不引用 `eda` 全局对象、不发起任何 EDA 调用**，可脱离客户端环境直接测试
+ * （见 test/netlistParser.test.mjs）。
+ * 「从 EDA 取数」的责任在调用方（autoWire/index.js）与 apiConfig.js。
+ *
+ * --- 已在网表格式差异上收敛的两个点 ---
+ * 1. 组件容器：V3 为 `{ components: {...} }`，V2 为裸对象 `{ [uniqueId]: {...} }`。
+ * 2. 引脚结构：V3 为 `pinInfoMap: { pin: { net } }`，V2 为 `pins: { pin: netName }`。
  */
 
 /**
  * 格式化原理图网表数据（支持 V2 和 V3 格式）
  *
+ * 入参 `netlistData` 为网表 JSON **字符串**（不是对象），函数内部自行 parse；
+ * `selectedComponents` 允许传单个器件对象或数组，内部统一为数组遍历。
+ * 器件在网表中缺失、或缺少 `props` / 引脚数据时只告警跳过，不会抛错。
+ *
  * @param {string} netlistData - 网表 JSON 字符串
  * @param {Array|Object} selectedComponents - 选中的器件（单个或数组）
- * @returns {Array<{uniqueId,designator,pin,netName}>}
+ * @returns {Array<{uniqueId: string, designator: string, pin: string, netName: string}>}
  */
 function formatSchematicNetlist(netlistData, selectedComponents) {
     const formatted = [];
@@ -85,8 +99,11 @@ function formatSchematicNetlist(netlistData, selectedComponents) {
 /**
  * 格式化 PCB 网表数据
  *
+ * 入参是 `pcb_SelectControl` 返回的图元（单个或数组），
+ * 仅保留 `primitiveType === 'Component'` 的器件，引脚取自 `component.pads[].num/net`。
+ *
  * @param {Array|Object} pcbData - PCB 选中图元（单个或数组）
- * @returns {Array<{uniqueId,designator,pin,netName}>}
+ * @returns {Array<{uniqueId: string, designator: string, pin: string, netName: string}>}
  */
 function formatPCBNetlist(pcbData) {
     const formatted = [];
@@ -124,6 +141,10 @@ function formatPCBNetlist(pcbData) {
  * 格式化文件网表数据
  *
  * 文件格式与原理图网表格式相同，调用统一处理函数。
+ *
+ * @param {string} fileData - 网表文件文本内容（JSON 字符串）
+ * @param {Array|Object} selectedComponents - 选中的器件（单个或数组）
+ * @returns {Array<{uniqueId: string, designator: string, pin: string, netName: string}>}
  */
 function formatFileNetlist(fileData, selectedComponents) {
     return formatSchematicNetlist(fileData, selectedComponents);
@@ -135,7 +156,15 @@ function formatFileNetlist(fileData, selectedComponents) {
  * 比对原理图与 PCB 的引脚网络：若原理图中该引脚无网络而 PCB 中有，
  * 则为该引脚（及其每个图元 ID）生成待放置导线的数据。
  *
- * @returns {Array<{componentId,uniqueId,designator,pin,netName}>}
+ * 判定规则：`!hasSchematicNet && hasPCBNet`，两侧都先 `trim()`，
+ * 因此空字符串与纯空格一律视为「无网络」。
+ *
+ * @param {string[]} componentIds - 同一器件的所有图元 ID（每个 ID 都会产出一条记录）
+ * @param {string} uniqueId - 器件唯一 ID
+ * @param {string} designator - 位号
+ * @param {Array<{uniqueId,designator,pin,netName}>} schematicNetlist - 已格式化的原理图网表
+ * @param {Array<{uniqueId,designator,pin,netName}>} pcbNetlist - 已格式化的 PCB 网表
+ * @returns {Array<{componentId: string, uniqueId: string, designator: string, pin: string, netName: string}>}
  */
 function processNetlistData(componentIds, uniqueId, designator, schematicNetlist, pcbNetlist) {
     const result = [];

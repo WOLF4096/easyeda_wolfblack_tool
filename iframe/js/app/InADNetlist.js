@@ -1,4 +1,6 @@
 (function() {
+        const { getNetlist, setNetlist } = window.WolfCommon;
+
         // ---------- 全局变量 ----------
         let currentNetlistRaw = null;      // 原始JLCEDA网表对象(深拷贝保留原始结构)
         let designatorMap = {};             // { 位号: componentObject }
@@ -35,9 +37,7 @@
                 if (typeof eda === 'undefined' || !eda.pcb_ManufactureData || !eda.pcb_ManufactureData.getNetlistFile) {
                     throw new Error('当前未检测到嘉立创EDA环境，请确保在JLCEDA插件/扩展中运行');
                 }
-                const getNetlist = await eda.pcb_ManufactureData.getNetlistFile('JLCEDA');
-                let currentNetlistStr = await getNetlist.text();
-                let parsed = JSON.parse(currentNetlistStr);
+                const { json: parsed } = await getNetlist('PCB');
                 currentNetlistRaw = JSON.parse(JSON.stringify(parsed)); // 深拷贝原始数据
                 buildDesignatorMap();
                 console.log('[系统] 当前PCB网表加载成功，组件数量:', Object.keys(componentListRef || {}).length);
@@ -312,7 +312,7 @@
                 const { updatedObj, updateCount, skippedCount } = applyNetlistUpdateToObject(currentNetlistRaw, adNetMap);
                 const updatedJsonStr = JSON.stringify(updatedObj);
                 // 调用嘉立创EDA写入接口
-                await eda.pcb_Net.setNetlist('JLCEDA', updatedJsonStr);
+                await setNetlist('PCB', updatedJsonStr);
                 parseFeedbackSpan.style.color = '#6fcf97';
                 // 写入成功后重新加载当前网表，刷新界面数据，让旧网络变成新网络
                 await loadCurrentNetlist();

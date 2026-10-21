@@ -328,7 +328,7 @@
 						for (let i = 0; i < arr.length; i++) totalSec += arr[i];
 					}
 				}
-                detailEl.innerHTML = `<div style="color:#fff;">${escapeHtml(seriesName)}总和：<span style="color:var(--accent-blue); font-weight:bold;">${formatDuration(totalSec)}</span></div>`;
+                detailEl.innerHTML = `<div style="color:#fff;">${escapeHtml(seriesName)}总和：<span style="color:var(--vscode-link); font-weight:bold;">${formatDuration(totalSec)}</span></div>`;
                 return;
             }
 
@@ -433,14 +433,14 @@
                                 if (hiddenSeries.has(name)) continue;
                                 const val = blockWork[pid] || 0;
                                 if (val > 0) {
-                                    tooltipHtml += `<div style="margin: 4px 0; font-size:12px;"><span class="color-block" style="background:${pidColorMap[pid] || 'var(--accent-blue)'};"></span> ${escapeHtml(name)}: <span style="float:right; font-weight:bold; margin-left: 15px; color:#fff;">${formatDuration(val)}</span></div>`;
+                                    tooltipHtml += `<div style="margin: 4px 0; font-size:12px;"><span class="color-block" style="background:${pidColorMap[pid] || 'var(--vscode-link)'};"></span> ${escapeHtml(name)}: <span style="float:right; font-weight:bold; margin-left: 15px; color:#fff;">${formatDuration(val)}</span></div>`;
                                     hasData = true;
                                 }
                             }
                         }
 
                         if (blockRest > 0 && !hiddenSeries.has('空闲时间')) {
-                            tooltipHtml += `<div style="margin: 4px 0; font-size:12px;"><span class="color-block" style="background:var(--chart-rest);"></span> 空闲时间: <span style="float:right; font-weight:bold; margin-left: 15px; color:#fff;">${formatDuration(blockRest)}</span></div>`;
+                            tooltipHtml += `<div style="margin: 4px 0; font-size:12px;"><span class="color-block" style="background:var(--vscode-chart-rest);"></span> 空闲时间: <span style="float:right; font-weight:bold; margin-left: 15px; color:#fff;">${formatDuration(blockRest)}</span></div>`;
                             hasData = true;
                         }
                         return hasData ? tooltipHtml : `<b style="font-size:13px; color:#fff;">${title}</b><br/><span style="color:#666;">无活动记录</span>`;
@@ -705,7 +705,7 @@
 						<span style="font-size:11px; font-weight:bold;">工作时间</span>
 					</div>
 					<div class="legend-item ${!showRest ? 'hidden' : ''}" data-name="空闲时间">
-						<span class="color-block" style="background: var(--chart-rest);"></span>
+						<span class="color-block" style="background: var(--vscode-chart-rest);"></span>
 						<span style="font-size:11px; color:#aaa;">空闲时间</span>
 					</div>
 				`;
@@ -760,8 +760,8 @@
 				},
 				angleAxis: {
 					type: 'category', data: categories, startAngle: 90, clockwise: true,
-					axisLine: { lineStyle: { color: 'var(--border-light)' } },
-					splitLine: { show: true, lineStyle: { color: 'var(--border-main)', type: 'solid' } },
+					axisLine: { lineStyle: { color: 'var(--vscode-border)' } },
+					splitLine: { show: true, lineStyle: { color: 'var(--vscode-border)', type: 'solid' } },
 					axisLabel: {
 						interval: 3, color: '#CCCCCC', fontSize: 12, textShadowColor: 'rgba(0,0,0,0.8)', textShadowBlur: 3,
 						formatter: function (value) { return value.endsWith(':00') ? value.split(':')[0] : ''; }
@@ -771,7 +771,7 @@
 				radiusAxis: {
 					max: axisMax, 
 					axisLabel: { show: false, color: '#999999', fontSize: 10, formatter: v => v === 0 ? '' : formatDuration(v) },
-					axisLine: { show: false }, splitLine: { lineStyle: { color: 'var(--border-main)', type: 'dashed' } },
+					axisLine: { show: false }, splitLine: { lineStyle: { color: 'var(--vscode-border)', type: 'dashed' } },
 					axisPointer: { label: { formatter: params => formatDuration(params.value) } }
 				},
 				polar: { center: ['50%', '50%'], radius: '76%' },
@@ -857,7 +857,7 @@
             if (hasRestTime) {
                 const isHidden = hiddenSeries.has('空闲时间');
                 html += `<div class="legend-item ${isHidden ? 'hidden' : ''}" data-name="空闲时间">
-                    <span class="color-block" style="background:var(--chart-rest);"></span><span style="font-size:11px; color:#aaa;">空闲时间</span>
+                    <span class="color-block" style="background:var(--vscode-chart-rest);"></span><span style="font-size:11px; color:#aaa;">空闲时间</span>
                 </div>`;
             }
             return html || '<div style="color:#666; font-size:11px;">当前区间无记录</div>';
@@ -1023,7 +1023,7 @@
             ['name', 'start', 'end', 'work', 'rest'].forEach(f => {
                 const el = document.getElementById(`sort-${f}`);
                 if(el) {
-                    if (currentSortField === f) { el.innerText = currentSortOrder === 'desc' ? ' ▼' : ' ▲'; el.style.color = 'var(--accent-blue)'; } 
+                    if (currentSortField === f) { el.innerText = currentSortOrder === 'desc' ? ' ▼' : ' ▲'; el.style.color = 'var(--vscode-link)'; } 
                     else { el.innerText = ''; }
                 }
             });
@@ -1046,12 +1046,12 @@
             list.forEach(item => {
                 const tr = document.createElement('tr');
                 tr.style.cursor = 'pointer';
-                if (currentlySelectedManageUuid === item.uuid) tr.style.background = 'var(--bg-active)';
+                if (currentlySelectedManageUuid === item.uuid) tr.style.background = 'var(--vscode-active)';
                 
                 tr.onclick = () => {
                     currentlySelectedManageUuid = item.uuid;
                     document.querySelectorAll('#project-table-body tr').forEach(r => r.style.background = '');
-                    tr.style.background = 'var(--bg-active)';
+                    tr.style.background = 'var(--vscode-active)';
                     document.getElementById('manage-chart-title').innerText = getProjectTitleString(item.uuid);
                     initManageChart(item.uuid, item.name);
                 };
@@ -1727,7 +1727,7 @@
                     const div = document.createElement('div');
                     div.className = 'reminder-item';
                     div.style.padding = '4px 8px';
-                    const color = type === 'duration' ? 'var(--accent-blue)' : 'var(--accent-green)';
+                    const color = type === 'duration' ? 'var(--vscode-link)' : 'var(--vscode-success-fill)';
                     div.innerHTML = `
                         <input class="list-input" style="width:55px; color:${color}; font-weight:bold; font-family:Consolas;"
                                value="${this.formatMin(item.m)}" onchange="ReminderApp.updateRule('${type}', ${idx}, 'm', this.value)">

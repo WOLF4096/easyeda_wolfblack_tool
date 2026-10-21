@@ -1,4 +1,6 @@
 // ---------- 全局状态 ----------
+		const { getEditorVersion, isV3, isV2 } = window.WolfCommon;
+
 		let zip = null;                  // 解压后的工程文件
 		let projectJson = null;          // project.json 内容
 		let components = [];             // 原始元件列表（每个元件一条）
@@ -32,11 +34,15 @@
 		const exportNetBtn = document.getElementById('exportNetBtn');
 
 		try {
-			version = eda.sys_Environment.getEditorCurrentVersion();
-			if (version.startsWith('2.2.')) {
+			version = getEditorVersion();
+			// 取不到版本号 = 不在 EDA 环境，抛错交由下方 catch 统一禁用按钮
+			if (!version) {
+				throw new Error('未检测到 EDA 环境');
+			}
+			if (isV2()) {
 				versionSpan.textContent = `当前EDA版本：${version} 功能可用`;
 				yvalueCheck.checked = false;
-			}else if(version.startsWith('3.')){
+			}else if(isV3()){
 				versionSpan.textContent = `当前EDA版本：${version} 功能可用`;
 				yvalueCheck.checked = true;
 			}
@@ -1026,10 +1032,10 @@
 					const pinX = compX + pinInfo.x;
 					let rawPinY;
 					let y;
-					if (version.startsWith('2.2.')) {
+					if (isV2()) {
 						rawPinY = compY + pinInfo.y; // V2版本 Y 坐标（向上为正）
 						y = 1;
-					} else if (version.startsWith('3.')) {
+					} else if (isV3()) {
 						rawPinY = compY - pinInfo.y; // V3版本 Y 坐标（向下为正）
 						y = -1;
 					}
@@ -1073,13 +1079,13 @@
 					const outEndY = rawEndY;
 					const outCenterY = rawCenterY;
 
-					if (version.startsWith('2.2.')) {
+					if (isV2()) {
 						// V2 版本
 						const wireTicket = idCounter++;
 						const wireId = 'e' + wireTicket;
 						wireLines.push(`["WIRE","${wireId}",[[${pinX},${outPinY},${endX},${outEndY}]],"st1",0]`);
 						wireLines.push(`["ATTR","e${idCounter++}","${wireId}","NET","${netName}",0,1,${centerX},${outCenterY},${netT},"st1",0]`);
-					} else if (version.startsWith('3.')) {
+					} else if (isV3()) {
 						// V3 版本
 						const wireTicket = idCounter++;
 						const lineTicket = idCounter++;
@@ -1097,7 +1103,7 @@
 
 
 
-			if (version.startsWith('2.2.')) {
+			if (isV2()) {
 
 				// 头部
 				lines.push('["DOCTYPE","SCH","1.1"]');
@@ -1276,7 +1282,7 @@
 
 				return lines.join('\n');
 
-			} else if (version.startsWith('3.')) {
+			} else if (isV3()) {
 				// V3 版本源码生成
 				// 生成唯一 client 和 uuid（保证文件内唯一）
 				const uniqueClient = 'client_' + Date.now() + '_' + Math.random().toString(36).substr(2, 8);

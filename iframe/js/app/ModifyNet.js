@@ -1,4 +1,6 @@
 (function() {
+        const { hasEda, isV3, getNetlist, setNetlist, getComponentsContainer } = window.WolfCommon;
+
         const resultOutput = document.getElementById('resultOutput');
         const executeBtn = document.getElementById('executeBtn');
         const csvInput = document.getElementById('csvInput');
@@ -7,28 +9,24 @@
         const verLabel = document.getElementById('verLabel');
 
         let cachedNetlistData = null;
-        let isV3 = false;
 
         // 初始化：获取网表并存储
         async function initNetlistData() {
             try {
                 status.className = 'status';
-                if (typeof eda !== 'undefined' && eda.pcb_Net && eda.pcb_Net.getNetlist) {
+                if (hasEda()) {
                     try {
-                        const version = eda.sys_Environment.getEditorCurrentVersion();
-                        isV3 = version && version.toString().startsWith('3.');
-                        verLabel.textContent = isV3 ? 'V3模式' : 'V2.2模式';
+                        verLabel.textContent = isV3() ? 'V3模式' : 'V2.2模式';
                     } catch (e) {
                         verLabel.textContent = 'Error';
                     }
 
-                    const getNetlistFile = await eda.pcb_ManufactureData.getNetlistFile();
-                    const rawData = await getNetlistFile.text();
-                    cachedNetlistData = JSON.parse(rawData);
+                    const { json } = await getNetlist('PCB');
+                    cachedNetlistData = json;
 
                     status.textContent = '✅ 网表已加载，可直接输入位号查询或粘贴数据替换。';
                     status.className = 'status info';
-                    console.log('网表已缓存', isV3 ? 'V3' : 'V2');
+                    console.log('网表已缓存', isV3() ? 'V3' : 'V2');
                 } else {
                     status.textContent = '⚠️ 未检测到EDA环境，请在嘉立创EDA中运行。';
                     status.className = 'status error';
@@ -57,30 +55,19 @@
             let foundComponent = null;
             let outputLines = [];
 
-            // 查找组件
-            if (isV3) {
-                if (cachedNetlistData.components) {
-                    for (const key in cachedNetlistData.components) {
-                        const comp = cachedNetlistData.components[key];
-                        if (comp.props && comp.props.Designator && comp.props.Designator.toUpperCase() === query) {
-                            foundComponent = comp;
-                            break;
-                        }
-                    }
-                }
-            } else {
-                for (const key in cachedNetlistData) {
-                    const comp = cachedNetlistData[key];
-                    if (comp.props && comp.props.Designator && comp.props.Designator.toUpperCase() === query) {
-                        foundComponent = comp;
-                        break;
-                    }
+            // 查找组件（V3 在 components 容器内，V2 直接是根对象）
+            const componentContainer = getComponentsContainer(cachedNetlistData);
+            for (const key in componentContainer) {
+                const comp = componentContainer[key];
+                if (comp && comp.props && comp.props.Designator && comp.props.Designator.toUpperCase() === query) {
+                    foundComponent = comp;
+                    break;
                 }
             }
 
             // 格式化输出
             if (foundComponent) {
-                if (isV3) {
+                if (isV3()) {
                     if (foundComponent.pinInfoMap) {
                         const pinKeys = Object.keys(foundComponent.pinInfoMap).sort((a, b) => {
                             return isNaN(a) || isNaN(b) ? a.localeCompare(b) : parseInt(a) - parseInt(b);
@@ -121,9 +108,7 @@
                 const content = csvInput.value.trim();
                 if (!content) throw new Error('请从 Excel 复制粘贴替换规则');
 
-                const getNetlistFile = await eda.pcb_ManufactureData.getNetlistFile();
-                const netdataRaw = await getNetlistFile.text();
-                let jsonData = JSON.parse(netdataRaw);
+                const { json: jsonData } = await getNetlist('PCB');
                 cachedNetlistData = jsonData;
 
                 // 强制使用制表符分隔
@@ -152,28 +137,28 @@
 
                 let totalReplacements = 0;
 
-                if (isV3) {
-                    if (jsonData.components) {
-                        for (const componentKey in jsonData.components) {
-                            const component = jsonData.components[componentKey];
-                            const designator = component.props ? component.props.Designator : componentKey;
+                if (isV3()) {
+                    const componentContainer = getComponentsContainer(jsonData);
+                    for (const componentKey in componentContainer) {
+                        const component = componentContainer[componentKey];
+                        const designator = component.props ? component.props.Designator : componentKey;
 
-                            if (component.pinInfoMap) {
-                                for (const pinKey in component.pinInfoMap) {
-                                    const pinInfo = component.pinInfoMap[pinKey];
-                                    if (pinInfo && pinInfo.net && replaceMap.has(pinInfo.net)) {
-                                        const newNet = replaceMap.get(pinInfo.net);
-                                        resultOutput.value += `替换: ${designator}.${pinKey} [${pinInfo.net} -> ${newNet}]\n`;
-                                        pinInfo.net = newNet;
-                                        totalReplacements++;
-                                    }
+                        if (component.pinInfoMap) {
+                            for (const pinKey in component.pinInfoMap) {
+                                const pinInfo = component.pinInfoMap[pinKey];
+                                if (pinInfo && pinInfo.net && replaceMap.has(pinInfo.net)) {
+                                    const newNet = replaceMap.get(pinInfo.net);
+                                    resultOutput.value += `替换: ${designator}.${pinKey} [${pinInfo.net} -> ${newNet}]\n`;
+                                    pinInfo.net = newNet;
+                                    totalReplacements++;
                                 }
                             }
                         }
                     }
                 } else {
-                    for (const componentKey in jsonData) {
-                        const component = jsonData[componentKey];
+                    const componentContainer = getComponentsContainer(jsonData);
+                    for (const componentKey in componentContainer) {
+                        const component = componentContainer[componentKey];
                         if (component.pins) {
                             const designator = component.props ? component.props.Designator : 'Unknown';
                             for (const pinKey in component.pins) {
@@ -192,7 +177,7 @@
                 resultOutput.value += `\n完成 ${totalReplacements} 次替换`;
 
                 const updatedJsonString = JSON.stringify(jsonData, null, 2);
-                await eda.pcb_Net.setNetlist('JLCEDA', updatedJsonString);
+                await setNetlist('PCB', updatedJsonString);
 
                 cachedNetlistData = jsonData;
 

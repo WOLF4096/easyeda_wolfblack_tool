@@ -1,28 +1,204 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="zh-CN">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>狼黑工具 - API 基准测试</title>
-    <link rel="stylesheet" href="/iframe/css/APITest.css">
-</head>
-<body>
+	<head>
+		<meta charset="UTF-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+		<title>狼黑工具 - API 基准测试</title>
+		<link rel="stylesheet" href="/iframe/css/common.css" />
+		<style>
+			/* ===== APITest 页面专属样式 ===== */
+			* {
+				box-sizing: border-box;
+				margin: 0;
+				padding: 0;
+			}
 
-<div class="header">
-    <div class="header-info">
-        <strong style="color: var(--primary)">API 基准测试</strong>
-        <span class="version-tag" id="ver-info">EDA版本: 获取中...</span>
-    </div>
-    <div class="btn-group">
-        <button class="btn" onclick="executeBatch('create')">创建</button>
-        <button class="btn" onclick="executeBatch('get')">获取</button>
-        <button class="btn" onclick="autoCalibrateAll()">校准</button>
-        <button class="btn" onclick="saveParams()">保存</button>
-    </div>
-</div>
+			body {
+				background: var(--vscode-bg);
+				color: var(--vscode-text);
+				font-size: 14px;
+				font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+				height: 100vh;
+				display: flex;
+				flex-direction: column;
+				overflow: hidden;
+			}
 
-<div class="container" id="main-list"></div>
+			.header {
+				padding: 10px 15px;
+				background: var(--vscode-panel);
+				display: flex;
+				justify-content: space-between;
+				align-items: center;
+				flex-shrink: 0;
+			}
 
-<script src="/iframe/js/app/APITest.js"></script>
-</body>
+			.header-info {
+				display: flex;
+				align-items: baseline;
+				gap: 10px;
+			}
+
+			.version-tag {
+				font-size: 12px;
+				background: var(--vscode-border);
+				padding: 2px 6px;
+				border-radius: 2px;
+			}
+
+			.btn-group {
+				display: flex;
+				gap: 5px;
+			}
+
+			.btn {
+				border: 1px solid transparent;
+				background: var(--vscode-button-secondary);
+				color: var(--vscode-text-bright);
+				padding: 5px 12px;
+				border-radius: 2px;
+				cursor: pointer;
+				transition: 0.1s;
+			}
+
+			.btn:hover {
+				background: #4d5054;
+			}
+
+			.btn-primary {
+				background: var(--vscode-accent);
+				color: white;
+				border: none;
+			}
+
+			.btn-primary:hover {
+				background: var(--vscode-accent-hover);
+			}
+
+			.container {
+				flex: 1;
+				overflow-y: auto;
+				padding: 10px;
+			}
+
+			.card {
+				background: var(--vscode-panel);
+				border-radius: 0px;
+				margin-bottom: 8px;
+			}
+
+			.card-header {
+				padding: 8px 12px;
+				display: flex;
+				justify-content: space-between;
+				align-items: center;
+				cursor: pointer;
+				user-select: none;
+			}
+
+			.card-header:hover {
+				background: var(--vscode-list-hover);
+			}
+
+			.card-tag {
+				font-size: 10px;
+				padding: 1px 5px;
+				border-radius: 2px;
+				background: var(--vscode-border);
+				margin-right: 8px;
+			}
+
+			.status-label {
+				font-weight: bold;
+			}
+
+			.card-content {
+				padding: 10px;
+				border-top: 1px solid var(--vscode-border);
+				display: block;
+			}
+
+			.collapsed .card-content {
+				display: none;
+			}
+
+			table {
+				width: 100%;
+				border-collapse: collapse;
+			}
+
+			th {
+				text-align: left;
+				color: var(--vscode-text-muted);
+				padding-bottom: 5px;
+				font-weight: normal;
+				text-align: center;
+			}
+
+			td {
+				padding: 6px 4px;
+				vertical-align: middle;
+				width: 77px;
+				text-align: center;
+			}
+
+			.val-input {
+				width: 100%;
+				background: var(--vscode-input-bg);
+				border: 1px solid transparent;
+				text-align: center;
+				color: var(--vscode-text);
+				padding: 5px 8px;
+				border-radius: 2px;
+				font-family: 'Consolas', 'Courier New', monospace;
+				font-size: 14px;
+				transition: border 0.1s;
+				outline: none;
+			}
+
+			.val-input:focus {
+				border: 1px solid var(--vscode-accent);
+			}
+
+			.val-input[readonly] {
+				border-color: transparent;
+				background: transparent;
+				color: var(--vscode-success);
+			}
+
+			.row-status {
+				width: 100px;
+				font-size: 14px;
+				text-align: center;
+				font-weight: bold;
+			}
+
+			.pass {
+				color: var(--vscode-success);
+			}
+
+			.fail {
+				color: var(--vscode-error);
+			}
+		</style>
+	</head>
+	<body>
+		<div class="header">
+			<div class="header-info">
+				<strong style="color: var(--vscode-accent)">API 基准测试</strong>
+				<span class="version-tag" id="ver-info">EDA版本: 获取中...</span>
+			</div>
+			<div class="btn-group">
+				<button class="btn" onclick="executeBatch('create')">创建</button>
+				<button class="btn" onclick="executeBatch('get')">获取</button>
+				<button class="btn" onclick="autoCalibrateAll()">校准</button>
+				<button class="btn" onclick="saveParams()">保存</button>
+			</div>
+		</div>
+
+		<div class="container" id="main-list"></div>
+
+		<script src="/iframe/js/common.js"></script>
+		<script src="/iframe/js/app/APITest.js"></script>
+	</body>
 </html>

@@ -1,77 +1,282 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="zh-CN">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>狼黑工具 - 3D 模型批量更新</title>
-    <link rel="stylesheet" href="/iframe/css/NetlistUpdate3DModels.css">
-</head>
-<body>
+	<head>
+		<meta charset="UTF-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+		<title>狼黑工具 - 3D 模型批量更新</title>
+		<link rel="stylesheet" href="/iframe/css/common.css" />
+		<style>
+			/* ===== NetlistUpdate3DModels 页面专属样式 ===== */
+			body,
+			html {
+				margin: 0;
+				padding: 0;
+				height: 100%;
+				font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+				background-color: var(--vscode-bg);
+				color: var(--vscode-text);
+				display: flex;
+				flex-direction: column;
+				overflow: hidden;
+				font-size: 13px;
+			}
 
-    <div class="toolbar">
-        <div class="title">3D 模型更新 & 恢复 （使用前必须确保没有重复位号）</div>
-        <div class="actions">
-            <button id="btn-get-current">获取当前数据</button> 
-            <button id="btn-load">读取网表</button>
-            <button id="btn-unit">单位切换</button>
-            <button id="btn-update" disabled>执行更新</button>
-        </div>
-    </div>
+			.toolbar {
+				display: flex;
+				justify-content: space-between;
+				align-items: center;
+				padding: 10px 15px;
+				background-color: var(--vscode-panel);
+				border-bottom: 1px solid var(--vscode-border);
+			}
 
-    <div class="table-container">
-        <table id="data-table">
-            <colgroup>
-                <col style="width: 54px;"> 
-				<col style="width: auto;"> 
-                <col style="width: auto;">
+			.title {
+				font-weight: 600;
+				font-size: 14px;
+			}
 
-                <col style="width: 54px;">
-                <col style="width: 54px;">
-                <col style="width: 54px;">
-                
-                <col style="width: 54px;">
-                <col style="width: 54px;">
-                <col style="width: 54px;">
-                
-                <col style="width: 54px;">
-                <col style="width: 54px;">
-                <col style="width: 54px;">
-                
-                <col style="width: 60px;"> 
-            </colgroup>
-            <thead>
-                <tr>
-                    <th rowspan="2" data-sort="designator">位号</th>
-                    <th rowspan="2" data-sort="footprint">封装</th>
-                    <th rowspan="2" data-sort="modelTitle">3D模型</th>
-                    <th colspan="3" id="th-size">大小 (mm)</th>
-                    <th colspan="3">旋转 (°)</th>
-                    <th colspan="3" id="th-offset">偏移 (mm)</th>
-                    <th rowspan="2" data-sort="status">状态</th>
-                </tr>
-                <tr>
-                    <th data-sort="sX" class="col-xyz">X</th>
-                    <th data-sort="sY" class="col-xyz">Y</th>
-                    <th data-sort="sZ" class="col-xyz">Z</th>
-                    <th data-sort="rX" class="col-xyz">X</th> 
-                    <th data-sort="rY" class="col-xyz">Y</th>
-                    <th data-sort="rZ" class="col-xyz">Z</th>
-                    <th data-sort="oX" class="col-xyz">X</th>
-                    <th data-sort="oY" class="col-xyz">Y</th>
-                    <th data-sort="oZ" class="col-xyz">Z</th>
-                </tr>
-            </thead>
-            <tbody id="table-body">
-                <tr><td colspan="13" style="text-align: center; padding: 20px; color: #888;">请先读取网表文件</td></tr>
-            </tbody>
-        </table>
-    </div>
+			.actions button {
+				background-color: var(--vscode-button-bg);
+				color: white;
+				border: none;
+				padding: 6px 12px;
+				margin-left: 8px;
+				border-radius: 2px;
+				cursor: pointer;
+				font-size: 12px;
+				transition: background 0.2s;
+			}
 
-    <div class="status-bar" id="statusBar">
-        <div class="progress-bg" id="progressBg"></div>
-        <span class="status-text" id="status-text">就绪</span>
-    </div>
+			.actions button:hover {
+				background-color: var(--vscode-button-hover);
+			}
 
-    <script src="/iframe/js/app/NetlistUpdate3DModels.js"></script>
-</body>
+			.actions button:disabled {
+				background-color: #5a5a5a;
+				cursor: not-allowed;
+				color: #a0a0a0;
+			}
+
+			.table-container {
+				flex: 1;
+				overflow: auto;
+				position: relative;
+				width: 100%;
+			}
+
+			table {
+				width: 100%;
+				table-layout: fixed;
+				border-collapse: separate;
+				border-spacing: 0;
+				text-align: left;
+				border-left: 1px solid var(--vscode-border);
+			}
+
+			th,
+			td {
+				padding: 4px 6px;
+				border-right: 1px solid var(--vscode-border);
+				border-bottom: 1px solid var(--vscode-border);
+				white-space: nowrap;
+				overflow: hidden;
+				text-overflow: ellipsis;
+				box-sizing: border-box;
+			}
+
+			th {
+				background-color: var(--vscode-panel);
+				position: sticky;
+				top: 0;
+				z-index: 10;
+				cursor: pointer;
+				user-select: none;
+				text-align: center;
+				box-shadow: 0 1px 0 var(--vscode-border);
+				border-bottom: none;
+			}
+
+			th.col-xyz {
+				width: 54px;
+				min-width: 54px;
+				max-width: 54px;
+				padding: 4px 0;
+			}
+
+			td.col-xyz {
+				padding: 0;
+			}
+
+			thead tr:nth-child(2) th {
+				top: 28px;
+				z-index: 9;
+			}
+
+			th:hover {
+				background-color: var(--vscode-border);
+			}
+
+			tbody tr:hover {
+				background-color: var(--vscode-list-hover);
+			}
+
+			td {
+				text-align: center;
+			}
+
+			td:nth-child(1),
+			td:nth-child(2),
+			td:nth-child(3) {
+				text-align: left;
+			}
+
+			.status-ready {
+				color: var(--vscode-text);
+			}
+
+			.status-success {
+				color: var(--vscode-success);
+				font-weight: bold;
+			}
+
+			.status-error {
+				color: var(--vscode-error);
+			}
+
+			.text-error {
+				color: var(--vscode-error);
+			}
+
+			.status-bar {
+				height: 22px;
+				background-color: var(--vscode-accent);
+				color: var(--vscode-text-bright);
+				font-size: 12px;
+				display: flex;
+				align-items: center;
+				padding: 0 10px;
+				flex-shrink: 0;
+				position: relative;
+				overflow: hidden;
+				box-shadow: 0 -1px 2px rgba(0, 0, 0, 0.2);
+			}
+
+			.progress-bg {
+				position: absolute;
+				left: 0;
+				top: 0;
+				bottom: 0;
+				background-color: rgba(255, 255, 255, 0.2);
+				width: 0%;
+				transition: width 0.2s ease;
+				z-index: 1;
+			}
+
+			.status-text {
+				position: relative;
+				z-index: 2;
+				white-space: nowrap;
+			}
+
+			th.col-xyz,
+			td.col-xyz {
+				width: 54px;
+				min-width: 54px;
+				max-width: 54px;
+			}
+
+			.xyz-input {
+				width: 100%;
+				height: 100%;
+				min-height: 25px;
+				box-sizing: border-box;
+				background-color: transparent;
+				color: var(--vscode-text);
+				border: none;
+				text-align: center;
+				font-size: 12px;
+				outline: none;
+				padding: 0 2px;
+				border-radius: 0;
+				transition:
+					background-color 0.2s,
+					box-shadow 0.2s;
+			}
+
+			.xyz-input:focus {
+				background-color: var(--vscode-border);
+				box-shadow: inset 0 0 0 1px var(--vscode-button-bg);
+			}
+		</style>
+	</head>
+	<body>
+		<div class="toolbar">
+			<div class="title">3D 模型更新 & 恢复 （使用前必须确保没有重复位号）</div>
+			<div class="actions">
+				<button id="btn-get-current">获取当前数据</button>
+				<button id="btn-load">读取网表</button>
+				<button id="btn-unit">单位切换</button>
+				<button id="btn-update" disabled>执行更新</button>
+			</div>
+		</div>
+
+		<div class="table-container">
+			<table id="data-table">
+				<colgroup>
+					<col style="width: 54px" />
+					<col style="width: auto" />
+					<col style="width: auto" />
+
+					<col style="width: 54px" />
+					<col style="width: 54px" />
+					<col style="width: 54px" />
+
+					<col style="width: 54px" />
+					<col style="width: 54px" />
+					<col style="width: 54px" />
+
+					<col style="width: 54px" />
+					<col style="width: 54px" />
+					<col style="width: 54px" />
+
+					<col style="width: 60px" />
+				</colgroup>
+				<thead>
+					<tr>
+						<th rowspan="2" data-sort="designator">位号</th>
+						<th rowspan="2" data-sort="footprint">封装</th>
+						<th rowspan="2" data-sort="modelTitle">3D模型</th>
+						<th colspan="3" id="th-size">大小 (mm)</th>
+						<th colspan="3">旋转 (°)</th>
+						<th colspan="3" id="th-offset">偏移 (mm)</th>
+						<th rowspan="2" data-sort="status">状态</th>
+					</tr>
+					<tr>
+						<th data-sort="sX" class="col-xyz">X</th>
+						<th data-sort="sY" class="col-xyz">Y</th>
+						<th data-sort="sZ" class="col-xyz">Z</th>
+						<th data-sort="rX" class="col-xyz">X</th>
+						<th data-sort="rY" class="col-xyz">Y</th>
+						<th data-sort="rZ" class="col-xyz">Z</th>
+						<th data-sort="oX" class="col-xyz">X</th>
+						<th data-sort="oY" class="col-xyz">Y</th>
+						<th data-sort="oZ" class="col-xyz">Z</th>
+					</tr>
+				</thead>
+				<tbody id="table-body">
+					<tr>
+						<td colspan="13" style="text-align: center; padding: 20px; color: #888">请先读取网表文件</td>
+					</tr>
+				</tbody>
+			</table>
+		</div>
+
+		<div class="status-bar" id="statusBar">
+			<div class="progress-bg" id="progressBg"></div>
+			<span class="status-text" id="status-text">就绪</span>
+		</div>
+
+		<script src="/iframe/js/common.js"></script>
+		<script src="/iframe/js/app/NetlistUpdate3DModels.js"></script>
+	</body>
 </html>

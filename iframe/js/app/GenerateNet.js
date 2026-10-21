@@ -1,4 +1,6 @@
 // ========================= 1. 全局变量 =========================
+    const { getEditorVersion, isV3, isV2, getNetlist, setNetlist, getComponentsContainer } = window.WolfCommon;
+
     let g_pendingOperations = [];       // 当前待执行的操作列表
     let g_isAnalyzing = false;
     let g_isExecuting = false;
@@ -424,9 +426,7 @@
 	async function fetchNetlist() {
 		try {
 			updateFooterStatus(0, 0, "获取网表");
-			const getNetlistFile = await eda.pcb_ManufactureData.getNetlistFile();
-			const res = await getNetlistFile.text();
-			return typeof res === 'string' ? JSON.parse(res) : res;
+			return (await getNetlist('PCB')).json;
 		} catch(e) {
 			console.error("获取网表失败", e);
 			return null;
@@ -801,9 +801,9 @@
 
             const lines = rawSource.split('\n');
             let parseResult;
-            if (g_editorVersion.trim().startsWith('3.')) {
+            if (isV3()) {
                 parseResult = parseV3Primitives(lines, allUsedNetNames, padIdToPinInfo);
-            } else if (g_editorVersion.trim().startsWith('2.2')) {
+            } else if (isV2()) {
                 parseResult = parseV2Primitives(lines, allUsedNetNames, padIdToPinInfo);
             }
             let primitives = parseResult.primitives;
@@ -835,12 +835,12 @@
 			let allUsedNetNames = new Set();
 			const lines = rawSource.split('\n');
 
-			if (g_editorVersion.trim().startsWith('3.')) {
+			if (isV3()) {
 				const parseRes = parseV3Primitives(lines, allUsedNetNames, padIdToPinInfo);
 				primitives = parseRes.primitives;
 				innerLayerIds = parseRes.innerLayerIds;
 				compIdToDesignator = parseRes.compIdToDesignator;
-			} else if (g_editorVersion.trim().startsWith('2.2')) {
+			} else if (isV2()) {
 				// V2 解析
 				const parseRes = parseV2Primitives(lines, allUsedNetNames, padIdToPinInfo);
 				primitives = parseRes.primitives;
@@ -944,7 +944,7 @@
 
 			// 生成操作列表
 			let operations = [];
-			let compSource = netlistData.components ? netlistData.components : netlistData;
+			let compSource = getComponentsContainer(netlistData);
 			let designatorToCompId = {};
 			for (let cid in compSource) {
 				let comp = compSource[cid];
@@ -1246,7 +1246,7 @@
 				// 1. 获取网表文件并解析
 				let res = netlistData;
 				let netlistJson = typeof res === 'string' ? JSON.parse(res) : res;
-				let compSource = netlistJson.components ? netlistJson.components : netlistJson;
+				let compSource = getComponentsContainer(netlistJson);
 
 				// 2. 将操作项按位号分组（designator -> {pin: newNet}）
 				const pinUpdatesByDesignator = new Map();
@@ -1343,7 +1343,7 @@
 
 				// 8. 调用 API 写入网表
 				const updatedJsonString = JSON.stringify(netlistJson);
-				await eda.pcb_Net.setNetlist('JLCEDA', updatedJsonString);
+				await setNetlist('PCB', updatedJsonString);
 
 				// 9. 写入完成，结束模拟
 				stopWriteProgress(true);
@@ -1380,7 +1380,7 @@
 					let modified = false;
 					let modifiedId = null; // 记录本次修改对应的ID
 
-					if (g_editorVersion.trim().startsWith('2.2')) {
+					if (isV2()) {
 						// V2 数组格式
 						try {
 							let item = JSON.parse(line.replace(/^\s*/, ''));
@@ -1409,7 +1409,7 @@
 								}
 							}
 						} catch(e) { modifiedLines.push(line); }
-					} else if (g_editorVersion.trim().startsWith('3.')) {
+					} else if (isV3()) {
 						// V3 格式
 						let hasTrailingPipe = line.endsWith('|');
 						let cleanLine = hasTrailingPipe ? line.slice(0, -1) : line;
@@ -1613,9 +1613,9 @@
 		try {
 			g_netlistOps = [];
 			g_sourceOps = [];
-			// 获取版本号
+			// 获取版本号（统一走 WolfCommon.getEditorVersion）
 			updateFooterStatus(0, 0, "获取版本号");
-			g_editorVersion = await eda.sys_Environment.getEditorCurrentVersion();
+			g_editorVersion = getEditorVersion();
 			// 获取源码
 			updateFooterStatus(0, 0, "获取源码");
 			rawSource = await eda.sys_FileManager.getDocumentSource();

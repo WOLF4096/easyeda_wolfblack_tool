@@ -6,6 +6,15 @@
 - `创建封装` 暂不支持 EDA V3 版本
 - V2.2.* 版本不支持快捷键功能
 
+## v1.17.2 `2026-10-21`
+- 新增 引入 `node:test` 测试链路（`npm test`，零依赖）：58 个用例覆盖网表解析纯函数、API 校准配置读取、EDA 图元调用参数契约（`pcb_PrimitiveVia/Pad/Line/Arc/Polyline.create` 的实参个数、类型、顺序与缩放倍率）
+- 重构 18 个页面的 18 份独立 CSS 合并为 `iframe/css/common.css`（公共样式）+ 各页面内联 `<style>`（专属样式），删除 18 个 CSS 文件；`:root` 变量从 `--bg` / `--bg-color` / `--vscode-bg` 三套并存收敛为单套 `--vscode-*`，边框色由 4 种取值统一为 1 种，硬编码色值同步改写为变量引用
+- 重构 新增 `iframe/js/common.js` 公共模块（`getEda` / `hasEda` / `getEditorVersion` / `isV3` / `isV2` / `getComponentsContainer` / `getNetlist` / `setNetlist`），全量替换 12 个页面的重复「版本判断 + 网表读写」逻辑，18 个 HTML 统一引用
+- 重构 `从PCB创建导线` 的网表解析、API 校准配置模块补齐模块边界与接口文档注释，明确「纯解析 / 读配置 / EDA 编排」三层边界
+- 工程化 18 个 HTML 用 prettier 统一格式化（`useTabs`），消除 9 个文件的 tab/空格混用；构建产物 `.eext` 已排除 `test/`、`src/`
+- 修复 `批量替换器件` 页面尾部多余的 `</div>` 导致的 HTML 结构不合法
+- 说明 本次为内部重构，交互与功能行为保持不变；重构前后对 18 个页面做了逐页截图比对，仅存在变量取值统一带来的细微色值差异（如灰底按钮 `#3c3c3c → #3a3d41`、边框 `#333333 → #3c3c3c`）
+
 ## v1.17.1 `2026-10-20`
 - 重构 拆分全部 18 个 iframe 前端页面：内联 `<style>` 抽至 `iframe/css/`、内联 `<script>` 抽至 `iframe/js/app/`，HTML 仅保留结构 + 引用，最大页面由 2756 行缩减至 276 行
 - 工程化 新增 `scripts/split-iframe.js` 前端拆分脚本，沉淀可复用的拆分工具

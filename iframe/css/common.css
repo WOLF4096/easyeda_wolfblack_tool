@@ -1,0 +1,211 @@
+/**
+ * 狼黑工具 - iframe 页面公共样式
+ *
+ * 18 个 iframe 页面统一引用本文件，页面专属样式写在各自 HTML 的 <style> 内
+ * （按「link common.css → 页面 <style>」的顺序，页面规则天然覆盖公共规则）。
+ *
+ * 分层：
+ *   1. :root      统一设计变量（唯一真源，命名统一为 --vscode-*）
+ *   2. 基础重置    * / body / 字体
+ *   3. 滚动条      WebKit + Firefox 两套
+ *   4. 按钮        button / .btn 基类 + primary / secondary / danger 变体
+ *   5. 表单控件    input / textarea / select / checkbox
+ *   6. 状态色      .status 系列（success / error / info / warning）
+ *
+ * 历史遗留：18 个页面原先各自定义 :root（--bg / --bg-color / --vscode-bg 三套并存，
+ * 边框有 #3c3c3c / #333333 / #404040 / #3e3e42 四种取值），现已全部收敛到本文件的
+ * 一套变量、一套取值。
+ */
+
+/* ============================ 1. 设计变量 ============================ */
+:root {
+	/* 背景 */
+	--vscode-bg: #1e1e1e; /* 编辑器主背景 */
+	--vscode-panel: #252526; /* 面板 / 标题栏 / 侧边栏 */
+	--vscode-list-hover: #2a2d2e; /* 列表项 hover */
+	--vscode-active: #37373d; /* 选中 / 激活 */
+	--vscode-input-bg: #3c3c3c; /* 输入框背景 */
+
+	/* 边框与焦点 */
+	--vscode-border: #3c3c3c;
+	--vscode-focus: #007fd4;
+
+	/* 文本 */
+	--vscode-text: #cccccc;
+	--vscode-text-bright: #ffffff;
+	--vscode-text-muted: #858585;
+	--vscode-text-disabled: #666666;
+
+	/* 强调色 */
+	--vscode-accent: #007acc; /* 品牌 / 状态栏 / 激活态 */
+	--vscode-accent-hover: #0098ff;
+	--vscode-link: #3794ff;
+
+	/* 按钮 */
+	--vscode-button-bg: #0e639c;
+	--vscode-button-hover: #1177bb;
+	--vscode-button-active: #094771;
+	--vscode-button-secondary: #3a3d41;
+	--vscode-button-secondary-hover: #45494e;
+	--vscode-disabled-bg: #4d4d4d;
+
+	/* 语义色 */
+	--vscode-success: #89d185; /* 文本型成功色 */
+	--vscode-success-fill: #16a34a; /* 填充型成功按钮 */
+	--vscode-success-fill-hover: #15803d;
+	--vscode-warning: #cca700;
+	--vscode-error: #f48771;
+	--vscode-danger: #c94a4a;
+	--vscode-danger-hover: #d15a5a;
+	--vscode-change: #4caf50; /* 值发生变化的行高亮 */
+
+	/* 滚动条 */
+	--vscode-scrollbar: #424242;
+	--vscode-scrollbar-hover: #4f4f4f;
+
+	/* 代码语法高亮（About 页展示用） */
+	--vscode-syntax-keyword: #569cd6;
+	--vscode-syntax-string: #ce9178;
+	--vscode-syntax-type: #4ec9b0;
+	--vscode-syntax-number: #b5cea8;
+
+	/* 图表 */
+	--vscode-chart-rest: #b0b0b0;
+}
+
+/* ============================ 2. 基础 ============================ */
+/* 注：不提供 `* { margin:0; padding:0; box-sizing }` 之类的全局重置。
+   各页面对盒模型/默认边距的用法并不一致（如 About 依赖浏览器默认段落边距），
+   统一重置会改变其版式，因此重置保留在各页面自己的 <style> 内。 */
+
+body {
+	background-color: var(--vscode-bg);
+	color: var(--vscode-text);
+}
+
+/* ============================ 3. 滚动条 ============================ */
+* {
+	scrollbar-width: thin;
+	scrollbar-color: var(--vscode-scrollbar) transparent;
+}
+
+::-webkit-scrollbar {
+	width: 12px;
+	height: 12px;
+}
+
+::-webkit-scrollbar-track {
+	background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+	background-color: var(--vscode-scrollbar);
+	border: 2px solid var(--vscode-bg);
+	border-radius: 0;
+}
+
+::-webkit-scrollbar-thumb:hover {
+	background-color: var(--vscode-scrollbar-hover);
+}
+
+::-webkit-scrollbar-corner {
+	background: var(--vscode-bg);
+}
+
+::-webkit-scrollbar-button {
+	display: none;
+}
+
+/* ============================ 4. 按钮 ============================ */
+button,
+.btn {
+	font-family: inherit;
+	color: var(--vscode-text-bright);
+	background-color: var(--vscode-button-bg);
+	border: 1px solid transparent;
+	border-radius: 2px;
+	padding: 4px 12px;
+	cursor: pointer;
+	transition: background-color 0.1s;
+}
+
+button:hover,
+.btn:hover {
+	background-color: var(--vscode-button-hover);
+}
+
+button:active,
+.btn:active {
+	background-color: var(--vscode-button-active);
+}
+
+.btn-primary {
+	background-color: var(--vscode-button-bg);
+	color: var(--vscode-text-bright);
+}
+
+.btn-primary:hover {
+	background-color: var(--vscode-button-hover);
+}
+
+.btn-secondary {
+	background-color: var(--vscode-button-secondary);
+	color: var(--vscode-text-bright);
+}
+
+.btn-secondary:hover {
+	background-color: var(--vscode-button-secondary-hover);
+}
+
+.btn-danger {
+	background-color: var(--vscode-danger);
+	color: var(--vscode-text-bright);
+}
+
+.btn-danger:hover {
+	background-color: var(--vscode-danger-hover);
+}
+
+button:disabled,
+.btn:disabled {
+	background-color: var(--vscode-disabled-bg);
+	color: var(--vscode-text-disabled);
+	cursor: not-allowed;
+}
+
+/* ============================ 5. 表单控件 ============================ */
+/* 注：各页面的输入框字号/字体/配色差异较大（等宽字体、绿色数值等），
+   统一基类会覆盖页面原有观感，故表单样式保留在各页面 <style> 内。
+   仅保留勾选框/单选框的品牌色，页面若自定义 accent-color 仍可覆盖。 */
+input[type='checkbox'],
+input[type='radio'] {
+	accent-color: var(--vscode-focus);
+}
+
+/* ============================ 6. 状态提示 ============================ */
+.status {
+	padding: 6px 10px;
+	border: 1px solid transparent;
+	border-radius: 2px;
+	font-size: 12px;
+}
+
+.status.success {
+	color: var(--vscode-success);
+	border-color: var(--vscode-success);
+}
+
+.status.error {
+	color: var(--vscode-error);
+	border-color: var(--vscode-error);
+}
+
+.status.info {
+	color: var(--vscode-link);
+	border-color: var(--vscode-focus);
+}
+
+.status.warning {
+	color: var(--vscode-warning);
+	border-color: var(--vscode-warning);
+}

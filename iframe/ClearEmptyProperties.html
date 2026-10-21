@@ -1,41 +1,230 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="zh-CN">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>清除属性工具</title>
-    <link rel="stylesheet" href="/iframe/css/ClearEmptyProperties.css">
-</head>
-<body>
+	<head>
+		<meta charset="UTF-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+		<title>清除属性工具</title>
+		<link rel="stylesheet" href="/iframe/css/common.css" />
+		<style>
+			/* ===== ClearEmptyProperties 页面专属样式 ===== */
+			body {
+				margin: 0;
+				padding: 0;
+				background-color: var(--vscode-bg);
+				color: var(--vscode-text);
+				font-family: Consolas, 'Courier New', monospace;
+				font-size: 13px;
+				height: 100vh;
+				display: flex;
+				flex-direction: column;
+				overflow: hidden;
+			}
 
-    <div class="toolbar">
-        <div class="title">清除多余属性</div>
-        <div class="button-group">
-            <button id="btnRefresh">刷新数据</button>
-            <button id="btnClear" class="btn-danger">执行清空</button>
-        </div>
-    </div>
+			.toolbar {
+				display: flex;
+				justify-content: space-between;
+				align-items: center;
+				padding: 8px 12px;
+				background-color: var(--vscode-panel);
+				border-bottom: 1px solid var(--vscode-border);
+				flex-shrink: 0;
+			}
 
-    <div class="table-container">
-        <table>
-            <thead>
-                <tr>
-                    <th><input type="checkbox" id="cbAllRows" title="全选/取消全选"></th>
-                    <th class="sortable" data-sort="designator">位号<span class="sort-icon"></span></th>
-                    <th class="sortable" data-sort="name">名称<span class="sort-icon"></span></th>
-                    <th class="sortable" data-sort="footprint">封装<span class="sort-icon"></span></th>
-                    <th class="sortable" data-sort="supplier">供应商<span class="sort-icon"></span></th>
-                    <th class="col-cb-header" id="thAllBase" title="点击全选/取消全选基础属性">基础属性</th>
-                    <th class="col-cb-header" id="thAllKey" title="点击全选/取消全选关键属性">关键属性</th>
-                    <th class="col-cb-header" id="thAllMore" title="点击全选/取消全选更多属性">更多属性</th>
-                </tr>
-            </thead>
-            <tbody id="tableBody">
-                <tr><td colspan="8" style="text-align: center; padding: 20px; color: #888;">请点击“刷新数据”获取网表</td></tr>
-            </tbody>
-        </table>
-    </div>
+			.title {
+				font-weight: bold;
+				font-size: 14px;
+			}
 
-    <script src="/iframe/js/app/ClearEmptyProperties.js"></script>
-</body>
+			.button-group {
+				display: flex;
+				gap: 8px;
+			}
+
+			button {
+				background-color: var(--vscode-button-secondary);
+				color: var(--vscode-text-bright);
+				border: 1px solid transparent;
+				padding: 5px 12px;
+				cursor: pointer;
+				font-family: inherit;
+				font-size: 13px;
+				border-radius: 2px;
+				transition: background-color 0.1s;
+			}
+
+			button:hover {
+				background-color: var(--vscode-button-secondary-hover);
+			}
+
+			button:disabled {
+				background-color: #555;
+				cursor: not-allowed;
+				color: var(--vscode-text-disabled);
+			}
+
+			.btn-danger {
+				background-color: var(--vscode-danger);
+			}
+
+			.table-container {
+				flex: 1;
+				overflow-y: auto;
+				position: relative;
+			}
+
+			table {
+				width: 100%;
+				border-collapse: collapse;
+				table-layout: fixed;
+				text-align: left;
+			}
+
+			th,
+			td {
+				padding: 6px 8px;
+				border-bottom: 1px solid var(--vscode-border);
+				white-space: nowrap;
+				overflow: hidden;
+				text-overflow: ellipsis;
+			}
+
+			th {
+				background-color: var(--vscode-panel);
+				position: sticky;
+				top: 0;
+				z-index: 10;
+				font-weight: normal;
+				color: #eeeeee;
+				box-shadow: 0 1px 0 var(--vscode-border);
+				border-bottom: none;
+				user-select: none;
+			}
+
+			.sortable {
+				cursor: pointer;
+				transition: color 0.1s;
+			}
+
+			.sortable:hover {
+				color: var(--vscode-link);
+			}
+
+			.sort-icon {
+				display: inline-block;
+				width: 12px;
+				margin-left: 2px;
+				color: var(--vscode-link);
+				font-size: 10px;
+			}
+
+			th:nth-child(1),
+			td:nth-child(1) {
+				width: 40px;
+				text-align: center;
+			}
+
+			th:nth-child(2),
+			td:nth-child(2) {
+				width: 80px;
+			}
+
+			th:nth-child(3),
+			td:nth-child(3) {
+				width: 120px;
+			}
+
+			th:nth-child(4),
+			td:nth-child(4) {
+				width: 120px;
+			}
+
+			th:nth-child(5),
+			td:nth-child(5) {
+				width: 100px;
+			}
+
+			th:nth-child(6),
+			td:nth-child(6) {
+				width: 70px;
+				text-align: center;
+			}
+
+			th:nth-child(7),
+			td:nth-child(7) {
+				width: 70px;
+				text-align: center;
+			}
+
+			th:nth-child(8),
+			td:nth-child(8) {
+				width: 70px;
+				text-align: center;
+			}
+
+			input[type='checkbox'] {
+				accent-color: var(--vscode-link);
+				cursor: pointer;
+				width: 14px;
+				height: 14px;
+				margin: 0;
+				vertical-align: middle;
+			}
+
+			tbody tr:hover {
+				background-color: var(--vscode-list-hover);
+			}
+
+			.disabled-row {
+				opacity: 0.5;
+				background-color: rgba(0, 0, 0, 0.2);
+			}
+
+			.disabled-row:hover {
+				background-color: rgba(0, 0, 0, 0.2);
+			}
+
+			.col-cb-header {
+				cursor: pointer;
+				transition: color 0.1s;
+			}
+
+			.col-cb-header:hover {
+				color: var(--vscode-link);
+			}
+		</style>
+	</head>
+	<body>
+		<div class="toolbar">
+			<div class="title">清除多余属性</div>
+			<div class="button-group">
+				<button id="btnRefresh">刷新数据</button>
+				<button id="btnClear" class="btn-danger">执行清空</button>
+			</div>
+		</div>
+
+		<div class="table-container">
+			<table>
+				<thead>
+					<tr>
+						<th><input type="checkbox" id="cbAllRows" title="全选/取消全选" /></th>
+						<th class="sortable" data-sort="designator">位号<span class="sort-icon"></span></th>
+						<th class="sortable" data-sort="name">名称<span class="sort-icon"></span></th>
+						<th class="sortable" data-sort="footprint">封装<span class="sort-icon"></span></th>
+						<th class="sortable" data-sort="supplier">供应商<span class="sort-icon"></span></th>
+						<th class="col-cb-header" id="thAllBase" title="点击全选/取消全选基础属性">基础属性</th>
+						<th class="col-cb-header" id="thAllKey" title="点击全选/取消全选关键属性">关键属性</th>
+						<th class="col-cb-header" id="thAllMore" title="点击全选/取消全选更多属性">更多属性</th>
+					</tr>
+				</thead>
+				<tbody id="tableBody">
+					<tr>
+						<td colspan="8" style="text-align: center; padding: 20px; color: #888">请点击“刷新数据”获取网表</td>
+					</tr>
+				</tbody>
+			</table>
+		</div>
+
+		<script src="/iframe/js/common.js"></script>
+		<script src="/iframe/js/app/ClearEmptyProperties.js"></script>
+	</body>
 </html>
