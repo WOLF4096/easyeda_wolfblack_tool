@@ -1514,7 +1514,8 @@
 					let rowDiv = document.getElementById(`row-${i}`);
 					if (rowDiv) rowDiv.classList.add('active');
 				}
-				try { eda.sys_Window.redraw(); } catch(e){}
+				// 注意：客户端的 sys_Window 没有 redraw 方法（V2.2 与 V4 实测都不存在），
+				// 写完源码后由宿主自行刷新视图，这里不要再调用不存在的 API。
 			} catch(e) {
 				console.error(e);
 				stopWriteProgress(false);
@@ -1584,7 +1585,7 @@
 					}
 				}
 
-				try { eda.sys_Window.redraw(); } catch(e){}
+				// sys_Window.redraw 不存在（两版实测），去掉调用；API 方式本身效率低，仅作兜底
 				const duration = ((Date.now() - startTime) / 1000).toFixed(2);
 				updateFooterStatus(total, total, `API更新完成，耗时 ${duration}秒，修改焊盘API存在Bug，待官方修复后启用`);
 			} catch(e) {

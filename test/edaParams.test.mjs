@@ -23,13 +23,14 @@ function assertClose(actual, expected, message) {
 /** 录制型 eda mock */
 function createEdaMock(options = {}) {
 	const calls = [];
+	const toasts = [];
 	let selectedDetailed = options.detailed || [];
 	const selections = options.selections || [];
 
 	const recorder = (apiName) => ({
 		create: async (...args) => {
 			calls.push({ api: apiName, method: 'create', args });
-			return { ok: true };
+			return options.failCreate === apiName ? null : { ok: true };
 		},
 		delete: async (...args) => {
 			calls.push({ api: apiName, method: 'delete', args });
@@ -55,8 +56,14 @@ function createEdaMock(options = {}) {
 		pcb_PrimitiveLine: recorder('pcb_PrimitiveLine'),
 		pcb_PrimitiveArc: recorder('pcb_PrimitiveArc'),
 		pcb_PrimitivePolyline: recorder('pcb_PrimitivePolyline'),
+		pcb_PrimitiveRegion: recorder('pcb_PrimitiveRegion'),
+		pcb_PrimitiveFill: recorder('pcb_PrimitiveFill'),
+		sys_Message: {
+			showToastMessage: (msg, type) => toasts.push({ msg, type }),
+		},
 		pcb_MathPolygon: {
 			createPolygon: (arr) => {
+				if (options.polygonFails) return undefined;
 				const polyObj = { __polygon: arr };
 				calls.push({ api: 'pcb_MathPolygon', method: 'createPolygon', args: [arr], result: polyObj });
 				return polyObj;
@@ -64,7 +71,7 @@ function createEdaMock(options = {}) {
 		},
 	};
 
-	return { calls, logs, setSelections: (s) => (selections.length = 0, selections.push(...s)) };
+	return { calls, logs, toasts, setSelections: (s) => (selections.length = 0, selections.push(...s)) };
 }
 
 /** 取某 API 某方法的全部调用实参 */
@@ -336,7 +343,7 @@ describe('pcb_PrimitiveLine.create / pcb_PrimitiveArc.create - 线条转导线',
 		assert.equal(args[9], false);
 	});
 
-	it('弧线角度倍率只作用于角度，不影响坐标（CARC 同源）', async () => {
+	it('弧线角度不做任何缩放（两版实测都是角度制，缩放会把圆弧画直）', async () => {
 		const poly = {
 			primitiveType: 'Polyline',
 			primitiveId: 'e300',
@@ -345,12 +352,14 @@ describe('pcb_PrimitiveLine.create / pcb_PrimitiveArc.create - 线条转导线',
 			lineWidth: 0.2,
 			polygon: { polygon: [0, 0, 'CARC', 9, 10, 0] },
 		};
-		const calibration = { 获取折线: { 坐标: 2 }, 创建直线: { 坐标: 1 }, 创建弧线: { 圆弧角度: 5 } };
+		// 历史校准数据里可能残留 创建弧线.圆弧角度 = 5 / 获取弧线.圆弧角度 = 0.017453，
+		// 都不能再影响结果
+		const calibration = { 获取折线: { 坐标: 2 }, 创建直线: { 坐标: 1 }, 创建弧线: { 圆弧角度: 5 }, 获取弧线: { 圆弧角度: 0.017453 } };
 		const { calls } = createEdaMock({ selections: [poly], detailed: [], calibration });
 		await WireConverter.toWire();
 
 		const [args] = pick(calls, 'pcb_PrimitiveArc');
-		assertClose(args[6], 45, '角度 9×5');
+		assertClose(args[6], 9, '角度原样透传');
 		assertClose(args[4], 20, '坐标 10×(2×1)');
 	});
 
@@ -482,7 +491,7 @@ describe('pcb_PrimitivePolyline.create - 导线转线条', () => {
 		assert.equal(args[4], false);
 	});
 
-	it('弧线 → polygon 数组带 ARC 段且角度经过缩放', async () => {
+	it('弧线 → polygon 数组带 ARC 段，角度原样透传', async () => {
 		const arc = {
 			primitiveType: 'Arc',
 			primitiveId: 'e501',
@@ -501,7 +510,7 @@ describe('pcb_PrimitivePolyline.create - 导线转线条', () => {
 
 		const [args] = pick(calls, 'pcb_PrimitivePolyline');
 		assert.equal(args[2].__polygon[2], 'ARC');
-		assertClose(args[2].__polygon[3], 180, '角度 30×6');
+		assertClose(args[2].__polygon[3], 30, '角度不缩放');
 	});
 
 	it('删除旧图元时区分 Line / Arc 的 API', async () => {
@@ -517,5 +526,83 @@ describe('pcb_PrimitivePolyline.create - 导线转线条', () => {
 		const { calls } = createEdaMock({ selections: [] });
 		await WireConverter.toggle();
 		assert.equal(calls.length, 0);
+	});
+
+	// ---------------- 多段合并成连续折线（v1.17.7 新增） ----------------
+
+	it('首尾相接的两段直线 → 合并成一条连续折线（3 个节点）', async () => {
+		const a = { primitiveType: 'Line', primitiveId: 'e1', net: 'GND', layer: 1, startX: 0, startY: 0, endX: 10, endY: 0, lineWidth: 0.2 };
+		const b = { primitiveType: 'Line', primitiveId: 'e2', net: 'GND', layer: 1, startX: 10, startY: 0, endX: 10, endY: 10, lineWidth: 0.2 };
+		const { calls } = createEdaMock({ selections: [a, b] });
+		await WireConverter.toPolyline();
+
+		const polys = pick(calls, 'pcb_PrimitivePolyline');
+		assert.equal(polys.length, 1, '两段应合并为一条折线');
+		assert.deepEqual(polys[0][2].__polygon, [0, 0, 'L', 10, 0, 'L', 10, 10]);
+		assert.deepEqual(pick(calls, 'pcb_PrimitiveLine', 'delete'), [['e1'], ['e2']], '原导线都必须删除');
+	});
+
+	it('方向相反的第二段（终点接第一段终点）→ 合并时自动反转', async () => {
+		const a = { primitiveType: 'Line', primitiveId: 'e1', net: '', layer: 1, startX: 0, startY: 0, endX: 10, endY: 0, lineWidth: 0.2 };
+		const b = { primitiveType: 'Line', primitiveId: 'e2', net: '', layer: 1, startX: 20, startY: 0, endX: 10, endY: 0, lineWidth: 0.2 };
+		const { calls } = createEdaMock({ selections: [a, b] });
+		await WireConverter.toPolyline();
+
+		const polys = pick(calls, 'pcb_PrimitivePolyline');
+		assert.equal(polys.length, 1);
+		assert.deepEqual(polys[0][2].__polygon, [0, 0, 'L', 10, 0, 'L', 20, 0]);
+	});
+
+	it('反向的弧线 → 合并时角度取负（扫掠方向相反）', async () => {
+		const line = { primitiveType: 'Line', primitiveId: 'e1', net: '', layer: 1, startX: 0, startY: 0, endX: 10, endY: 0, lineWidth: 0.2 };
+		const arc = { primitiveType: 'Arc', primitiveId: 'e2', net: '', layer: 1, startX: 20, startY: 0, endX: 10, endY: 0, arcAngle: 90, lineWidth: 0.2 };
+		const { calls } = createEdaMock({ selections: [line, arc] });
+		await WireConverter.toPolyline();
+
+		const polys = pick(calls, 'pcb_PrimitivePolyline');
+		assert.equal(polys.length, 1);
+		assert.deepEqual(polys[0][2].__polygon, [0, 0, 'L', 10, 0, 'ARC', -90, 20, 0]);
+	});
+
+	it('不同网络 / 图层 / 线宽不合并', async () => {
+		const mk = (id, net, layer, width) => ({ primitiveType: 'Line', primitiveId: id, net, layer, startX: 0, startY: 0, endX: 1, endY: 0, lineWidth: width });
+		const { calls } = createEdaMock({ selections: [mk('e1', 'GND', 1, 0.2), mk('e2', 'VCC', 1, 0.2)] });
+		await WireConverter.toPolyline();
+		assert.equal(pick(calls, 'pcb_PrimitivePolyline').length, 2, '不同网络各自成线');
+
+		const { calls: c2 } = createEdaMock({ selections: [mk('e1', 'GND', 1, 0.2), mk('e2', 'GND', 2, 0.2)] });
+		await WireConverter.toPolyline();
+		assert.equal(pick(c2, 'pcb_PrimitivePolyline').length, 2, '不同图层各自成线');
+
+		const { calls: c3 } = createEdaMock({ selections: [mk('e1', 'GND', 1, 0.2), mk('e2', 'GND', 1, 0.3)] });
+		await WireConverter.toPolyline();
+		assert.equal(pick(c3, 'pcb_PrimitivePolyline').length, 2, '不同线宽各自成线');
+	});
+
+	it('折线创建失败 → 用快照恢复原导线，并给出提示', async () => {
+		const a = { primitiveType: 'Line', primitiveId: 'e1', net: 'GND', layer: 1, startX: 0, startY: 0, endX: 10, endY: 0, lineWidth: 0.2 };
+		const { calls, toasts } = createEdaMock({ selections: [a], failCreate: 'pcb_PrimitivePolyline' });
+		await WireConverter.toPolyline();
+
+		const restored = pick(calls, 'pcb_PrimitiveLine');
+		assert.equal(restored.length, 1, '应重建原直线');
+		assert.deepEqual(restored[0], ['GND', 1, 0, 0, 10, 0, 0.2, false], '恢复参数与原图元一致');
+		assert.equal(toasts.length, 1);
+	});
+
+	it('Region 必须用 pcb_PrimitiveRegion.delete（不能用 Polyline.delete）', async () => {
+		const region = {
+			primitiveType: 'Region',
+			primitiveId: 'e400',
+			net: 'GND',
+			layer: 1,
+			lineWidth: 0.2,
+			complexPolygon: { polygon: ['CIRCLE', 10, 20, 5] },
+		};
+		const { calls } = createEdaMock({ selections: [region] });
+		await WireConverter.toWire();
+
+		assert.deepEqual(pick(calls, 'pcb_PrimitiveRegion', 'delete'), [['e400']]);
+		assert.equal(pick(calls, 'pcb_PrimitivePolyline', 'delete').length, 0, '不应再借用折线 API 删区域');
 	});
 });

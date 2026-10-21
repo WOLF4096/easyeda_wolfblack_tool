@@ -203,8 +203,13 @@ try {
 } catch (e) {}
 console.log(`[系统] 检测到编辑器版本: ${editorVersion}`);
 
-// 条件判断：只支持V3版本，V2版本不支持快捷键
-if (editorVersion.trim().startsWith('3.')) {
+// 版本族判断：V3 与 V4 都是「新格式」客户端，快捷键 API 从 V3 起提供。
+// 注意不要写回 `startsWith('3.')` —— V4 的版本号是 4.x，会被判成「不支持」而全部不注册。
+const editorMajorVersion = Number.parseInt(String(editorVersion).trim().split('.')[0], 10);
+const shortcutSupported = Number.isFinite(editorMajorVersion) && editorMajorVersion >= 3;
+
+// 条件判断：V2.2 不提供快捷键 API（不注册也不报错），V3 / V4 正常注册
+if (shortcutSupported) {
 	// 导入图片
 	eda.sys_ShortcutKey.unregisterShortcutKey(['Ctrl+Shift+C']);
 	eda.sys_ShortcutKey.registerShortcutKey(

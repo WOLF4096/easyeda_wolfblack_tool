@@ -85,3 +85,18 @@
 - **角度**：Arc 与多边形路径 `"ARC"` 都是**角度制**（两版一致），不要乘 π/180。
 - **量纲**：V4 焊盘尺寸量化到 0.1 mil；阻焊默认 V2.2=0.2 / V4=2（差 10×，不是单位换算）→ 校准值别跨版本复用。
 - V4 新增可用：`sys_Environment.isEditorCurrentVersionGreaterThanOrEqual`、`dmt_EditorControl.waitForDocumentReady`。
+
+## 导线⇄线条（用户明确的两条业务约束）
+
+- **必须先删后建**：两根交叉导线（ID1/ID2）一旦同时存在，系统会自动拆成 ID3/4/5/6 四段，
+  之后按原 ID 已删不掉。所以转换流程是「删原图元 → 建新图元」，不能反过来。
+  代价是失败后原图元已消失 → 每条路径都必须用删除前的快照 `_restoreItem()` 重建兜底。
+- **导线转线条要合并连续段**：框选多条首尾相接的导线时输出**一条连续折线**，不是每段一条碎折线。
+  实现在 `src/js/common/wireChain.js`（纯函数，可单测）：按 `layer + net + 线宽` 分组，
+  反向段自动反转、弧线反向角度取负，端点容差 1e-3 mil。
+
+## 格式化注意（别踩）
+
+- 不要对**旧文件整份**跑 `prettier --write`：工作区是 CRLF、旧文件用 4 空格缩进，
+  而 `.prettierrc` 是 `useTabs + endOfLine: lf` → 会把 `GenerateNet.js` 等整体重排（3000+ 行假 diff）。
+  改旧文件用手工最小编辑；新文件（如 `wireChain.js`、新测试）按 prettier 风格写。

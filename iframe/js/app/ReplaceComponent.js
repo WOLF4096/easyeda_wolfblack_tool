@@ -127,7 +127,15 @@ const { getNetlist, setNetlist, getComponentsContainer } = window.WolfCommon;
             const props = comp.otherProperty || {}; 
             
             // 提前提取 Device 或 manufacturerId 属性用于兜底
-            const deviceName = props["Device"] || comp.manufacturerId || ""; 
+            // V2.2：器件名在 otherProperty.Device；
+            // V4：otherProperty 里没有 Device/DeviceName，器件名在 comp.component.uuid.name
+            //     （实测 comp.component = { libraryUuid, uuid: { name, source, uuid }, name: null }）
+            const deviceFromComponent =
+                (comp.component && typeof comp.component === 'object')
+                    ? ((comp.component.uuid && typeof comp.component.uuid === 'object' && comp.component.uuid.name) ||
+                       comp.component.name)
+                    : "";
+            const deviceName = props["Device"] || props["DeviceName"] || deviceFromComponent || comp.manufacturerId || "";
             
             // 【核心修改】：合并根节点属性和 otherProperty，确保 ={Value} 和 ={manufacturerId} 都能被字典找到
             const mergedProps = { ...comp, ...props };

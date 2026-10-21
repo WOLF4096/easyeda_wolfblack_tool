@@ -27,7 +27,10 @@ const { getEditorVersion, getVersionFamily, getNetlist, setNetlist, getComponent
                     const props = component.props;
                     
                     // 兼容性修复：部分基础元件（如电阻电容）的名字通常存在 Value 字段中
-                    const compName = props.Name || props.Value || props.value || '';
+                    // V4 的 Name 可能是模板串 "={Value}"（引用 Value 属性），直接显示会变成字面量，
+                    // 这里解引用后再用；解析不到才退回原串。
+                    const rawCompName = String(props.Name || '');
+                    const compName = /^=\{.*\}$/.test(rawCompName) ? (props.Value || props.value || '') : (rawCompName || props.Value || props.value || '');
                     const compDesignator = props.Designator || '';
                     
                     // 新增：提取封装属性用于后台分组判定
@@ -389,7 +392,15 @@ const { getEditorVersion, getVersionFamily, getNetlist, setNetlist, getComponent
                     if (item.jsonKey && componentsMap[item.jsonKey]) {
                         const comp = componentsMap[item.jsonKey];
 
-                        comp.props.Name = item.name || item.original.name;
+                        const newValue = item.name || item.original.name;
+                        comp.props = comp.props || {};
+                        // V4 画布上的器件值来自 Value（Name 属性是 ={Value} 模板），
+                        // 只写 Name 会出现「提示导入成功但画面没变」，所以两版都写 Value；
+                        // Name 仅在它本身是字面值时才覆盖，避免把模板串改成固定文本。
+                        comp.props.Value = newValue;
+                        if (!/^=\{.*\}$/.test(String(comp.props.Name || ''))) {
+                            comp.props.Name = newValue;
+                        }
                         comp.props.Supplier = item.supplier || item.original.supplier; // 写入新供应商
                         comp.props['Supplier Part'] = item.supplierPart || item.original.supplierPart;
                         comp.props['Manufacturer Part'] = item.manufacturerPart || item.original.manufacturerPart;

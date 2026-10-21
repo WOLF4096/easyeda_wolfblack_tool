@@ -147,6 +147,17 @@ export async function placeWires(importMethod) {
                 }
             }
 
+            // 写入前自检：PCB 与原理图的源码格式不同，写错文档会被系统拦截（「格式错误」）。
+            // 这里用 documentType 兜底（1 = 原理图），切换失败/分屏异常时不会误写。
+            const curDocInfo = await eda.dmt_SelectControl.getCurrentDocumentInfo();
+            if (!curDocInfo || curDocInfo.documentType !== 1) {
+                await eda.sys_Message.showToastMessage('当前文档不是原理图，已中止写入', 2);
+                return {
+                    success: false,
+                    message: '当前文档不是原理图，已中止写入',
+                };
+            }
+
             // 写入回编辑器
             await eda.sys_FileManager.setDocumentSource(documentSource);
         }
@@ -182,6 +193,8 @@ export async function placeWires(importMethod) {
     } catch (error) {
         const performanceStats = perfMonitor.end();
         console.error('放置导线失败:', error);
+        // 失败原因要让用户在界面上看得到（此前只写控制台，表现为「点了没反应」）
+        await eda.sys_Message.showToastMessage('放置导线失败：' + ((error && error.message) || error), 2);
         return {
             success: false,
             message: error.message,
@@ -229,11 +242,13 @@ async function switchToPCB() {
 
 // 2. 切换回原来的原理图界面
 async function switchToSchematic() {
-    try {
-        await eda.dmt_EditorControl.activateDocument(_lastSchematicTabId);
-    } catch (error) {
-        console.error('切换原理图失败:', error);
+    // 没有记录到原理图页签时直接中止：否则后续 getDocumentSource() 读到的是 PCB 源码，
+    // 再把原理图导线行拼进去写回，等于往 PCB 文档里塞错误格式（系统会报「格式错误」）。
+    if (!_lastSchematicTabId) {
+        await eda.sys_Message.showToastMessage('未能定位原理图页签，已中止（避免写入错误文档）', 2);
+        throw new Error('未能定位原理图页签');
     }
+    await eda.dmt_EditorControl.activateDocument(_lastSchematicTabId);
 }
 
 // 获取原理图网表

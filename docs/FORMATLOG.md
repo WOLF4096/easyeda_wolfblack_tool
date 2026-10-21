@@ -60,6 +60,12 @@
 - **中文**：本仓库 `validate.js` 已按 V4 类型全集建立校验映射；因 LINE / POLY / ARC / META 等外层名在不同文档域指向不同 Schema，校验时可用域前缀别名（`PCB_LINE`、`PANEL_POLY`、`PCB_META` 等）或小写 kebab Schema 名（`t-pcb-line`）精确指定目标 Schema。
 - **English**: This repository's `validate.js` maps the full V4 type set; because outer names like LINE / POLY / ARC / META resolve to different schemas per document domain, use the domain-prefixed aliases (`PCB_LINE`, `PANEL_POLY`, `PCB_META`, …) or the lowercase kebab-case schema names (`t-pcb-line`) to target a schema precisely.
 
+### 11. 写回整份源码会丢 `POURED`（V4）/ Full-source write drops POURED rows (V4)
+
+- **中文**：V4.1.78 实测：把 `sys_FileManager.getDocumentSource()` 读到的**原文原样**写回 `setDocumentSource()`，文档会从 45,557 字节 / 193 行变成 43,119 字节 / 191 行，差的正是 2 行 `POURED`（铜皮「已计算填充」的几何缓存）。`POUR` 本体（铺铜参数）仍在，`pcb_PrimitivePour.getAll()` 仍是 2 个；其它行（含 `DOCHEAD` 时间戳）除时间与 client 外无实质变化。同一操作在 **V2.2.45.5 上逐字节一致**（14,368 → 14,368，8 行 `POURED` 保留）。
+  → 结论：`POURED` 是 V4 侧的派生缓存，整份写回即失效，需要重算铜皮才恢复。因此「读全文 → 改几行 → 整份写回」的功能（`生成物理网络` 源码方式、`从PCB转原理图` 等）在 V4 下都要考虑这一点；`setDocumentSource` **不能**当作无损往返使用。
+- **English**: Measured on V4.1.78: writing back the exact string returned by `getDocumentSource()` via `setDocumentSource()` shrinks the document from 45,557 B / 193 lines to 43,119 B / 191 lines — exactly the two `POURED` rows (cached poured-copper geometry) disappear. The `POUR` primitives themselves survive (`pcb_PrimitivePour.getAll()` still returns 2). The same operation on V2.2.45.5 is byte-identical (14,368 → 14,368, all 8 `POURED` rows kept). So `POURED` behaves as a derived cache in V4 and `setDocumentSource` must not be treated as a lossless round-trip; features that rewrite the whole source must account for it (repour needed).
+
 ---
 
 ## 更新记录 / Update History
@@ -68,3 +74,4 @@
 |---|---|---|
 | 2026-09-22 | V3 → V4 | 初版：基于 V3（2025.10.21）规范与本仓库 V4 格式资料对比总结 / Initial entry: comparison of the V3 (2025.10.21) spec against the V4 format in this repository |
 | 2026-09-22 | V3 → V4（修订） | 依据刷新后的 SKILL.md：修正平票判优方向（client 大者胜）、补充 DOCHEAD 外层 ticket 与 16 位十六进制约束、细化删除语义易错点 / Revision per the refreshed SKILL.md: tie-break direction corrected (larger client wins), DOCHEAD outer ticket and 16-hex constraints added, deletion pitfalls refined |
+| 2026-10-21 | 新增 §11 | V4 `setDocumentSource` 丢 `POURED` 行的实测记录（待处理） / Recorded V4 `setDocumentSource` dropping `POURED` rows (pending) |
