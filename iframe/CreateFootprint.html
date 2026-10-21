@@ -5,129 +5,17 @@
 	<meta charset="UTF-8" />
 	<title>狼黑工具 - 创建封装</title>
 	<link rel="stylesheet" href="/iframe/css/common.css" />
-	<style>
-		/* ===== CreateFootprint 页面专属样式 ===== */
-		body {
-			margin: 0;
-			padding: 0;
-			width: 300px;
-			height: 120px;
-			overflow: hidden;
-			font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-			background-color: var(--vscode-bg);
-			color: var(--vscode-text);
-			font-size: 13px;
-		}
-
-		.container {
-			width: 300px;
-			height: 100px;
-			box-sizing: border-box;
-			padding: 0px 14px;
-			display: flex;
-			flex-direction: column;
-			justify-content: center;
-			gap: 12px;
-		}
-
-		.input-group {
-			width: 100%;
-			display: flex;
-			gap: 12px;
-		}
-
-		input[type='text'] {
-			padding: 5px;
-			background-color: var(--vscode-border);
-			color: var(--vscode-text);
-			border: 1px solid var(--vscode-border);
-			border-radius: 2px;
-			font-size: 13px;
-			outline: none;
-			box-sizing: border-box;
-			transition: border-color 0.1s ease;
-		}
-
-		input[type='text']::placeholder {
-			color: var(--vscode-text-muted);
-		}
-
-		input[type='text']:focus {
-			border-color: var(--vscode-focus);
-		}
-
-		.footer {
-			display: flex;
-			flex-direction: row;
-			align-items: center;
-			gap: 12px;
-			width: 100%;
-		}
-
-		.footer label {
-			white-space: nowrap;
-			color: var(--vscode-text);
-		}
-
-		select {
-			width: 135px;
-			flex: 1;
-			padding: 4px;
-			background-color: var(--vscode-border);
-			color: var(--vscode-text);
-			border: 1px solid var(--vscode-border);
-			border-radius: 2px;
-			font-size: 13px;
-			outline: none;
-			cursor: pointer;
-		}
-
-		select:focus {
-			border-color: var(--vscode-focus);
-		}
-
-		select option {
-			background-color: var(--vscode-panel);
-			color: var(--vscode-text);
-		}
-
-		button {
-			padding: 3px 10px;
-			background-color: var(--vscode-button-bg);
-			color: var(--vscode-text-bright);
-			border: 1px solid transparent;
-			border-radius: 2px;
-			font-size: 13px;
-			cursor: pointer;
-			white-space: nowrap;
-			transition: background-color 0.1s ease;
-		}
-
-		button:hover:not(:disabled) {
-			background-color: var(--vscode-button-hover);
-		}
-
-		button:active:not(:disabled) {
-			background-color: var(--vscode-button-active);
-		}
-
-		button:disabled {
-			background-color: var(--vscode-disabled-bg);
-			color: var(--vscode-text-disabled);
-			cursor: not-allowed;
-		}
-	</style>
 </head>
 
 <body>
-	<div class="container">
-		<div class="input-group">
-			<input type="text" id="fooNameInput" placeholder="封装名称" autocomplete="off" style="width: 186px" />
-			<input type="text" id="desNameInput" placeholder="位号" autocomplete="off" style="width: 74px" />
+	<div class="cf-form">
+		<div class="cf-inputs">
+			<input type="text" id="fooNameInput" class="cf-name" placeholder="封装名称" autocomplete="off" />
+			<input type="text" id="desNameInput" class="cf-des" placeholder="位号" autocomplete="off" />
 		</div>
 
-		<div class="footer">
-			<label>选择库</label>
+		<div class="cf-footer">
+			<label for="libSelect">选择库</label>
 			<select id="libSelect" title="目标库">
 				<option value="" disabled selected>正在加载库列表...</option>
 			</select>

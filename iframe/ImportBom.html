@@ -5,224 +5,23 @@
 		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
 		<title>狼黑工具 - 导入BOM</title>
 		<link rel="stylesheet" href="/iframe/css/common.css" />
-		<style>
-			/* ===== ImportBom 页面专属样式 ===== */
-			body {
-				margin: 0;
-				padding: 0;
-				background-color: var(--vscode-bg);
-				color: var(--vscode-text);
-				font-family: Consolas, 'Courier New', monospace;
-				font-size: 13px;
-				height: 100vh;
-				display: flex;
-				flex-direction: column;
-				overflow: hidden;
-			}
-
-			.toolbar {
-				display: flex;
-				justify-content: space-between;
-				align-items: center;
-				padding: 8px 12px;
-				background-color: var(--vscode-panel);
-				border-bottom: 1px solid var(--vscode-border);
-				flex-shrink: 0;
-			}
-
-			.toolbar-left {
-				display: flex;
-				align-items: center;
-				gap: 12px;
-			}
-
-			.title {
-				font-size: 14px;
-				font-weight: bold;
-				color: var(--vscode-text);
-			}
-
-			.version-tag {
-				font-size: 11px;
-				font-weight: normal;
-				background-color: var(--vscode-button-secondary);
-				padding: 2px 4px;
-				border-radius: 2px;
-				color: var(--vscode-link);
-				border: 1px solid var(--vscode-border);
-			}
-
-			.warning-text {
-				color: var(--vscode-text);
-				font-size: 12px;
-			}
-
-			.button-group {
-				display: flex;
-				gap: 6px;
-			}
-
-			button {
-				background-color: var(--vscode-button-secondary);
-				color: var(--vscode-text);
-				border: 1px solid transparent;
-				padding: 4px 12px;
-				cursor: pointer;
-				font-family: inherit;
-				font-size: 13px;
-				border-radius: 2px;
-				transition: background-color 0.1s;
-			}
-
-			button:hover:not(:disabled) {
-				background-color: var(--vscode-button-secondary-hover);
-			}
-
-			button:disabled {
-				opacity: 0.5;
-				cursor: not-allowed;
-			}
-
-			.table-container {
-				flex: 1;
-				overflow-y: auto;
-				padding: 0;
-				position: relative;
-			}
-
-			table {
-				width: 100%;
-				border-collapse: collapse;
-				table-layout: fixed;
-			}
-
-			thead {
-				position: sticky;
-				top: 0;
-				z-index: 20;
-			}
-
-			th,
-			td {
-				padding: 4px 8px;
-				text-align: left;
-				white-space: nowrap;
-				overflow: hidden;
-				text-overflow: ellipsis;
-			}
-
-			th {
-				background-color: #2d2d30;
-				font-weight: normal;
-				color: #eeeeee;
-				box-shadow: 0 1px 0 var(--vscode-border);
-				border-bottom: none;
-			}
-
-			td {
-				border-bottom: 1px solid var(--vscode-border);
-			}
-
-			th:nth-child(1),
-			td:nth-child(1) {
-				width: 20px;
-				text-align: center;
-			}
-
-			th:nth-child(2),
-			td:nth-child(2) {
-				width: 80px;
-			}
-
-			th:nth-child(3),
-			td:nth-child(3) {
-				width: 80px;
-			}
-
-			input[type='checkbox'] {
-				accent-color: var(--vscode-link);
-				cursor: pointer;
-				width: 14px;
-				height: 14px;
-				margin: 0;
-				vertical-align: middle;
-			}
-
-			.disabled-row {
-				color: var(--vscode-text-disabled);
-				background-color: rgba(0, 0, 0, 0.1);
-			}
-
-			.disabled-row input[type='checkbox']:not(.row-selector) {
-				opacity: 0.3;
-				cursor: not-allowed;
-			}
-
-			.change-arrow {
-				color: var(--vscode-change);
-				margin: 0 4px;
-				font-weight: bold;
-			}
-
-			.status-bar {
-				padding: 4px 12px;
-				font-size: 12px;
-				border-top: 1px solid var(--vscode-border);
-				background-color: var(--vscode-panel);
-				flex-shrink: 0;
-				min-height: 20px;
-				display: flex;
-				align-items: center;
-			}
-
-			.status-bar.warning {
-				color: #d7ba7d;
-			}
-
-			.status-bar.success {
-				color: var(--vscode-change);
-			}
-
-			.status-bar.error {
-				color: var(--vscode-error);
-			}
-
-			th.sortable {
-				cursor: pointer;
-				user-select: none;
-				transition: background-color 0.1s;
-			}
-
-			th.sortable:hover {
-				background-color: #3d3d40;
-			}
-
-			.sort-arrow {
-				display: inline-block;
-				width: 12px;
-				font-size: 10px;
-				color: var(--vscode-link);
-				margin-left: 4px;
-				text-align: center;
-			}
-		</style>
 	</head>
-	<body>
+	<body class="app">
 		<div class="toolbar">
 			<div class="toolbar-left">
 				<span class="title">导入BOM</span>
 				<span id="versionTag" class="version-tag">检测中...</span>
-				<span class="warning-text">必须按照以下字段排列后再从Excel复制粘贴</span>
+				<span class="hint">按下列字段排列后从 Excel 复制粘贴</span>
 			</div>
 			<div class="button-group">
-				<button id="pasteBtn">粘贴</button>
-				<button id="selectAll">全选</button>
+				<button id="pasteBtn" class="btn-secondary">粘贴</button>
+				<button id="selectAll" class="btn-secondary">全选</button>
 				<button id="importBtn" disabled>导入</button>
 			</div>
 		</div>
 
-		<div class="table-container">
-			<table id="bomTable">
+		<div class="table-wrap">
+			<table id="bomTable" class="tbl ib-table">
 				<thead>
 					<tr>
 						<th><input type="checkbox" id="masterCheckbox" title="全选/取消全选" /></th>

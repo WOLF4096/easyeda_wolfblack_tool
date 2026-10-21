@@ -91,9 +91,9 @@
                         <tbody>
                             ${p.params.map((name, i) => `
                                 <tr>
-                                    <td style="color:var(--vscode-text-muted)">${name}${
+                                    <td class="param-name">${name}${
                                         name === '圆弧角度'
-                                            ? '<div style="font-size:11px;opacity:.7;line-height:1.4">1 = 两侧同为角度制<br>0.017453 = 度→弧度<br>57.2958 = 弧度→度</div>'
+                                            ? '<div class="param-note">1 = 两侧同为角度制<br>0.017453 = 度→弧度<br>57.2958 = 弧度→度</div>'
                                             : ''
                                     }</td>
                                     <td><input class="val-input" id="set_${p.id}_${i}" value="${defaults[i] || ''}"></td>

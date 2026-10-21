@@ -1,6 +1,6 @@
 {
 	"name": "pro-api-sdk",
-	"version": "1.17.11",
+	"version": "1.18.0",
 	"description": "嘉立创EDA & EasyEDA 专业版扩展 API 开发工具",
 	"author": "JLCEDA <support@lceda.cn>",
 	"license": "Apache-2.0",
@@ -15,6 +15,7 @@
 		"test": "node --test \"test/*.test.mjs\"",
 		"test:samples": "node test/samples/run.mjs",
 		"test:all": "npm test && node test/samples/run.mjs",
+		"check:layout": "node tools/layout-check.mjs",
 		"bridge": "node tools/eda-bridge/server.mjs",
 		"bridge:run": "node tools/eda-bridge/run.mjs"
 	},

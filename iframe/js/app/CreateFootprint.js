@@ -17,11 +17,12 @@ const { getEditorVersion, isModern, logger } = WC;
 	try {
 		// V3 起底层源码写入 API 有缺陷，V4 同源问题，一并拦截
 		if (isModern()) {
-			// 获取主容器
-			const container = document.querySelector('.container');
+			// 获取主容器（.cf-form 是页面表单容器，见 css/common.css）
+			const container = document.querySelector('.cf-form');
 			// 清空所有控件，替换为居中提示文字
-			container.innerHTML =
-				'<div style="display: flex; height: 100%; width: 100%; align-items: center; justify-content: center; text-align: center; color: #AFF; font-size: 14px;">此功能只支持 EDA V2.2.45 版本</div>';
+			if (container) {
+				container.innerHTML = '<div class="notice-center">此功能只支持 EDA V2.2.45 版本</div>';
+			}
 			return;
 		}
 	} catch (err) {

@@ -5,215 +5,39 @@
 		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
 		<title>狼黑工具 - 丝印代码转换</title>
 		<link rel="stylesheet" href="/iframe/css/common.css" />
-		<style>
-			/* ===== CodeConvert 页面专属样式 ===== */
-			* {
-				margin: 0;
-				padding: 0;
-				box-sizing: border-box;
-				font-family:
-					-apple-system, BlinkMacSystemFont, 'Segoe WPC', 'Segoe UI', 'HelveticaNeue-Light', system-ui, 'Ubuntu', 'Droid Sans', sans-serif;
-			}
-
-			body {
-				width: 100%;
-				height: 100vh;
-				padding: 0;
-				background-color: var(--vscode-bg);
-				color: var(--vscode-text);
-				display: flex;
-				flex-direction: column;
-				overflow: hidden;
-			}
-
-			.container {
-				width: 100%;
-				height: 100%;
-				display: flex;
-				flex-direction: column;
-				padding: 10px 14px;
-			}
-
-			.header {
-				display: flex;
-				justify-content: space-between;
-				align-items: center;
-				padding-bottom: 8px;
-				margin-bottom: 8px;
-				border-bottom: 1px solid var(--vscode-border);
-			}
-
-			.title {
-				font-size: 12px;
-				font-weight: 600;
-				color: var(--vscode-text);
-				display: flex;
-				align-items: center;
-				gap: 8px;
-			}
-
-			.version-tag {
-				font-size: 11px;
-				background-color: #4d4d4d40;
-				border: 1px solid var(--vscode-border);
-				padding: 1px 4px;
-				border-radius: 3px;
-				color: var(--vscode-text-muted);
-				font-family: Consolas, 'Courier New', monospace;
-			}
-
-			.controls {
-				display: flex;
-				align-items: center;
-				gap: 12px;
-				font-size: 12px;
-			}
-
-			.select-all {
-				display: flex;
-				align-items: center;
-				gap: 4px;
-				cursor: pointer;
-				user-select: none;
-			}
-
-			input[type='checkbox'] {
-				accent-color: var(--vscode-focus);
-				cursor: pointer;
-				width: 14px;
-				height: 14px;
-				margin: 0;
-				border-radius: 2px;
-			}
-
-			.execute-btn {
-				padding: 4px 12px;
-				background-color: var(--vscode-button-bg);
-				color: var(--vscode-text-bright);
-				border: none;
-				border-radius: 2px;
-				cursor: pointer;
-				font-size: 12px;
-				font-weight: 500;
-				transition: background 0.1s;
-			}
-
-			.execute-btn:hover {
-				background-color: var(--vscode-button-hover);
-			}
-
-			.execute-btn:disabled {
-				background-color: var(--vscode-disabled-bg);
-				color: var(--vscode-text-disabled);
-				cursor: not-allowed;
-			}
-
-			.table-container {
-				flex: 1;
-				overflow: auto;
-			}
-
-			table {
-				width: 100%;
-				border-collapse: collapse;
-				font-size: 12px;
-			}
-
-			th,
-			td {
-				padding: 4px;
-				text-align: left;
-				border-bottom: 1px solid var(--vscode-border);
-			}
-
-			th {
-				background-color: var(--vscode-panel);
-				font-weight: 600;
-				color: var(--vscode-text);
-				position: sticky;
-				top: 0;
-				z-index: 10;
-				box-shadow: 0 1px 0 var(--vscode-border);
-				border-bottom: none;
-			}
-
-			td {
-				font-family: Consolas, 'Courier New', monospace;
-				color: var(--vscode-text);
-				font-size: 14px;
-			}
-
-			tr:hover td {
-				background-color: var(--vscode-list-hover);
-			}
-
-			td:last-child {
-				color: var(--vscode-syntax-string);
-			}
-
-			.checkbox-cell {
-				text-align: center;
-				width: 20px;
-			}
-
-			.status {
-				margin-top: 8px;
-				padding: 6px 10px;
-				font-size: 12px;
-				background-color: var(--vscode-panel);
-				border: 1px solid var(--vscode-border);
-				display: none;
-			}
-
-			.status:not(:empty) {
-				display: block;
-			}
-
-			.status.success {
-				border-left: 3px solid var(--vscode-success);
-			}
-
-			.status.error {
-				border-left: 3px solid var(--vscode-error);
-			}
-
-			.status.info {
-				border-left: 3px solid var(--vscode-link);
-			}
-		</style>
 	</head>
-	<body>
-		<div class="container">
-			<div class="header">
-				<div class="title">
-					丝印代码转换工具
-					<span id="versionTag" class="version-tag">检测中...</span>
-					只处理位号以C、R、L开头的元件
-				</div>
-				<div class="controls">
-					<div class="select-all">
-						<input type="checkbox" id="selectAll" style="transform: scale(1)" />
-						<label for="selectAll">全选</label>
-					</div>
-					<button id="executeBtn" class="execute-btn">执行</button>
-				</div>
+	<body class="app">
+		<div class="cc-header">
+			<div class="cc-title">
+				丝印代码转换工具
+				<span id="versionTag" class="version-tag">检测中...</span>
+				<span class="cc-hint">只处理 C / R / L 开头的位号</span>
 			</div>
-
-			<div class="table-container">
-				<table id="componentsTable">
-					<thead>
-						<tr>
-							<th style="width: 30px" class="checkbox-cell">修改</th>
-							<th style="width: 80px">位号</th>
-							<th style="width: 80px">封装</th>
-							<th style="width: 80px">代码/名称</th>
-							<th style="width: 80px">转换值</th>
-						</tr>
-					</thead>
-					<tbody id="tableBody"></tbody>
-				</table>
+			<div class="cc-controls">
+				<div class="select-all">
+					<input type="checkbox" id="selectAll" />
+					<label for="selectAll">全选</label>
+				</div>
+				<button id="executeBtn">执行</button>
 			</div>
+		</div>
 
+		<div class="cc-table">
+			<table id="componentsTable" class="tbl">
+				<thead>
+					<tr>
+						<th class="checkbox-cell">修改</th>
+						<th>位号</th>
+						<th>封装</th>
+						<th>代码/名称</th>
+						<th>转换值</th>
+					</tr>
+				</thead>
+				<tbody id="tableBody"></tbody>
+			</table>
+		</div>
+
+		<div class="cc-status">
 			<div id="status" class="status"></div>
 		</div>
 

@@ -250,8 +250,8 @@
 		featuresData.forEach(item => {
 			// 1. 处理演示链接按钮
 			const linkHtml = item.demoUrl 
-				? `<a href="${item.demoUrl}" target="_blank" style="color: var(--vscode-link);">打开</a>` 
-				: `<span style="color: var(--vscode-border);">暂无</span>`;
+				? `<a href="${item.demoUrl}" target="_blank">打开</a>` 
+				: `<span class="muted">暂无</span>`;
 
 			// 2. 处理名称与快捷键/提示标签
 			let nameHtml = item.name;
@@ -294,7 +294,7 @@
 			mainRow.className = 'main-row';
 			mainRow.innerHTML = `
 				<td class="name-col">${nameHtml}</td>
-				<td style="color: var(--vscode-text-muted); font-size: 0.9em;">${item.brief}</td>
+				<td class="brief-col">${item.brief}</td>
 				<td>${envAndVersionHtml}</td>
 				<td>${linkHtml}</td>
 			`;
@@ -303,7 +303,7 @@
 			const detailsRow = document.createElement('tr');
 			detailsRow.className = 'details-row';
 			detailsRow.innerHTML = `
-				<td colspan="4" style="padding: 0; border: none;">
+				<td colspan="4" class="details-cell">
 					<div class="details-content">
 						<h4><span class="purpose-tag">开发目的</span></h4>
 						<p>${item.purpose}</p>

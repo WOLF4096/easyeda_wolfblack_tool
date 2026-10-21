@@ -5,252 +5,45 @@
 		<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
 		<title>狼黑工具 - 批量修改网络 与 引脚查询工具</title>
 		<link rel="stylesheet" href="/iframe/css/common.css" />
-		<style>
-			/* ===== ModifyNet 页面专属样式 ===== */
-			* {
-				box-sizing: border-box;
-				margin: 0;
-				padding: 0;
-				font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-			}
-
-			body {
-				background-color: var(--vscode-bg);
-				display: flex;
-				justify-content: center;
-				align-items: center;
-				height: 100vh;
-				overflow: hidden;
-				color: var(--vscode-text);
-			}
-
-			.container {
-				width: 100%;
-				height: 100%;
-				background-color: var(--vscode-bg);
-				display: flex;
-				flex-direction: column;
-			}
-
-			.header {
-				display: flex;
-				justify-content: space-between;
-				align-items: center;
-				background-color: var(--vscode-panel);
-				color: var(--vscode-text);
-				padding: 8px 14px;
-				border-bottom: 1px solid var(--vscode-border);
-			}
-
-			h1 {
-				font-size: 12px;
-				font-weight: normal;
-				display: flex;
-				align-items: center;
-				gap: 8px;
-				text-transform: uppercase;
-				letter-spacing: 0.5px;
-			}
-
-			.version-info {
-				font-size: 11px;
-				background: var(--vscode-border);
-				padding: 2px 6px;
-				border-radius: 2px;
-				color: var(--vscode-text);
-				margin-left: 8px;
-			}
-
-			.header-actions {
-				display: flex;
-				align-items: center;
-				gap: 10px;
-				flex-shrink: 0;
-			}
-
-			.upper-opt {
-				display: flex;
-				align-items: center;
-				gap: 4px;
-				font-size: 12px;
-				color: var(--vscode-text);
-				cursor: pointer;
-				user-select: none;
-				white-space: nowrap;
-			}
-
-			.upper-opt input[type='checkbox'] {
-				cursor: pointer;
-				margin: 0;
-			}
-
-			.execute-btn {
-				background: var(--vscode-button-bg);
-				color: white;
-				border: 1px solid transparent;
-				padding: 4px 12px;
-				border-radius: 2px;
-				cursor: pointer;
-				font-size: 12px;
-				transition: background 0.1s;
-			}
-
-			.execute-btn:hover {
-				background: var(--vscode-button-hover);
-			}
-
-			.execute-btn:disabled {
-				background: var(--vscode-disabled-bg);
-				color: var(--vscode-text-disabled);
-				cursor: not-allowed;
-			}
-
-			.content {
-				flex: 1;
-				display: flex;
-				flex-direction: column;
-				padding: 14px;
-				overflow: hidden;
-				gap: 14px;
-			}
-
-			.input-section {
-				flex-shrink: 0;
-			}
-
-			label {
-				display: block;
-				margin-bottom: 6px;
-				font-size: 12px;
-				color: var(--vscode-text);
-			}
-
-			textarea,
-			.search-input {
-				width: 100%;
-				padding: 6px 8px;
-				background: var(--vscode-border);
-				border: 1px solid transparent;
-				border-radius: 2px;
-				resize: none;
-				font-size: 13px;
-				line-height: 1.4;
-				color: var(--vscode-text);
-				font-family: Consolas, 'Courier New', monospace;
-			}
-
-			textarea:focus,
-			.search-input:focus {
-				outline: none;
-				border-color: var(--vscode-focus);
-			}
-
-			.search-input::placeholder,
-			textarea::placeholder {
-				color: var(--vscode-text-muted);
-			}
-
-			#csvInput {
-				height: 120px;
-			}
-
-			.result-section {
-				flex: 1;
-				display: flex;
-				flex-direction: column;
-				min-height: 0;
-				gap: 10px;
-			}
-
-			.search-section {
-				display: flex;
-				align-items: center;
-				gap: 10px;
-				background: transparent;
-				padding: 0;
-				border: none;
-			}
-
-			.search-section label {
-				margin-bottom: 0;
-				white-space: nowrap;
-			}
-
-			.result-textarea {
-				flex: 1;
-				background: var(--vscode-bg);
-				border: 1px solid var(--vscode-border);
-			}
-
-			.result-textarea:focus {
-				border-color: var(--vscode-focus);
-			}
-
-			.status {
-				margin-top: 4px;
-				padding: 6px 10px;
-				border-radius: 2px;
-				font-size: 12px;
-				display: none;
-				flex-shrink: 0;
-				border: 1px solid transparent;
-			}
-
-			.status.success {
-				background: var(--vscode-bg);
-				color: var(--vscode-success);
-				border-color: var(--vscode-success);
-				display: block;
-			}
-
-			.status.error {
-				background: var(--vscode-bg);
-				color: var(--vscode-error);
-				border-color: var(--vscode-error);
-				display: block;
-			}
-
-			.status.info {
-				background: var(--vscode-bg);
-				color: #75beff;
-				border-color: var(--vscode-focus);
-				display: block;
-			}
-		</style>
 	</head>
-	<body>
-		<div class="container">
-			<div class="header">
-				<h1>网络修改 & 查询工具 <span id="verLabel" class="version-info"></span></h1>
-				<div class="header-actions">
-					<label class="upper-opt" title="替换时把新网络名里的英文字母转成大写（部分 EDA 版本对小写网络名支持不友好）">
-						<input type="checkbox" id="toUpper" checked />
-						转大写
-					</label>
-					<button id="executeBtn" class="execute-btn">执行替换</button>
-				</div>
+	<body class="app">
+		<div class="toolbar">
+			<div class="toolbar-left">
+				<span class="title">网络修改 &amp; 查询工具</span>
+				<span id="verLabel" class="version-tag"></span>
 			</div>
-			<div class="content">
-				<div class="input-section">
-					<label for="csvInput">替换规则，从 Excel 复制粘贴（旧网络名匹配不区分大小写）：</label>
-					<textarea id="csvInput" placeholder="旧网络名称	新网络名称&#10;(直接从Excel复制粘贴，使用Tab分隔)"></textarea>
+			<div class="button-group">
+				<label
+					class="inline"
+					title="替换时把新网络名里的英文字母转成大写（部分 EDA 版本对小写网络名支持不友好）"
+				>
+					<input type="checkbox" id="toUpper" checked />
+					转大写
+				</label>
+				<button id="executeBtn">执行替换</button>
+			</div>
+		</div>
+
+		<div class="mn-content">
+			<div>
+				<label class="mn-label" for="csvInput">替换规则，从 Excel 复制粘贴（旧网络名匹配不区分大小写）：</label>
+				<textarea id="csvInput" class="mn-csv" placeholder="旧网络名称	新网络名称&#10;(直接从Excel复制粘贴，使用Tab分隔)"></textarea>
+			</div>
+
+			<div class="mn-result">
+				<div class="mn-search">
+					<label for="designatorInput">查询引脚：</label>
+					<input type="text" id="designatorInput" placeholder="输入位号 (如 U1)" />
 				</div>
 
-				<div class="result-section">
-					<div class="search-section">
-						<label for="designatorInput" style="margin-bottom: 0">查询引脚：</label>
-						<input type="text" id="designatorInput" class="search-input" placeholder="输入位号 (如 U1)" />
-					</div>
-
-					<label for="resultOutput">输出结果：</label>
-					<textarea
-						id="resultOutput"
-						class="result-textarea"
-						readonly
-						placeholder="在此输入位号查看引脚网络，或点击执行查看替换结果..."
-					></textarea>
-					<div id="status" class="status"></div>
-				</div>
+				<label class="mn-label" for="resultOutput">输出结果：</label>
+				<textarea
+					id="resultOutput"
+					class="mn-textarea"
+					readonly
+					placeholder="在此输入位号查看引脚网络，或点击执行查看替换结果..."
+				></textarea>
+				<div id="status" class="status"></div>
 			</div>
 		</div>
 

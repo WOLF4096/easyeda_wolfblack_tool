@@ -1901,7 +1901,7 @@
             if (tab === 'total' || tab === 'project') {
                 if (tab === 'project' && !SELECTED_DETAIL_UUID) {
                     const emptyTip = document.getElementById('project-empty-tip');
-                    emptyTip.innerHTML = `<div style="margin-bottom:8px; font-weight: bold; color:#e0e0e0;">当前未打开工程</div><div style="font-size:11px; color:#666;">当前视图不包含任何数据。请在顶部下拉菜单中选择一个项目。</div>`;
+                    emptyTip.innerHTML = `<b>当前未打开工程</b><small>当前视图不包含任何数据。请在顶部下拉菜单中选择一个项目。</small>`;
                     emptyTip.classList.remove('hidden');
                 } else {
                     document.getElementById('view-chart').classList.remove('hidden');

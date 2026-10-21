@@ -19,8 +19,29 @@
 - 实测确认：`pcb_Net.getAllNets` 在 V2.2 与 V4 **都存在**（类型声明标 Excluded，但运行时保留）；
   两版形参契约一致（Via 9 / Pad 17 / Line 8 / Arc 10 / Polyline 5）；`documentType`：PCB = 3。
 
-## 已知非插件问题（不要在插件侧修）
+## 前端样式约定（2026-10-22 统一重构后，v1.18.0）
 
+- **只有一个 CSS 文件**：`iframe/css/common.css`，18 个页面共用。HTML 里**不写** `<style>`、
+  不写 `style=""`（含 `<col style>`）；只有 JS 运行时改进度/尺寸才用内联。
+- 想通用就先找公共组件：`.toolbar` / `.title` / `.hint` / `.version-tag` / `.btn`(+`-secondary`
+  `-danger` `-success` `-sm`) / `.field-row` / `.segmented` / `.tbl`(+`.col-cb`) / `.status-bar`(+`.accent`)
+  / `.status`(+semantic) / `.badge` / `.card` / `.legend-panel` / `.empty-state` / `.mask` / `.spinner`。
+- ⚠️ **`.hidden` 必须留在文件最末**：页面段落里有 `display:grid/flex` 的元素（`#gridPreview` 等）
+  要在同权重下被它压住；且不能加 `!important`——JS 会写 `style.display` 去覆盖它。
+- ⚠️ **CSS 变量名 `--vscode-*` 不能改**：页面 JS 里有 `style.color = 'var(--vscode-link)'`
+  这类内联值，改名会静默失效。
+- ⚠️ **被 JS 查询的类名不能改**：`.sidebar-item` `.view-container` `.grid-row` `.row-cell`
+  `.manual-input` `.table-header .header-cell` `.grid-item` `.unit-option` `.layer-option`
+  `.dpi-value-item` `.preview-placeholder` `.main-row` `.details-row` `.sort-icon` `.sort-arrow`
+  `.disabled-row` `.row-error` `.row-selector` `.opt-cb` `.cb-*` `.checkbox-cell` `.status`
+  `.small-btn` `.stepper` `.list-input` `.legend-item` `.color-block` `.wh-table`。
+  改结构类名时**同时**改 JS（例：`CreateFootprint.js` 的 `querySelector('.container')` → `.cf-form`）。
+- `.status-bar` 默认灰底（ImportBom 的 JS 会整串替换 `className`），蓝底进度型用 `.status-bar.accent`。
+- 版式自检：`npm run check:layout`（`tools/layout-check.mjs`）。尺寸从 `src/index.ts` 的
+  `openPage()` 自动读取；Chrome 窗口有最小尺寸（<500px 宽被夹、矮窗口会被压到 4px），
+  所以测量走「harness 页 + 精确尺寸 iframe」，别直接用 `--window-size` 当页面视口。
+
+## 已知非插件问题（不要在插件侧修）
 - `生成物理网络` V2.2 源码写入后重开会丢弧线导线 → EDA V2.2 平台缺陷。
 - `批量替换器件` V2.2 替换后网表取空 / 参数补全失败 → EDA V2.2 API 缺陷。
 - `从PCB创建导线` 的"切回原理图"注释写着不生效，但**实测正常**，属陈旧注释（已清理）。

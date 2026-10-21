@@ -6,94 +6,17 @@
 		<meta http-equiv="Cache-Control" content="no-store" />
 		<title>EDA 桥</title>
 		<link rel="stylesheet" href="/iframe/css/common.css" />
-		<style>
-			/* ===== EDABridge 页面专属样式 ===== */
-			* {
-				box-sizing: border-box;
-				margin: 0;
-				padding: 0;
-			}
-
-			body {
-				font-family: 'Segoe UI', sans-serif;
-				background: var(--vscode-bg);
-				color: var(--vscode-text);
-				padding: 6px 8px;
-				font-size: 12px;
-			}
-
-			.bar {
-				display: flex;
-				align-items: center;
-				gap: 6px;
-				white-space: nowrap;
-			}
-
-			input {
-				background: var(--vscode-input-bg);
-				color: var(--vscode-text-bright);
-				border: 1px solid var(--vscode-border);
-				border-radius: 2px;
-				padding: 4px 6px;
-				font-size: 12px;
-				outline: none;
-				width: 132px;
-				font-family: Consolas, monospace;
-			}
-
-			input:focus {
-				border-color: var(--vscode-focus);
-			}
-
-			button {
-				background: var(--vscode-button-bg);
-				color: var(--vscode-text-bright);
-				border: none;
-				border-radius: 2px;
-				padding: 4px 10px;
-				cursor: pointer;
-				font-size: 12px;
-			}
-
-			button:hover {
-				background: var(--vscode-button-hover);
-			}
-
-			button.ghost {
-				background: var(--vscode-button-secondary);
-			}
-
-			button.ghost:hover {
-				background: #4a4d51;
-			}
-
-			.dot {
-				display: inline-block;
-				width: 8px;
-				height: 8px;
-				border-radius: 50%;
-				background: var(--vscode-error);
-				margin-right: 5px;
-			}
-
-			.dot.ok {
-				background: var(--vscode-success);
-			}
-		</style>
 	</head>
 	<body>
-		<div class="bar" id="bar">
-			<span><span class="dot" id="dot"></span><span id="st">未连接</span></span>
-			<input id="addr" value="127.0.0.1:8233" spellcheck="false" title="后端地址，格式 IP:端口" />
-			<label
-				title="开启后允许后端下发 eval 指令，在 EDA 里执行代码。仅用于插件自测，平时请关闭"
-				style="display: inline-flex; align-items: center; gap: 4px; color: var(--vscode-text-muted)"
-			>
-				<input id="allowEval" type="checkbox" style="width: auto" />
+		<div class="bridge-bar" id="bar">
+			<span><span class="bridge-dot" id="dot"></span><span id="st">未连接</span></span>
+			<input id="addr" type="text" value="127.0.0.1:8233" spellcheck="false" title="后端地址，格式 IP:端口" />
+			<label title="开启后允许后端下发 eval 指令，在 EDA 里执行代码。仅用于插件自测，平时请关闭">
+				<input id="allowEval" type="checkbox" />
 				调试指令
 			</label>
 			<button id="conn">连接</button>
-			<button class="ghost" id="disc">断开</button>
+			<button class="btn-secondary" id="disc">断开</button>
 		</div>
 
 		<script src="/iframe/js/common.js"></script>

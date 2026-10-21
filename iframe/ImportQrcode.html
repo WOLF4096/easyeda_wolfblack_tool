@@ -4,274 +4,34 @@
 		<meta charset="UTF-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
 		<title>狼黑工具 - 各种码生成器</title>
-		<script src="js/bwip-js-min.js"></script>
 		<script src="/iframe/js/bwip-js-min.js"></script>
 		<link rel="stylesheet" href="/iframe/css/common.css" />
-		<style>
-			/* ===== ImportQrcode 页面专属样式 ===== */
-			* {
-				box-sizing: border-box;
-				margin: 0;
-				padding: 0;
-				font-family: Consolas, 'Microsoft YaHei', monospace;
-				font-size: 12px;
-			}
-
-			body {
-				background-color: var(--vscode-bg);
-				color: var(--vscode-text);
-				display: flex;
-				height: 100vh;
-				overflow: hidden;
-			}
-
-			.preview-container {
-				flex: 1;
-				display: flex;
-				flex-direction: column;
-				align-items: center;
-				justify-content: center;
-				padding: 20px;
-				background-color: var(--vscode-bg);
-				position: relative;
-				overflow: auto;
-			}
-
-			.canvas-wrapper {
-				display: flex;
-				align-items: center;
-				justify-content: center;
-				cursor: pointer;
-				border: 2px solid transparent;
-				padding: 10px;
-				transition: border-color 0.2s;
-			}
-
-			.canvas-wrapper:hover {
-				border-color: var(--vscode-focus);
-				border-radius: 4px;
-			}
-
-			canvas {
-				display: block;
-				width: 450px;
-				object-fit: contain;
-			}
-
-			.error-message {
-				margin-top: 15px;
-				color: var(--vscode-error);
-				max-width: 80%;
-				text-align: center;
-				word-wrap: break-word;
-				min-height: 20px;
-				font-size: 13px;
-			}
-
-			.info-hint {
-				color: var(--vscode-text);
-				font-size: 20px;
-			}
-
-			.properties-panel {
-				width: 300px;
-				background-color: var(--vscode-panel);
-				border-left: 1px solid var(--vscode-border);
-				display: flex;
-				flex-direction: column;
-				overflow-y: auto;
-			}
-
-			.panel-header {
-				padding: 10px 12px;
-				font-size: 13px;
-				text-transform: uppercase;
-				border-bottom: 1px solid var(--vscode-border);
-				color: var(--vscode-text-bright);
-				font-weight: bold;
-			}
-
-			.form-group {
-				padding: 8px 12px;
-				border-bottom: 1px solid var(--vscode-border);
-			}
-
-			.form-group label {
-				display: block;
-				margin-bottom: 4px;
-				color: var(--vscode-text);
-			}
-
-			.control-item {
-				padding: 5px 0px;
-			}
-
-			.label-with-value {
-				display: flex;
-				justify-content: space-between;
-				align-items: center;
-			}
-
-			.value-display {
-				color: var(--vscode-focus);
-				font-weight: bold;
-				font-size: 11px;
-			}
-
-			select,
-			input[type='text'],
-			input[type='number'],
-			textarea {
-				width: 100%;
-				background-color: var(--vscode-input-bg);
-				border: 1px solid var(--vscode-border);
-				color: var(--vscode-text-bright);
-				padding: 4px 6px;
-				outline: none;
-				border-radius: 2px;
-				transition: border-color 0.15s ease;
-			}
-
-			select:focus,
-			input[type='text']:focus,
-			input[type='number']:focus,
-			textarea:focus {
-				border-color: var(--vscode-focus);
-			}
-
-			input[type='range'] {
-				width: 100%;
-				margin-top: 4px;
-				accent-color: var(--vscode-focus);
-				background: transparent;
-				cursor: pointer;
-				height: 12px;
-			}
-
-			textarea {
-				resize: vertical;
-				min-height: 50px;
-			}
-
-			.checkbox-group {
-				display: flex;
-				align-items: center;
-				margin-top: 4px;
-			}
-
-			.checkbox-group input[type='checkbox'] {
-				margin-right: 6px;
-				accent-color: var(--vscode-focus);
-			}
-
-			.output-toggle,
-			.unit-toggle {
-				display: flex;
-				border: 1px solid var(--vscode-border);
-				border-radius: 2px;
-				overflow: hidden;
-				margin-top: 2px;
-			}
-
-			.output-option,
-			.unit-option {
-				padding: 4px 0;
-				background-color: var(--vscode-input-bg);
-				color: var(--vscode-text);
-				cursor: pointer;
-				font-size: 12px;
-				flex: 1;
-				text-align: center;
-			}
-
-			.output-option.active,
-			.unit-option.active {
-				background-color: var(--vscode-button-bg);
-				color: var(--vscode-text-bright);
-			}
-
-			.size-control {
-				display: flex;
-				align-items: center;
-			}
-
-			.size-control .unit-toggle {
-				margin-top: 0;
-				width: 80px;
-			}
-
-			.resolution-text {
-				color: #9cdcfe;
-				font-size: 12px;
-				font-weight: normal;
-				padding: 8px 0px;
-			}
-
-			.button-group {
-				padding: 10px 12px;
-				margin-top: auto;
-				display: flex;
-				gap: 10px;
-			}
-
-			button {
-				flex: 1;
-				background-color: var(--vscode-button-bg);
-				color: var(--vscode-text-bright);
-				border: none;
-				padding: 6px 12px;
-				cursor: pointer;
-				border-radius: 2px;
-			}
-
-			button:hover {
-				background-color: var(--vscode-button-hover);
-			}
-
-			button:active {
-				background-color: var(--vscode-button-active);
-			}
-
-			#status-message {
-				position: absolute;
-				top: 20px;
-				right: 20px;
-				padding: 8px 16px;
-				background: var(--vscode-syntax-type);
-				color: var(--vscode-bg);
-				border-radius: 4px;
-				font-weight: bold;
-				display: none;
-				z-index: 100;
-				box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
-			}
-		</style>
 	</head>
-	<body>
-		<div class="preview-container">
-			<div class="canvas-wrapper" id="canvas-wrapper" title="单击左侧条码放置到选定图层">
+	<body class="app-row">
+		<div class="qr-preview">
+			<div class="qr-canvas-wrap" id="canvas-wrapper" title="单击条码放置到选定图层">
 				<canvas id="barcode-canvas"></canvas>
 			</div>
-			<div id="error-message" class="error-message"></div>
-			<div class="info-hint" id="place-hint">单击码可放置到 PCB 画布</div>
-			<div id="status-message"></div>
+			<div id="error-message" class="qr-error"></div>
+			<div class="qr-hint" id="place-hint">单击码可放置到 PCB 画布</div>
+			<div id="status-message" class="qr-toast"></div>
 		</div>
 
-		<div class="properties-panel">
-			<div class="panel-header">属性面板</div>
+		<div class="qr-panel">
+			<div class="qr-panel-header">属性面板</div>
 
-			<div class="form-group flex-group">
-				<div class="control-item">
+			<div class="qr-group">
+				<div class="qr-item">
 					<label for="barcode-type">码类型</label>
 					<select id="barcode-type"></select>
 				</div>
 
-				<div class="control-item">
+				<div class="qr-item">
 					<label for="barcode-data">数据内容</label>
 					<textarea id="barcode-data">JLCJLCJLCJLC</textarea>
 				</div>
 
-				<div class="control-item" id="group-eclevel" style="display: none">
+				<div class="qr-item hidden" id="group-eclevel">
 					<label for="barcode-eclevel">容错级别</label>
 					<select id="barcode-eclevel">
 						<option value="L">L - 7%</option>
@@ -281,109 +41,85 @@
 					</select>
 				</div>
 
-				<div class="control-item" id="group-include-text" style="display: none">
-					<div class="checkbox-group">
+				<div class="qr-item hidden" id="group-include-text">
+					<label class="qr-check">
 						<input type="checkbox" id="barcode-include-text" checked />
-						<label for="barcode-include-text" style="margin-bottom: 0">显示文本信息</label>
-					</div>
+						显示文本信息
+					</label>
 				</div>
 			</div>
 
-			<div class="form-group flex-group">
-				<div class="control-item">
-					<div class="label-with-value">
-						<label for="barcode-scale" style="margin-bottom: 0">码元尺寸</label>
-						<span class="value-display" id="scale-value">32</span>
+			<div class="qr-group">
+				<div class="qr-item">
+					<div class="qr-label-row">
+						<label for="barcode-scale">码元尺寸</label>
+						<span class="qr-value" id="scale-value">32</span>
 					</div>
 					<input type="range" id="barcode-scale" value="32" min="1" max="50" step="1" />
 				</div>
 
-				<div class="control-item">
-					<div class="label-with-value">
-						<label for="barcode-padding" style="margin-bottom: 0">码元边距</label>
-						<span class="value-display" id="padding-value">1</span>
+				<div class="qr-item">
+					<div class="qr-label-row">
+						<label for="barcode-padding">码元边距</label>
+						<span class="qr-value" id="padding-value">1</span>
 					</div>
 					<input type="range" id="barcode-padding" value="1" min="0" max="16" step="1" />
 				</div>
 
-				<div class="control-item">
-					<label>物理尺寸</label>
-					<div class="size-control">
-						<input type="number" class="size-input" id="qr-size" value="1000" min="0.1" style="flex: 1; margin-right: 10px" />
-						<div class="unit-toggle">
-							<div class="unit-option" id="unit-mm">mm</div>
-							<div class="unit-option active" id="unit-mil">mil</div>
+				<div class="qr-item">
+					<label for="qr-size">物理尺寸</label>
+					<div class="qr-size-row">
+						<input type="number" id="qr-size" value="1000" min="0.1" />
+						<div class="segmented">
+							<div id="unit-mm">mm</div>
+							<div id="unit-mil" class="active">mil</div>
 						</div>
 					</div>
 				</div>
 
-				<div class="control-item">
-					<div id="resolution-info" class="resolution-text">尺寸: 0 × 0 px | 0 DPI</div>
+				<div class="qr-item">
+					<div id="resolution-info" class="qr-res">尺寸: 0 × 0 px | 0 DPI</div>
 				</div>
 			</div>
 
-			<div class="form-group flex-group" style="border-bottom: none">
-				<div class="control-item">
+			<div class="qr-group is-last">
+				<div class="qr-item">
 					<label>显示类型</label>
-					<div class="output-toggle">
-						<div class="output-option active" id="type-image">图片</div>
-						<div class="output-option" id="type-vector">矢量</div>
+					<div class="segmented">
+						<div class="active" id="type-image">图片</div>
+						<div id="type-vector">矢量</div>
 					</div>
 				</div>
 
-				<div class="control-item" id="image-controls">
-					<div style="display: flex; gap: 10px">
-						<div style="flex: 1">
-							<label for="color-fore" style="margin-bottom: 4px">前景色</label>
-							<input
-								type="color"
-								id="color-fore"
-								value="#000000"
-								style="
-									width: 100%;
-									height: 26px;
-									cursor: pointer;
-									border: 1px solid var(--vscode-border);
-									background: var(--vscode-input-bg);
-									padding: 0;
-								"
-							/>
+				<div class="qr-item" id="image-controls">
+					<div class="qr-colors">
+						<div>
+							<label for="color-fore">前景色</label>
+							<input type="color" id="color-fore" value="#000000" />
 						</div>
-						<div style="flex: 1">
-							<label for="color-back" style="margin-bottom: 4px">背景色</label>
-							<input
-								type="color"
-								id="color-back"
-								value="#ffffff"
-								style="
-									width: 100%;
-									height: 26px;
-									cursor: pointer;
-									border: 1px solid var(--vscode-border);
-									background: var(--vscode-input-bg);
-									padding: 0;
-								"
-							/>
+						<div>
+							<label for="color-back">背景色</label>
+							<input type="color" id="color-back" value="#ffffff" />
 						</div>
 					</div>
 				</div>
 
-				<div class="control-item" id="vector-controls" style="display: none">
-					<div class="checkbox-group">
+				<div class="qr-item hidden" id="vector-controls">
+					<label class="qr-check">
 						<input type="checkbox" id="invert-image" />
-						<label for="invert-image" style="margin-bottom: 0">反向图像 (黑底白码)</label>
-					</div>
+						反向图像 (黑底白码)
+					</label>
 				</div>
 
-				<div class="control-item">
+				<div class="qr-item">
 					<label for="layer-select">放置图层</label>
-					<select id="layer-select" class="layer-select"></select>
+					<select id="layer-select"></select>
 				</div>
 			</div>
 
-			<div class="button-group">
+			<div class="qr-actions">
 				<button id="generate-btn">重新生成</button>
-				<button id="save-btn">保存图片</button>
+				<button id="save-btn" class="btn-secondary">保存图片</button>
 			</div>
 		</div>
 
