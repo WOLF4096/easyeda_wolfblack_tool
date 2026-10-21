@@ -44,6 +44,21 @@
   相关格式事实以样本实测为准：**V3/V4 内层字段叫 `layerId`（不是 `layer`）**；V2 图元 layer 在数组下标 4；
   V3/V4 日志里 **存在缺行尾 `|` 的行**；`[]` 孤立空行是 EDA 写盘残留。
 - 改完必须 `npm run build`，产物在 `build/dist/wolfblack-tool_v<version>.eext`。
+- `npm test` 只收集 `test/*.test.mjs`。`test/pages/` 是浏览器冒烟脚本（需要 Chrome），
+  **不是** node:test 用例，不要让它被默认收集（会必然失败）。
+
+## 实机测试通道（EDA 桥）
+
+- 拓扑：EDA 里的「EDA 桥」页面是 **WebSocket 客户端**，主动连 `ws://127.0.0.1:8233/ws/eda`；
+  服务端在 `tools/eda-bridge/server.mjs`（自实现 WS，零依赖），**没有服务端桥就连不上**。
+- 用法：`npm run bridge` 起服务 → EDA 里开「EDA 桥」并**勾选「调试指令」** → 点连接 →
+  `npm run bridge:run -- --file tools/eda-bridge/probes/00-env.js` 下发探针；
+  `--status` 看连接状态。业务侧也可用 `POST /__cmd` 同步下发。
+- 指令：`ping` / `import`(建图元) / `probe`(只查 API 是否存在) / `eval`(在页面跑代码，可用 `eda`/`arg`)。
+  `eval`、`probe` **默认关闭**，必须在桥页面勾「调试指令」——产品不能默认带远程执行入口。
+- 探针写在 `tools/eda-bridge/probes/*.js`，内容是「在 EDA 页面里执行的代码片段」，
+  顶层 `return` 不是合法模块，已加入 `.prettierignore`。
+
 
 ## 图层实测补充（官方表之外）
 

@@ -5,3 +5,5 @@
 /.eslintcache
 debug.log
 测试样本
+# 探针是「在 EDA 页面里执行的代码片段」，顶层 return 不是合法模块，prettier 无法解析
+/tools/eda-bridge/probes/

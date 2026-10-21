@@ -45,7 +45,10 @@ function showMsg(msg, type = 'info') {
 				}
 			})();
 
-			document.getElementById('runBtn').addEventListener('click', async function () {
+			// 注意：V3/V4 分支会清空 .container（连带移除 #runBtn），所以按钮绑定必须判空，
+			// 否则 `getElementById('runBtn').addEventListener` 会抛
+			// "Cannot read properties of null"，中断整段脚本。
+			async function onRunClick() {
 				const btn = document.getElementById('runBtn');
 				const inputVal = document.getElementById('fooNameInput').value.trim();
 				const inputdes = document.getElementById('desNameInput').value.trim();
@@ -453,7 +456,12 @@ function showMsg(msg, type = 'info') {
 					console.error('执行错误: ', err);
 					showMsg(err.message, 'error');
 				} finally {
-					btn.disabled = false;
-					btn.innerText = '创建封装';
+					if (btn) {
+						btn.disabled = false;
+						btn.innerText = '创建封装';
+					}
 				}
-			});
+			}
+
+			const runBtnEl = document.getElementById('runBtn');
+			if (runBtnEl) runBtnEl.addEventListener('click', onRunClick);

@@ -8,6 +8,14 @@
 - V2.2.* 版本不支持快捷键功能（该 API 仅 V3+ 提供）
 - 已知的 V4 适配待验证项：V4 的 PCB 坐标单位改为 mil（网格尺寸 ×10），`生成物理网络` 的点合并容差、`从PCB转原理图` 的坐标搬运需在 V4 实机复核
 
+## v1.17.6 `2026-10-21`
+- 新增 **EDA 桥服务端**（`tools/eda-bridge/`，零依赖）：EDA 里的「EDA 桥」页面是 **WebSocket 客户端**，仓库内此前没有配套服务端，只能依赖外部「工作台」。现补齐 `server.mjs`（自实现 WebSocket 服务端 `ws://127.0.0.1:8233/ws/eda`，不引入 `ws` 依赖；同端口附 HTTP 控制面 `POST /__cmd` 下发指令并同步等结果、`GET /__status` 查看连接状态与当前选中对象）、`run.mjs`（命令行助手，`--file 探针.js` 直接下发代码并打印 JSON，免手写转义）、`probes/00-env.js`（环境体检探针，一次拿齐 EDA 版本 / 当前文档 / 源码是 V2 数组还是 V3-V4 日志格式 / 21 个关键 API 是否存在 / 选中集数量，供 V4 实机核对）
+- 增强 **EDA 桥页面 v2.1 → v2.2**：除原有 `import`（建图元）外新增 `ping`（探活 + 回版本）、`probe`（只探测 API 路径是否存在，不调用）、`eval`（在页面上下文执行代码，可用 `eda` / `arg`，用 `return` 回传），这样实测 27 个功能不必为每条用例改桥
+- 安全 EDA 桥新增「调试指令」勾选框，**默认关闭**：未勾选时 `eval` / `probe` 一律拒绝，避免产品默认携带「本地任意代码执行」入口
+- 修复 `创建封装` 空引用：V3/V4 分支清空 `.container`（连带移除 `#runBtn`）后仍执行 `getElementById('runBtn').addEventListener`，抛 `Cannot read properties of null` 并中断整段脚本；改为判空后再绑定
+- 工程化 `npm test` 显式只收集 `test/*.test.mjs`：此前 `test/pages/` 下的浏览器脚本（`run.mjs` / `mock-eda.js`）被 `node --test` 当作测试文件执行，导致 2 个必然失败的用例
+- 工程化 `.edaignore` 排除 `tools/`（测试工具不进扩展包）
+
 ## v1.17.5 `2026-10-21`
 - 新增 **测试样本自动化测试工具**（`test/samples/`，`npm run test:samples`）：脱离 EDA 环境直接解包 `测试样本/` 下的 `.epro` / `.epro2`，自动识别 V2 / V3 / V4，逐文档、逐行跑 10 个用例（包结构、版本一致性、行解析、文档头、id 唯一性、ticket、图层合法性、**源码行改写往返**、行尾 `|` 保留、前后端图层常量一致性）；输出控制台四段式报告 + `build/test-report/samples-report.{json,md}`，失败时给出「文件 › 文档 › 行号 + 期望/实际」，退出码非 0。详见 `test/samples/README.md`
 - 重构 源码行切分/拼装抽到 `WolfCommon.splitSourceLine` / `joinSourceLine`，`生成物理网络` 的行改写改为复用它 —— 这样样本测试验证的就是产品代码，而不是测试里的平行实现
