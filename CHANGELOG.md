@@ -6,6 +6,14 @@
 - `创建封装` 暂不支持 EDA V3 版本
 - V2.2.* 版本不支持快捷键功能
 
+## v1.17.3 `2026-10-21`
+- 优化 版本号读取加缓存：`WolfCommon.getEditorVersion()` 只穿透宿主一次（原来 `生成物理网络` 在逐行循环里判断版本，上万行源码会造成上万次跨 iframe 调用）
+- 优化 删除两个零引用第三方库 `jspdf.umd.min.js`(536KB) / `crypto-js.min.js`(50KB)，安装包由 1.16MB 降至约 1.01MB（-12.5%）
+- 优化 统一 HTML 转义：新增 `WolfCommon.escapeHtml`（`& < > " '` 全转义），替换 `从PCB转原理图` / `导入AD网表` / `工作时间统计` 中的 3 份各自实现；顺带修复 `从PCB转原理图` 原实现只转义双引号、且表格正文未转义的问题
+- 新增 `从网表创建导线` 菜单项：该功能此前已实现并导出，但未在 `extension.json` 注册，用户无法从菜单触达
+- 清理 删除悬空导出 `NetReplace()`（指向不存在的 `/iframe/NetReplace.html`，真实功能为 `批量修改网络`）
+- 工程化 新增 `test/common.test.mjs`（16 个用例）覆盖公共模块的版本缓存、网表读写、容器识别与转义，测试总数 58 → 74
+
 ## v1.17.2 `2026-10-21`
 - 新增 引入 `node:test` 测试链路（`npm test`，零依赖）：58 个用例覆盖网表解析纯函数、API 校准配置读取、EDA 图元调用参数契约（`pcb_PrimitiveVia/Pad/Line/Arc/Polyline.create` 的实参个数、类型、顺序与缩放倍率）
 - 重构 18 个页面的 18 份独立 CSS 合并为 `iframe/css/common.css`（公共样式）+ 各页面内联 `<style>`（专属样式），删除 18 个 CSS 文件；`:root` 变量从 `--bg` / `--bg-color` / `--vscode-bg` 三套并存收敛为单套 `--vscode-*`，边框色由 4 种取值统一为 1 种，硬编码色值同步改写为变量引用

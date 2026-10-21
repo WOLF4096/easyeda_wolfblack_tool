@@ -21,6 +21,17 @@
 	const NETLIST_KEY = 'JLCEDA';
 
 	/**
+	 * 版本号缓存
+	 *
+	 * `getEditorCurrentVersion()` 是**同步穿透到宿主**的调用，如果在循环里反复取
+	 * （历史问题：GenerateNet 逐行判断版本），上万行源码就是上万次跨 iframe 调用。
+	 * 版本号在客户端生命周期内不会变化，取到有效值后缓存即可。
+	 *
+	 * 只缓存非空值：取不到（不在 EDA 环境）时不缓存，保证后续环境就绪后还能拿到。
+	 */
+	let cachedVersion = null;
+
+	/**
 	 * 取 EDA 运行环境对象
 	 *
 	 * 兼容三种挂载方式：
@@ -53,17 +64,22 @@
 	 * 取编辑器版本号字符串（如 "3.0.12" / "2.2.45.1"）
 	 *
 	 * 取不到时返回空字符串（调用方按「非 V3」处理），永不抛错。
+	 * 结果会被缓存（见 cachedVersion），因此本函数可以在循环里安全调用。
 	 *
 	 * @returns {string}
 	 */
 	function getEditorVersion() {
+		if (cachedVersion !== null) return cachedVersion;
 		try {
 			const edaObj = getEda();
 			if (!edaObj || !edaObj.sys_Environment || typeof edaObj.sys_Environment.getEditorCurrentVersion !== 'function') {
 				return '';
 			}
 			const version = edaObj.sys_Environment.getEditorCurrentVersion();
-			return version === null || version === undefined ? '' : String(version).trim();
+			const text = version === null || version === undefined ? '' : String(version).trim();
+			// 只缓存有效值，避免把「环境未就绪」的空结果永久固化
+			if (text) cachedVersion = text;
+			return text;
 		} catch (e) {
 			return '';
 		}
@@ -105,6 +121,26 @@
 	function getComponentsContainer(netlistObj) {
 		if (!netlistObj) return {};
 		return netlistObj.components ? netlistObj.components : netlistObj;
+	}
+
+	/**
+	 * HTML 转义（用于拼 innerHTML / 属性值）
+	 *
+	 * 覆盖 `& < > " '` 五个字符，既可用于文本节点也可用于属性值。
+	 * 此前各页面各写了一份，其中 PcbToSch 那份只转义了双引号，`&`/`<`/`>` 会漏，
+	 * 这里统一为唯一实现。
+	 *
+	 * @param {*} value - 任意值，null/undefined 返回空字符串
+	 * @returns {string}
+	 */
+	function escapeHtml(value) {
+		if (value === null || value === undefined) return '';
+		return String(value)
+			.replace(/&/g, '&amp;')
+			.replace(/</g, '&lt;')
+			.replace(/>/g, '&gt;')
+			.replace(/"/g, '&quot;')
+			.replace(/'/g, '&#039;');
 	}
 
 	/**
@@ -191,6 +227,7 @@
 		isV3: isV3,
 		isV2: isV2,
 		getComponentsContainer: getComponentsContainer,
+		escapeHtml: escapeHtml,
 		getNetlist: getNetlist,
 		setNetlist: setNetlist,
 	};

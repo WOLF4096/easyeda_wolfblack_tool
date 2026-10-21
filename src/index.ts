@@ -96,11 +96,6 @@ export async function CreateFootprint() {
 	eda.sys_IFrame.openIFrame('/iframe/CreateFootprint.html', 300, 100, 'CreateFootprint');
 }
 
-// 批量修改网络
-export async function NetReplace() {
-	eda.sys_IFrame.openIFrame('/iframe/NetReplace.html', 470, 640, 'NetReplace');
-}
-
 // 批量替换器件
 export async function ReplaceComponent() {
 	eda.sys_IFrame.openIFrame('/iframe/ReplaceComponent.html', 810, 480, 'ReplaceComponent');

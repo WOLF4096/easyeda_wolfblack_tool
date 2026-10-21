@@ -1,5 +1,5 @@
 (function() {
-        const { getNetlist, setNetlist } = window.WolfCommon;
+        const { getNetlist, setNetlist, escapeHtml } = window.WolfCommon;
 
         // ---------- 全局变量 ----------
         let currentNetlistRaw = null;      // 原始JLCEDA网表对象(深拷贝保留原始结构)
@@ -217,18 +217,7 @@
             adStatusSpan.innerText = `AD网表已导入`;
         }
         
-        // 辅助HTML转义
-        function escapeHtml(str) {
-            if (str === undefined || str === null) return '';
-            return String(str).replace(/[&<>]/g, function(m) {
-                if (m === '&') return '&amp;';
-                if (m === '<') return '&lt;';
-                if (m === '>') return '&gt;';
-                return m;
-            }).replace(/[\uD800-\uDBFF][\uDC00-\uDFFF]/g, function(c) {
-                return c;
-            });
-        }
+        // HTML 转义统一走 WolfCommon.escapeHtml（见 common.js）
         
         // ---------- 4. 核心更新逻辑: 根据adNetMap更新JLCEDA网表对象 (兼容pinInfoMap/pins) ----------
         function applyNetlistUpdateToObject(netlistObj, netMap) {

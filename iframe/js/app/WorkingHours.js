@@ -1,6 +1,8 @@
 // ==========================================
         // [1] 全局状态与基础配置
         // ==========================================
+        const { escapeHtml } = window.WolfCommon;
+
         let CURRENT_UUID = null;
         let CURRENT_NAME = '未命名工程';
         let GLOBAL_TODAY_TS = 0;
@@ -41,15 +43,7 @@
         // [2] 基础工具函数
         // ==========================================
         
-        // XSS 转义函数
-        const escapeHtml = (unsafe) => {
-            return (unsafe || '').toString()
-                 .replace(/&/g, "&amp;")
-                 .replace(/</g, "&lt;")
-                 .replace(/>/g, "&gt;")
-                 .replace(/"/g, "&quot;")
-                 .replace(/'/g, "&#039;");
-        };
+        // XSS 转义统一走 WolfCommon.escapeHtml（& < > " ' 全转义，与其它页面同一实现）
 
         function formatDuration(seconds) {
             if (!seconds) return '00:00:00';
@@ -1293,6 +1287,8 @@
             let hiddenSeries = new Set(); let chartInstance = null; let heatmapInstance = null; let globalCoreData = null; 
             let currentClusterSize = 1; let slotDataMap = new Map(); let sortedUuids = [];
 
+            // 注意：这一份是「导出报告」自带的内联脚本，导出文件必须能脱离本扩展独立运行，
+            // 因此不能依赖 WolfCommon，保留独立实现（与本文件其它地方用的公共版本语义一致）。
             const escapeHtml = (u) => (u||'').toString().replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#039;");
             const formatDuration = (sec) => { if (!sec) return '0:00:00'; const h = Math.floor(sec/3600); const m = Math.floor((sec%3600)/60); const s = Math.floor(sec%60); return h + ':' + m.toString().padStart(2, '0') + ':' + s.toString().padStart(2, '0'); };
             const formatFullDateTime = (ts) => { const d = new Date(ts); return d.getFullYear() + '/' + (d.getMonth() + 1) + '/' + d.getDate() + ' ' + d.getHours().toString().padStart(2, '0') + ':' + d.getMinutes().toString().padStart(2, '0'); };

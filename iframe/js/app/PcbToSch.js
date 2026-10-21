@@ -1,5 +1,5 @@
 // ---------- 全局状态 ----------
-		const { getEditorVersion, isV3, isV2 } = window.WolfCommon;
+		const { getEditorVersion, isV3, isV2, escapeHtml } = window.WolfCommon;
 
 		let zip = null;                  // 解压后的工程文件
 		let projectJson = null;          // project.json 内容
@@ -708,20 +708,18 @@
 				// 判断该组是否有符号：检查组内所有元件的 symbolUuid 是否都不为空
 				const hasSymbol = group.componentIndices.some(idx => components[idx] && components[idx].symbolUuid);
 
-				// 新增：安全转义双引号，防止属性截断
-				const escapeHtml = (str) => String(str || '').replace(/"/g, '&quot;');
-
+				// 转义统一走 WolfCommon.escapeHtml（& < > " ' 全转义，属性值与正文都可用）
 				const row = document.createElement('div');
 				row.className = 'grid-row';
 				row.setAttribute('data-group-key', group.key);
                 
 				// 修改后：前 5 个单元格均加上了 title 属性
 				row.innerHTML = `
-					<div class="row-cell" title="${escapeHtml(group.designatorDisplay)}">${group.designatorDisplay}</div>
-					<div class="row-cell" title="${escapeHtml(group.nameDisplay)}">${group.nameDisplay}</div>
-					<div class="row-cell" title="${escapeHtml(group.footprintName)}">${group.footprintName || ''}</div>
-					<div class="row-cell" title="${escapeHtml(group.deviceName)}">${group.deviceName || ''}</div>
-					<div class="row-cell" title="${escapeHtml(group.symbolName)}">${group.symbolName || ''}</div>
+					<div class="row-cell" title="${escapeHtml(group.designatorDisplay)}">${escapeHtml(group.designatorDisplay)}</div>
+					<div class="row-cell" title="${escapeHtml(group.nameDisplay)}">${escapeHtml(group.nameDisplay)}</div>
+					<div class="row-cell" title="${escapeHtml(group.footprintName)}">${escapeHtml(group.footprintName)}</div>
+					<div class="row-cell" title="${escapeHtml(group.deviceName)}">${escapeHtml(group.deviceName)}</div>
+					<div class="row-cell" title="${escapeHtml(group.symbolName)}">${escapeHtml(group.symbolName)}</div>
 					<div class="row-cell"><input class="manual-input" type="text" placeholder="指定..." data-group-key="${group.key}" value=""></div>
 				`;
 				tableRows.appendChild(row);
