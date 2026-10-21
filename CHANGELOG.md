@@ -9,6 +9,20 @@
 - 已知的 V4 适配待验证项：V4 的 PCB 坐标单位改为 mil（网格尺寸 ×10），`生成物理网络` 的点合并容差、`从PCB转原理图` 的坐标搬运需在 V4 实机复核
 - ⚠️ **V4 待处理**：V4 下 `sys_FileManager.setDocumentSource()` 整份写回会丢掉 `POURED`（铜皮已计算填充）行 —— 实测同一份原文写回后 45,557 → 43,119 字节，`POUR` 本体仍在、填充缓存消失（V2.2 逐字节一致）。受影响：`生成物理网络`（源码方式）、`从PCB转原理图` 等整份重写源码的功能；重算铜皮可恢复。处理方案待定
 
+## v1.17.11 `2026-10-21`
+> 四个 **仅 V4 出现** 的问题，全部通过 EDA 桥（127.0.0.1 实连 V4.1.78）实测定位，详见 `docs/V4问题分析报告-v1.17.11.md`
+
+- 修复 **批量替换器件：V4 报「未能在库中找到对应的器件」** —— `lib_Device.getByLcscIds()` 传单个 C 编号时，V4 实测返回**器件对象**（类型声明写的是数组），旧代码 `t.length > 0` 恒为 false，整个分支被跳过 → placeCount=0。新增 `pickDevice()` / `pickPrimitiveId()` 归一两种返回形态
+- 修复 **批量替换器件：V4 替换后器件其实没换**（属性被糊上、`component.uuid` 仍是旧器件）—— V4 源码里器件引用有两处：COMPONENT 行的 `attrs.DeviceName`（权威）与 ATTR `Device`（投影），**只改 ATTR 不生效**。现在两处一起写，`component.uuid` 才真正切换（实测换成 74LVC2G14GV_1 成功）
+- 修复 **批量替换器件：V4 下临时器件必须先删再写**导致目标器件 uuid 失效 —— V4 删除临时器件会**连带销毁它带入文档的器件定义**。现在 V3/V4 改为「先写源码、再删临时器件」，并补按坐标兜底清理 + 关闭窗口时清理
+- 修复 **图片转填充：V4 报「无法创建填充图元」** —— 图像的 `path` 是**子路径数组**（二维码有成百上千个轮廓），`pcb_MathPolygon.createPolygon()` 只接受**单条扁平路径**，传嵌套数组直接返回 `undefined`。改用 `createComplexPolygon()`（实测单轮廓/5 轮廓都成功）
+- 修复 **填充转图片：V4 选不中填充、删不掉源图元** —— V4 填充图元的 `primitiveType` 是 **`Fill`**（不是 `Region`），旧过滤条件漏掉；且 `pcb_PrimitiveRegion.delete()` 删填充会返回 false 却**不报错**。现在按真实类型分派删除
+- 新增 批量替换网络：**匹配不区分大小写**（网表里的大小写与 Excel 常不一致）
+- 新增 批量替换网络：「执行替换」左侧 **`转大写` 复选框（默认勾选）**，替换时把新网络名里的英文字母转大写（部分 EDA 版本对小写网络名支持不友好）
+- 修复 **从 PCB 转原理图：V4 导线正常、符号全丢** —— 生成的 COMPONENT 行**缺 `attrs`**（`Symbols`/`Devices`/`Footprints`/… 7 个键）。V4 下缺 `attrs` 时 `setDocumentSource` 仍返回 true，但器件被**静默丢弃**，只剩导线；另外 ATTR 行字段不全、缺 `Channel ID` 会导致整份源码被拒写。现在按 EDA 自身写盘的形状生成完整行
+- 优化 从 PCB 转原理图：写入后**清点器件数**，源码写入成功但器件为 0 时明确提示（不再假报「写入成功」）
+- 工程化 `npm test` 124 用例全绿；产物 `build/dist/wolfblack-tool_v1.17.11.eext`
+
 ## v1.17.10 `2026-10-21`
 - 修复 **导入图片 / 导入二维码 放置时报 `PcbApiError: [VALUE_OUT_OF_RANGE] width: 图像宽度 width=2275.00 必须为正数`**：根因是把 `toFixed(2)` 的**字符串**当长度传给了 `pcb_PrimitiveObject.create` / `pcb_PrimitiveImage.create` / `pcb_MathPolygon.convertImageToComplexPolygon`，而这三个 API 的 `width`/`height` 声明是 `number`，V4 按严格类型校验会把 `"2275.00"` 判为非法值（V2.2 内部强转，所以历史上没暴露）。5 处调用点全部改为传数字
 - 新增 **`WolfCommon.toApiLength(value, digits)`**：把长度规整成 API 需要的 number（默认两位小数）；极小非零值（如 `0.001`）不会被舍成 `0` 再被判"非正数"，无法解析时返回 `NaN` 交给调用方校验。新增 4 个用例，`npm test` **120 → 124 全绿**

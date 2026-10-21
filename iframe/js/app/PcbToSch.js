@@ -481,10 +481,24 @@
 				const endTime = Date.now();
 				const elapsed = ((endTime - startTime) / 1000).toFixed(1);
 
-				if (isSuccess) {
-					updateProgress(100, `写入成功！耗时${elapsed}秒`);
+				// 写入自检：V4 的 setDocumentSource 有可能"返回 true 但器件没生成"
+				// （COMPONENT 行缺 attrs 时就是这样：导线在、符号全丢），必须真的数一遍
+				let placedCount = 0;
+				try {
+					const comps = await eda.sch_PrimitiveComponent.getAll();
+					placedCount = Array.isArray(comps) ? comps.length : 0;
+				} catch (e) {
+					logger.warn('写入后清点器件失败（可忽略）', e);
+				}
+				logger.debug(`[Debug] 写入返回 ${isSuccess}，当前原理图器件数 ${placedCount}`);
+
+				if (isSuccess && placedCount > 0) {
+					updateProgress(100, `写入成功！耗时${elapsed}秒，器件 ${placedCount} 个`);
 					eda.sys_Message.showToastMessage('写入成功', 'success');
 					// await eda.sch_Document.importChanges();//完成后从PCB导入变更
+				} else if (isSuccess && placedCount === 0) {
+					updateProgress(100, `源码已写入，但没有生成任何器件（耗时${elapsed}秒）`);
+					eda.sys_Message.showToastMessage('源码已写入，但器件没有生成：原理图页可能有旧内容，建议新建一个空白原理图页后重新写入', 'error');
 				} else {
 					updateProgress(100, `写入失败！耗时${elapsed}秒`);
 					eda.sys_Message.showToastMessage('写入失败', 'error');
@@ -1298,6 +1312,61 @@
 				// CANVAS
 				lines.push(`{"type":"CANVAS","ticket":${idCounter++},"id":"CANVAS"}||{"originX":0,"originY":0}|`);
 
+				// ---------- V4 实测得到的三条硬约束（写错任何一条，符号都会"凭空消失"） ----------
+				// 1. COMPONENT 行**必须带 attrs**（Symbols/Devices/Footprints/... 这 7 个键）。
+				//    缺了 attrs，setDocumentSource 仍返回 true，但器件会被静默丢弃 →
+				//    表现就是「导线都在、符号一个都没有」。
+				// 2. ATTR 行**必须字段齐全**（x/y/rotation/color/.../zIndex 都写上），
+				//    只写 parentId/key/value 会让整份源码写入直接返回 false。
+				// 3. 每个器件**必须有一条 `Channel ID` 属性**（空串即可），否则同样整份拒写。
+				// 下面两个小工具就是按 EDA 自己写盘的形状生成行，别再简化。
+				const schCompAttrs = () => ({
+					Footprints: '[]',
+					Devices: '[]',
+					DeviceName: null,
+					FootprintName: null,
+					pinClass: {},
+					differentialPairClass: {},
+					Symbols: '[]',
+				});
+				const schComponentLine = (partId, x, y, rotation) => {
+					const ticket = idCounter++;
+					const body = {
+						partId: partId,
+						x: x,
+						y: y,
+						rotation: rotation || 0,
+						isMirror: false,
+						attrs: schCompAttrs(),
+						zIndex: ticket,
+					};
+					return { id: 'e' + ticket, line: '{"type":"COMPONENT","ticket":' + ticket + ',"id":"e' + ticket + '"}||' + JSON.stringify(body) + '|' };
+				};
+				const schAttrLine = (parentId, key, value, extra) => {
+					const e = extra || {};
+					const ticket = idCounter++;
+					const body = {
+						x: e.x === undefined ? null : e.x,
+						y: e.y === undefined ? null : e.y,
+						rotation: e.rotation === undefined ? null : e.rotation,
+						color: null,
+						fontFamily: null,
+						fontSize: null,
+						fontWeight: null,
+						italic: null,
+						underline: null,
+						align: null,
+						value: value === undefined ? null : value,
+						keyVisible: e.keyVisible === undefined ? null : e.keyVisible,
+						valueVisible: e.valueVisible === undefined ? null : e.valueVisible,
+						key: key,
+						fillColor: null,
+						parentId: parentId,
+						zIndex: ticket,
+					};
+					return '{"type":"ATTR","ticket":' + ticket + ',"id":"e' + ticket + '"}||' + JSON.stringify(body) + '|';
+				};
+
 				// 当前绘制位置
 				// let currentY = startY;
 				let currentTopY = startY;
@@ -1314,25 +1383,30 @@
 						items.forEach(comp => {
 							const partCount = comp.partCount || 1;
 							for (let partIdx = 0; partIdx < partCount; partIdx++) {
-								const compTicket = idCounter++;
-								const compId = 'e' + compTicket;
 								const symbolName = comp.symbolName || 'Unknown';
 								const compName = symbolPinsDatabase[comp.symbolUuid][partIdx].name;;
 								// COMPONENT 行
 								comp.y = comp.y + 10;
 								const outY = yvalue ? -comp.y : comp.y;
-								lines.push('{"type":"COMPONENT","ticket":' + compTicket + ',"id":"' + compId + '"}||{"partId":"' + compName + '","x":' + comp.x + ',"y":' + outY + ',"rotation":0}|');
+								const compLine = schComponentLine(compName, comp.x, outY, 0);
+								const compId = compLine.id;
+								lines.push(compLine.line);
 
 								// Device 属性
-								lines.push(`{"type":"ATTR","ticket":${idCounter++},"id":"e${idCounter-1}"}||{"parentId":"${compId}","key":"Device","value":"${comp.deviceUuid || ''}"}|`);
+								lines.push(schAttrLine(compId, 'Device', comp.deviceUuid || ''));
 								// Symbol 属性
-								lines.push(`{"type":"ATTR","ticket":${idCounter++},"id":"e${idCounter-1}"}||{"parentId":"${compId}","key":"Symbol","value":"${comp.symbolUuid || ''}"}|`);
+								lines.push(schAttrLine(compId, 'Symbol', comp.symbolUuid || ''));
 								// Unique ID 属性
-								lines.push(`{"type":"ATTR","ticket":${idCounter++},"id":"e${idCounter-1}"}||{"parentId":"${compId}","key":"Unique ID","value":"${comp.uniqueId || ''}"}|`);
+								lines.push(schAttrLine(compId, 'Unique ID', comp.uniqueId || ''));
 								// Designator 属性（带坐标偏移）
-								lines.push(`{"type":"ATTR","ticket":${idCounter++},"id":"e${idCounter-1}"}||{"parentId":"${compId}","key":"Designator","value":"${comp.designator || ''}","rotation":0}|`);
+								lines.push(schAttrLine(compId, 'Designator', comp.designator || '', { rotation: 0, keyVisible: false, valueVisible: true }));
 								// Name 属性（带坐标偏移）
-								lines.push(`{"type":"ATTR","ticket":${idCounter++},"id":"e${idCounter-1}"}||{"parentId":"${compId}","key":"Name","value":"${comp.name || ''}","rotation":0}|`);
+								lines.push(schAttrLine(compId, 'Name', comp.name || '', { rotation: 0, keyVisible: false, valueVisible: true }));
+								// Channel ID / Group ID / Reuse Block：EDA 自己写盘时每个器件都有，
+								// 其中 Channel ID 缺失会导致整份源码被拒写（V4 实测）
+								lines.push(schAttrLine(compId, 'Channel ID', ''));
+								lines.push(schAttrLine(compId, 'Group ID', ''));
+								lines.push(schAttrLine(compId, 'Reuse Block', ''));
 								// 新增：生成导线
 								if (genWire) {
 									const wireLines = generateWires(comp, compId, comp.x, outY, version, wireLength, partIdx);
@@ -1402,20 +1476,24 @@
 								minYThisRow = absoluteBottomY;
 							}
 
-							// 生成元件（V3 格式）
-							const compTicket = idCounter++;
-							const compId = 'e' + compTicket;
+							// 生成元件（V3/V4 格式）
 							const symbolName = comp.symbolName || 'Unknown';
 							const compName = symbolPinsDatabase[comp.symbolUuid][partIdx].name;;
 							const outY = yvalue ? -compY : compY;
-							lines.push('{"type":"COMPONENT","ticket":' + compTicket + ',"id":"' + compId + '"}||{"partId":"' + compName + '","x":' + compX + ',"y":' + outY + ',"rotation":0}|');
+							const compLine = schComponentLine(compName, compX, outY, 0);
+							const compId = compLine.id;
+							lines.push(compLine.line);
 
 							// 属性
-							lines.push('{"type":"ATTR","ticket":' + (idCounter++) + ',"id":"e' + (idCounter-1) + '"}||{"parentId":"' + compId + '","key":"Device","value":"' + (comp.deviceUuid || '') + '"}|');
-							lines.push('{"type":"ATTR","ticket":' + (idCounter++) + ',"id":"e' + (idCounter-1) + '"}||{"parentId":"' + compId + '","key":"Symbol","value":"' + (comp.symbolUuid || '') + '"}|');
-							lines.push('{"type":"ATTR","ticket":' + (idCounter++) + ',"id":"e' + (idCounter-1) + '"}||{"parentId":"' + compId + '","key":"Unique ID","value":"' + (comp.uniqueId || '') + '"}|');
-							lines.push('{"type":"ATTR","ticket":' + (idCounter++) + ',"id":"e' + (idCounter-1) + '"}||{"parentId":"' + compId + '","key":"Designator","value":"' + (comp.designator || '') + '","rotation":0}|');
-							lines.push('{"type":"ATTR","ticket":' + (idCounter++) + ',"id":"e' + (idCounter-1) + '"}||{"parentId":"' + compId + '","key":"Name","value":"' + (comp.name || '') + '","rotation":0}|');
+							lines.push(schAttrLine(compId, 'Device', comp.deviceUuid || ''));
+							lines.push(schAttrLine(compId, 'Symbol', comp.symbolUuid || ''));
+							lines.push(schAttrLine(compId, 'Unique ID', comp.uniqueId || ''));
+							lines.push(schAttrLine(compId, 'Designator', comp.designator || '', { rotation: 0, keyVisible: false, valueVisible: true }));
+							lines.push(schAttrLine(compId, 'Name', comp.name || '', { rotation: 0, keyVisible: false, valueVisible: true }));
+							// Channel ID 缺失会让整份源码被拒写；Group ID / Reuse Block 与 EDA 自身写盘保持一致
+							lines.push(schAttrLine(compId, 'Channel ID', ''));
+							lines.push(schAttrLine(compId, 'Group ID', ''));
+							lines.push(schAttrLine(compId, 'Reuse Block', ''));
 							
 							// 新增：生成导线
 							if (genWire) {

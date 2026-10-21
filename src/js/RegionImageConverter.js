@@ -27,9 +27,12 @@ export const ImageFillConverter = {
                 return;
             }
 
-            const targets = components.filter(c => c.primitiveType === 'Image' || c.primitiveType === 'Region');
+            const targets = components.filter(c => c.primitiveType === 'Image' || c.primitiveType === 'Fill' || c.primitiveType === 'Region');
             if (targets.length === 0) {
-                console.log('选中的图元中没有 Image 或 Region');
+                // V4 实测：填充图元的 primitiveType 是 'Fill'（不是 'Region'）；
+                // 彩色图片（二进制内嵌对象）是 'Object'，源码里没有 path 只有 blob 地址，无法转填充
+                console.warn('选中的图元中没有 Image / Fill（彩色图片是 Object，暂不支持转换）');
+                eda.sys_Message.showToastMessage('请先选中「图片」或「填充」图元（彩色图片/二维码彩色图暂不支持）');
                 return;
             }
 
@@ -38,12 +41,12 @@ export const ImageFillConverter = {
 
             for (const item of targets) {
                 const isImage = item.primitiveType === 'Image';
-                const isRegion = item.primitiveType === 'Region';
+                const isFill = item.primitiveType === 'Fill' || item.primitiveType === 'Region';
 
                 let targetType = mode;
                 if (mode === 'Toggle') {
                     targetType = isImage ? 'Fill' : 'Image';
-                } else if ((mode === 'Fill' && isRegion) || (mode === 'Image' && isImage)) {
+                } else if ((mode === 'Fill' && isFill) || (mode === 'Image' && isImage)) {
                     continue; 
                 }
 
@@ -51,6 +54,7 @@ export const ImageFillConverter = {
                 let extractedData = this._extractPath(segments, item.primitiveId);
                 if (!extractedData || !extractedData.path) {
                     console.warn(`跳过：无法从源码提取图元 [${item.primitiveId}] 的路径数据`);
+                    eda.sys_Message.showToastMessage(`图元 [${item.primitiveId}] 源码里没有路径数据，无法转换`);
                     continue;
                 }
 
@@ -82,7 +86,7 @@ export const ImageFillConverter = {
                             let jsonStr = parts[1];
                             if (jsonStr.endsWith('|')) jsonStr = jsonStr.slice(0, -1);
                             const data = JSON.parse(jsonStr);
-                            if (data.path) {
+                            if (Array.isArray(data.path)) {
                                 return {
                                     path: data.path,
                                     angle: data.angle || 0,
@@ -342,11 +346,34 @@ export const ImageFillConverter = {
 
             if (newImage) {
                 console.log(`成功将 Region [${item.primitiveId}] 转换为 Image`);
-                await eda.pcb_PrimitiveRegion.delete(item.primitiveId);
+                await this._deleteSource(item);
+            } else {
+                eda.sys_Message.showToastMessage(`图元 [${item.primitiveId}] 转换为 Image 失败`);
             }
         } catch (err) {
 			eda.sys_Message.showToastMessage(`图元 [${item.primitiveId}] 转换为 Image 失败:`);
             console.error(`图元 [${item.primitiveId}] 转换为 Image 失败:`, err);
+        }
+    },
+
+    /**
+     * 删除被转换的源图元
+     *
+     * V4 实测：填充图元的 primitiveType 是 `Fill`，只能用 `pcb_PrimitiveFill.delete` 删；
+     * 用 `pcb_PrimitiveRegion.delete` 删填充会返回 false 而且**不会报错**（图元留在原地）。
+     */
+    async _deleteSource(item) {
+        const type = item.primitiveType;
+        try {
+            if (type === 'Image') {
+                await eda.pcb_PrimitiveImage.delete(item.primitiveId);
+            } else if (type === 'Fill') {
+                await eda.pcb_PrimitiveFill.delete(item.primitiveId);
+            } else if (type === 'Region') {
+                await eda.pcb_PrimitiveRegion.delete(item.primitiveId);
+            }
+        } catch (err) {
+            console.warn(`删除源图元 [${item.primitiveId}](${type}) 失败:`, err);
         }
     },
 
@@ -380,7 +407,16 @@ export const ImageFillConverter = {
             }
 
             // 5. 生成最终的填充
-            const polygon = await eda.pcb_MathPolygon.createPolygon(finalPath);
+            // ⚠️ V4 实测：图片的 path 是「子路径数组」（多轮廓，二维码就是成百上千个轮廓），
+            // `createPolygon()` 只吃单条扁平路径，传嵌套数组会直接返回 undefined，
+            // 接着 Fill.create 就抛「无法创建填充图元，可能是传入的参数不正确」。
+            // 必须用 `createComplexPolygon()`（等价于旧版能接受的嵌套形态）。
+            const polygon = await this._toPolygon(finalPath);
+            if (!polygon) {
+                eda.sys_Message.showToastMessage(`图元 [${item.primitiveId}] 转换为 Fill 失败：路径无法构成填充`);
+                console.warn('createComplexPolygon 返回空，path 片段:', JSON.stringify(finalPath).slice(0, 200));
+                return;
+            }
             const newFill = await eda.pcb_PrimitiveFill.create(
                 item.layer, 
                 polygon,               
@@ -392,12 +428,35 @@ export const ImageFillConverter = {
 
             if (newFill) {
                 console.log(`成功将 Image [${item.primitiveId}] 转换为 Region(Fill)`);
-                await eda.pcb_PrimitiveImage.delete(item.primitiveId);
+                await this._deleteSource(item);
             }
         } catch (err) {
             eda.sys_Message.showToastMessage(`图元 [${item.primitiveId}] 转换为 Fill 失败`);
             console.error(`图元 [${item.primitiveId}] 转换为 Fill 失败:`, err);
         }
+    },
+
+    /**
+     * path（子路径数组）→ 复杂多边形对象
+     *
+     * 优先 `createComplexPolygon`（支持多轮廓）；个别老版本没有该方法时，
+     * 退化成「单轮廓用 createPolygon(path[0])」——多轮廓下会丢失内部挖孔，但至少不报错。
+     */
+    async _toPolygon(path) {
+        if (typeof eda.pcb_MathPolygon.createComplexPolygon === 'function') {
+            const cp = await eda.pcb_MathPolygon.createComplexPolygon(path);
+            if (cp) return cp;
+            // 有的版本对"只有一条轮廓"的嵌套数组也挑剔，再试一次扁平形态
+            if (path.length === 1) {
+                return (await eda.pcb_MathPolygon.createComplexPolygon(path[0])) || null;
+            }
+            return null;
+        }
+        if (path.length === 1) {
+            return (await eda.pcb_MathPolygon.createPolygon(path[0])) || null;
+        }
+        console.warn('当前 EDA 版本没有 createComplexPolygon，多轮廓填充可能丢挖孔');
+        return (await eda.pcb_MathPolygon.createPolygon(path[0])) || null;
     }
 };
 

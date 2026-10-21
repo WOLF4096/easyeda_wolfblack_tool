@@ -61,6 +61,29 @@
 				margin-left: 8px;
 			}
 
+			.header-actions {
+				display: flex;
+				align-items: center;
+				gap: 10px;
+				flex-shrink: 0;
+			}
+
+			.upper-opt {
+				display: flex;
+				align-items: center;
+				gap: 4px;
+				font-size: 12px;
+				color: var(--vscode-text);
+				cursor: pointer;
+				user-select: none;
+				white-space: nowrap;
+			}
+
+			.upper-opt input[type='checkbox'] {
+				cursor: pointer;
+				margin: 0;
+			}
+
 			.execute-btn {
 				background: var(--vscode-button-bg);
 				color: white;
@@ -199,11 +222,17 @@
 		<div class="container">
 			<div class="header">
 				<h1>网络修改 & 查询工具 <span id="verLabel" class="version-info"></span></h1>
-				<button id="executeBtn" class="execute-btn">执行替换</button>
+				<div class="header-actions">
+					<label class="upper-opt" title="替换时把新网络名里的英文字母转成大写（部分 EDA 版本对小写网络名支持不友好）">
+						<input type="checkbox" id="toUpper" checked />
+						转大写
+					</label>
+					<button id="executeBtn" class="execute-btn">执行替换</button>
+				</div>
 			</div>
 			<div class="content">
 				<div class="input-section">
-					<label for="csvInput">替换规则，从 Excel 复制粘贴：</label>
+					<label for="csvInput">替换规则，从 Excel 复制粘贴（旧网络名匹配不区分大小写）：</label>
 					<textarea id="csvInput" placeholder="旧网络名称	新网络名称&#10;(直接从Excel复制粘贴，使用Tab分隔)"></textarea>
 				</div>
 

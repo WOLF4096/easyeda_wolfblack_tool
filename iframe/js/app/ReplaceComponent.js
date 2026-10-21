@@ -3,10 +3,20 @@ if (!WC) {
 	(document.body || document.documentElement).innerHTML = '<div style="padding:24px;font:14px/1.6 sans-serif;color:#f28b82">公共模块 common.js 未加载，请重新安装扩展</div>';
 	throw new Error('[狼黑工具] 公共模块 common.js 未加载');
 }
-const { getNetlist, setNetlist, getComponentsContainer, logger } = WC;
+const { getNetlist, setNetlist, getComponentsContainer, isModern, logger } = WC;
 
         // 核心数据模型
         let groupedData = [];
+
+        /**
+         * 暂存「阶段0 为了读属性而放到 (-10000,-10000) 的临时器件」
+         *
+         * ⚠️ V4 实测：**删掉临时器件会连带销毁它带入文档的器件定义**（源码里那个
+         * `DeviceName` / `Device` 的 uuid 直接从文档里消失）。所以必须先写源码、
+         * 让目标器件的 DeviceName 指向它，**再**删临时器件；否则写进去的是一个
+         * 不存在的器件 uuid，EDA 只会把属性糊上去、器件本身换不掉。
+         */
+        let pendingTempIds = [];
 
 		// --- 新增：状态栏管理器 ---
         const statusBar = {
@@ -124,6 +134,95 @@ const { getNetlist, setNetlist, getComponentsContainer, logger } = WC;
             }
 
             return result; // 比如原本就是 "10K" 这种普通字符串，直接原样返回
+        };
+
+        // ---------- 跨版本取值工具（V4 实测差异集中在这里） ----------
+
+        /**
+         * 取 `lib_Device.getByLcscIds()` 的器件
+         *
+         * 类型声明写的是「传单个编号 → 返回数组」，但 **V4.1.78 实测返回单个器件对象**
+         * （传数组才返回数组）。以前写成 `t.length > 0`，在 V4 下 `length` 是 undefined，
+         * 整个分支被跳过 → placeCount 恒为 0 → 报「未能在库中找到对应的器件」。
+         */
+        const pickDevice = (t) => (Array.isArray(t) ? t[0] : t) || null;
+
+        /**
+         * 取 `pcb_PrimitiveComponent.create()` 返回的图元 ID
+         * V3/V4 返回图元对象（带 primitiveId / getState_PrimitiveId），V2 返回 ID 数组或字符串
+         */
+        const pickPrimitiveId = (h) => {
+            if (!h) return null;
+            if (Array.isArray(h)) return h.length ? pickPrimitiveId(h[0]) : null;
+            if (typeof h === 'string') return h;
+            if (h.primitiveId) return h.primitiveId;
+            if (typeof h.getState_PrimitiveId === 'function') return h.getState_PrimitiveId();
+            return null;
+        };
+
+        /**
+         * 取器件 UUID（源码 ATTR `Device` 里写的就是这个值）
+         * V2：`component.uuid` 是字符串；
+         * V4：`component.uuid` 是对象 `{ name, source, uuid }`（外壳是 JSON 化的 DeviceName），
+         *     直接写对象会变成 `[object Object]`，必须取里面的 `.uuid`
+         */
+        const getDeviceUuid = (comp) => {
+            const u = comp && comp.component ? comp.component.uuid : null;
+            if (!u) return '';
+            return typeof u === 'string' ? u : (u.uuid || '');
+        };
+
+        /** 取封装 UUID（源码 ATTR `Footprint` 写的就是这个值），V4 下 `footprint.uuid` 仍是字符串 */
+        const getFootprintUuid = (comp) => {
+            const f = comp && comp.footprint ? comp.footprint.uuid : null;
+            if (!f) return '';
+            return typeof f === 'string' ? f : (f.uuid || '');
+        };
+
+        /** 取封装名，按 V4(对象) / V2(字符串或 otherProperty) 逐级兜底 */
+        const getFootprintName = (comp) => {
+            if (!comp) return '';
+            const f = comp.footprint;
+            if (f && typeof f === 'object' && f.name) return f.name;
+            if (typeof f === 'string' && f) return f;
+            return (comp.otherProperty && comp.otherProperty['Footprint']) || '';
+        };
+
+        /**
+         * 取 V4 需要的 `DeviceName` 字面量（COMPONENT 行 `attrs.DeviceName` 的字符串形态）
+         *
+         * V4 源码里器件的**权威引用**在 COMPONENT 行的 `attrs.DeviceName`（`{"name","source","uuid"}` 的 JSON 字符串），
+         * ATTR `Device` 只是它的投影。实测：只改 ATTR Device 时，EDA 会把新器件的属性/封装糊上来，
+         * 但 `component.uuid` 仍是旧器件 —— 器件根本没换，还会留下"器件名与封装对不上"的脏状态。
+         * 必须两处一起改。
+         *
+         * @returns {string|null} V2/V3（component.uuid 是字符串）返回 null，表示不需要改这一行
+         */
+        const getDeviceNameJson = (comp) => {
+            const u = comp && comp.component ? comp.component.uuid : null;
+            if (!u || typeof u !== 'object') return null;
+            return JSON.stringify({ name: u.name || '', source: u.source || '', uuid: u.uuid || '' });
+        };
+
+        /**
+         * 删除为「读属性」而临时放置的器件
+         *
+         * 同时按坐标兜底：源码写回后 EDA 会重建文档，图元 id 有可能变，
+         * 只按 id 删会漏（漏了就在 (-10000,-10000) 留一堆垃圾器件）。
+         */
+        async function cleanupTempComponents() {
+            const ids = pendingTempIds.slice();
+            pendingTempIds = [];
+            const targets = new Set(ids);
+            try {
+                const all = await eda.pcb_PrimitiveComponent.getAll();
+                for (const c of all) {
+                    if (Math.round(c.x) === -10000 && Math.round(c.y) === -10000) targets.add(c.primitiveId);
+                }
+                if (targets.size > 0) await eda.pcb_PrimitiveComponent.delete(Array.from(targets));
+            } catch (err) {
+                logger.warn('清理临时器件失败（画布 (-10000,-10000) 附近可能残留）', err);
+            }
         };
 
         // 修改：从原始画布元件数据中提取属性
@@ -456,19 +555,15 @@ const { getNetlist, setNetlist, getComponentsContainer, logger } = WC;
                 
                 await Promise.all(chunk.map(async (supplierId) => {
                     try {
-                        const t = await eda.lib_Device.getByLcscIds(supplierId);
-                        if (t && t.length > 0) {
+                        // V4：单个编号返回的是器件对象而不是数组，必须用 pickDevice 归一
+                        const dev = pickDevice(await eda.lib_Device.getByLcscIds(supplierId));
+                        if (dev && dev.uuid) {
                             const h = await eda.pcb_PrimitiveComponent.create(
-                                { 'libraryUuid': sysLibUuid, 'uuid': t[0].uuid },
+                                { 'libraryUuid': sysLibUuid, 'uuid': dev.uuid },
                                 1, -10000, -10000, 0, false
                             );
 
-                            let createdId = null;
-                            if (h) {
-                                if (Array.isArray(h) && h.length > 0) createdId = h[0];
-                                else if (typeof h === 'string') createdId = h;
-                                else if (h.primitiveId) createdId = h.primitiveId;
-                            }
+                            const createdId = pickPrimitiveId(h);
 
                             if (createdId) {
                                 autoFetchMap.set(supplierId, createdId);
@@ -478,6 +573,7 @@ const { getNetlist, setNetlist, getComponentsContainer, logger } = WC;
                             placeCount++;
                         }
                     } catch (err) {
+                        logger.warn(`预载器件 ${supplierId} 失败，转为手动兜底`, err);
                         manualPendingIds.add(supplierId); 
                         placeCount++;
                     }
@@ -535,16 +631,15 @@ const { getNetlist, setNetlist, getComponentsContainer, logger } = WC;
 
                                 const fpInfo = pInfo ? pInfo.device_info.footprint_info : null;
                                 const finalFootprint = (fpInfo && (fpInfo.display_title || fpInfo.title)) || 
-                                                    (enrichedSel.otherProperty && enrichedSel.otherProperty.Footprint) || 
-                                                    (enrichedSel.footprint && enrichedSel.footprint.name) || 
+                                                    getFootprintName(enrichedSel) || 
                                                     "未知封装";
 
                                 groupedData.forEach(g => {
                                     if (g.selected && g.target.supplierId === supplierId) {
                                         g.target.name = finalName;
                                         g.target.footprint = finalFootprint;
-                                        g.target.footprintuuid = enrichedSel.footprint ? enrichedSel.footprint.uuid : null;
-                                        g.target.uuid = enrichedSel.component ? enrichedSel.component.uuid : null;
+                                        g.target.footprintuuid = getFootprintUuid(enrichedSel);
+                                        g.target.uuid = getDeviceUuid(enrichedSel);
                                         g.ComponentsTarget = enrichedSel;
                                     }
                                 });
@@ -552,7 +647,7 @@ const { getNetlist, setNetlist, getComponentsContainer, logger } = WC;
                                 toDeleteIds.push(pId); 
                             }
                         } catch (getErr) {
-                        	logger.warn('读取器件属性失败，已跳过该器件', e);
+                        	logger.warn('读取器件属性失败，已跳过该器件', getErr);
                         }
 
                         // 更新阶段 1 的进度条
@@ -566,8 +661,14 @@ const { getNetlist, setNetlist, getComponentsContainer, logger } = WC;
 
                 const cleanupStart = performance.now();
                 if (toDeleteIds.length > 0) {
-                    try { await eda.pcb_PrimitiveComponent.delete(toDeleteIds); } catch (delErr) {
-                    	logger.error('批量删除原器件失败，可能残留旧器件', e);
+                    if (isModern()) {
+                        // V4/V3：器件定义跟着临时器件走，先留着，等源码写回后再删
+                        // （见 pendingTempIds 的注释；立刻删会让后面写进源码的器件 uuid 失效）
+                        for (const id of toDeleteIds) pendingTempIds.push(id);
+                    } else {
+                        try { await eda.pcb_PrimitiveComponent.delete(toDeleteIds); } catch (delErr) {
+                            logger.error('批量删除原器件失败，可能残留旧器件', delErr);
+                        }
                     }
                 }
                 renderTable();
@@ -630,16 +731,15 @@ const { getNetlist, setNetlist, getComponentsContainer, logger } = WC;
 
                             const fpInfo = pInfo ? pInfo.device_info.footprint_info : null;
                             const finalFootprint = (fpInfo && (fpInfo.display_title || fpInfo.title)) || 
-                                                (sel.otherProperty && sel.otherProperty.Footprint) || 
-                                                (sel.footprint && sel.footprint.name) || 
+                                                getFootprintName(sel) || 
                                                 "未知封装";
                             
                             groupedData.forEach(g => {
                                 if (g.selected && g.target.supplierId === selSupplierId) {
                                     g.target.name = finalName;                 
                                     g.target.footprint = finalFootprint;       
-                                    g.target.footprintuuid = sel.footprint ? sel.footprint.uuid : null; 
-                                    g.target.uuid = sel.component ? sel.component.uuid : null;          
+                                    g.target.footprintuuid = getFootprintUuid(sel);
+                                    g.target.uuid = getDeviceUuid(sel);
                                     g.ComponentsTarget = sel; 
                                 }
                             });
@@ -656,8 +756,12 @@ const { getNetlist, setNetlist, getComponentsContainer, logger } = WC;
                     
                     const toDeleteIds = selectedItems.map(item => item.primitiveId).filter(id => id);
                     if (toDeleteIds.length > 0) {
-                        try { await eda.pcb_PrimitiveComponent.delete(toDeleteIds); } catch (delErr) {
-                        	logger.error('批量删除原器件失败，可能残留旧器件', e);
+                        if (isModern()) {
+                            for (const id of toDeleteIds) pendingTempIds.push(id);
+                        } else {
+                            try { await eda.pcb_PrimitiveComponent.delete(toDeleteIds); } catch (delErr) {
+                                logger.error('批量删除原器件失败，可能残留旧器件', delErr);
+                            }
                         }
                     }
                     renderTable();
@@ -749,13 +853,17 @@ const { getNetlist, setNetlist, getComponentsContainer, logger } = WC;
                             preserve3D: group.options.preserve3D,
                             sourceComp: sourceComp,
                             targetComp: targetComp,
-                            targetDeviceUuid: targetComp.component ? targetComp.component.uuid : "",
+                            // V4 的 component.uuid 是对象，源码 ATTR 里要写的是里面的字符串 uuid
+                            targetDeviceUuid: getDeviceUuid(targetComp),
+                            // V4 还要改 COMPONENT 行的 attrs.DeviceName（器件引用的权威字段）
+                            targetDeviceNameJson: getDeviceNameJson(targetComp),
                             sourceName: sourceComp.name || "",
-                            targetName: targetComp.name || "",
-                            sourceFootprintUuid: sourceComp.footprint ? sourceComp.footprint.uuid : "",
-                            targetFootprintUuid: targetComp.footprint ? targetComp.footprint.uuid : "",
+                            // 用解析后的名称（targetComp.name 在 V4 里是 "={Manufacturer Part}" 这种模板）
+                            targetName: group.target.name || targetComp.name || "",
+                            sourceFootprintUuid: getFootprintUuid(sourceComp),
+                            targetFootprintUuid: getFootprintUuid(targetComp),
                             designator: group.designators[index],
-                            sourceFootprintName: (sourceComp.footprint && sourceComp.footprint.name) || (sourceComp.otherProperty && sourceComp.otherProperty["Footprint"]) || ""
+                            sourceFootprintName: getFootprintName(sourceComp)
                         });
                         replaceCount++;
                     });
@@ -818,6 +926,17 @@ const { getNetlist, setNetlist, getComponentsContainer, logger } = WC;
                             
                             if (parts.length === 2) {
                                 const head = JSON.parse(parts[0]);
+                                // V4：器件的权威引用在 COMPONENT 行的 attrs.DeviceName，
+                                // 只改 ATTR Device 换不掉器件（属性会被糊上去，器件仍是旧的）
+                                if (head.type === "COMPONENT" && targetMap.has(head.id)) {
+                                    const action = targetMap.get(head.id);
+                                    if (action.targetDeviceNameJson) {
+                                        const tail = JSON.parse(parts[1]);
+                                        tail.attrs = tail.attrs || {};
+                                        tail.attrs.DeviceName = action.targetDeviceNameJson;
+                                        return JSON.stringify(head) + '||' + JSON.stringify(tail) + (hasTrailingPipe ? '|' : '');
+                                    }
+                                }
                                 if (head.type === "ATTR") {
                                     const tail = JSON.parse(parts[1]);
                                     const parentId = tail.parentId;
@@ -859,6 +978,10 @@ const { getNetlist, setNetlist, getComponentsContainer, logger } = WC;
                 // 4. 写回修改后的源码
                 logger.debug("[Debug] 源码处理完成，开始写入...");
                 await eda.sys_FileManager.setDocumentSource(modifiedLines.join('\n'));
+
+                // 4.1 源码写成功后，目标器件已经被正式引用，这时才能删临时器件
+                //     （顺序反了会把 DeviceName 指向的器件定义一起删掉，见 pendingTempIds 注释）
+                await cleanupTempComponents();
 
                 // 5. 使用 API 更新 3D 模型属性
                 logger.debug("[Debug] 开始同步 3D 模型属性...");
@@ -957,6 +1080,8 @@ const { getNetlist, setNetlist, getComponentsContainer, logger } = WC;
 				logger.error("[Debug] 替换过程中发生致命错误:", err);
                 logger.debug("替换失败，请查看控制台日志。");
                 statusBar.setText("替换失败，请查看控制台日志"); // 失败状态
+                // 写回失败也要把临时器件清掉，不然会一直躺在 (-10000,-10000)
+                await cleanupTempComponents();
             }
         }
 
@@ -1041,4 +1166,9 @@ const { getNetlist, setNetlist, getComponentsContainer, logger } = WC;
         document.addEventListener('DOMContentLoaded', () => {
             bindEvents();
             initData();
+        });
+
+        // 兜底：用户在「获取数据」之后直接关掉插件（没点替换）时，别把临时器件留在画布上
+        window.addEventListener('pagehide', () => {
+            if (pendingTempIds.length > 0) cleanupTempComponents();
         });

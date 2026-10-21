@@ -64,7 +64,28 @@
   （`pcb_PrimitiveObject.create` / `convertImageToComplexPolygon` / `pcb_PrimitiveImage.create`）。
   其它页面的 `toFixed` 都已套 `parseFloat/Number` 或仅作显示。
 
+### V4 运行时与类型声明不一致的点（实测，别照类型写）
+
+- `lib_Device.getByLcscIds(单个编号)`：声明是数组，**V4 返回单个器件对象** → 一律用 `pickDevice()` 归一。
+- `component.uuid`：V2/V3 是字符串，**V4 是对象** `{name,source,uuid}`；写源码 ATTR `Device` 要取 `.uuid`。
+- PCB 器件引用有**两处**：COMPONENT 行 `attrs.DeviceName`（权威）+ ATTR `Device`（投影）。V4 只改 ATTR
+  → 属性/封装被糊上去但 `component.uuid` 不变（器件没换）。两处一起改才真正切换。
+- **删除临时器件会连带销毁器件定义**（V4）→ 批量替换必须「先写源码、后删临时器件」。
+- `pcb_PrimitiveFill` 图元的 `primitiveType` 是 **`Fill`**，不是 `Region`；
+  `pcb_PrimitiveRegion.delete()` 删填充返回 false 且**不报错**。
+- `pcb_PrimitiveImage.getAll()` 在 V4 **会带上 Object 图元**，对其调 `Image.delete()` 抛 TypeError。
+- 多轮廓路径（图片/二维码）：`pcb_MathPolygon.createPolygon()` 只吃扁平单路径，会返回 `undefined`；
+  必须用 `createComplexPolygon()`（接受 `Array<SubPath>`）。
+- 原理图源码 COMPONENT 行**必须带 `attrs`**（`Symbols`/`Devices`/`Footprints`/`DeviceName`/
+  `FootprintName`/`pinClass`/`differentialPairClass`），否则 `setDocumentSource` 返回 **true 但器件被静默丢弃**
+  → 表现是「导线在、符号全丢」。ATTR 行字段必须齐全、且必须有一条 `Channel ID`，否则整份拒写（返回 false）。
+
 ## 实机测试通道（EDA 桥）
+
+- 端口可用 `npm run bridge -- 4178` 改；`/__status` 里的 `ver` 是**桥协议版本**，不是 EDA 版本
+  （EDA 版本问 `eda.sys_Environment.getEditorCurrentVersion()`）。
+- 定位「写入被拒」这类问题时：先写基线源码、`await 300ms`、再写变体，并失败重试一次；
+  V4 在文档刚重建的窗口内会误返回 false。
 
 - 拓扑：EDA 里的「EDA 桥」页面是 **WebSocket 客户端**，主动连 `ws://127.0.0.1:8233/ws/eda`；
   服务端在 `tools/eda-bridge/server.mjs`（自实现 WS，零依赖），**没有服务端桥就连不上**。

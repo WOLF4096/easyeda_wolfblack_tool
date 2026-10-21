@@ -4,7 +4,8 @@ function showMsg(msg, type = 'info') {
 
 const WC = window.WolfCommon;
 if (!WC) {
-	(document.body || document.documentElement).innerHTML = '<div style="padding:24px;font:14px/1.6 sans-serif;color:#f28b82">公共模块 common.js 未加载，请重新安装扩展</div>';
+	(document.body || document.documentElement).innerHTML =
+		'<div style="padding:24px;font:14px/1.6 sans-serif;color:#f28b82">公共模块 common.js 未加载，请重新安装扩展</div>';
 	throw new Error('[狼黑工具] 公共模块 common.js 未加载');
 }
 const { getEditorVersion, isModern, logger } = WC;
@@ -20,7 +21,7 @@ const { getEditorVersion, isModern, logger } = WC;
 			const container = document.querySelector('.container');
 			// 清空所有控件，替换为居中提示文字
 			container.innerHTML =
-				'<div style="display: flex; height: 100%; width: 100%; align-items: center; justify-content: center; text-align: center; color: #AFF; font-size: 14px;">由于 API 存在缺陷，底层源码无法写入成功<br/>此功能只支持 EDA V2.2.45 版本</div>';
+				'<div style="display: flex; height: 100%; width: 100%; align-items: center; justify-content: center; text-align: center; color: #AFF; font-size: 14px;">此功能只支持 EDA V2.2.45 版本</div>';
 			return;
 		}
 	} catch (err) {

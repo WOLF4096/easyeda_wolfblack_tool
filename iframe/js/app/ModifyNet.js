@@ -12,6 +12,8 @@
         const designatorInput = document.getElementById('designatorInput');
         const status = document.getElementById('status');
         const verLabel = document.getElementById('verLabel');
+        // 「转大写」复选框：部分 EDA 版本对小写网络名支持不友好，默认勾选
+        const toUpperCheckbox = document.getElementById('toUpper');
 
         let cachedNetlistData = null;
 
@@ -139,7 +141,12 @@
                 resultOutput.value += `找到 ${replaceRules.length} 条替换规则\n\n`;
 
                 const replaceMap = new Map();
-                for (const rule of replaceRules) replaceMap.set(rule.oldName, rule.newName);
+                const shouldUpperCase = toUpperCheckbox ? toUpperCheckbox.checked : true;
+                for (const rule of replaceRules) {
+                    // key 统一小写：匹配时忽略大小写（网表里的网络名大小写和 Excel 里不一定一致）
+                    const newNet = shouldUpperCase ? rule.newName.toUpperCase() : rule.newName;
+                    replaceMap.set(rule.oldName.toLowerCase(), newNet);
+                }
 
                 let totalReplacements = 0;
 
@@ -152,8 +159,9 @@
                         if (component.pinInfoMap) {
                             for (const pinKey in component.pinInfoMap) {
                                 const pinInfo = component.pinInfoMap[pinKey];
-                                if (pinInfo && pinInfo.net && replaceMap.has(pinInfo.net)) {
-                                    const newNet = replaceMap.get(pinInfo.net);
+                                const netKey = pinInfo && pinInfo.net ? pinInfo.net.toLowerCase() : '';
+                                if (netKey && replaceMap.has(netKey)) {
+                                    const newNet = replaceMap.get(netKey);
                                     resultOutput.value += `替换: ${designator}.${pinKey} [${pinInfo.net} -> ${newNet}]\n`;
                                     pinInfo.net = newNet;
                                     totalReplacements++;
@@ -169,8 +177,9 @@
                             const designator = component.props ? component.props.Designator : 'Unknown';
                             for (const pinKey in component.pins) {
                                 const currentNet = component.pins[pinKey];
-                                if (currentNet && replaceMap.has(currentNet)) {
-                                    const newNet = replaceMap.get(currentNet);
+                                const netKey = currentNet ? String(currentNet).toLowerCase() : '';
+                                if (netKey && replaceMap.has(netKey)) {
+                                    const newNet = replaceMap.get(netKey);
                                     resultOutput.value += `替换: ${designator}.${pinKey} [${currentNet} -> ${newNet}]\n`;
                                     component.pins[pinKey] = newNet;
                                     totalReplacements++;
