@@ -52,6 +52,18 @@
 - `npm test` 只收集 `test/*.test.mjs`。`test/pages/` 是浏览器冒烟脚本（需要 Chrome），
   **不是** node:test 用例，不要让它被默认收集（会必然失败）。
 
+### EDA API 的数值参数是严格类型（别传 toFixed 字符串）
+
+- 类型声明在 `node_modules/@jlceda/pro-api-types/index.d.ts`，`width/height` 等长度参数**就是 `number`**。
+- V2.2 内部会强转，**V4 严格校验**：传字符串 `"2275.00"` 直接抛
+  `PcbApiError: [VALUE_OUT_OF_RANGE] width: 图像宽度 width=2275.00 必须为正数`
+  —— 注意报错文案是"必须为正数"，但真实原因是**类型不对**，不要顺着"值越界"去查。
+- 凡是 `toFixed()` 的结果要进 API，必须用 `WolfCommon.toApiLength(v, 2)` 回成数字
+  （`iframe/js/common.js`）：极小非零值不会被舍成 0、无法解析返回 `NaN`。
+- 已修：`ImportImage`（`pcb_PrimitiveObject.create` ×2）、`ImportQrcode`
+  （`pcb_PrimitiveObject.create` / `convertImageToComplexPolygon` / `pcb_PrimitiveImage.create`）。
+  其它页面的 `toFixed` 都已套 `parseFloat/Number` 或仅作显示。
+
 ## 实机测试通道（EDA 桥）
 
 - 拓扑：EDA 里的「EDA 桥」页面是 **WebSocket 客户端**，主动连 `ws://127.0.0.1:8233/ws/eda`；

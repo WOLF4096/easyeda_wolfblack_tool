@@ -358,3 +358,30 @@ describe('getNetlist - 空网表要给人话', () => {
 		assert.deepEqual(res.json, { u9: {} });
 	});
 });
+
+describe('toApiLength - 传给 EDA API 的长度必须是 number', () => {
+	const WC = loadCommon();
+
+	it('toFixed 出来的字符串必须转回 number（V4 判字符串非法，报「必须为正数」）', () => {
+		const value = WC.toApiLength('2275.00');
+		assert.equal(typeof value, 'number');
+		assert.equal(value, 2275);
+	});
+
+	it('按位数四舍五入，结果不带浮点尾巴', () => {
+		assert.equal(WC.toApiLength(12.3456), 12.35);
+		assert.equal(WC.toApiLength(2.0000000001), 2);
+		assert.equal(WC.toApiLength(1.23456, 4), 1.2346);
+	});
+
+	it('极小非零值不会被舍成 0（0 同样会被判为"非正数"）', () => {
+		assert.equal(WC.toApiLength(0.001), 0.001);
+		assert.equal(WC.toApiLength(0), 0);
+	});
+
+	it('无法解析为有限数时返回 NaN，交给调用方校验', () => {
+		assert.ok(Number.isNaN(WC.toApiLength('abc')));
+		assert.ok(Number.isNaN(WC.toApiLength(undefined)));
+		assert.ok(Number.isNaN(WC.toApiLength(Infinity)));
+	});
+});

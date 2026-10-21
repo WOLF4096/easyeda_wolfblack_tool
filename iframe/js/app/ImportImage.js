@@ -1,4 +1,13 @@
-// ======================== 配置常量 ========================
+// ======================== 公共模块 ========================
+			// 需在 HTML 中先引入 /iframe/js/common.js
+			const WC = window.WolfCommon;
+			if (!WC) {
+				(document.body || document.documentElement).innerHTML = '<div style="padding:24px;font:14px/1.6 sans-serif;color:#f28b82">公共模块 common.js 未加载，请重新安装扩展</div>';
+				throw new Error('[狼黑工具] 公共模块 common.js 未加载');
+			}
+			const { toApiLength } = WC;
+
+			// ======================== 配置常量 ========================
 			const CONFIG = {
 				TILE_SIZE: 1800,                // 切片像素尺寸（正方形）
 				JPEG_QUALITY: 0.8,              // JPEG 压缩质量 (0-1)
@@ -386,8 +395,9 @@
 					const layerId = getCurrentLayerId();
 					const colorObj = await eda.pcb_PrimitiveObject.create(
 						layerId, 0, 0, tile.base64,
-						tile.width.toFixed(2), tile.height.toFixed(2), 0, false, 'img', false
+						toApiLength(tile.width), toApiLength(tile.height), 0, false, 'img', false
 					);
+					if (!colorObj) throw new Error('创建图像图元失败（API 返回空）');
 					const primitiveId = colorObj.getState_PrimitiveId();
 					currentPlacedId = primitiveId;
 					
@@ -476,8 +486,9 @@
 					try {
 						const colorObj = await eda.pcb_PrimitiveObject.create(
 							layerId, absX, absY, tile.base64,
-							tile.width.toFixed(2), tile.height.toFixed(2), 0, false, 'img', false
+							toApiLength(tile.width), toApiLength(tile.height), 0, false, 'img', false
 						);
+						if (!colorObj) throw new Error('创建图像图元失败（API 返回空）');
 						const primitiveId = colorObj.getState_PrimitiveId();
 						createdPrimitives.push({ primitiveId: primitiveId, imgIndex: tile.imgIndex });
 					} catch (err) {

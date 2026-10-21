@@ -9,6 +9,11 @@
 - 已知的 V4 适配待验证项：V4 的 PCB 坐标单位改为 mil（网格尺寸 ×10），`生成物理网络` 的点合并容差、`从PCB转原理图` 的坐标搬运需在 V4 实机复核
 - ⚠️ **V4 待处理**：V4 下 `sys_FileManager.setDocumentSource()` 整份写回会丢掉 `POURED`（铜皮已计算填充）行 —— 实测同一份原文写回后 45,557 → 43,119 字节，`POUR` 本体仍在、填充缓存消失（V2.2 逐字节一致）。受影响：`生成物理网络`（源码方式）、`从PCB转原理图` 等整份重写源码的功能；重算铜皮可恢复。处理方案待定
 
+## v1.17.10 `2026-10-21`
+- 修复 **导入图片 / 导入二维码 放置时报 `PcbApiError: [VALUE_OUT_OF_RANGE] width: 图像宽度 width=2275.00 必须为正数`**：根因是把 `toFixed(2)` 的**字符串**当长度传给了 `pcb_PrimitiveObject.create` / `pcb_PrimitiveImage.create` / `pcb_MathPolygon.convertImageToComplexPolygon`，而这三个 API 的 `width`/`height` 声明是 `number`，V4 按严格类型校验会把 `"2275.00"` 判为非法值（V2.2 内部强转，所以历史上没暴露）。5 处调用点全部改为传数字
+- 新增 **`WolfCommon.toApiLength(value, digits)`**：把长度规整成 API 需要的 number（默认两位小数）；极小非零值（如 `0.001`）不会被舍成 `0` 再被判"非正数"，无法解析时返回 `NaN` 交给调用方校验。新增 4 个用例，`npm test` **120 → 124 全绿**
+- 优化 两个页面创建图元返回 `undefined` 时不再裸抛 `TypeError: Cannot read properties of undefined`，改为明确提示「创建图像图元失败（API 返回空）」/「图像转换为多边形失败」；顺带补上 `common.js` 缺失时的页面横幅提示
+
 ## v1.17.9 `2026-10-21`
 - 修复 **13 个页面缺 `common.js` 时整页白屏且无提示**：顶层解构前先判空，缺失时在页面上显示「公共模块 common.js 未加载，请重新安装扩展」并中止脚本（此前是 `TypeError: Cannot destructure property … of undefined`）
 - 修复 **网表读取的两种"空"没有区分**：`getNetlistFile()` 返回 `undefined`（当前文档没有网表）与文件内容为空，都会抛 `Cannot read properties of undefined`；现统一抛 **`获取的网表为空`**，JSON 解析失败也给出「网表格式无法解析（PCB/SCH）」而不是裸 `SyntaxError`

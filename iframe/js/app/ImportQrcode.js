@@ -1,4 +1,12 @@
 // EDA 核心配置与状态管理
+        // 公共模块（HTML 中需先引入 /iframe/js/common.js）
+        const WC = window.WolfCommon;
+        if (!WC) {
+            (document.body || document.documentElement).innerHTML = '<div style="padding:24px;font:14px/1.6 sans-serif;color:#f28b82">公共模块 common.js 未加载，请重新安装扩展</div>';
+            throw new Error('[狼黑工具] 公共模块 common.js 未加载');
+        }
+        const { toApiLength } = WC;
+
         const EDA_CONFIG = {
             MM_TO_MIL: 39.37007874015748
         };
@@ -340,26 +348,33 @@
                 const layerId = getCurrentLayerId();
                 const base64 = canvas.toDataURL('image/png');
 
+                // API 的 width/height 是 number，字符串会被判为非法值（VALUE_OUT_OF_RANGE）
+                const apiWidth = toApiLength(width);
+                const apiHeight = toApiLength(height);
+
                 if (STATE.outputType === 'image') {
-                    const colorObj = eda.pcb_PrimitiveObject.create(
+                    const colorObj = await eda.pcb_PrimitiveObject.create(
                         layerId, 0, 0, base64,
-                        width.toFixed(2), height.toFixed(2),
+                        apiWidth, apiHeight,
                         0, false, 'img', false
                     );
-                    STATE.primitiveId = (await colorObj).getState_PrimitiveId();
+                    if (!colorObj) throw new Error('创建图像图元失败（API 返回空）');
+                    STATE.primitiveId = colorObj.getState_PrimitiveId();
                     startFollowing(eda.pcb_PrimitiveObject);
                 } else {
                     const blob = await (await fetch(base64)).blob();
                     const edaImage = await eda.pcb_MathPolygon.convertImageToComplexPolygon(
-                        blob, width.toFixed(2), height.toFixed(2),
+                        blob, apiWidth, apiHeight,
                         0.5, 0, 0, 0, true, false
                     );
-                    const noColorImg = eda.pcb_PrimitiveImage.create(
+                    if (!edaImage) throw new Error('图像转换为多边形失败');
+                    const noColorImg = await eda.pcb_PrimitiveImage.create(
                         0, 0, edaImage, layerId,
-                        width.toFixed(2), height.toFixed(2),
+                        apiWidth, apiHeight,
                         0, false, false
                     );
-                    STATE.primitiveId = (await noColorImg).getState_PrimitiveId();
+                    if (!noColorImg) throw new Error('创建图像图元失败（API 返回空）');
+                    STATE.primitiveId = noColorImg.getState_PrimitiveId();
                     startFollowing(eda.pcb_PrimitiveImage);
                 }
 
