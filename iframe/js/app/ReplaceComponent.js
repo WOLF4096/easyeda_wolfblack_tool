@@ -1,4 +1,9 @@
-const { getNetlist, setNetlist, getComponentsContainer } = window.WolfCommon;
+const WC = window.WolfCommon;
+if (!WC) {
+	(document.body || document.documentElement).innerHTML = '<div style="padding:24px;font:14px/1.6 sans-serif;color:#f28b82">公共模块 common.js 未加载，请重新安装扩展</div>';
+	throw new Error('[狼黑工具] 公共模块 common.js 未加载');
+}
+const { getNetlist, setNetlist, getComponentsContainer, logger } = WC;
 
         // 核心数据模型
         let groupedData = [];
@@ -158,15 +163,15 @@ const { getNetlist, setNetlist, getComponentsContainer } = window.WolfCommon;
         // 1. 初始化并获取画布元件
         async function initData() {
             try {
-                console.log("[Debug] 开始获取画布全局元件...");
+                logger.debug("[Debug] 开始获取画布全局元件...");
                 // 确保在沙箱环境中 eda 对象存在
                 if (typeof eda === 'undefined') {
-                    console.warn("[Debug] 未检测到 eda 对象，等待环境注入或在独立浏览器中运行...");
+                    logger.warn("[Debug] 未检测到 eda 对象，等待环境注入或在独立浏览器中运行...");
                     return;
                 }
 
                 const rawComponents = await eda.pcb_PrimitiveComponent.getAll();
-                console.log(rawComponents);
+                logger.debug(rawComponents);
 
                 const groupMap = new Map();
 
@@ -201,11 +206,11 @@ const { getNetlist, setNetlist, getComponentsContainer } = window.WolfCommon;
                 }
 
                 groupedData = Array.from(groupMap.values());
-                console.log("[Debug] 合并后数据分组:", groupedData);
+                logger.debug("[Debug] 合并后数据分组:", groupedData);
                 renderTable();
 
             } catch (error) {
-                console.error("[Debug] 初始化数据失败:", error);
+                logger.error("[Debug] 初始化数据失败:", error);
             }
         }
 
@@ -213,7 +218,7 @@ const { getNetlist, setNetlist, getComponentsContainer } = window.WolfCommon;
         async function handlePaste() {
             try {
                 const text = await navigator.clipboard.readText();
-                console.log("[Debug] 剪贴板内容读取成功:\n", text);
+                logger.debug("[Debug] 剪贴板内容读取成功:\n", text);
                 
                 const lines = text.split('\n');
                 
@@ -317,7 +322,7 @@ const { getNetlist, setNetlist, getComponentsContainer } = window.WolfCommon;
                 // 将最新的 Map 还原给全局变量，完成数据流闭环
                 groupedData = Array.from(groupMap.values());
 
-                console.log(`[Debug] 匹配并更新了 ${updateCount} 条记录的立创编号`);
+                logger.debug(`[Debug] 匹配并更新了 ${updateCount} 条记录的立创编号`);
 
 				// === 新增：如果成功匹配到需要更新的数据，解锁“获取”按钮 ===
                 if (updateCount > 0) {
@@ -325,8 +330,8 @@ const { getNetlist, setNetlist, getComponentsContainer } = window.WolfCommon;
                 }
                 renderTable();
             } catch (err) {
-                console.error("[Debug] 读取剪贴板失败:", err);
-                console.log("读取剪贴板失败，请检查浏览器权限或确认是否在安全上下文(https)中！");
+                logger.error("[Debug] 读取剪贴板失败:", err);
+                logger.debug("读取剪贴板失败，请检查浏览器权限或确认是否在安全上下文(https)中！");
             }
         }
 
@@ -362,10 +367,10 @@ const { getNetlist, setNetlist, getComponentsContainer } = window.WolfCommon;
             //         }
             //     } catch (e) {
             //         // 如果跨域、超时(AbortError)或报错，静默尝试下一个 URL
-            //         // console.warn(`[Debug] URL ${url} 尝试失败:`, e.name);
+            //         // logger.warn(`[Debug] URL ${url} 尝试失败:`, e.name);
             //     }
             // }
-            // console.warn(`[Debug] 无法通过 API 获取 ${supplierId} 的详细属性，将使用基础残缺属性。`);
+            // logger.warn(`[Debug] 无法通过 API 获取 ${supplierId} 的详细属性，将使用基础残缺属性。`);
             return null;
         }
 
@@ -406,8 +411,8 @@ const { getNetlist, setNetlist, getComponentsContainer } = window.WolfCommon;
 		// 3. 获取新器件数据并关联本地库逻辑 (支持 V2/V3，分片并发优化版，解决UI假死)
         async function handleFetch() {
             const totalFetchStart = performance.now();
-            console.log("--------------------------------------------------");
-            console.log("[性能打点] 🚀 开始执行 handleFetch 流程 (分片并发优化版)...");
+            logger.debug("--------------------------------------------------");
+            logger.debug("[性能打点] 🚀 开始执行 handleFetch 流程 (分片并发优化版)...");
 
             statusBar.setText("正在检查待获取器件...");
             
@@ -486,7 +491,7 @@ const { getNetlist, setNetlist, getComponentsContainer } = window.WolfCommon;
                 await new Promise(resolve => setTimeout(resolve, 10));
             }
 
-            console.log(`[性能打点] 🚩 阶段0 (分批预载 ${placeCount} 个器件) 总耗时: ${((performance.now() - stepPreloadStart) / 1000).toFixed(3)} 秒`);
+            logger.debug(`[性能打点] 🚩 阶段0 (分批预载 ${placeCount} 个器件) 总耗时: ${((performance.now() - stepPreloadStart) / 1000).toFixed(3)} 秒`);
 
             if (placeCount === 0) {
                 statusBar.setText("未能在库中找到对应的器件");
@@ -496,7 +501,7 @@ const { getNetlist, setNetlist, getComponentsContainer } = window.WolfCommon;
 
             // ====== 阶段 1：分批提取图元信息 ======
             if (autoFetchMap.size > 0) {
-                console.log(`[Debug] 开始分批提取 ${autoFetchMap.size} 个器件的信息...`);
+                logger.debug(`[Debug] 开始分批提取 ${autoFetchMap.size} 个器件的信息...`);
                 const toDeleteIds = [];
                 
                 const autoFetchArray = Array.from(autoFetchMap.entries());
@@ -546,7 +551,9 @@ const { getNetlist, setNetlist, getComponentsContainer } = window.WolfCommon;
 
                                 toDeleteIds.push(pId); 
                             }
-                        } catch (getErr) {}
+                        } catch (getErr) {
+                        	logger.warn('读取器件属性失败，已跳过该器件', e);
+                        }
 
                         // 更新阶段 1 的进度条
                         processCount++;
@@ -559,11 +566,13 @@ const { getNetlist, setNetlist, getComponentsContainer } = window.WolfCommon;
 
                 const cleanupStart = performance.now();
                 if (toDeleteIds.length > 0) {
-                    try { await eda.pcb_PrimitiveComponent.delete(toDeleteIds); } catch (delErr) {}
+                    try { await eda.pcb_PrimitiveComponent.delete(toDeleteIds); } catch (delErr) {
+                    	logger.error('批量删除原器件失败，可能残留旧器件', e);
+                    }
                 }
                 renderTable();
                 
-                console.log(`[性能打点] 🚩 阶段1 (分批提取数据并清理) 总耗时: ${((performance.now() - step1Start) / 1000).toFixed(3)} 秒`);
+                logger.debug(`[性能打点] 🚩 阶段1 (分批提取数据并清理) 总耗时: ${((performance.now() - step1Start) / 1000).toFixed(3)} 秒`);
 
                 statusBar.clearProgress();
                 if (manualPendingIds.size === 0) {
@@ -575,15 +584,15 @@ const { getNetlist, setNetlist, getComponentsContainer } = window.WolfCommon;
 
                     setTimeout(() => statusBar.readyToReplace(costTime), 3000);
                     
-                    console.log(`[性能打点] 🎉 handleFetch 完整生命周期 总耗时: ${costTime} 秒`);
-                    console.log("--------------------------------------------------");
+                    logger.debug(`[性能打点] 🎉 handleFetch 完整生命周期 总耗时: ${costTime} 秒`);
+                    logger.debug("--------------------------------------------------");
                 }
             }
 
             // ====== 阶段 2：处理没有返回图元 ID 的器件（V2 手动框选兜底机制） ======
             if (manualPendingIds.size === 0) return;
 
-            console.log(`由于API限制，有 ${manualPendingIds.size} 种器件需要手动辅助。\n请在画布中将它们【全部框选】，工具将自动提取参数并删除！`);
+            logger.debug(`由于API限制，有 ${manualPendingIds.size} 种器件需要手动辅助。\n请在画布中将它们【全部框选】，工具将自动提取参数并删除！`);
             statusBar.setText(`由于API限制，需手动辅助，请在画布(-10000,-10000)中【框选】新增的 ${manualPendingIds.size} 个器件，工具将自动提取参数并删除！`);
 
             fetchPollInterval = setInterval(async () => {
@@ -591,7 +600,7 @@ const { getNetlist, setNetlist, getComponentsContainer } = window.WolfCommon;
                 const selectedItems = await eda.pcb_SelectControl.getAllSelectedPrimitives() || [];
                 if (selectedItems.length !== manualPendingIds.size) return; 
 
-                console.log("[性能打点] ⏱️ 检测到框选完毕，开始执行阶段2兜底提取...");
+                logger.debug("[性能打点] ⏱️ 检测到框选完毕，开始执行阶段2兜底提取...");
                 let hasUpdate = false;
                 let validMatchCount = 0;
 
@@ -647,7 +656,9 @@ const { getNetlist, setNetlist, getComponentsContainer } = window.WolfCommon;
                     
                     const toDeleteIds = selectedItems.map(item => item.primitiveId).filter(id => id);
                     if (toDeleteIds.length > 0) {
-                        try { await eda.pcb_PrimitiveComponent.delete(toDeleteIds); } catch (delErr) {}
+                        try { await eda.pcb_PrimitiveComponent.delete(toDeleteIds); } catch (delErr) {
+                        	logger.error('批量删除原器件失败，可能残留旧器件', e);
+                        }
                     }
                     renderTable();
 
@@ -656,9 +667,9 @@ const { getNetlist, setNetlist, getComponentsContainer } = window.WolfCommon;
                     statusBar.setText(`获取完成，耗时${costTime}秒 (已自动删除临时器件)`);
                     setTimeout(() => statusBar.readyToReplace(costTime), 3000);
                     
-                    console.log(`[性能打点] 🚩 阶段2 (分批兜底提取) 总耗时: ${((performance.now() - pollStart) / 1000).toFixed(3)} 秒`);
-                    console.log(`[性能打点] 🎉 handleFetch 完整生命周期 总耗时: ${costTime} 秒`);
-                    console.log("--------------------------------------------------");
+                    logger.debug(`[性能打点] 🚩 阶段2 (分批兜底提取) 总耗时: ${((performance.now() - pollStart) / 1000).toFixed(3)} 秒`);
+                    logger.debug(`[性能打点] 🎉 handleFetch 完整生命周期 总耗时: ${costTime} 秒`);
+                    logger.debug("--------------------------------------------------");
                 }
             }, 1000);
         }
@@ -721,7 +732,7 @@ const { getNetlist, setNetlist, getComponentsContainer } = window.WolfCommon;
             const startTime = performance.now();
             statusBar.setText("正在执行替换...");
             
-            console.log("[Debug] 开始执行替换操作...");
+            logger.debug("[Debug] 开始执行替换操作...");
             const targetMap = new Map();
             let replaceCount = 0;
 
@@ -752,7 +763,7 @@ const { getNetlist, setNetlist, getComponentsContainer } = window.WolfCommon;
             });
 
             if (targetMap.size === 0) {
-                console.warn("[Debug] 没有需要替换的有效图元，请检查是否勾选并成功获取了目标数据");
+                logger.warn("[Debug] 没有需要替换的有效图元，请检查是否勾选并成功获取了目标数据");
                 return;
             }
 
@@ -794,7 +805,9 @@ const { getNetlist, setNetlist, getComponentsContainer } = window.WolfCommon;
                                     // 注意：如果勾选了保留，代码会直接无视上面的 if，走到最后的 return line; 保持源码原封不动！
                                 }
                             }
-                        } catch (e) {}
+                        } catch (e) {
+                        	logger.warn('读取器件库信息失败，已跳过', e);
+                        }
                     }
                     // 处理 V3 格式 {...}||{...}|
                     else if (line.startsWith('{') && line.includes('||')) {
@@ -836,17 +849,19 @@ const { getNetlist, setNetlist, getComponentsContainer } = window.WolfCommon;
                                     }
                                 }
                             }
-                        } catch (e) {}
+                        } catch (e) {
+                        	logger.warn('读取器件库信息失败，已跳过', e);
+                        }
                     }
                     return line; // 未修改的行原样返回
                 });
 
                 // 4. 写回修改后的源码
-                console.log("[Debug] 源码处理完成，开始写入...");
+                logger.debug("[Debug] 源码处理完成，开始写入...");
                 await eda.sys_FileManager.setDocumentSource(modifiedLines.join('\n'));
 
                 // 5. 使用 API 更新 3D 模型属性
-                console.log("[Debug] 开始同步 3D 模型属性...");
+                logger.debug("[Debug] 开始同步 3D 模型属性...");
                 for (let [pId, action] of targetMap.entries()) {
                     const modelDataObj = action.preserve3D ? action.sourceComp : action.targetComp;
                     const props = modelDataObj.otherProperty || {};
@@ -864,11 +879,11 @@ const { getNetlist, setNetlist, getComponentsContainer } = window.WolfCommon;
                 }
 
                 // 6. 获取并更新网表 (【核心改动】：兼容 V2/V3 格式动态识别)
-                console.log("[Debug] 开始同步网表属性...");
+                logger.debug("[Debug] 开始同步网表属性...");
 				// BUG 在V2版本下，替换完器件后无法获取网表。返回值为{}
                 try {
                     const jsonData = (await getNetlist('PCB')).json;
-					// console.log(jsonData);
+					// logger.debug(jsonData);
 
                     const desigMap = new Map();
                     for (let action of targetMap.values()) {
@@ -921,16 +936,16 @@ const { getNetlist, setNetlist, getComponentsContainer } = window.WolfCommon;
                             }
                         }
                     }
-					// console.log(JSON.stringify(jsonData, null, 2));//在V2版本上内容为{}
+					// logger.debug(JSON.stringify(jsonData, null, 2));//在V2版本上内容为{}
                     await setNetlist('PCB', JSON.stringify(jsonData, null, 2));
-                    console.log("[Debug] 网表同步更新完成！");
+                    logger.debug("[Debug] 网表同步更新完成！");
 
                 } catch (netErr) {
-                    console.error("[Debug] 网表更新阶段发生异常:", netErr);
+                    logger.error("[Debug] 网表更新阶段发生异常:", netErr);
                 }
                             
-                console.log(`[Debug] 替换完成，共处理 ${replaceCount} 个图元。`);
-                console.log("替换成功！");
+                logger.debug(`[Debug] 替换完成，共处理 ${replaceCount} 个图元。`);
+                logger.debug("替换成功！");
 
 				// 【新增：计算耗时并显示】
                 const costTime = ((performance.now() - startTime) / 1000).toFixed(2);
@@ -939,8 +954,8 @@ const { getNetlist, setNetlist, getComponentsContainer } = window.WolfCommon;
                 setTimeout(() => statusBar.reset(), 3000);
 
             } catch (err) {
-				console.error("[Debug] 替换过程中发生致命错误:", err);
-                console.log("替换失败，请查看控制台日志。");
+				logger.error("[Debug] 替换过程中发生致命错误:", err);
+                logger.debug("替换失败，请查看控制台日志。");
                 statusBar.setText("替换失败，请查看控制台日志"); // 失败状态
             }
         }

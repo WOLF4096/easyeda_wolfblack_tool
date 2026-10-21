@@ -311,3 +311,50 @@ describe('getNetlist / setNetlist', () => {
 		assert.equal(state.schWriteCalls, 1);
 	});
 });
+
+// ---------------------------------------------------------------------------
+// 网表读取的空值语义（v1.17.9）
+// ---------------------------------------------------------------------------
+
+describe('getNetlist - 空网表要给人话', () => {
+	it('文件返回 undefined（当前文档没有网表）→ 抛「获取的网表为空」', async () => {
+		globalThis.eda = {
+			pcb_ManufactureData: { getNetlistFile: async () => undefined },
+			sch_ManufactureData: { getNetlistFile: async () => undefined },
+		};
+		const WC = loadCommon();
+		await assert.rejects(() => WC.getNetlist('PCB'), /获取的网表为空/);
+		// AUTO 两个来源都空时同样是这句，而不是 TypeError
+		await assert.rejects(() => WC.getNetlist('AUTO'), /获取的网表为空/);
+	});
+
+	it('文件内容为空串 / 纯空白 → 抛「获取的网表为空」', async () => {
+		for (const text of ['', '   \n  ']) {
+			globalThis.eda = {
+				pcb_ManufactureData: { getNetlistFile: async () => ({ text: async () => text }) },
+				sch_ManufactureData: { getNetlistFile: async () => ({ text: async () => text }) },
+			};
+			const WC = loadCommon();
+			await assert.rejects(() => WC.getNetlist('PCB'), /获取的网表为空/);
+		}
+	});
+
+	it('JSON 非法 → 抛出带来源的解析错误，而不是裸 SyntaxError', async () => {
+		globalThis.eda = {
+			pcb_ManufactureData: { getNetlistFile: async () => ({ text: async () => 'not-json' }) },
+		};
+		const WC = loadCommon();
+		await assert.rejects(() => WC.getNetlist('PCB'), /网表格式无法解析（PCB）/);
+	});
+
+	it('AUTO 下 PCB 为空会回退 SCH，正常返回', async () => {
+		globalThis.eda = {
+			pcb_ManufactureData: { getNetlistFile: async () => undefined },
+			sch_ManufactureData: { getNetlistFile: async () => ({ text: async () => '{"u9":{}}' }) },
+		};
+		const WC = loadCommon();
+		const res = await WC.getNetlist('AUTO');
+		assert.equal(res.page, 'SCH');
+		assert.deepEqual(res.json, { u9: {} });
+	});
+});

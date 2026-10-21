@@ -1,5 +1,10 @@
 // 1. 原始测试源码数据集 (常量)
-    const { getEditorVersion } = window.WolfCommon;
+    const WC = window.WolfCommon;
+    if (!WC) {
+    	(document.body || document.documentElement).innerHTML = '<div style="padding:24px;font:14px/1.6 sans-serif;color:#f28b82">公共模块 common.js 未加载，请重新安装扩展</div>';
+    	throw new Error('[狼黑工具] 公共模块 common.js 未加载');
+    }
+    const { getEditorVersion } = WC;
 
     const RAW_SOURCE = {
         "Via": ["VIA","e1",0,"","",105,110,12,24,0,10,5,0,[]],
@@ -86,7 +91,11 @@
                         <tbody>
                             ${p.params.map((name, i) => `
                                 <tr>
-                                    <td style="color:var(--vscode-text-muted)">${name}</td>
+                                    <td style="color:var(--vscode-text-muted)">${name}${
+                                        name === '圆弧角度'
+                                            ? '<div style="font-size:11px;opacity:.7;line-height:1.4">1 = 两侧同为角度制<br>0.017453 = 度→弧度<br>57.2958 = 弧度→度</div>'
+                                            : ''
+                                    }</td>
                                     <td><input class="val-input" id="set_${p.id}_${i}" value="${defaults[i] || ''}"></td>
                                     <td><input class="val-input" id="act_${p.id}_${i}" readonly></td>
                                     <td><input class="val-input" id="cal_${p.id}_${i}" placeholder="*1"></td>
@@ -519,36 +528,47 @@
         const config = {};
 
         // 内部工具：将输入框的字符串转为纯粹的乘数类型 (Number)
+        //
+        // 合法范围 0.001 ~ 1000：必须覆盖「角度↔弧度」的换算系数（0.017453 / 57.2958），
+        // 又要把手滑输入的 0 / 负数 / 天文数字挡掉 —— 一次误校准会让所有转换全歪。
+        const MULTIPLIER_MIN = 0.001;
+        const MULTIPLIER_MAX = 1000;
+        const roundMultiplier = (v) => {
+            if (!Number.isFinite(v) || v < MULTIPLIER_MIN || v > MULTIPLIER_MAX) return Number.NaN;
+            return parseFloat(v.toFixed(6)); // 限制6位小数避免浮点精度溢出
+        };
+
         const convertToMultiplier = (str) => {
             if (!str || str.trim() === "") return 1; // 为空则默认乘数为 1
-            
+
             const op = str.charAt(0);
             const num = parseFloat(str.substring(1));
 
             // 处理乘法
-            if (op === '*' && !isNaN(num)) {
-                return parseFloat(num.toFixed(6)); // 限制6位小数避免浮点精度溢出
-            }
+            if (op === '*' && !isNaN(num)) return roundMultiplier(num);
             // 处理除法，转为倒数乘数
-            if (op === '/' && !isNaN(num) && num !== 0) {
-                return parseFloat((1 / num).toFixed(6));
-            }
+            if (op === '/' && !isNaN(num) && num !== 0) return roundMultiplier(1 / num);
             // 兼容用户没有写符号，直接填入纯数字(例如"0.5")的情况
             const pureNum = parseFloat(str);
-            if (!isNaN(pureNum) && op !== '+' && op !== '-') {
-                return parseFloat(pureNum.toFixed(6));
-            }
+            if (!isNaN(pureNum) && op !== '+' && op !== '-') return roundMultiplier(pureNum);
 
             return 1; // 无法识别的非法字符，兜底返回 1
         };
 
+        const invalidParams = [];
         PROJECTS.forEach(p => {
             const paramsObj = {};
             
             p.params.forEach((paramName, i) => {
                 const valStr = document.getElementById(`cal_${p.id}_${i}`).value;
                 // 全部转换为纯数字乘数
-                paramsObj[paramName] = convertToMultiplier(valStr); 
+                const multiplier = convertToMultiplier(valStr);
+                if (Number.isNaN(multiplier)) {
+                    invalidParams.push(`${p.name}.${paramName}（${valStr}）`);
+                    paramsObj[paramName] = 1;
+                } else {
+                    paramsObj[paramName] = multiplier;
+                }
             });
             
             // 取消了过滤条件，强制保留所有项目，方便后续代码直接映射
@@ -557,6 +577,12 @@
                 ...paramsObj
             };
         });
+
+        // 有越界/非法值就不保存：宁可报错，也不要把错误倍率写进存储
+        if (invalidParams.length > 0) {
+            eda.sys_Message.showToastMessage(`校准值不合法：${invalidParams.slice(0, 3).join('、')}，允许范围 ${MULTIPLIER_MIN}~${MULTIPLIER_MAX}`, 'error');
+            return;
+        }
 
 		// 保存数据
 		try {

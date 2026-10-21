@@ -343,7 +343,7 @@ describe('pcb_PrimitiveLine.create / pcb_PrimitiveArc.create - 线条转导线',
 		assert.equal(args[9], false);
 	});
 
-	it('弧线角度不做任何缩放（两版实测都是角度制，缩放会把圆弧画直）', async () => {
+	it('弧线角度只用「创建弧线」一侧的倍率（个别版本 create 要弧度）', async () => {
 		const poly = {
 			primitiveType: 'Polyline',
 			primitiveId: 'e300',
@@ -352,15 +352,29 @@ describe('pcb_PrimitiveLine.create / pcb_PrimitiveArc.create - 线条转导线',
 			lineWidth: 0.2,
 			polygon: { polygon: [0, 0, 'CARC', 9, 10, 0] },
 		};
-		// 历史校准数据里可能残留 创建弧线.圆弧角度 = 5 / 获取弧线.圆弧角度 = 0.017453，
-		// 都不能再影响结果
+		// 写侧用 创建弧线.圆弧角度=5；读侧 0.017453 不应影响写
 		const calibration = { 获取折线: { 坐标: 2 }, 创建直线: { 坐标: 1 }, 创建弧线: { 圆弧角度: 5 }, 获取弧线: { 圆弧角度: 0.017453 } };
 		const { calls } = createEdaMock({ selections: [poly], detailed: [], calibration });
 		await WireConverter.toWire();
 
 		const [args] = pick(calls, 'pcb_PrimitiveArc');
-		assertClose(args[6], 9, '角度原样透传');
+		assertClose(args[6], 45, '角度 9×5（只乘创建侧）');
 		assertClose(args[4], 20, '坐标 10×(2×1)');
+	});
+
+	it('角度校准默认 1：两侧同为角度制时原样透传', async () => {
+		const poly = {
+			primitiveType: 'Polyline',
+			primitiveId: 'e301',
+			net: '',
+			layer: 1,
+			lineWidth: 0.2,
+			polygon: { polygon: [0, 0, 'ARC', 90, 10, 0] },
+		};
+		const { calls } = createEdaMock({ selections: [poly], detailed: [], calibration: {} });
+		await WireConverter.toWire();
+		const [args] = pick(calls, 'pcb_PrimitiveArc');
+		assert.equal(args[6], 90, '无校准时角度不变');
 	});
 
 	it('多段路径逐段发射：起止点首尾相接', async () => {
@@ -491,7 +505,7 @@ describe('pcb_PrimitivePolyline.create - 导线转线条', () => {
 		assert.equal(args[4], false);
 	});
 
-	it('弧线 → polygon 数组带 ARC 段，角度原样透传', async () => {
+	it('弧线 → polygon：角度乘「获取弧线」一侧的倍率（个别版本 get 返回弧度）', async () => {
 		const arc = {
 			primitiveType: 'Arc',
 			primitiveId: 'e501',
@@ -504,13 +518,35 @@ describe('pcb_PrimitivePolyline.create - 导线转线条', () => {
 			arcAngle: 30,
 			lineWidth: 0.3,
 		};
-		const calibration = { 获取弧线: { 圆弧角度: 6 } };
+		// 读侧：get 返回弧度时，系数应为 57.2958（弧度→度）；这里用 6 便于断言
+		const calibration = { 获取弧线: { 圆弧角度: 6 }, 创建弧线: { 圆弧角度: 0.017453 } };
 		const { calls } = createEdaMock({ selections: [arc], calibration });
 		await WireConverter.toPolyline();
 
 		const [args] = pick(calls, 'pcb_PrimitivePolyline');
 		assert.equal(args[2].__polygon[2], 'ARC');
-		assertClose(args[2].__polygon[3], 30, '角度不缩放');
+		assertClose(args[2].__polygon[3], 180, '角度 30×6（只乘获取侧）');
+	});
+
+	it('弧度↔角度换算系数（0.017453 / 57.2958）在合法范围内不会被当作非法值', async () => {
+		const arc = {
+			primitiveType: 'Arc',
+			primitiveId: 'e502',
+			net: '',
+			layer: 1,
+			startX: 0,
+			startY: 0,
+			endX: 1,
+			endY: 1,
+			arcAngle: 90,
+			lineWidth: 0.2,
+		};
+		// 模拟某版本 get 返回的是弧度、需要换成度：90 × 57.2958 ≈ 5156.6
+		const calibration = { 获取弧线: { 圆弧角度: 57.2958 } };
+		const { calls } = createEdaMock({ selections: [arc], calibration });
+		await WireConverter.toPolyline();
+		const [args] = pick(calls, 'pcb_PrimitivePolyline');
+		assert.ok(args[2].__polygon[3] > 5000, 'rad→deg 系数应原样生效');
 	});
 
 	it('删除旧图元时区分 Line / Arc 的 API', async () => {

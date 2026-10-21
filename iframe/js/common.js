@@ -225,7 +225,137 @@
 	 */
 	function escapeHtml(value) {
 		if (value === null || value === undefined) return '';
-		return String(value).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
+		return String(value)
+			.replace(/&/g, '&amp;')
+			.replace(/</g, '&lt;')
+			.replace(/>/g, '&gt;')
+			.replace(/"/g, '&quot;')
+			.replace(/'/g, '&#039;');
+	}
+
+	/* ------------------------------ 日志 ------------------------------ */
+
+	/** 日志级别：数字越小越详细 */
+	const LOG_LEVELS = { debug: 10, info: 20, warn: 30, error: 40 };
+
+	/** 当前级别：默认 info（debug 静默），排查问题时用 `WolfCommon.logger.setLevel('debug')` 打开 */
+	let currentLogLevel = LOG_LEVELS.info;
+
+	/**
+	 * 统一日志出口
+	 *
+	 * 为什么要有：全项目曾有 200+ 处裸 `console.*`，其中不少是整对象打印（大工程下拖慢控制台），
+	 * 而且生产环境无法一键静默。这里统一走一个出口，级别可调、前缀统一，方便过滤。
+	 *
+	 * 用法：
+	 *   const { logger } = window.WolfCommon;
+	 *   logger.debug('分批处理', batch);   // 默认不输出
+	 *   logger.warn('删除失败', err);      // 输出
+	 *
+	 * @param {'debug'|'info'|'warn'|'error'} level - 级别
+	 * @param {...*} args - 参数，透传给对应 console 方法
+	 */
+	function logAt(level, ...args) {
+		if ((LOG_LEVELS[level] || 0) < currentLogLevel) return;
+		const method = level === 'debug' ? 'log' : level;
+		const fn = console[method] || console.log;
+		try {
+			fn.apply(console, ['[狼黑工具]', ...args]);
+		} catch (e) {
+			/* 控制台不可用时忽略 */
+		}
+	}
+
+	const logger = {
+		debug: (...args) => logAt('debug', ...args),
+		info: (...args) => logAt('info', ...args),
+		warn: (...args) => logAt('warn', ...args),
+		error: (...args) => logAt('error', ...args),
+		/**
+		 * 调整日志级别
+		 * @param {'debug'|'info'|'warn'|'error'|'off'} level - 级别名，`off` 表示全部静默
+		 */
+		setLevel: (level) => {
+			if (level === 'off') {
+				currentLogLevel = Number.POSITIVE_INFINITY;
+				return;
+			}
+			if (LOG_LEVELS[level]) currentLogLevel = LOG_LEVELS[level];
+		},
+	};
+
+	/* ---------------------------- 网表读写 ---------------------------- */
+
+	/* ---------------------------- 源码发射 ---------------------------- */
+
+	/**
+	 * 生成一根导线的源码行（与 `src/js/common/sourceEmitter.js` 保持逐字节一致）
+	 *
+	 * 为什么两处都有一份：前端页面是 IIFE（`iframe/js/app/PcbToSch.js`），
+	 * 后端是 ESM（`src/js/autoWire/index.js`），两套 bundle 无法共享代码。
+	 * 约定：**改动必须两边同步**，`test/sourceEmitter.test.mjs` 会逐字节比对两条实现。
+	 *
+	 * @param {object} o - 参数，见 sourceEmitter.js 的同名函数
+	 * @returns {string[]} 源码行（V3/V4 每行已带行尾 `|`）
+	 */
+	function createSchWireLines(o) {
+		const net = o.net;
+		const startX = o.startX;
+		const startY = o.startY;
+		const endX = o.endX;
+		const endY = o.endY;
+		const isModern = !!o.isModern;
+		const rotation = Number.isFinite(o.rotation) ? o.rotation : 0;
+		const wireStyle = o.wireStyle || 'st1';
+		const attrStyle = o.attrStyle || 'st1';
+		const centerX = (startX + endX) / 2;
+		const centerY = (startY + endY) / 2;
+
+		if (isModern) {
+			const wire = o.nextRow();
+			const line = o.nextRow();
+			const attr = o.nextRow();
+			const wireId = `e${wire.id}`;
+			return [
+				`{"type":"WIRE","ticket":${wire.ticket},"id":"${wireId}"}||{"zIndex":1}|`,
+				`{"type":"LINE","ticket":${line.ticket},"id":"e${line.id}"}||{"lineGroup":"${wireId}","startX":${startX},"startY":${startY},"endX":${endX},"endY":${endY}}|`,
+				`{"type":"ATTR","ticket":${attr.ticket},"id":"e${attr.id}"}||{"parentId":"${wireId}","key":"NET","value":"${net}","x":${centerX},"y":${centerY},"rotation":${rotation},"keyVisible":false,"valueVisible":true}|`,
+			];
+		}
+
+		const wire = o.nextRow();
+		const attr = o.nextRow();
+		const wireId = `e${wire.id}`;
+		return [
+			`["WIRE","${wireId}",[[${startX},${startY},${endX},${endY}]],"${wireStyle}",0]`,
+			`["ATTR","e${attr.id}","${wireId}","NET","${net}",0,1,${centerX},${centerY},${rotation},"${attrStyle}",0]`,
+		];
+	}
+
+	/**
+	 * 读取一个网表文件并解析
+	 *
+	 * 两种「空」都要拦：`getNetlistFile()` 在「当前文档没有网表」时返回 `undefined`，
+	 * 文件内容为空时也是空串 —— 这两种情况原先都会抛出 `Cannot read properties of undefined`，
+	 * 用户看到的却是笼统的「网表读取失败」，看不出真实原因。
+	 *
+	 * @param {() => Promise<Blob|undefined>} getFile - 取文件的方法
+	 * @param {'PCB'|'SCH'} page - 来源
+	 * @returns {Promise<{page: 'PCB'|'SCH', text: string, json: object}>}
+	 * @throws {Error} 文件不存在 / 内容为空 / JSON 无法解析
+	 */
+	async function readNetlistFile(getFile, page) {
+		const file = await getFile();
+		if (!file) throw new Error('获取的网表为空');
+		const text = await file.text();
+		if (!text || !text.trim()) throw new Error('获取的网表为空');
+		let json;
+		try {
+			json = JSON.parse(text);
+		} catch (e) {
+			throw new Error(`网表格式无法解析（${page}）：${(e && e.message) || e}`);
+		}
+		return { page: page, text: text, json: json };
 	}
 
 	/**
@@ -233,7 +363,7 @@
 	 *
 	 * @param {'AUTO'|'PCB'|'SCH'} [page='AUTO'] - 来源页面；AUTO 先试 PCB 再回退 SCH
 	 * @returns {Promise<{page: 'PCB'|'SCH', text: string, json: object}>} 来源、原文、解析结果
-	 * @throws {Error} 指定来源读取失败（或 AUTO 下两个来源都失败）时抛出
+	 * @throws {Error} 指定来源读取失败（或 AUTO 下两个来源都失败）时抛出，消息可直接展示给用户
 	 */
 	async function getNetlist(page = 'AUTO') {
 		const edaObj = getEda();
@@ -241,28 +371,18 @@
 			throw new Error('未检测到 EDA 运行环境');
 		}
 
-		if (page === 'PCB') {
-			const file = await edaObj.pcb_ManufactureData.getNetlistFile(NETLIST_KEY);
-			const text = await file.text();
-			return { page: 'PCB', text: text, json: JSON.parse(text) };
-		}
+		const readPcb = () => readNetlistFile(() => edaObj.pcb_ManufactureData.getNetlistFile(NETLIST_KEY), 'PCB');
+		const readSch = () => readNetlistFile(() => edaObj.sch_ManufactureData.getNetlistFile(NETLIST_KEY), 'SCH');
 
-		if (page === 'SCH') {
-			const file = await edaObj.sch_ManufactureData.getNetlistFile(NETLIST_KEY);
-			const text = await file.text();
-			return { page: 'SCH', text: text, json: JSON.parse(text) };
-		}
+		if (page === 'PCB') return readPcb();
+		if (page === 'SCH') return readSch();
 
 		// AUTO：PCB 优先，失败回退 SCH（SCH 的异常向上抛，由调用方提示）
-		let text;
 		try {
-			const file = await edaObj.pcb_ManufactureData.getNetlistFile(NETLIST_KEY);
-			text = await file.text();
-			return { page: 'PCB', text: text, json: JSON.parse(text) };
+			return await readPcb();
 		} catch (pcbError) {
-			const file = await edaObj.sch_ManufactureData.getNetlistFile(NETLIST_KEY);
-			text = await file.text();
-			return { page: 'SCH', text: text, json: JSON.parse(text) };
+			logger.debug('PCB 网表不可用，回退原理图网表：', pcbError);
+			return readSch();
 		}
 	}
 
@@ -353,6 +473,7 @@
 	global.WolfCommon = {
 		NETLIST_KEY: NETLIST_KEY,
 		LAYER: LAYER,
+		logger: logger,
 		getEda: getEda,
 		hasEda: hasEda,
 		getEditorVersion: getEditorVersion,
@@ -366,6 +487,7 @@
 		isConductiveLayer: isConductiveLayer,
 		getComponentsContainer: getComponentsContainer,
 		escapeHtml: escapeHtml,
+		createSchWireLines: createSchWireLines,
 		splitSourceLine: splitSourceLine,
 		joinSourceLine: joinSourceLine,
 		getNetlist: getNetlist,

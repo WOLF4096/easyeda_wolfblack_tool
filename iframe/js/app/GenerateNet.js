@@ -1,4 +1,9 @@
 // ========================= 1. 全局变量 =========================
+    const WC = window.WolfCommon;
+    if (!WC) {
+    	(document.body || document.documentElement).innerHTML = '<div style="padding:24px;font:14px/1.6 sans-serif;color:#f28b82">公共模块 common.js 未加载，请重新安装扩展</div>';
+    	throw new Error('[狼黑工具] 公共模块 common.js 未加载');
+    }
     const {
         getEditorVersion,
         isV2,
@@ -10,7 +15,8 @@
         isConductiveLayer,
         splitSourceLine,
         joinSourceLine,
-    } = window.WolfCommon;
+        logger,
+    } = WC;
 
     let g_pendingOperations = [];       // 当前待执行的操作列表
     let g_isAnalyzing = false;
@@ -503,7 +509,9 @@
                     let padSuffix = item[4];
                     padIdToPinInfo[compId + padSuffix] = { compId: compId, pin: pinNum };
                 }
-            } catch (e) {}
+            } catch (e) {
+            	logger.debug('跳过无法解析的源码行', e);
+            }
         });
         return { primitives, innerLayerIds };
     }
@@ -530,7 +538,9 @@
 				if (!part.trim()) continue;
 				try {
 					objects.push(JSON.parse(part));
-				} catch (e) {}
+				} catch (e) {
+					logger.debug('跳过格式异常的源码行', e);
+				}
 			}
 			return objects;
 		}
@@ -596,7 +606,9 @@
 							padIdToPinInfo[compId + padSuffix] = pinInfo;
 							padIdToPinInfo[padSuffix] = pinInfo;
 						}
-					} catch (e) {}
+					} catch (e) {
+						logger.debug('跳过格式异常的源码行', e);
+					}
 				}
 				continue;
 			}
@@ -875,7 +887,9 @@
 								compIdToDesignator[ownerId] = val;
 							}
 						}
-					} catch(e) {}
+					} catch(e) {
+						logger.debug('跳过无法识别的属性行', e);
+					}
 				});
 			}
 
@@ -1443,7 +1457,9 @@
 											modifiedId = realId;
 										}
 									}
-								} catch (e) {}
+								} catch (e) {
+									logger.debug('跳过无法解析的 PAD_NET 行', e);
+								}
 							}
 						} else {
 							const objId = leftObj.id;

@@ -9,6 +9,20 @@
 - 已知的 V4 适配待验证项：V4 的 PCB 坐标单位改为 mil（网格尺寸 ×10），`生成物理网络` 的点合并容差、`从PCB转原理图` 的坐标搬运需在 V4 实机复核
 - ⚠️ **V4 待处理**：V4 下 `sys_FileManager.setDocumentSource()` 整份写回会丢掉 `POURED`（铜皮已计算填充）行 —— 实测同一份原文写回后 45,557 → 43,119 字节，`POUR` 本体仍在、填充缓存消失（V2.2 逐字节一致）。受影响：`生成物理网络`（源码方式）、`从PCB转原理图` 等整份重写源码的功能；重算铜皮可恢复。处理方案待定
 
+## v1.17.9 `2026-10-21`
+- 修复 **13 个页面缺 `common.js` 时整页白屏且无提示**：顶层解构前先判空，缺失时在页面上显示「公共模块 common.js 未加载，请重新安装扩展」并中止脚本（此前是 `TypeError: Cannot destructure property … of undefined`）
+- 修复 **网表读取的两种"空"没有区分**：`getNetlistFile()` 返回 `undefined`（当前文档没有网表）与文件内容为空，都会抛 `Cannot read properties of undefined`；现统一抛 **`获取的网表为空`**，JSON 解析失败也给出「网表格式无法解析（PCB/SCH）」而不是裸 `SyntaxError`
+- 新增 **统一日志出口**：前端 `WolfCommon.logger`、后端 `src/js/common/logger.js`（`debug/info/warn/error` + `setLevel`，默认 info、debug 静默，前缀统一 `[狼黑工具]`）
+- 清理 **`console.*` 203 → 134**：`ReplaceComponent` 36 处、`PcbToSch` 17 处、`autoWire` 17 处全部改走 logger（整对象打印降为 `debug`，默认不再刷控制台）
+- 修复 **21 处空 `catch {}` 全部补上处理**：删除/写入类失败（批量替换删原器件、EDABridge 建图元、工时写入）改为 `warn/error`，逐行解析类（源码行 JSON 解析、PAD_NET 解析）改为 `debug`（默认不输出、排查时可开），关闭已断开连接这类幂等操作显式注明「可忽略」
+- 修复 **「从 PCB 转原理图」写入前没有文档类型门禁**：写入前校验 `documentType === 1`，不匹配时提示「请先切换到原理图页再写入」（该 iframe 是浮窗，用户可能在生成期间切走）
+- 修复 **7 处 `alert()`** 改为宿主 toast；其中「未检测到 EDA 运行环境」这类**无 eda 环境**的路径改用页面顶部横幅兜底（直接调 `eda.*` 会二次抛错）
+- 恢复 **「圆弧角度」校准**（撤销 v1.17.7 中的移除）：个别 EDA 版本 get/create 存在角度/弧度混用，不校准会偏。现在读弧线乘 `获取弧线.圆弧角度`、写弧线乘 `创建弧线.圆弧角度`，两侧独立；回滚重建也会带上读×写两个系数
+- 优化 **APITest 校准值校验**：合法范围 0.001~1000（覆盖 0.017453 / 57.2958 两个换算系数），越界或非法输入**拒绝保存**并提示是哪个项目哪个参数；「圆弧角度」参数旁标注 `1 / 0.017453 / 57.2958` 的含义
+- 重构 **源码发射器合一**：`PcbToSch` 与 `autoWire` 各自一份的「一根导线 = WIRE + LINE + NET 属性」拼装，收敛为 `src/js/common/sourceEmitter.js`（后端 ESM）+ `WolfCommon.createSchWireLines`（前端 IIFE 镜像），并新增**前后端逐字节一致性测试**（两套 bundle 无法共享代码，靠测试防漂移）
+- 工程化 新增测试 12 个（发射器 6 + 角度校准 2 + 其它），`npm test` **108 → 116 用例全绿**
+- 工程化 `build/dist/` 出库：移除历史入库的 1 个旧包（v1.14.22）并把 `build/dist/` 加入 `.gitignore`（本地 60+ 个产物保留，仅不再入库）
+
 ## v1.17.8 `2026-10-21`
 - 重构 入口 `src/index.ts` 整理为五段式：**公共工具 / 生命周期 / 有界面的功能 / 无界面的功能 / 模块加载时执行**，26 个导出按「原理图 / PCB / 通用 / 转换 / 网表」分组，每段一句话说明用途
 - 清理 入口里的死代码：`PadToVia`、`ViaToPad`、`PolylinetoWire`、`WiretoPolyline`、`ImportGerber`、`ExportFile` 六段注释代码（前两对已被 `*Toggle` 取代，后两个页面文件根本不存在），以及重复的 `WorkingHours` 注释块
@@ -23,7 +37,7 @@
 - 新增 **导线转线条自动合并连续段**：框选多段首尾相接的导线时合并成**一条连续折线**（此前是每段一条两点碎折线）。新增 `src/js/common/wireChain.js`（纯函数：拼链 / 反向 / 路径拼装），按 `layer + net + 线宽` 分组，支持弧线反向时角度取负
 - 修复 **导线⇄线条 Region 删不掉**：`_convertRegionToWire` 原用 `pcb_PrimitivePolyline.delete(regionId)`，实测返回 `true` 但图元仍在（转换后原区域残留）；改用 `pcb_PrimitiveRegion.delete`
 - 修复 **导线⇄线条先删后建会丢图元**：保留「先删」（交叉导线会被系统自动拆段，删必须赶在创建前），但创建失败时用删除前的快照重建原图元（`_restoreItem`），并给出 toast / 日志提示；坐标异常、零长度的图元改为跳过而不是先删
-- 修复 **弧线角度被错误缩放**：多边形路径 `ARC` 与 `pcb_PrimitiveArc.create/get` 两版实测都是**角度制**，不再乘「获取弧线/创建弧线.圆弧角度」校准倍率（历史配置里的 `0.017453` 会把 90° 压成 1.57°，圆弧几乎变直线）
+- 修复 **弧线角度被错误缩放**：多边形路径 `ARC` 与 `pcb_PrimitiveArc.create/get` 两版实测都是**角度制**，不再乘「获取弧线/创建弧线.圆弧角度」校准倍率（历史配置里的 `0.017453` 会把 90° 压成 1.57°，圆弧几乎变直线） —— ⚠️ **该改动已在 v1.17.9 撤销**：个别 EDA 版本确实存在角度/弧度混用，校准必须保留，v1.17.9 改为「读写两侧各用一个系数 + 数值范围校验」
 - 修复 **批量替换器件 V4 器件名为空**：V4 的 `otherProperty` 不再提供 `Device`/`DeviceName`，器件名改从 `comp.component.uuid.name` 取（实测 `CAP_0603` / `AO3401A_P` / `Res_0603`），Name 为空的器件不再显示空白
 - 修复 **导入 BOM 在 V4 提示成功但画面不变**：V4 的 `Name` 属性值是 `={Value}` 模板，只写 `Name` 不生效；现改为同时写 `Value`（`Name` 仅在是字面值时覆盖），BOM 表格显示也会解引用模板
 - 修复 **生成物理网络** 调用不存在的 `eda.sys_Window.redraw()`（V2.2 与 V4 实测都没有该 API，原来是永远抛错 + 空 catch）

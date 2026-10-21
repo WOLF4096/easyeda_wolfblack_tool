@@ -1,7 +1,12 @@
 // ==========================================
         // [1] 全局状态与基础配置
         // ==========================================
-        const { escapeHtml } = window.WolfCommon;
+        const WC = window.WolfCommon;
+        if (!WC) {
+        	(document.body || document.documentElement).innerHTML = '<div style="padding:24px;font:14px/1.6 sans-serif;color:#f28b82">公共模块 common.js 未加载，请重新安装扩展</div>';
+        	throw new Error('[狼黑工具] 公共模块 common.js 未加载');
+        }
+        const { escapeHtml, logger } = WC;
 
         let CURRENT_UUID = null;
         let CURRENT_NAME = '未命名工程';
@@ -1701,7 +1706,9 @@
                             this.data = Object.assign(this.data, parsed);
                         }
                     }
-                } catch (e) {}
+                } catch (e) {
+                	logger.warn('处理工时记录失败', e);
+                }
 
                 document.getElementById('welcome-enabled').checked = !!this.data.welcomeEnabled;
                 document.getElementById('idle-enabled').checked = !!this.data.idleEnabled;
@@ -1861,7 +1868,9 @@
                             projectStats[CURRENT_UUID] = { name: CURRENT_NAME, uuid: CURRENT_UUID, totalWork: 0, totalRest: 0, startTs: Infinity, endTs: -Infinity };
                         }
                     }
-                } catch (e) {}
+                } catch (e) {
+                	logger.warn('处理工时记录失败', e);
+                }
                 if (!SELECTED_DETAIL_UUID) SELECTED_DETAIL_UUID = CURRENT_UUID;
                 updateProjectSelector();
             }

@@ -1,5 +1,10 @@
 // ---------- 全局状态 ----------
-		const { getEditorVersion, isV2, isModern, escapeHtml } = window.WolfCommon;
+		const WC = window.WolfCommon;
+		if (!WC) {
+			(document.body || document.documentElement).innerHTML = '<div style="padding:24px;font:14px/1.6 sans-serif;color:#f28b82">公共模块 common.js 未加载，请重新安装扩展</div>';
+			throw new Error('[狼黑工具] 公共模块 common.js 未加载');
+		}
+		const { getEditorVersion, isV2, isModern, escapeHtml, createSchWireLines, logger } = WC;
 
 		let zip = null;                  // 解压后的工程文件
 		let projectJson = null;          // project.json 内容
@@ -118,13 +123,13 @@
 
 				// 1. 版本检测
 				updateProgress(5, '版本检测');
-				console.log('当前EDA版本:', version);
+				logger.debug('当前EDA版本:', version);
 				await delay(100); // 稍微停顿，让进度条可见
 
 				// 2. 获取当前原理图页信息
 				updateProgress(7, '获取当前原理信息');
 				const curDoc = await eda.dmt_SelectControl.getCurrentDocumentInfo();
-				console.log('当前文档信息:', curDoc);
+				logger.debug('当前文档信息:', curDoc);
 				await delay(100);
 
 				// 3. 获取工程文件（最慢步骤，进度缓慢递增）
@@ -158,7 +163,7 @@
 				zip = await JSZip.loadAsync(epro);
 				const projectJsonContent = await zip.file('project.json').async('string');
 				projectJson = JSON.parse(projectJsonContent);
-				console.log('Project JSON:', projectJson);
+				logger.debug('Project JSON:', projectJson);
 				await delay(100);
 
 				// 5. 查找对应的PCB UUID
@@ -166,9 +171,9 @@
 				const uuids = findUuids(projectJson, curDoc.uuid);
 				currentPcbUuid = projectJson.pcbs[uuids.pcbUuid];
 
-				console.log(projectJson.pcbs[uuids.pcbUuid],uuids.pcbUuid);
+				logger.debug(projectJson.pcbs[uuids.pcbUuid],uuids.pcbUuid);
 
-				console.log('找到的UUIDs:', uuids);
+				logger.debug('找到的UUIDs:', uuids);
 				currentSchematicUuid = uuids.schematicUuid;   // 存储原理图UUID
 				await delay(100);
 
@@ -180,19 +185,19 @@
 					throw new Error(`在压缩包中未找到PCB文件: ${pcbFilePath}`);
 				}
 				const pcbContent = await pcbFile.async('string');
-				console.log('PCB文件内容长度:', pcbContent.length);
+				logger.debug('PCB文件内容长度:', pcbContent.length);
 				await delay(100);
 
 				// 7. 解析 PCB 内容
 				updateProgress(60, '解析PCB内容');
 				components = parsePcbContent(pcbContent);
-				console.log('解析的元件信息:', components);
+				logger.debug('解析的元件信息:', components);
 				await delay(100);
 
 				// 8. 补充 Symbol 信息（从project.json中获取Symbol UUID和名称）
 				updateProgress(80, '获取符号信息');
 				enrichWithSymbol(components, projectJson);
-				console.log('补充Symbol后的元件:', components);
+				logger.debug('补充Symbol后的元件:', components);
 				await delay(100);
 
 				// 9. 存储数据表内容（components已包含所有信息）
@@ -210,7 +215,7 @@
 				exportCsvBtn.disabled = false;
 
 			} catch (error) {
-				console.error('刷新列表失败:', error);
+				logger.error('刷新列表失败:', error);
 				updateProgress(0, `错误: ${error.message}`);
 			}
 		});
@@ -389,7 +394,7 @@
 					if (!ignoreMissing) {
 						throw new Error(`未生成源码，部分元件格式错误，已标红，需要做完 器件标准化 才能转换！！！`);
 					} else {
-						console.log(`忽略 ${missingSymbols.length} 组缺失符号的元件，它们将不会出现在生成的源码中`);
+						logger.debug(`忽略 ${missingSymbols.length} 组缺失符号的元件，它们将不会出现在生成的源码中`);
 						updateProgress(10, `忽略 ${missingSymbols.length} 组缺失符号元件`);
 					}
 				}
@@ -401,13 +406,13 @@
 				if (ignoreMissing) {
 					// 过滤掉 symbolUuid 为空或仅空白字符的元件
 					componentsToBuild = components.filter(comp => comp.symbolUuid && comp.symbolUuid.trim() !== '');
-					console.log(`过滤后剩余 ${componentsToBuild.length} 个有符号的元件`);
+					logger.debug(`过滤后剩余 ${componentsToBuild.length} 个有符号的元件`);
 				}
 
 				// 4. 检测多部件符号（只对有符号的元件进行）
 				updateProgress(20, '检测多部件符号中');
 				await enrichPartCounts(componentsToBuild);  // 传入过滤后的列表
-				console.log('符号引脚信息数据库:',symbolPinsDatabase);
+				logger.debug('符号引脚信息数据库:',symbolPinsDatabase);
 				await delay(100);
 
 				// 4. 构建源码
@@ -427,7 +432,7 @@
 				});
 
 
-				// console.log('构建的SCH源码:\n', candidateSource);
+				// logger.debug('构建的SCH源码:\n', candidateSource);
 				await delay(100);
 
 				// 5. 完成
@@ -442,7 +447,7 @@
 				document.getElementById('outfile').disabled = false;
 				exportNetBtn.disabled = false;
 			} catch (error) {
-				console.error('构建源码失败:', error);
+				logger.error('构建源码失败:', error);
 				updateProgress(0, `错误: ${error.message}`);
 			}
 		});
@@ -462,6 +467,15 @@
 				// 进度条固定在90%
 				updateProgress(90, '正在写入文档...');
 
+				// 写入门禁：PCB 与原理图的源码格式不同，写进错误文档会被系统拦截（「格式错误」）。
+				// documentType：1 = 原理图页。这个 iframe 是浮窗，用户可能在生成期间切到别的文档。
+				const curDoc = await eda.dmt_SelectControl.getCurrentDocumentInfo();
+				if (!curDoc || curDoc.documentType !== 1) {
+					updateProgress(0, '请先切换到原理图页再写入');
+					eda.sys_Message.showToastMessage('请先切换到原理图页再写入', 2);
+					return;
+				}
+
 				const isSuccess = await eda.sys_FileManager.setDocumentSource(candidateSource);
 
 				const endTime = Date.now();
@@ -476,7 +490,7 @@
 					eda.sys_Message.showToastMessage('写入失败', 'error');
 				}
 			} catch (error) {
-				console.error('写入失败:', error);
+				logger.error('写入失败:', error);
 				updateProgress(0, `错误: ${error.message}`);
 			}
 		});
@@ -535,7 +549,7 @@
 				// 可选提示
 				eda.sys_Message.showToastMessage('文件已导出', 'success');
 			} catch (error) {
-				console.error('导出失败:', error);
+				logger.error('导出失败:', error);
 				updateProgress(0, `导出错误: ${error.message}`);
 			}
 		});
@@ -803,7 +817,7 @@
 				const symbolPath = `SYMBOL/${comp.symbolUuid}.esym`;
 				const symbolFile = zip.file(symbolPath);
 				if (!symbolFile) {
-					console.warn(`符号文件不存在: ${symbolPath}`);
+					logger.warn(`符号文件不存在: ${symbolPath}`);
 					comp.partCount = 1;
 					symbolPinsDatabase[comp.symbolUuid] = [{ pinBbox: null, pins: {} }]; // 占位
 					continue;
@@ -1068,32 +1082,24 @@
 							netT = 0;
 					}
 
-					// 计算导线中心点（原始坐标）
-					const centerX = (pinX + endX) / 2;
-					const rawCenterY = (rawPinY + rawEndY) / 2;
-
-					// 根据 yvalue 决定最终输出的 Y 坐标（翻转后输出）
-					const outPinY = rawPinY;
-					const outEndY = rawEndY;
-					const outCenterY = rawCenterY;
-
-					if (isV2()) {
-						// V2 版本
-						const wireTicket = idCounter++;
-						const wireId = 'e' + wireTicket;
-						wireLines.push(`["WIRE","${wireId}",[[${pinX},${outPinY},${endX},${outEndY}]],"st1",0]`);
-						wireLines.push(`["ATTR","e${idCounter++}","${wireId}","NET","${netName}",0,1,${centerX},${outCenterY},${netT},"st1",0]`);
-					} else if (isModern()) {
-						// V3 版本
-						const wireTicket = idCounter++;
-						const lineTicket = idCounter++;
-						const attrTicket = idCounter++;
-						const wireId = 'e' + wireTicket;
-
-						// V3 图元，使用 outPinY/outEndY/outCenterY 作为最终坐标
-						wireLines.push(`{"type":"WIRE","ticket":${wireTicket},"id":"${wireId}"}||{"zIndex":1}|`);
-						wireLines.push(`{"type":"LINE","ticket":${lineTicket},"id":"e${lineTicket}"}||{"lineGroup":"${wireId}","startX":${pinX},"startY":${outPinY},"endX":${endX},"endY":${outEndY}}|`);
-						wireLines.push(`{"type":"ATTR","ticket":${attrTicket},"id":"e${attrTicket}"}||{"parentId":"${wireId}","key":"NET","value":"${netName}","x":${centerX},"y":${outCenterY},"rotation":${netT},"keyVisible":false,"valueVisible":true}|`);
+					// 源码行统一由 WolfCommon.createSchWireLines 发射（与后端 autoWire 同一份规格）
+					if (isV2() || isModern()) {
+						wireLines.push(
+							...createSchWireLines({
+								net: netName,
+								startX: pinX,
+								startY: rawPinY,
+								endX: endX,
+								endY: rawEndY,
+								rotation: netT,
+								isModern: !isV2(),
+								// 该页面的 id 与 ticket 共用一个计数器（历史行为，保持不变）
+								nextRow: () => {
+									const n = idCounter++;
+									return { id: n, ticket: n };
+								},
+							}),
+						);
 					}
 				});
 				return wireLines;

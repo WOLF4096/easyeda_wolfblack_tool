@@ -77,6 +77,32 @@ export function isValidSegment(seg) {
 }
 
 /**
+ * 在剩余段里找一个能与「锚点」接上的段
+ *
+ * @param {Array<object>} list - 全部段
+ * @param {boolean[]} used - 已使用的标记
+ * @param {object} anchor - 锚点段（链尾或链首）
+ * @param {'tail'|'head'} mode - tail：接在 anchor 终点之后；head：接在 anchor 起点之前
+ * @param {number} tol - 端点容差
+ * @returns {{index: number, reverse: boolean}|null} 命中的段下标及是否需要反转
+ */
+function findConnector(list, used, anchor, mode, tol) {
+	for (let j = 0; j < list.length; j++) {
+		if (used[j]) continue;
+		const seg = list[j];
+		if (!sameGroup(anchor, seg)) continue;
+		if (mode === 'tail') {
+			if (samePoint(anchor.endX, anchor.endY, seg.startX, seg.startY, tol)) return { index: j, reverse: false };
+			if (samePoint(anchor.endX, anchor.endY, seg.endX, seg.endY, tol)) return { index: j, reverse: true };
+		} else {
+			if (samePoint(anchor.startX, anchor.startY, seg.endX, seg.endY, tol)) return { index: j, reverse: false };
+			if (samePoint(anchor.startX, anchor.startY, seg.startX, seg.startY, tol)) return { index: j, reverse: true };
+		}
+	}
+	return null;
+}
+
+/**
  * 把导线段拼成连续链
  *
  * 贪心算法：从任意未使用的段出发，先向「链尾」方向找能接上的段（起点或终点与链尾重合，
@@ -102,51 +128,19 @@ export function buildWireChains(segments, tolerance = DEFAULT_TOLERANCE) {
 		// 1. 向链尾延伸
 		for (let guard = 0; guard <= list.length; guard++) {
 			const tail = chain.segments[chain.segments.length - 1];
-			let found = -1;
-			let reverse = false;
-			for (let j = 0; j < list.length; j++) {
-				if (used[j]) continue;
-				const seg = list[j];
-				if (!sameGroup(tail, seg)) continue;
-				if (samePoint(tail.endX, tail.endY, seg.startX, seg.startY, tol)) {
-					found = j;
-					reverse = false;
-					break;
-				}
-				if (samePoint(tail.endX, tail.endY, seg.endX, seg.endY, tol)) {
-					found = j;
-					reverse = true;
-					break;
-				}
-			}
-			if (found < 0) break;
-			used[found] = true;
-			chain.segments.push(reverse ? reverseSegment(list[found]) : list[found]);
+			const hit = findConnector(list, used, tail, 'tail', tol);
+			if (!hit) break;
+			used[hit.index] = true;
+			chain.segments.push(hit.reverse ? reverseSegment(list[hit.index]) : list[hit.index]);
 		}
 
 		// 2. 向链头延伸（接在链首的那一段，其终点必须落在链首起点上）
 		for (let guard = 0; guard <= list.length; guard++) {
 			const head = chain.segments[0];
-			let found = -1;
-			let reverse = false;
-			for (let j = 0; j < list.length; j++) {
-				if (used[j]) continue;
-				const seg = list[j];
-				if (!sameGroup(head, seg)) continue;
-				if (samePoint(head.startX, head.startY, seg.endX, seg.endY, tol)) {
-					found = j;
-					reverse = false;
-					break;
-				}
-				if (samePoint(head.startX, head.startY, seg.startX, seg.startY, tol)) {
-					found = j;
-					reverse = true;
-					break;
-				}
-			}
-			if (found < 0) break;
-			used[found] = true;
-			chain.segments.unshift(reverse ? reverseSegment(list[found]) : list[found]);
+			const hit = findConnector(list, used, head, 'head', tol);
+			if (!hit) break;
+			used[hit.index] = true;
+			chain.segments.unshift(hit.reverse ? reverseSegment(list[hit.index]) : list[hit.index]);
 		}
 
 		chains.push(chain);

@@ -1,5 +1,10 @@
 (function() {
-        const { getNetlist, setNetlist, escapeHtml } = window.WolfCommon;
+        const WC = window.WolfCommon;
+        if (!WC) {
+        	(document.body || document.documentElement).innerHTML = '<div style="padding:24px;font:14px/1.6 sans-serif;color:#f28b82">公共模块 common.js 未加载，请重新安装扩展</div>';
+        	throw new Error('[狼黑工具] 公共模块 common.js 未加载');
+        }
+        const { getNetlist, setNetlist, escapeHtml } = WC;
 
         // ---------- 全局变量 ----------
         let currentNetlistRaw = null;      // 原始JLCEDA网表对象(深拷贝保留原始结构)

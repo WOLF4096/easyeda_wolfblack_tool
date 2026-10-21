@@ -1,5 +1,10 @@
 // ---------- 全局变量 ----------
-    const { getNetlist, getComponentsContainer } = window.WolfCommon;
+    const WC = window.WolfCommon;
+    if (!WC) {
+    	(document.body || document.documentElement).innerHTML = '<div style="padding:24px;font:14px/1.6 sans-serif;color:#f28b82">公共模块 common.js 未加载，请重新安装扩展</div>';
+    	throw new Error('[狼黑工具] 公共模块 common.js 未加载');
+    }
+    const { getNetlist, getComponentsContainer } = WC;
     let allComponents = [];              // 存储所有器件（扁平化）
     let sortedPins = [];                 // 所有出现的引脚编号（排序后）
     // let netlistData = null;
@@ -221,7 +226,7 @@
 			const allNets = await eda.pcb_Net.getAllNets();
 			
 			if (!allNets || allNets.length === 0) {
-				alert("未能获取到网络数据，请确认是否处于 PCB 环境或图纸中是否包含网络。");
+				eda.sys_Message.showToastMessage("未能获取到网络数据，请确认是否处于 PCB 环境或图纸中是否包含网络", 2);
 				return;
 			}
 
@@ -257,7 +262,7 @@
 
 		} catch (error) {
 			console.error("获取网络长度失败:", error);
-			alert("导出网络数据失败！注意：带长度的网络导出功能仅在 PCB 视图下有效。");
+			eda.sys_Message.showToastMessage("导出网络数据失败：带长度的网络导出仅在 PCB 视图下有效", 2);
 		}
 	}
 
@@ -313,7 +318,7 @@
     // 绑定导出按钮
     exportPinNetBtn.addEventListener('click', () => {
         if (allComponents.length === 0) {
-            alert('网表尚未加载');
+            eda.sys_Message.showToastMessage("网表尚未加载", 2);
             return;
         }
         exportPinNetAsCSV();
@@ -321,7 +326,7 @@
 
     exportAllNetBtn.addEventListener('click', () => {
         if (allComponents.length === 0) {
-            alert('网表尚未加载');
+            eda.sys_Message.showToastMessage("网表尚未加载", 2);
             return;
         }
         exportAllNetsAsCSV();

@@ -102,6 +102,25 @@ export const WireConverter = {
 	},
 
 	/**
+	 * 角度校准系数（单侧）
+	 *
+	 * 为什么只取一侧：多边形路径的 `ARC` 角度是**统一基准**（实测 V2.2 / V4 都是角度制），
+	 * 只有 `pcb_PrimitiveArc` 的 get / create 在个别 EDA 版本里会与基准不同（角度/弧度混用）。
+	 * 所以：
+	 *   - 读弧线 → 基准：乘 `获取弧线.圆弧角度`（该版本 get 返回弧度时填 57.2958）
+	 *   - 基准 → 写弧线：乘 `创建弧线.圆弧角度`（该版本 create 要求弧度时填 0.017453）
+	 * 两个值都为 1 表示两侧同为角度制（当前 V2.2.45 / V4.1.78 实测即是）。
+	 *
+	 * @param {object} api - 校准配置
+	 * @param {'获取弧线'|'创建弧线'} key - 取哪一侧
+	 * @returns {number} 合法(>0 且有限)的系数，否则 1
+	 */
+	_getAngleScale(api, key) {
+		const value = Number(api?.[key]?.['圆弧角度']);
+		return Number.isFinite(value) && value > 0 ? value : 1;
+	},
+
+	/**
 	 * 构建图元ID到Net的映射表
 	 */
 	_buildNetMap(detailedPrimitives) {
@@ -135,9 +154,10 @@ export const WireConverter = {
 	 * @param {object} item - `getAllSelectedPrimitives()` 返回的原始图元对象
 	 * @param {number} [coordScale] - 坐标倍率：快照是原始值，重建时要按 create 的单位换算
 	 * @param {number} [widthScale] - 线宽倍率
+	 * @param {number} [angleScale] - 角度倍率（读侧 × 写侧：快照是 get 的原始值，重建走 create）
 	 * @returns {Promise<boolean>} 是否重建成功
 	 */
-	async _restoreItem(item, coordScale = 1, widthScale = 1) {
+	async _restoreItem(item, coordScale = 1, widthScale = 1, angleScale = 1) {
 		if (!item) return false;
 		try {
 			if (item.primitiveType === 'Polyline') {
@@ -163,7 +183,7 @@ export const WireConverter = {
 					item.startY * coordScale,
 					item.endX * coordScale,
 					item.endY * coordScale,
-					item.arcAngle || 0,
+					(item.arcAngle || 0) * angleScale,
 					item.lineWidth * widthScale,
 					1,
 					false,
@@ -202,6 +222,7 @@ export const WireConverter = {
 
 		const coordScale = this._getScale(api, '获取折线', '创建直线', '坐标');
 		const widthScale = this._getScale(api, '获取折线', '创建直线', '线宽');
+		const angleScale = this._getAngleScale(api, '创建弧线');
 
 		const net = polyItem.net || '';
 		const layer = polyItem.layer;
@@ -212,7 +233,7 @@ export const WireConverter = {
 
 		let created = 0;
 		try {
-			created = await this._emitLinesFromPath(arr, net, layer, targetWidth, coordScale);
+			created = await this._emitLinesFromPath(arr, net, layer, targetWidth, coordScale, angleScale);
 			if (created === 0) throw new Error('没有生成任何导线段');
 		} catch (e) {
 			console.error('线条转导线失败，正在恢复原折线:', e);
@@ -234,6 +255,8 @@ export const WireConverter = {
 		// 获取折线 (作为 Region 的兜底) 到 创建直线的比例
 		const coordScale = this._getScale(api, '获取折线', '创建直线', '坐标');
 		const widthScale = this._getScale(api, '获取折线', '创建直线', '线宽');
+		// 多边形角度是基准（度），写入 Arc 时按校准换算（个别版本 create 要弧度）
+		const angleScale = this._getAngleScale(api, '创建弧线');
 
 		const net = overrideNet ?? regionItem.net ?? '';
 		const layer = regionItem.layer;
@@ -255,7 +278,7 @@ export const WireConverter = {
 			// --- 场景 A: 通用多边形 ---
 			if (typeof firstVal === 'number') {
 				if (arr.length < 2) return;
-				const created = await this._emitLinesFromPath(arr, net, layer, targetWidth, coordScale);
+				const created = await this._emitLinesFromPath(arr, net, layer, targetWidth, coordScale, angleScale);
 				if (created === 0) throw new Error('没有生成任何导线段');
 				return;
 			}
@@ -266,8 +289,8 @@ export const WireConverter = {
 				const cx = arr[1] * coordScale;
 				const cy = arr[2] * coordScale;
 				const r = arr[3] * coordScale;
-				await eda.pcb_PrimitiveArc.create(net, layer, cx - r, cy, cx + r, cy, 180, targetWidth, 1, false);
-				await eda.pcb_PrimitiveArc.create(net, layer, cx + r, cy, cx - r, cy, 180, targetWidth, 1, false);
+				await eda.pcb_PrimitiveArc.create(net, layer, cx - r, cy, cx + r, cy, 180 * angleScale, targetWidth, 1, false);
+				await eda.pcb_PrimitiveArc.create(net, layer, cx + r, cy, cx - r, cy, 180 * angleScale, targetWidth, 1, false);
 			} else if (type === 'R') {
 				const x = arr[1] * coordScale;
 				const y = arr[2] * coordScale;
@@ -302,15 +325,15 @@ export const WireConverter = {
 				const p7_end = rotatePoint(x, y - r);
 
 				if (w > 2 * r) await eda.pcb_PrimitiveLine.create(net, layer, p1_start.x, p1_start.y, p1_end.x, p1_end.y, targetWidth, false);
-				if (r > 0) await eda.pcb_PrimitiveArc.create(net, layer, p1_end.x, p1_end.y, p2_end.x, p2_end.y, -90, targetWidth, 1, false);
+				if (r > 0) await eda.pcb_PrimitiveArc.create(net, layer, p1_end.x, p1_end.y, p2_end.x, p2_end.y, -90 * angleScale, targetWidth, 1, false);
 				if (Math.abs(h_vector) > 2 * r)
 					await eda.pcb_PrimitiveLine.create(net, layer, p2_end.x, p2_end.y, p3_end.x, p3_end.y, targetWidth, false);
-				if (r > 0) await eda.pcb_PrimitiveArc.create(net, layer, p3_end.x, p3_end.y, p4_end.x, p4_end.y, -90, targetWidth, 1, false);
+				if (r > 0) await eda.pcb_PrimitiveArc.create(net, layer, p3_end.x, p3_end.y, p4_end.x, p4_end.y, -90 * angleScale, targetWidth, 1, false);
 				if (w > 2 * r) await eda.pcb_PrimitiveLine.create(net, layer, p4_end.x, p4_end.y, p5_end.x, p5_end.y, targetWidth, false);
-				if (r > 0) await eda.pcb_PrimitiveArc.create(net, layer, p5_end.x, p5_end.y, p6_end.x, p6_end.y, -90, targetWidth, 1, false);
+				if (r > 0) await eda.pcb_PrimitiveArc.create(net, layer, p5_end.x, p5_end.y, p6_end.x, p6_end.y, -90 * angleScale, targetWidth, 1, false);
 				if (Math.abs(h_vector) > 2 * r)
 					await eda.pcb_PrimitiveLine.create(net, layer, p6_end.x, p6_end.y, p7_end.x, p7_end.y, targetWidth, false);
-				if (r > 0) await eda.pcb_PrimitiveArc.create(net, layer, p7_end.x, p7_end.y, p1_start.x, p1_start.y, -90, targetWidth, 1, false);
+				if (r > 0) await eda.pcb_PrimitiveArc.create(net, layer, p7_end.x, p7_end.y, p1_start.x, p1_start.y, -90 * angleScale, targetWidth, 1, false);
 			}
 		} catch (e) {
 			console.error('区域转导线失败，正在恢复原区域:', e);
@@ -333,7 +356,7 @@ export const WireConverter = {
 	 * @param {number} coordScale - 坐标缩放倍率
 	 * @returns {Promise<number>} 实际创建的导线段数
 	 */
-	async _emitLinesFromPath(arr, net, layer, targetWidth, coordScale) {
+	async _emitLinesFromPath(arr, net, layer, targetWidth, coordScale, angleScale = 1) {
 		let startX = arr[0] * coordScale;
 		let startY = arr[1] * coordScale;
 		let currentMode = 'L';
@@ -358,7 +381,7 @@ export const WireConverter = {
 				i += 2;
 				count++;
 			} else if (currentMode === 'ARC' || currentMode === 'CARC') {
-				const angle = Number(arr[i]) || 0;
+				const angle = (Number(arr[i]) || 0) * angleScale;
 				const endX = arr[i + 1] * coordScale;
 				const endY = arr[i + 2] * coordScale;
 				if (!Number.isFinite(endX) || !Number.isFinite(endY)) break;
@@ -389,6 +412,9 @@ export const WireConverter = {
 	 * @param {object} api - 校准配置
 	 */
 	async _convertWiresToPoly(items, api) {
+		// 角度：get 出来的角度先换到基准（度），失败回滚时再换回 create 需要的单位
+		const readAngleScale = this._getAngleScale(api, '获取弧线');
+		const writeAngleScale = this._getAngleScale(api, '创建弧线');
 		// 1. 归一化（缩放 + 统一字段），并记录原始图元用于回滚
 		const convertible = [];
 		const skipped = [];
@@ -406,10 +432,12 @@ export const WireConverter = {
 				startY: item.startY * coordScale,
 				endX: item.endX * coordScale,
 				endY: item.endY * coordScale,
-				angle: isArc ? Number(item.arcAngle) || 0 : 0,
+				angle: isArc ? (Number(item.arcAngle) || 0) * readAngleScale : 0,
 				item,
 				coordScale,
 				widthScale,
+				// 回滚走 create：原始 get 值 × 读侧 × 写侧
+				restoreAngleScale: readAngleScale * writeAngleScale,
 			};
 			// 坐标异常 / 零长度的图元不参与转换，更不能先删掉
 			if (isValidSegment(seg)) convertible.push(seg);
@@ -456,7 +484,7 @@ export const WireConverter = {
 				failCount++;
 				console.error(`折线创建失败（${chain.segments.length} 段），正在恢复原导线:`, e);
 				// 该链的每段都按快照重建，尽量不让图元消失
-				for (const seg of chain.segments) await this._restoreItem(seg.item, seg.coordScale, seg.widthScale);
+				for (const seg of chain.segments) await this._restoreItem(seg.item, seg.coordScale, seg.widthScale, seg.restoreAngleScale);
 			}
 		}
 

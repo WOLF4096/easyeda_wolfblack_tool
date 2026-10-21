@@ -12,4 +12,5 @@ debug.log
 .gitignore
 .prettierignore
 测试样本
+/build/dist/
 /build/test-report/

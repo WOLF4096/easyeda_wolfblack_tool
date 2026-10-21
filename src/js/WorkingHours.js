@@ -1,3 +1,5 @@
+import { logger } from './common/logger.js';
+
 export function WorkingHours() {
 	// ==========================================
 	// 1. 全局配置项
@@ -298,7 +300,9 @@ export function WorkingHours() {
 			ReminderManager.data.lastHb = Date.now();
 			try {
 				await eda.sys_Storage.setExtensionUserConfig(CONFIG.reminderKey, JSON.stringify(ReminderManager.data));
-			} catch(e) {}
+			} catch(e) {
+				logger.warn('保存提醒配置失败', e);
+			}
 		},
 
 		showWelcome: () => {
@@ -341,7 +345,9 @@ export function WorkingHours() {
 				session.currentUuid = info.uuid;
 				session.currentName = info.friendlyName || '未命名工程';
 			}
-		} catch (e) {}
+		} catch (e) {
+			logger.debug('读取工程信息失败（不影响计时）', e);
+		}
 	}
 
 	function checkActivity(apiObj, type) {
@@ -372,7 +378,9 @@ export function WorkingHours() {
 		try {
 			const debugFlag = await eda.sys_Storage.getExtensionUserConfig('WORKING_HOURS_DEBUG_ENABLED');
 			globalThis.__WORKING_HOURS_DEBUG__ = (debugFlag === 'true');
-		} catch(e) {}
+		} catch(e) {
+			logger.debug('读取调试开关失败', e);
+		}
 
 		let now = Date.now();
 		let delta = (now - session.lastTick) / 1000;

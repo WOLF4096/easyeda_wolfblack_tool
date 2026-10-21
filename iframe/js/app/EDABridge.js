@@ -21,7 +21,9 @@ let ws = null;
 function log(...a) {
 	try {
 		console.log('[EDA 桥]', ...a);
-	} catch (e) {}
+	} catch (e) {
+		// 控制台不可用时忽略
+	}
 }
 
 function setStatus(txt, ok) {
@@ -322,7 +324,9 @@ function connectWS() {
 	if (prev) {
 		try {
 			prev.close();
-		} catch (e) {}
+		} catch (e) {
+			log('关闭旧连接时出错（通常可忽略）');
+		}
 	}
 	stopWatch();
 
@@ -367,7 +371,9 @@ function connectWS() {
 	sock.onerror = () => {
 		try {
 			sock.close();
-		} catch (e) {}
+		} catch (e) {
+			log('关闭连接时出错（通常可忽略）');
+		}
 	};
 }
 
@@ -378,7 +384,9 @@ function disconnect() {
 	if (old) {
 		try {
 			old.close();
-		} catch (e) {}
+		} catch (e) {
+			log('关闭旧连接时出错（通常可忽略）');
+		}
 	}
 	setStatus('未连接', false);
 }

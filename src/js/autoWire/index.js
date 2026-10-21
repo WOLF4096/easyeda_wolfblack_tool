@@ -17,6 +17,8 @@
 //
 import { PerformanceMonitor } from './performanceMonitor.js';
 import { formatSchematicNetlist, formatPCBNetlist, formatFileNetlist, processNetlistData } from './netlistParser.js';
+import { logger } from '../common/logger.js';
+import { createSchWireLines } from '../common/sourceEmitter.js';
 
 // 导线长度
 const WIRE_LENGTH = 40;
@@ -33,10 +35,10 @@ export async function placeWires(importMethod) {
         // 版本检测日志
         try {
             if (typeof eda !== 'undefined' && currentVersion) {
-                console.log('当前EDA版本:', currentVersion);
+                logger.debug('当前EDA版本:', currentVersion);
             }
         } catch (e) {
-            console.log('版本检测跳过');
+            logger.debug('版本检测跳过');
         }
 
         // 1. 获取选中的器件
@@ -192,7 +194,7 @@ export async function placeWires(importMethod) {
         };
     } catch (error) {
         const performanceStats = perfMonitor.end();
-        console.error('放置导线失败:', error);
+        logger.error('放置导线失败:', error);
         // 失败原因要让用户在界面上看得到（此前只写控制台，表现为「点了没反应」）
         await eda.sys_Message.showToastMessage('放置导线失败：' + ((error && error.message) || error), 2);
         return {
@@ -211,17 +213,17 @@ async function switchToPCB() {
     try {
         // A. 记录当前原理图信息 (如果当前是在原理图界面)
         const curDoc = await eda.dmt_SelectControl.getCurrentDocumentInfo();
-        console.log(curDoc);
+        logger.debug(curDoc);
         if (curDoc && curDoc.documentType === 1) {
             // 1 代表原理图
             _lastSchematicTabId = curDoc.uuid + '@' + curDoc.parentProjectUuid;
-            console.log(_lastSchematicTabId);
-            console.log(curDoc.tabId);
+            logger.debug(_lastSchematicTabId);
+            logger.debug(curDoc.tabId);
         }
 
         // B. 获取当前板子对应的 PCB UUID
         const boardInfo = await eda.dmt_Board.getCurrentBoardInfo();
-        console.log(boardInfo);
+        logger.debug(boardInfo);
         if (!boardInfo || !boardInfo.pcb) throw new Error('未获取到板子信息');
         const targetPcbUuid = boardInfo.pcb.uuid;
 
@@ -229,14 +231,14 @@ async function switchToPCB() {
         const splitData = await eda.dmt_EditorControl.getSplitScreenTree();
         // TabId 通常格式为 "UUID@ProjectID"，所以使用 includes 匹配
         const pcbTab = splitData.tabs.find((tab) => tab.tabId.includes(targetPcbUuid));
-        console.log(pcbTab);
+        logger.debug(pcbTab);
         if (pcbTab) {
             await eda.dmt_EditorControl.activateDocument(pcbTab.tabId);
         } else {
             await eda.sys_Message.showToastMessage('未找到当前板子对应的PCB窗口，请确认PCB已打开', 2);
         }
     } catch (error) {
-        console.error('切换PCB失败:', error);
+        logger.error('切换PCB失败:', error);
     }
 }
 
@@ -259,7 +261,7 @@ async function getSchematicNetlist() {
     } catch (error) {
         eda.sys_Log.add('获取原理图网表失败', 'error');
         eda.sys_PanelControl.openBottomPanel('log');
-        console.error('获取原理图网表失败:', error);
+        logger.error('获取原理图网表失败:', error);
         throw new Error('获取原理图网表失败');
     }
 }
@@ -301,7 +303,7 @@ async function getSelectedComponent() {
                 designator = component.param.designator;
                 componentId = component.id;
             } else {
-                console.warn('未识别的组件结构', component);
+                logger.warn('未识别的组件结构', component);
                 continue;
             }
 
@@ -337,7 +339,7 @@ async function getSelectedComponent() {
     } catch (error) {
         eda.sys_Log.add('获取选中器件失败', 'error');
         eda.sys_PanelControl.openBottomPanel('log');
-        console.error('获取选中器件失败:', error);
+        logger.error('获取选中器件失败:', error);
         throw new Error('获取选中器件失败');
     }
 }
@@ -360,7 +362,7 @@ async function getPCBSelection() {
         }
     } catch (error) {
         eda.sys_Log.add('获取PCB选中信息失败', 'error');
-        console.error('获取PCB选中信息失败:', error);
+        logger.error('获取PCB选中信息失败:', error);
         throw new Error('获取PCB选中信息失败');
     }
 }
@@ -376,7 +378,7 @@ async function importNetlistFromFile() {
         const fileContent = await readFileAsText(fileData);
         return fileContent;
     } catch (error) {
-        console.error('导入网表文件失败:', error);
+        logger.error('导入网表文件失败:', error);
         throw new Error('导入网表文件失败');
     }
 }
@@ -428,13 +430,13 @@ async function getMultiplePinPositions(pinsData) {
                 } else {
                     eda.sys_Log.add(`在图元 ${componentId} 中未找到引脚 ${pinNumber}`);
                     eda.sys_PanelControl.openBottomPanel('log');
-                    console.warn(`在图元 ${componentId} 中未找到引脚 ${pinNumber}`);
+                    logger.warn(`在图元 ${componentId} 中未找到引脚 ${pinNumber}`);
                 }
             }
         } catch (error) {
             eda.sys_Log.add(`获取图元 ${componentId} 引脚信息失败:`, 'error');
             eda.sys_PanelControl.openBottomPanel('log');
-            console.error(`获取图元 ${componentId} 引脚信息失败:`, error);
+            logger.error(`获取图元 ${componentId} 引脚信息失败:`, error);
         }
     }
 
@@ -455,7 +457,7 @@ async function drawWiresForPins(pinsData, idCounter, ticketCounter) {
             const pinInfo = pinPositions[`${componentId}_${pin}`];
 
             if (!pinInfo) {
-                console.warn(`未找到引脚 ${pin} 的位置信息`);
+                logger.warn(`未找到引脚 ${pin} 的位置信息`);
                 results.push({ componentId, pin, netName, success: false });
                 continue;
             }
@@ -478,12 +480,18 @@ async function drawWiresForPins(pinsData, idCounter, ticketCounter) {
 }
 
 // 弃用 API 绘制，改为生成单根导线的源码片段
+//
+// 源码行由 `common/sourceEmitter.js` 统一发射（与前端 PcbToSch 同一份规格），
+// 这里只负责几何：按引脚朝向算终点，Y 轴方向按版本翻转。
 function generateWireSource(pinInfo, netName, idCounter, ticketCounter) {
     const { x, y, angle } = pinInfo;
-    let startX = x;
-    let startY = -y; // API获取的坐标Y值与源码相反
-    let endX, endY, netT;
-    let y1 = currentVersion.startsWith('2.') ? 1 : -1;
+    const startX = x;
+    const startY = -y; // API获取的坐标Y值与源码相反
+    let endX;
+    let endY;
+    let netT;
+    const y1 = currentVersion.startsWith('2.') ? 1 : -1;
+    const isV2 = currentVersion.startsWith('2.');
 
     switch (angle) {
         case 0:
@@ -512,25 +520,22 @@ function generateWireSource(pinInfo, netName, idCounter, ticketCounter) {
             netT = 0;
     }
 
-    const centerX = (startX + endX) / 2;
-    const centerY = (startY + endY) / 2;
-    const lines = [];
-
-    if (currentVersion.startsWith('2.')) {
-        // V2 源码格式
-        const wireId = 'e' + idCounter.val++;
-        const attrId = 'e' + idCounter.val++;
-        lines.push(`["WIRE","${wireId}",[[${startX},${startY},${endX},${endY}]],"st1",0]`);
-        lines.push(`["ATTR","${attrId}","${wireId}","NET","${netName}",0,1,${centerX},${centerY},${netT},"st2",0]`);
-    } else {
-        // V3 源码格式
-        const wireId = 'e' + idCounter.val++;
-        lines.push(`{"type":"WIRE","ticket":${ticketCounter.val++},"id":"${wireId}"}||{"zIndex":1}|`);
-        lines.push(`{"type":"LINE","ticket":${ticketCounter.val++},"id":"e${idCounter.val++}"}||{"lineGroup":"${wireId}","startX":${startX},"startY":${startY},"endX":${endX},"endY":${endY}}|`);
-        lines.push(`{"type":"ATTR","ticket":${ticketCounter.val++},"id":"e${idCounter.val++}"}||{"parentId":"${wireId}","key":"NET","value":"${netName}","x":${centerX},"y":${centerY},"rotation":${netT},"keyVisible":false,"valueVisible":true}|`);
-    }
-
-    return lines;
+    return createSchWireLines({
+        net: netName,
+        startX: startX,
+        startY: startY,
+        endX: endX,
+        endY: endY,
+        rotation: netT,
+        isModern: !isV2,
+        // V2 的 ATTR 用 st2（历史样式名，与 PcbToSch 的 st1 不同）
+        attrStyle: isV2 ? 'st2' : 'st1',
+        // id 走 maxId+1、ticket 走 maxTicket+1，两个计数器独立
+        nextRow: () => ({
+            id: idCounter.val++,
+            ticket: isV2 ? 0 : ticketCounter.val++,
+        }),
+    });
 }
 
 // 延迟函数

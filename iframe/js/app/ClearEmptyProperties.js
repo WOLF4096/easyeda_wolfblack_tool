@@ -1,6 +1,35 @@
 // 获取 EDA 环境上下文
         const sys_eda = window.parent.eda || window.eda;
-        const { getNetlist, setNetlist, getComponentsContainer } = window.WolfCommon;
+
+/**
+ * 轻量提示：优先用 EDA 的 toast；不在 EDA 环境（浏览器直开）时退回页面顶部横幅
+ * 注意：不能直接调 eda.* —— 这条路径本身就是为了处理「eda 不存在」的情况。
+ */
+function notice(msg) {
+    try {
+        if (sys_eda && sys_eda.sys_Message) {
+            sys_eda.sys_Message.showToastMessage(msg, 2);
+            return;
+        }
+    } catch (e) {
+        /* 忽略：继续走页面提示 */
+    }
+    let bar = document.getElementById("__wolf_notice");
+    if (!bar) {
+        bar = document.createElement("div");
+        bar.id = "__wolf_notice";
+        bar.style.cssText = "position:fixed;left:0;right:0;top:0;padding:8px 12px;background:#5a1d1d;color:#fff;font:13px/1.5 sans-serif;z-index:9999";
+        document.body.appendChild(bar);
+    }
+    bar.textContent = msg;
+    setTimeout(() => bar.remove(), 3000);
+}
+        const WC = window.WolfCommon;
+        if (!WC) {
+        	(document.body || document.documentElement).innerHTML = '<div style="padding:24px;font:14px/1.6 sans-serif;color:#f28b82">公共模块 common.js 未加载，请重新安装扩展</div>';
+        	throw new Error('[狼黑工具] 公共模块 common.js 未加载');
+        }
+        const { getNetlist, setNetlist, getComponentsContainer } = WC;
 
         // 全局状态
         let rawNetlistData = null; 
@@ -39,7 +68,7 @@
         // 1. 获取网表数据
         async function fetchNetlist() {
             if (!sys_eda) {
-                alert("未检测到 EDA 运行环境！");
+                notice('未检测到 EDA 运行环境');
                 return;
             }
 
