@@ -14,7 +14,7 @@
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
-import { describe, it, beforeEach, afterEach } from 'node:test';
+import { afterEach, beforeEach, describe, it } from 'node:test';
 
 const COMMON_SOURCE = fs.readFileSync(path.join(process.cwd(), 'iframe', 'js', 'common.js'), 'utf8');
 
@@ -183,6 +183,47 @@ describe('图层常量与判定', () => {
 		assert.equal(WC.isInnerLayer(46), true);
 		assert.equal(WC.isInnerLayer(1), false);
 		assert.equal(WC.isInnerLayer(14), false);
+	});
+});
+
+describe('日志行切分/拼装（改写源码的地基）', () => {
+	const LINE = '{"type":"ATTR","ticket":7,"id":"e70"}||{"key":"Designator","value":"R1"}|';
+
+	it('带行尾 | 的行能切分并原样拼回', () => {
+		const WC = loadCommon();
+		const parsed = WC.splitSourceLine(LINE);
+		assert.ok(parsed);
+		assert.equal(parsed.hasTrailingPipe, true);
+		assert.equal(parsed.leftObj.id, 'e70');
+		assert.equal(parsed.rightObj.value, 'R1');
+		assert.equal(WC.joinSourceLine(parsed.leftStr, parsed.rightStr, parsed.hasTrailingPipe), LINE);
+	});
+
+	it('缺少行尾 | 的行（真实样本里存在）也能往返，且不擅自补 |', () => {
+		const WC = loadCommon();
+		const raw = '{"type":"META","ticket":1,"id":"META"}||{"title":"Board2","zIndex":1}';
+		const parsed = WC.splitSourceLine(raw);
+		assert.ok(parsed);
+		assert.equal(parsed.hasTrailingPipe, false);
+		assert.equal(WC.joinSourceLine(parsed.leftStr, parsed.rightStr, parsed.hasTrailingPipe), raw);
+		assert.ok(!WC.joinSourceLine(parsed.leftStr, parsed.rightStr, false).endsWith('|'));
+	});
+
+	it('改写内层后外层文本保持原样（不重新序列化）', () => {
+		const WC = loadCommon();
+		const parsed = WC.splitSourceLine(LINE);
+		parsed.rightObj.value = 'R2';
+		const next = WC.joinSourceLine(parsed.leftStr, JSON.stringify(parsed.rightObj), parsed.hasTrailingPipe);
+		assert.ok(next.startsWith('{"type":"ATTR","ticket":7,"id":"e70"}||'));
+		assert.ok(next.includes('"value":"R2"'));
+		assert.ok(next.endsWith('|'));
+	});
+
+	it('非法行返回 null（调用方应保留原行）', () => {
+		const WC = loadCommon();
+		['', 'no separator', '{"a":1}||{bad json}|', '{"a":1}||{"b":2}||{"c":3}|'].forEach((bad) => {
+			assert.equal(WC.splitSourceLine(bad), null, `应判为非法: ${bad}`);
+		});
 	});
 });
 

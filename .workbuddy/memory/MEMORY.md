@@ -40,4 +40,14 @@
   不要把 `* { margin:0;padding:0;box-sizing }` 或 `body { font-family/font-size }` 放进公共样式
   （会改变 About 等页面的版式）。
 - 测试：`npm test`（node:test，`.mjs`），改 `common.js` / `src/js` 后必须跑；新增前端公共能力要补用例。
+- 样本测试：`npm run test:samples`（`test/samples/`，脱离 EDA 跑 `测试样本/` 真实工程文件，覆盖 V2/V3/V4）。
+  相关格式事实以样本实测为准：**V3/V4 内层字段叫 `layerId`（不是 `layer`）**；V2 图元 layer 在数组下标 4；
+  V3/V4 日志里 **存在缺行尾 `|` 的行**；`[]` 孤立空行是 EDA 写盘残留。
 - 改完必须 `npm run build`，产物在 `build/dist/wolfblack-tool_v<version>.eext`。
+
+## 图层实测补充（官方表之外）
+
+- 官方层表只列到「内层 30」，但真实工程里有 `INNER_31=45`、`INNER_32=46`（样本里叫 Inner31/Inner32）。
+- 基板层实际编号从 **361** 起（`["LAYER",361,"SUBSTRATE","Dielectric1",...]`），官方表的 `SUBSTRATE_1=101` 对不上。
+- 因此图层合法性用 `pcbConstants.isKnownLayer()`（官方表 + 铜层 15~46 + 基板 361+），不要只查表。
+

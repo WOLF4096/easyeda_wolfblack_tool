@@ -8,6 +8,8 @@
         getComponentsContainer,
         isInnerLayer,
         isConductiveLayer,
+        splitSourceLine,
+        joinSourceLine,
     } = window.WolfCommon;
 
     let g_pendingOperations = [];       // 当前待执行的操作列表
@@ -1419,24 +1421,14 @@
 							}
 						} catch(e) { modifiedLines.push(line); }
 					} else if (isModern()) {
-						// V3/V4 格式（同构）
-						let hasTrailingPipe = line.endsWith('|');
-						let cleanLine = hasTrailingPipe ? line.slice(0, -1) : line;
-						const parts = cleanLine.split('||');
-						if (parts.length !== 2) {
+						// V3/V4 格式（同构）：行切分/拼装统一走 WolfCommon，保证改写后逐字节可还原
+						const parsedLine = splitSourceLine(line);
+						if (!parsedLine) {
 							modifiedLines.push(line);
 							continue;
 						}
-						let leftStr = parts[0];
-						let rightStr = parts[1];
-						let leftObj, rightObj;
-						try {
-							leftObj = JSON.parse(leftStr);
-							rightObj = JSON.parse(rightStr);
-						} catch (e) {
-							modifiedLines.push(line);
-							continue;
-						}
+						const { leftStr, leftObj, hasTrailingPipe } = parsedLine;
+						let rightObj = parsedLine.rightObj;
 						const type = leftObj.type;
 						if (type === 'PAD_NET') {
 							let idRaw = leftObj.id;
@@ -1463,9 +1455,7 @@
 						}
 						if (modified) {
 							const newRightStr = JSON.stringify(rightObj);
-							let newLine = leftStr + '||' + newRightStr;
-							if (hasTrailingPipe) newLine += '|';
-							modifiedLines.push(newLine);
+							modifiedLines.push(joinSourceLine(leftStr, newRightStr, hasTrailingPipe));
 						} else {
 							modifiedLines.push(line);
 						}

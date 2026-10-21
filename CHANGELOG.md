@@ -8,6 +8,14 @@
 - V2.2.* 版本不支持快捷键功能（该 API 仅 V3+ 提供）
 - 已知的 V4 适配待验证项：V4 的 PCB 坐标单位改为 mil（网格尺寸 ×10），`生成物理网络` 的点合并容差、`从PCB转原理图` 的坐标搬运需在 V4 实机复核
 
+## v1.17.5 `2026-10-21`
+- 新增 **测试样本自动化测试工具**（`test/samples/`，`npm run test:samples`）：脱离 EDA 环境直接解包 `测试样本/` 下的 `.epro` / `.epro2`，自动识别 V2 / V3 / V4，逐文档、逐行跑 10 个用例（包结构、版本一致性、行解析、文档头、id 唯一性、ticket、图层合法性、**源码行改写往返**、行尾 `|` 保留、前后端图层常量一致性）；输出控制台四段式报告 + `build/test-report/samples-report.{json,md}`，失败时给出「文件 › 文档 › 行号 + 期望/实际」，退出码非 0。详见 `test/samples/README.md`
+- 重构 源码行切分/拼装抽到 `WolfCommon.splitSourceLine` / `joinSourceLine`，`生成物理网络` 的行改写改为复用它 —— 这样样本测试验证的就是产品代码，而不是测试里的平行实现
+- 修复 图层常量表补全：`PIN_SOLDERING(50)` / `PIN_FLOATING(51)` / `COMPONENT_MODEL(52)` / `SHELL_3D_*` / `*_STIFFENER` / `SUBSTRATE` 等此前缺失；并依据真实样本补上 `INNER_31(45) / INNER_32(46)`（官方表只列到内层 30）与基板层实际起始号 `361`
+- 新增 `pcbConstants.isKnownLayer()` / `isSubstrateLayer()`：图层合法性判断收敛到一处，样本测试用它校验真实工程文件
+- 工程化 单元测试 82 → 92（新增 `splitSourceLine/joinSourceLine` 往返、无行尾 `|`、非法行等用例）
+- 工程化 `.edaignore` 排除 `测试样本/`：此前 3 个样本文件（约 56KB 的工程数据）被误打进 `.eext`
+
 ## v1.17.4 `2026-10-21`
 - 修复 版本族判断：新增 `getVersionFamily` / `isV4` / `isModern`。此前 `isV3()` 只认 `3.x`，**V4 会被误判为 V2 并按 V2 数组格式写入源码，可能写坏文档**；现所有「写源码 / 选解析器」分支统一走 `isModern()`（V3 与 V4 格式同构）
 - 优化 `导入BOM` 表格渲染转义：`formatCell` 原先直接把器件名/厂商/供应商拼进 `innerHTML`，含 `<` `&` 的值会被当作标签解析；现统一改用 `WolfCommon.escapeHtml`；同时修正 `title` 属性被多余转义、tooltip 会显示成 `&quot;` 的问题

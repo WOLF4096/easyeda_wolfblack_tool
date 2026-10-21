@@ -11,3 +11,5 @@ debug.log
 .prettierrc.js
 .gitignore
 .prettierignore
+测试样本
+/build/test-report/
