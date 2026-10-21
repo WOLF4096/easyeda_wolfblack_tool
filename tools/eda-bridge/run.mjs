@@ -50,17 +50,24 @@ async function main() {
 	}
 
 	let code = '';
+	let arg;
+	if (argv.includes('--arg-file')) {
+		// 探针需要外部数据（如 API 路径清单）时用：--arg-file xxx.json
+		const argFile = argv[argv.indexOf('--arg-file') + 1];
+		if (!argFile) usage('--arg-file 后面要跟文件路径');
+		arg = JSON.parse(fs.readFileSync(argFile, 'utf8'));
+	}
 	if (argv.includes('--file')) {
 		const file = argv[argv.indexOf('--file') + 1];
 		if (!file) usage('--file 后面要跟文件路径');
 		code = fs.readFileSync(file, 'utf8');
 	} else {
-		const rest = argv.filter((a) => !a.startsWith('--'));
+		const rest = argv.filter((a) => !a.startsWith('--') && a !== arg && !String(a).endsWith('.json'));
 		code = rest.join(' ').trim();
 	}
 	if (!code) usage('缺少要执行的代码');
 
-	const out = await post('/__cmd', { cmd: 'eval', code });
+	const out = await post('/__cmd', { cmd: 'eval', code, arg });
 	process.stdout.write(JSON.stringify(out, null, 2) + '\n');
 	return out.ok ? 0 : 1;
 }

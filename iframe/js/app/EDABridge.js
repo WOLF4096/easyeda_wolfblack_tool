@@ -170,7 +170,8 @@ async function handleEval(cmd) {
 function handleProbe(cmd) {
 	const out = {};
 	for (const p of cmd.paths || []) {
-		let cur = { eda: typeof eda !== 'undefined' ? eda : null };
+		// 必须从 eda 根开始逐级下钻；早期实现误把 { eda } 当根，导致首段永远判定缺失
+		let cur = typeof eda !== 'undefined' ? eda : null;
 		let missingAt = null;
 		for (const seg of String(p).split('.')) {
 			if (cur === null || cur === undefined || !(seg in Object(cur))) {

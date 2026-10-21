@@ -13,6 +13,11 @@
 - **判断"用新格式还是 V2 格式"必须用 `isModern()`（V3 或 V4），不能用 `isV3()`**。
   历史上 `isV3()` 只认 3.x，会把 V4 误判成 V2 并按数组格式写源码 → 写坏文档。
   `isV3()` 现在只用于"确实只对 3.x 成立"的判断。
+- ⚠️ **FORMATLOG 里「V4 PCB 坐标改 mil 且网格 ×10」经实测不成立**（2026-10-21，同一 PCB 文档
+  在 V2.2.45.5 与 V4.1.78 打开）：同一个 LINE 坐标、同一 POLY path、CANVAS 都是 `unit:"mil"` 栅格 5，
+  数值完全一致。→ 坐标搬运与 `GRID_SIZE` 容差**不需要**乘 10。
+- 实测确认：`pcb_Net.getAllNets` 在 V2.2 与 V4 **都存在**（类型声明标 Excluded，但运行时保留）；
+  两版形参契约一致（Via 9 / Pad 17 / Line 8 / Arc 10 / Polyline 5）；`documentType`：PCB = 3。
 
 ## 已知非插件问题（不要在插件侧修）
 
@@ -66,3 +71,17 @@
 - 基板层实际编号从 **361** 起（`["LAYER",361,"SUBSTRATE","Dielectric1",...]`），官方表的 `SUBSTRATE_1=101` 对不上。
 - 因此图层合法性用 `pcbConstants.isKnownLayer()`（官方表 + 铜层 15~46 + 基板 361+），不要只查表。
 
+
+## V4 实机差异（2026-10-21 双客户端对照，同一 PCB 文档）
+
+- **器件属性**：V4 `pcb_PrimitiveComponent.getAll()` 的 `otherProperty` **无 `Device`/`DeviceName`**；
+  `comp.name` 是模板 `"={Value}"`（值在 `otherProperty.Value`）；**器件名在 `comp.component.uuid.name`**。
+  → 读器件名要 `props.Device || comp.component?.uuid?.name || manufacturerId`。
+- **网表**：V4 根对象 `{version:"2.0.0", projectId, components, designRule…}`；器件**没有 `pins`**，
+  改 `pinInfoMap`（`{pin:{name,number,net,…}}`）。`getComponentsContainer()` 已兼容，读引脚必须两套都判。
+- **写源码**：V4 `setDocumentSource(读出来的原文)` 会**丢掉 `POURED` 行**（铜皮填充缓存），V2.2 逐字节一致。
+  → 整份写回的功能在 V4 要让用户重算铜皮。
+- **`pcb_PrimitivePolyline.delete(regionId)` 返回 true 但不删**；Region 只能用 `pcb_PrimitiveRegion.delete`。
+- **角度**：Arc 与多边形路径 `"ARC"` 都是**角度制**（两版一致），不要乘 π/180。
+- **量纲**：V4 焊盘尺寸量化到 0.1 mil；阻焊默认 V2.2=0.2 / V4=2（差 10×，不是单位换算）→ 校准值别跨版本复用。
+- V4 新增可用：`sys_Environment.isEditorCurrentVersionGreaterThanOrEqual`、`dmt_EditorControl.waitForDocumentReady`。
