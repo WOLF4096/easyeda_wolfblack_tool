@@ -1,241 +1,100 @@
-function showMsg(msg, type = 'info') {
-	eda.sys_Message.showToastMessage(msg, type);
-}
+/*! 由 npm run build:iframe 从 iframe/js/src 生成，请勿直接修改本文件 */
+"use strict";
+(() => {
+  // iframe/js/src/core/eda.js
+  function getEda() {
+    try {
+      if (typeof eda !== "undefined" && eda) return eda;
+    } catch (e) {
+    }
+    try {
+      if (globalThis.parent && globalThis.parent !== globalThis && globalThis.parent.eda) return globalThis.parent.eda;
+    } catch (e) {
+    }
+    return globalThis.eda || null;
+  }
 
-const WC = window.WolfCommon;
-if (!WC) {
-	(document.body || document.documentElement).innerHTML =
-		'<div style="padding:24px;font:14px/1.6 sans-serif;color:#f28b82">公共模块 common.js 未加载，请重新安装扩展</div>';
-	throw new Error('[狼黑工具] 公共模块 common.js 未加载');
-}
-const { getEditorVersion, isModern, logger } = WC;
+  // iframe/js/src/core/version.js
+  var cachedVersion = null;
+  function getEditorVersion() {
+    if (cachedVersion !== null) return cachedVersion;
+    try {
+      const edaObj = getEda();
+      if (!edaObj || !edaObj.sys_Environment || typeof edaObj.sys_Environment.getEditorCurrentVersion !== "function") {
+        return "";
+      }
+      const version = edaObj.sys_Environment.getEditorCurrentVersion();
+      const text = version === null || version === void 0 ? "" : String(version).trim();
+      if (text) cachedVersion = text;
+      return text;
+    } catch (e) {
+      return "";
+    }
+  }
+  function getVersionFamily() {
+    const version = getEditorVersion();
+    if (!version) return "";
+    if (version.startsWith("4")) return "V4";
+    if (version.startsWith("3")) return "V3";
+    if (version.startsWith("2.2")) return "V2.2";
+    if (version.startsWith("2")) return "V2";
+    return "";
+  }
+  function isModern() {
+    const family = getVersionFamily();
+    return family === "V3" || family === "V4";
+  }
 
-(async function initLibList() {
-	const select = document.getElementById('libSelect');
-	const btn = document.getElementById('runBtn');
+  // iframe/js/src/ui/toast.js
+  var TOAST_LEVEL = Object.freeze({
+    info: "info",
+    success: "success",
+    warn: "warning",
+    error: "error",
+    warning: "warning",
+    legacy: 2
+  });
+  var BANNER_ID = "__wolf_notice";
+  function normalizeLevel(level) {
+    if (typeof level === "number") return Number.isFinite(level) ? level : TOAST_LEVEL.info;
+    if (typeof level !== "string") return TOAST_LEVEL.info;
+    const key = level.trim().toLowerCase();
+    return Object.prototype.hasOwnProperty.call(TOAST_LEVEL, key) ? TOAST_LEVEL[key] : level;
+  }
+  function banner(doc, text, timeoutMs) {
+    if (!doc || !doc.body || typeof doc.createElement !== "function") return false;
+    let bar = doc.getElementById(BANNER_ID);
+    if (!bar) {
+      bar = doc.createElement("div");
+      bar.id = BANNER_ID;
+      bar.style.cssText = "position:fixed;left:0;right:0;top:0;padding:8px 12px;background:#5a1d1d;color:#fff;font:13px/1.5 sans-serif;z-index:9999";
+      doc.body.appendChild(bar);
+    }
+    bar.textContent = text;
+    setTimeout(() => {
+      if (typeof bar.remove === "function") bar.remove();
+    }, timeoutMs);
+    return true;
+  }
+  function toast(message, level = TOAST_LEVEL.info, opts = {}) {
+    const doc = opts.doc || globalThis.document;
+    const host = opts.host === void 0 ? getEda() : opts.host;
+    const text = message === null || message === void 0 ? "" : String(message);
+    const type = normalizeLevel(level);
+    try {
+      if (host && host.sys_Message && typeof host.sys_Message.showToastMessage === "function") {
+        host.sys_Message.showToastMessage(text, type);
+        return "host";
+      }
+    } catch (e) {
+    }
+    return banner(doc, text, opts.timeoutMs === void 0 ? 3e3 : opts.timeoutMs) ? "dom" : "none";
+  }
 
-	try {
-		// V3 起底层源码写入 API 有缺陷，V4 同源问题，一并拦截
-		if (isModern()) {
-			// 获取主容器（.cf-form 是页面表单容器，见 css/common.css）
-			const container = document.querySelector('.cf-form');
-			// 清空所有控件，替换为居中提示文字
-			if (container) {
-				container.innerHTML = '<div class="notice-center">此功能只支持 EDA V2.2.45 版本</div>';
-			}
-			return;
-		}
-	} catch (err) {
-		console.warn('版本检测异常，尝试继续执行...', err);
-	}
-
-	try {
-		let components0 = await eda.lib_LibrariesList.getAllLibrariesList();
-		select.innerHTML = '';
-		if (components0 && components0.length > 0) {
-			components0.forEach((lib, index) => {
-				let opt = document.createElement('option');
-				opt.value = lib.uuid;
-				opt.innerText = lib.name;
-				if (index === 0) opt.selected = true;
-				select.appendChild(opt);
-			});
-			btn.disabled = false;
-		} else {
-			let opt = document.createElement('option');
-			opt.innerText = '未找到可用库';
-			select.appendChild(opt);
-		}
-	} catch (err) {
-		console.error('加载库列表失败:', err);
-		select.innerHTML = `<option value="">加载失败</option>`;
-		showMsg('加载库列表失败: ' + err.message, 'error');
-	}
-})();
-
-// 注意：V3/V4 分支会清空 .container（连带移除 #runBtn），所以按钮绑定必须判空，
-// 否则 `getElementById('runBtn').addEventListener` 会抛
-// "Cannot read properties of null"，中断整段脚本。
-async function onRunClick() {
-	const btn = document.getElementById('runBtn');
-	const inputVal = document.getElementById('fooNameInput').value.trim();
-	const inputdes = document.getElementById('desNameInput').value.trim();
-	const libSelect = document.getElementById('libSelect');
-	const LIBRARY_UUID = libSelect.value;
-
-	if (!LIBRARY_UUID) {
-		showMsg('请先选择一个目标库！', 'warn');
-		return;
-	}
-
-	btn.disabled = true;
-	btn.innerText = '处理中...';
-
-	try {
-		console.log(`>>> 开始创建封装 (目标库UUID: ${LIBRARY_UUID})...`);
-
-		const ALLOWED_TYPES = ['Pad', 'Polyline', 'Region'];
-
-		// A. 获取选中并过滤
-		let allSelected = await eda.pcb_SelectControl.getAllSelectedPrimitives();
-		if (!allSelected || allSelected.length === 0) {
-			throw new Error('请先在 PCB 中选中图元！');
-		}
-
-		// 获取除 Component 以外的所有选中图元 (保留对象用于结尾删除图元)
-		let targetPrimitives = allSelected.filter((p) => p.primitiveType !== 'Component');
-		if (targetPrimitives.length === 0) {
-			throw new Error('未选中有效图元');
-		}
-		let selectedIds = targetPrimitives.map((p) => p.primitiveId);
-
-		// 获取完整源码并提取对应行
-		let docSource = await eda.sys_FileManager.getDocumentSource();
-		let sourceLines = docSource.split('\n');
-		let sourcePrimitives = [];
-
-		sourceLines.forEach((line) => {
-			if (!line.trim()) return;
-			try {
-				let arr = JSON.parse(line);
-				let id = arr[1]; // 源码中索引 1 通常是 primitiveId
-				if (selectedIds.includes(id)) {
-					sourcePrimitives.push(arr);
-				}
-			} catch (e) {
-				logger.debug('跳过无法解析的源码行', e);
-			}
-		});
-
-		if (sourcePrimitives.length === 0) {
-			throw new Error('无法在源码中匹配到选中的图元数据');
-		}
-
-		console.log(`选中 ${allSelected.length} 个, 过滤后提取到源码 ${sourcePrimitives.length} 行`);
-
-		// B. 计算原点 (从源码中提取精确坐标)
-		let pads = sourcePrimitives.filter((p) => p[0] === 'PAD');
-		let originX = 0;
-		let originY = 0;
-
-		// 辅助函数：从不同类型的源码数组中提取第一个有效坐标点
-		function getCoordsFromSource(arr) {
-			let type = arr[0];
-			let pathObj = null;
-			if (type === 'PAD') return { x: arr[6], y: arr[7] };
-			if (type === 'VIA') return { x: arr[5], y: arr[6] };
-			if (type === 'IMAGE') return { x: arr[4], y: arr[5] };
-			if (type === 'POLY' || type === 'REGION') pathObj = arr[6];
-			if (type === 'FILL') pathObj = arr[7];
-			if (type === 'POUR') pathObj = arr[8];
-
-			if (pathObj) {
-				// 兼容单层数组和双层数组
-				let polyArr = Array.isArray(pathObj[0]) ? pathObj[0] : pathObj;
-				for (let i = 0; i < polyArr.length - 1; i++) {
-					if (typeof polyArr[i] === 'number' && typeof polyArr[i + 1] === 'number') {
-						return { x: polyArr[i], y: polyArr[i + 1] };
-					}
-				}
-			}
-			return { x: undefined, y: undefined };
-		}
-
-		// 计算几何中心
-		if (pads.length === 1) {
-			originX = pads[0][6];
-			originY = pads[0][7];
-		} else if (pads.length > 1) {
-			let minX = Infinity;
-			let minY = Infinity;
-			let maxX = -Infinity;
-			let maxY = -Infinity;
-			pads.forEach((p) => {
-				let x = p[6];
-				let y = p[7];
-				if (x < minX) minX = x;
-				if (x > maxX) maxX = x;
-				if (y < minY) minY = y;
-				if (y > maxY) maxY = y;
-			});
-			originX = (minX + maxX) / 2;
-			originY = (minY + maxY) / 2;
-		} else {
-			let minX = Infinity;
-			let minY = Infinity;
-			let maxX = -Infinity;
-			let maxY = -Infinity;
-			sourcePrimitives.forEach((p) => {
-				let coords = getCoordsFromSource(p);
-				let x = coords.x;
-				let y = coords.y;
-				if (x !== undefined && y !== undefined) {
-					if (x < minX) minX = x;
-					if (x > maxX) maxX = x;
-					if (y < minY) minY = y;
-					if (y > maxY) maxY = y;
-				}
-			});
-			if (minX === Infinity) {
-				minX = 0;
-				maxX = 0;
-				minY = 0;
-				maxY = 0;
-			}
-			originX = (minX + maxX) / 2;
-			originY = (minY + maxY) / 2;
-		}
-
-		// C. 命名
-		let uniquePadNumbers = new Set();
-		pads.forEach((p) => {
-			let padNumber = p[5]; // 源码中索引 5 是焊盘号
-			if (padNumber !== undefined && padNumber !== null && String(padNumber).trim() !== '') {
-				uniquePadNumbers.add(String(padNumber).trim());
-			}
-		});
-		let pinCount = uniquePadNumbers.size;
-		let deviceName = '';
-
-		if (inputVal && inputVal.length > 0) {
-			deviceName = inputVal;
-		} else {
-			const now = new Date();
-			const timeStr = `${now.getHours().toString().padStart(2, '0')}${now.getMinutes().toString().padStart(2, '0')}${now.getSeconds().toString().padStart(2, '0')}`;
-			deviceName = `NEW-${pinCount}Pin_${timeStr}`;
-		}
-
-		let desMatch = inputdes.match(/^[a-zA-Z]+/);
-		// 提取到则转为大写并拼接 '?'，提取不到或为空则默认使用 'U?'
-		let finalDesignator = (desMatch ? desMatch[0].toUpperCase() : 'U') + '?';
-
-		// D. 创建库元素
-		let fp_uuid = await eda.lib_Footprint.create(LIBRARY_UUID, deviceName);
-		let sym_uuid = await eda.lib_Symbol.create(LIBRARY_UUID, deviceName);
-
-		// 创建器件并关联封装和符号
-		let dev_uuid = await eda.lib_Device.create(
-			LIBRARY_UUID,
-			deviceName,
-			undefined,
-			{
-				symbolType: 2,
-				symbol: { uuid: sym_uuid, libraryUuid: LIBRARY_UUID },
-				footprint: { uuid: fp_uuid, libraryUuid: LIBRARY_UUID },
-			},
-			undefined,
-			{
-				addIntoBom: true,
-				addIntoPcb: true,
-				designator: finalDesignator,
-				name: deviceName,
-			},
-		);
-		console.log('创建器件成功\n', fp_uuid, sym_uuid, dev_uuid);
-
-		// E. 生成封装源码 (基于提取的源码直接偏移)
-		let fpHeader = `["DOCTYPE","FOOTPRINT","1.8"]
-["HEAD",{"editorVersion":"2.2.43.4","importFlag":0,"uuid":"${fp_uuid}","source":"generated","title":"${deviceName}"}]
+  // iframe/js/src/app/create-footprint/sourceBuilder.js
+  function footprintHeader(uuid, deviceName) {
+    return `["DOCTYPE","FOOTPRINT","1.8"]
+["HEAD",{"editorVersion":"2.2.43.4","importFlag":0,"uuid":"${uuid}","source":"generated","title":"${deviceName}"}]
 ["CANVAS",0,0,"mil",10,10,10,10,100,100,0,0,5]
 ["LAYER",1,"TOP","Top Layer",3,"#ff0000",1,"#7f0000",1]
 ["LAYER",2,"BOTTOM","Bottom Layer",3,"#0000ff",1,"#00007f",1]
@@ -256,240 +115,333 @@ async function onRunClick() {
 ["NET","",null,null,1,null,0,null]
 ["PRIMITIVE","PAD",1,1]
 `;
-		// 路径偏移重算
-		function transformPath(arr, ox, oy) {
-			let newArr = [...arr];
-			if (newArr.length === 0) return newArr;
-			let type = newArr[0];
-			if (type === 'R' || type === 'CIRCLE') {
-				if (typeof newArr[1] === 'number') newArr[1] = parseFloat((newArr[1] - ox).toFixed(4));
-				if (typeof newArr[2] === 'number') newArr[2] = parseFloat((newArr[2] - oy).toFixed(4));
-			} else {
-				let i = 0;
-				if (typeof newArr[0] === 'number') {
-					newArr[0] = parseFloat((newArr[0] - ox).toFixed(4));
-					newArr[1] = parseFloat((newArr[1] - oy).toFixed(4));
-					i = 2;
-				}
-				while (i < newArr.length) {
-					let cmd = newArr[i];
-					if (typeof cmd === 'number') {
-						newArr[i] = parseFloat((newArr[i] - ox).toFixed(4));
-						newArr[i + 1] = parseFloat((newArr[i + 1] - oy).toFixed(4));
-						i += 2;
-					} else if (cmd === 'L') {
-						newArr[i + 1] = parseFloat((newArr[i + 1] - ox).toFixed(4));
-						newArr[i + 2] = parseFloat((newArr[i + 2] - oy).toFixed(4));
-						i += 3;
-					} else if (cmd === 'ARC') {
-						newArr[i + 2] = parseFloat((newArr[i + 2] - ox).toFixed(4));
-						newArr[i + 3] = parseFloat((newArr[i + 3] - oy).toFixed(4));
-						i += 4;
-					} else {
-						i++;
-					}
-				}
-			}
-			return newArr;
-		}
-
-		let primitivesSource = '';
-		let idCounter = 1;
-
-		sourcePrimitives.forEach((p) => {
-			let type = p[0];
-			// 重新排列图元 ID，从 e1 开始递增
-			p[1] = `e${idCounter++}`;
-
-			// 根据图元类型处理偏移量
-			if (type === 'PAD') {
-				// 修改焊盘的中心坐标
-				p[6] = parseFloat((p[6] - originX).toFixed(4));
-				p[7] = parseFloat((p[7] - originY).toFixed(4));
-
-				// 处理异形焊盘 (POLYGON) 的多边形绝对坐标
-				let padShape = p[10];
-				if (Array.isArray(padShape) && padShape[0] === 'POLYGON' && Array.isArray(padShape[1])) {
-					padShape[1] = transformPath(padShape[1], originX, originY);
-				}
-			} else if (type === 'VIA') {
-				p[5] = parseFloat((p[5] - originX).toFixed(4));
-				p[6] = parseFloat((p[6] - originY).toFixed(4));
-			} else if (type === 'IMAGE') {
-				// <--- 新增：处理 IMAGE 图元
-				// 1. 偏移图片的基准 X 和 Y
-				p[4] = parseFloat((p[4] - originX).toFixed(4));
-				p[5] = parseFloat((p[5] - originY).toFixed(4));
-
-				// 2. 偏移图片轮廓数组 (索引 10)
-				let pathIndex = 10;
-				if (Array.isArray(p[pathIndex]) && Array.isArray(p[pathIndex][0])) {
-					p[pathIndex] = p[pathIndex].map((sub) => transformPath(sub, originX, originY));
-				} else if (Array.isArray(p[pathIndex])) {
-					p[pathIndex] = transformPath(p[pathIndex], originX, originY);
-				}
-			} else if (type === 'POLY' || type === 'REGION') {
-				let pathIndex = 6;
-				if (Array.isArray(p[pathIndex]) && Array.isArray(p[pathIndex][0])) {
-					p[pathIndex] = p[pathIndex].map((sub) => transformPath(sub, originX, originY));
-				} else if (Array.isArray(p[pathIndex])) {
-					p[pathIndex] = transformPath(p[pathIndex], originX, originY);
-				}
-			} else if (type === 'FILL') {
-				let pathIndex = 7;
-				if (Array.isArray(p[pathIndex]) && Array.isArray(p[pathIndex][0])) {
-					p[pathIndex] = p[pathIndex].map((sub) => transformPath(sub, originX, originY));
-				} else if (Array.isArray(p[pathIndex])) {
-					p[pathIndex] = transformPath(p[pathIndex], originX, originY);
-				}
-			} else if (type === 'POUR') {
-				let pathIndex = 8;
-				if (Array.isArray(p[pathIndex]) && Array.isArray(p[pathIndex][0])) {
-					p[pathIndex] = p[pathIndex].map((sub) => transformPath(sub, originX, originY));
-				} else if (Array.isArray(p[pathIndex])) {
-					p[pathIndex] = transformPath(p[pathIndex], originX, originY);
-				}
-			}
-
-			// 格式化为字符串后拼接换行
-			primitivesSource += JSON.stringify(p) + '\n';
-		});
-
-		await eda.lib_Footprint.updateDocumentSource(fp_uuid, LIBRARY_UUID, fpHeader + primitivesSource);
-		console.log('封装源码生成完毕');
-
-		// ================= F. 生成符号源码 (含动态BBOX和CCW排序) =================
-
-		// 1. 准备数据和排序 (将排序逻辑前置)
-		let sortedPins = Array.from(uniquePadNumbers).sort((a, b) => {
-			let na = parseInt(a);
-			let nb = parseInt(b);
-			if (!isNaN(na) && !isNaN(nb)) return na - nb;
-			return a.localeCompare(b);
-		});
-
-		let totalPins = sortedPins.length;
-		let leftCount = Math.ceil(totalPins / 2);
-		let rowHeight = 10;
-
-		// 2. 提前计算几何尺寸
-		let topY = 10;
-		let maxRows = Math.max(leftCount, totalPins - leftCount);
-		let bottomY = 10 - (maxRows - 1) * 10;
-		let geometricCenterY = (topY + bottomY) / 2;
-		let snappedCenterY = Math.round(geometricCenterY / 10) * 10;
-		let startY = 10 - snappedCenterY;
-
-		let boxTop = startY + 10;
-		let boxBottom = startY - (maxRows - 1) * rowHeight - 10;
-		if (totalPins <= 1) boxBottom = boxTop - 20;
-
-		// 3. 计算 BBOX 并生成 Header
-		// X范围: -40(左引脚起点) 到 40(右引脚起点)。矩形体是 -20 到 20。
-		// 为了确保原理图中容易选中，BBOX 最好包含引脚端点。
-		let bboxStr = `[-40,${boxBottom},40,${boxTop}]`;
-
-		let symHeader = `["DOCTYPE","SYMBOL","1.1"]
+  }
+  function getCoordsFromSource(arr) {
+    const type = arr[0];
+    let pathObj = null;
+    if (type === "PAD") return { x: arr[6], y: arr[7] };
+    if (type === "VIA") return { x: arr[5], y: arr[6] };
+    if (type === "IMAGE") return { x: arr[4], y: arr[5] };
+    if (type === "POLY" || type === "REGION") pathObj = arr[6];
+    if (type === "FILL") pathObj = arr[7];
+    if (type === "POUR") pathObj = arr[8];
+    if (pathObj) {
+      const polyArr = Array.isArray(pathObj[0]) ? pathObj[0] : pathObj;
+      for (let i = 0; i < polyArr.length - 1; i++) {
+        if (typeof polyArr[i] === "number" && typeof polyArr[i + 1] === "number") return { x: polyArr[i], y: polyArr[i + 1] };
+      }
+    }
+    return { x: void 0, y: void 0 };
+  }
+  function transformPath(arr, ox, oy) {
+    const out = Array.isArray(arr) ? arr.slice() : [];
+    if (out.length === 0) return out;
+    const type = out[0];
+    const shift = (index, delta) => {
+      if (typeof out[index] === "number") out[index] = parseFloat((out[index] - delta).toFixed(4));
+    };
+    if (type === "R" || type === "CIRCLE") {
+      shift(1, ox);
+      shift(2, oy);
+      return out;
+    }
+    let i = 0;
+    if (typeof out[0] === "number") {
+      shift(0, ox);
+      shift(1, oy);
+      i = 2;
+    }
+    while (i < out.length) {
+      const cmd = out[i];
+      if (typeof cmd === "number") {
+        shift(i, ox);
+        shift(i + 1, oy);
+        i += 2;
+      } else if (cmd === "L") {
+        shift(i + 1, ox);
+        shift(i + 2, oy);
+        i += 3;
+      } else if (cmd === "ARC") {
+        shift(i + 2, ox);
+        shift(i + 3, oy);
+        i += 4;
+      } else {
+        i++;
+      }
+    }
+    return out;
+  }
+  function shiftPathField(value, ox, oy) {
+    if (Array.isArray(value) && Array.isArray(value[0])) return value.map((sub) => transformPath(sub, ox, oy));
+    if (Array.isArray(value)) return transformPath(value, ox, oy);
+    return value;
+  }
+  function buildFootprintSource(primitives, options) {
+    const { uuid, deviceName, originX, originY } = options;
+    let idCounter = 1;
+    const lines = [];
+    for (const source of Array.isArray(primitives) ? primitives : []) {
+      const p = source.slice();
+      const type = p[0];
+      p[1] = `e${idCounter++}`;
+      if (type === "PAD") {
+        p[6] = parseFloat((p[6] - originX).toFixed(4));
+        p[7] = parseFloat((p[7] - originY).toFixed(4));
+        const padShape = p[10];
+        if (Array.isArray(padShape) && padShape[0] === "POLYGON" && Array.isArray(padShape[1])) {
+          padShape[1] = transformPath(padShape[1], originX, originY);
+        }
+      } else if (type === "VIA") {
+        p[5] = parseFloat((p[5] - originX).toFixed(4));
+        p[6] = parseFloat((p[6] - originY).toFixed(4));
+      } else if (type === "IMAGE") {
+        p[4] = parseFloat((p[4] - originX).toFixed(4));
+        p[5] = parseFloat((p[5] - originY).toFixed(4));
+        p[10] = shiftPathField(p[10], originX, originY);
+      } else if (type === "POLY" || type === "REGION") {
+        p[6] = shiftPathField(p[6], originX, originY);
+      } else if (type === "FILL") {
+        p[7] = shiftPathField(p[7], originX, originY);
+      } else if (type === "POUR") {
+        p[8] = shiftPathField(p[8], originX, originY);
+      }
+      lines.push(JSON.stringify(p));
+    }
+    return footprintHeader(uuid, deviceName) + lines.join("\n") + (lines.length ? "\n" : "");
+  }
+  function sortPinNumbers(pins) {
+    return pins.slice().sort((a, b) => {
+      const na = parseInt(a, 10);
+      const nb = parseInt(b, 10);
+      if (!isNaN(na) && !isNaN(nb)) return na - nb;
+      return a.localeCompare(b);
+    });
+  }
+  function buildSymbolSource(options) {
+    const pins = sortPinNumbers(Array.from(options.pinNumbers || []));
+    const deviceName = options.deviceName;
+    const totalPins = pins.length;
+    const leftCount = Math.ceil(totalPins / 2);
+    const rowHeight = 10;
+    const topY = 10;
+    const maxRows = Math.max(leftCount, totalPins - leftCount);
+    const bottomY = 10 - (maxRows - 1) * 10;
+    const geometricCenterY = (topY + bottomY) / 2;
+    const snappedCenterY = Math.round(geometricCenterY / 10) * 10;
+    const startY = 10 - snappedCenterY;
+    const boxTop = startY + 10;
+    let boxBottom = startY - (maxRows - 1) * rowHeight - 10;
+    if (totalPins <= 1) boxBottom = boxTop - 20;
+    const bboxStr = `[-40,${boxBottom},40,${boxTop}]`;
+    const header = `["DOCTYPE","SYMBOL","1.1"]
 ["HEAD",{"originX":0,"originY":0,"version":"2","symbolType":2}]
 ["PART","${deviceName}.1",{"BBOX":${bboxStr}}]
 `;
-
-		// FONTSTYLE 格式: ["FONTSTYLE", ID, 颜色, 背景色, 字体名, 字号, 斜体, 粗体, 下划线, 删除线, 垂直对齐, 水平对齐]
-		let symStyles = `["FONTSTYLE","st1",null,null,null,null,null,null,null,null,1,0]
+    const styles = `["FONTSTYLE","st1",null,null,null,null,null,null,null,null,1,0]
 ["FONTSTYLE","st2",null,null,null,null,null,null,null,null,2,2]
 ["FONTSTYLE","st3",null,null,null,null,null,null,null,null,1,2]
 ["FONTSTYLE","st4",null,null,null,null,null,null,null,null,2,0]
 ["LINESTYLE","st5",null,null,null,null,null]
 `;
+    const createAttr = (id, parent, key, val, x, y, font) => {
+      const safeVal = val !== void 0 && val !== null && val !== "" ? val : "?";
+      return `["ATTR","${id}","${parent}","${key}","${safeVal}",0,1,${x},${y},0,"${font}",0]`;
+    };
+    let body = "";
+    for (let i = 0; i < totalPins; i++) {
+      if (i < leftCount) {
+        const pinNum = pins[i];
+        const y = startY - i * rowHeight;
+        const pId = `pL${i}`;
+        body += `["PIN","${pId}",1,null,-40,${y},20,0,null,0,0]
+`;
+        body += createAttr(`nL${i}`, pId, "NAME", pinNum, -17, y, "st1") + "\n";
+        body += createAttr(`uL${i}`, pId, "NUMBER", pinNum, -25, y, "st2") + "\n";
+      } else {
+        const rightIndex = i - leftCount;
+        const pinIndex = totalPins - 1 - rightIndex;
+        const pinNum = pins[pinIndex];
+        const y = startY - rightIndex * rowHeight;
+        const pId = `pR${i}`;
+        body += `["PIN","${pId}",1,null,40,${y},20,180,null,0,0]
+`;
+        body += createAttr(`nR${i}`, pId, "NAME", pinNum, 17, y, "st3") + "\n";
+        body += createAttr(`uR${i}`, pId, "NUMBER", pinNum, 25, y, "st4") + "\n";
+      }
+    }
+    const box = `["RECT","box",-20,${boxTop},20,${boxBottom},0,0,0,"st5",0]`;
+    return header + styles + body + box;
+  }
 
-		let symPins = '';
-		const createAttr = (id, parent, key, val, x, y, font) => {
-			let safeVal = val !== undefined && val !== null && val !== '' ? val : '?';
-			return `["ATTR","${id}","${parent}","${key}","${safeVal}",0,1,${x},${y},0,"${font}",0]`;
-		};
-
-		// 4. 生成引脚 (CCW 逆时针顺序)
-		for (let i = 0; i < totalPins; i++) {
-			if (i < leftCount) {
-				// 左侧: 从上往下
-				let pinNum = sortedPins[i];
-				let y = startY - i * rowHeight;
-				let pId = `pL${i}`;
-				symPins += `["PIN","${pId}",1,null,-40,${y},20,0,null,0,0]\n`;
-				symPins += createAttr(`nL${i}`, pId, 'NAME', pinNum, -17, y, 'st1') + '\n';
-				symPins += createAttr(`uL${i}`, pId, 'NUMBER', pinNum, -25, y, 'st2') + '\n';
-			} else {
-				// 右侧: 从下往上 (倒序取值)
-				let rightIndex = i - leftCount;
-				let pinIndex = totalPins - 1 - rightIndex;
-				let pinNum = sortedPins[pinIndex];
-
-				let y = startY - rightIndex * rowHeight;
-				let pId = `pR${i}`;
-				symPins += `["PIN","${pId}",1,null,40,${y},20,180,null,0,0]\n`;
-				symPins += createAttr(`nR${i}`, pId, 'NAME', pinNum, 17, y, 'st3') + '\n';
-				symPins += createAttr(`uR${i}`, pId, 'NUMBER', pinNum, 25, y, 'st4') + '\n';
-			}
-		}
-
-		// 5. 生成矩形框
-		let symBox = `["RECT","box",-20,${boxTop},20,${boxBottom},0,0,0,"st5",0]`;
-
-		await eda.lib_Symbol.updateDocumentSource(sym_uuid, LIBRARY_UUID, symHeader + symStyles + symPins + symBox);
-		console.log('符号源码生成完毕');
-		// console.log(symHeader + symStyles + symPins + symBox);
-
-		// 8. 使用API放置器件
-
-		// 如果是2.2.43，执行这一段，2.2.45跳过
-		// 1. 版本检测（这里判断的是具体补丁版本 2.2.43 的 API 行为差异，不能用 isV2() 代替）
-		const currentVersion = getEditorVersion();
-		if (currentVersion.startsWith('2.2.43')) {
-			let primitiveIds;
-			// 这个API放置的器件保存后会丢失，但是不用这个API的话原理图符号就会出问题
-			// 解决办法，先创建一个后删除，用另一个API放置器件
-			await eda.pcb_PrimitiveComponent
-				.create({ 'libraryUuid': LIBRARY_UUID, 'uuid': dev_uuid }, EPCB_LayerId.TOP, originX, originY, 0, false)
-				.then((result) => {
-					primitiveIds = result.primitiveId;
-				});
-			// console.log(primitiveIds);
-			await eda.pcb_PrimitiveComponent.delete(primitiveIds); // 删除创建的器件
-		}
-
-		// 放置器件，这个API可以在PCB上放置器件，保存后不会丢失
-		eda.sch_PrimitiveComponent.create({ 'libraryUuid': LIBRARY_UUID, 'uuid': dev_uuid }, 0, 0, '', 0, false, true, true);
-
-		// 删除选中的图元
-		let idsToRemove = targetPrimitives.map((p) => ({ id: p.primitiveId, type: p.primitiveType }));
-		for (let item of idsToRemove) {
-			try {
-				if (item.type === 'Pad')
-					eda.pcb_PrimitivePad.delete(item.id); // 已知不支持删除异形焊盘
-				else if (item.type === 'Polyline') eda.pcb_PrimitivePolyline.delete(item.id);
-				else if (item.type === 'Region') eda.pcb_PrimitivePour.delete(item.id);
-				else if (item.type === 'Via') eda.pcb_PrimitiveVia.delete(item.id);
-				else if (item.type === 'Image') eda.pcb_PrimitiveImage.delete(item.id);
-			} catch (e) {
-				logger.warn('删除临时图元失败', e);
-			}
-		}
-
-		eda.sys_IFrame.hideIFrame('CreateFootprint');
-		document.getElementById('fooNameInput').value = '';
-
-		console.log('转换完成！');
-		showMsg('成功创建封装: ' + deviceName, 'success');
-	} catch (err) {
-		console.error('执行错误: ', err);
-		showMsg(err.message, 'error');
-	} finally {
-		if (btn) {
-			btn.disabled = false;
-			btn.innerText = '创建封装';
-		}
-	}
-}
-
-const runBtnEl = document.getElementById('runBtn');
-if (runBtnEl) runBtnEl.addEventListener('click', onRunClick);
+  // iframe/js/src/app/create-footprint/index.js
+  function blockModernClients() {
+    try {
+      if (!isModern()) return false;
+    } catch (e) {
+      return false;
+    }
+    const container = document.querySelector(".cf-form");
+    if (container) container.innerHTML = '<div class="notice-center">此功能只支持 EDA V2.2.45 版本</div>';
+    return true;
+  }
+  function computeOrigin(primitives) {
+    const pads = primitives.filter((item) => item[0] === "PAD");
+    if (pads.length === 1) return { originX: pads[0][6], originY: pads[0][7] };
+    if (pads.length > 1) {
+      let minX2 = Infinity;
+      let minY2 = Infinity;
+      let maxX2 = -Infinity;
+      let maxY2 = -Infinity;
+      for (const pad of pads) {
+        if (pad[6] < minX2) minX2 = pad[6];
+        if (pad[6] > maxX2) maxX2 = pad[6];
+        if (pad[7] < minY2) minY2 = pad[7];
+        if (pad[7] > maxY2) maxY2 = pad[7];
+      }
+      return { originX: (minX2 + maxX2) / 2, originY: (minY2 + maxY2) / 2 };
+    }
+    let minX = Infinity;
+    let minY = Infinity;
+    let maxX = -Infinity;
+    let maxY = -Infinity;
+    for (const item of primitives) {
+      const { x, y } = getCoordsFromSource(item);
+      if (x === void 0 || y === void 0) continue;
+      if (x < minX) minX = x;
+      if (x > maxX) maxX = x;
+      if (y < minY) minY = y;
+      if (y > maxY) maxY = y;
+    }
+    if (minX === Infinity) {
+      minX = 0;
+      minY = 0;
+      maxX = 0;
+      maxY = 0;
+    }
+    return { originX: (minX + maxX) / 2, originY: (minY + maxY) / 2 };
+  }
+  function collectPadNumbers(primitives) {
+    const set = /* @__PURE__ */ new Set();
+    for (const item of primitives) {
+      if (item[0] !== "PAD") continue;
+      const num = item[5];
+      if (num !== void 0 && num !== null && String(num).trim() !== "") set.add(String(num).trim());
+    }
+    return set;
+  }
+  function deviceNameOf(input, pinCount) {
+    if (input && input.length > 0) return input;
+    const now = /* @__PURE__ */ new Date();
+    const hh = now.getHours().toString().padStart(2, "0");
+    const mm = now.getMinutes().toString().padStart(2, "0");
+    const ss = now.getSeconds().toString().padStart(2, "0");
+    return `NEW-${pinCount}Pin_${hh}${mm}${ss}`;
+  }
+  async function onRunClick() {
+    const btn = document.getElementById("runBtn");
+    const inputVal = document.getElementById("fooNameInput").value.trim();
+    const inputDes = document.getElementById("desNameInput").value.trim();
+    const libraryUuid = document.getElementById("libSelect").value;
+    if (!libraryUuid) {
+      toast("请先选择一个目标库！", "warning");
+      return;
+    }
+    const host = getEda();
+    if (!host) {
+      toast("未检测到 EDA 运行环境", "error");
+      return;
+    }
+    if (btn) {
+      btn.disabled = true;
+      btn.innerText = "处理中...";
+    }
+    try {
+      const allSelected = await host.pcb_SelectControl.getAllSelectedPrimitives();
+      if (!allSelected || allSelected.length === 0) throw new Error("请先在 PCB 中选中图元！");
+      const targets = allSelected.filter((p) => p.primitiveType !== "Component");
+      if (targets.length === 0) throw new Error("未选中有效图元");
+      const selectedIds = targets.map((p) => p.primitiveId);
+      const docSource = await host.sys_FileManager.getDocumentSource();
+      const primitives = [];
+      for (const line of docSource.split("\n")) {
+        if (!line.trim()) continue;
+        try {
+          const arr = JSON.parse(line);
+          if (selectedIds.includes(arr[1])) primitives.push(arr);
+        } catch (e) {
+        }
+      }
+      if (primitives.length === 0) throw new Error("无法在源码中匹配到选中的图元数据");
+      const { originX, originY } = computeOrigin(primitives);
+      const padNumbers = collectPadNumbers(primitives);
+      const deviceName = deviceNameOf(inputVal, padNumbers.size);
+      const desMatch = inputDes.match(/^[a-zA-Z]+/);
+      const finalDesignator = (desMatch ? desMatch[0].toUpperCase() : "U") + "?";
+      const fpUuid = await host.lib_Footprint.create(libraryUuid, deviceName);
+      const symUuid = await host.lib_Symbol.create(libraryUuid, deviceName);
+      const devUuid = await host.lib_Device.create(
+        libraryUuid,
+        deviceName,
+        void 0,
+        {
+          symbolType: 2,
+          symbol: { uuid: symUuid, libraryUuid },
+          footprint: { uuid: fpUuid, libraryUuid }
+        },
+        void 0,
+        { addIntoBom: true, addIntoPcb: true, designator: finalDesignator, name: deviceName }
+      );
+      await host.lib_Footprint.updateDocumentSource(fpUuid, libraryUuid, buildFootprintSource(primitives, { uuid: fpUuid, deviceName, originX, originY }));
+      await host.lib_Symbol.updateDocumentSource(symUuid, libraryUuid, buildSymbolSource({ deviceName, pinNumbers: padNumbers }));
+      if (getEditorVersion().startsWith("2.2.43")) {
+        const created = await host.pcb_PrimitiveComponent.create({ libraryUuid, uuid: devUuid }, host.EPCB_LayerId ? host.EPCB_LayerId.TOP : 1, originX, originY, 0, false);
+        if (created && created.primitiveId) await host.pcb_PrimitiveComponent.delete(created.primitiveId);
+      }
+      await host.sch_PrimitiveComponent.create({ libraryUuid, uuid: devUuid }, 0, 0, "", 0, false, true, true);
+      for (const item of targets) {
+        try {
+          if (item.primitiveType === "Pad") await host.pcb_PrimitivePad.delete(item.primitiveId);
+          else if (item.primitiveType === "Polyline") await host.pcb_PrimitivePolyline.delete(item.primitiveId);
+          else if (item.primitiveType === "Region") await host.pcb_PrimitivePour.delete(item.primitiveId);
+          else if (item.primitiveType === "Via") await host.pcb_PrimitiveVia.delete(item.primitiveId);
+          else if (item.primitiveType === "Image") await host.pcb_PrimitiveImage.delete(item.primitiveId);
+        } catch (e) {
+          console.warn("删除临时图元失败", e);
+        }
+      }
+      if (host.sys_IFrame) host.sys_IFrame.hideIFrame("CreateFootprint");
+      document.getElementById("fooNameInput").value = "";
+      toast("成功创建封装: " + deviceName, "success");
+    } catch (err) {
+      console.error("执行错误: ", err);
+      toast(err.message, "error");
+    } finally {
+      if (btn) {
+        btn.disabled = false;
+        btn.innerText = "创建封装";
+      }
+    }
+  }
+  async function initLibList() {
+    const select = document.getElementById("libSelect");
+    const runBtn = document.getElementById("runBtn");
+    try {
+      const host = getEda();
+      const libraries = host && host.lib_LibrariesList ? await host.lib_LibrariesList.getAllLibrariesList() : [];
+      for (const lib of libraries) {
+        const option = document.createElement("option");
+        option.value = lib.uuid || lib.id || "";
+        option.textContent = lib.name || lib.title || "未命名库";
+        select.appendChild(option);
+      }
+      if (runBtn) runBtn.disabled = false;
+    } catch (err) {
+      console.warn("版本检测异常，尝试继续执行...", err);
+    }
+  }
+  if (!blockModernClients()) {
+    void initLibList();
+    const runBtnEl = document.getElementById("runBtn");
+    if (runBtnEl) runBtnEl.addEventListener("click", onRunClick);
+  }
+})();

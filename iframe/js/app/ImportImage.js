@@ -1,876 +1,719 @@
-// ======================== 公共模块 ========================
-			// 需在 HTML 中先引入 /iframe/js/common.js
-			const WC = window.WolfCommon;
-			if (!WC) {
-				(document.body || document.documentElement).innerHTML = '<div style="padding:24px;font:14px/1.6 sans-serif;color:#f28b82">公共模块 common.js 未加载，请重新安装扩展</div>';
-				throw new Error('[狼黑工具] 公共模块 common.js 未加载');
-			}
-			const { toApiLength } = WC;
+/*! 由 npm run build:iframe 从 iframe/js/src 生成，请勿直接修改本文件 */
+"use strict";
+(() => {
+  // iframe/js/src/core/eda.js
+  function getEda() {
+    try {
+      if (typeof eda !== "undefined" && eda) return eda;
+    } catch (e) {
+    }
+    try {
+      if (globalThis.parent && globalThis.parent !== globalThis && globalThis.parent.eda) return globalThis.parent.eda;
+    } catch (e) {
+    }
+    return globalThis.eda || null;
+  }
 
-			// ======================== 配置常量 ========================
-			const CONFIG = {
-				TILE_SIZE: 1800,                // 切片像素尺寸（正方形）
-				JPEG_QUALITY: 0.8,              // JPEG 压缩质量 (0-1)
-				DPI_PRESETS: [300, 600, 900, 1200, 2400, 4800],
-				MM_TO_MIL: 39.37007874015748,
-				MIL_TO_MM: 0.0254,
-				MOUSE_FOLLOW_INTERVAL_MS: 50    // 鼠标跟随刷新间隔(ms)
-			};
+  // iframe/js/src/core/layer.js
+  var LAYER = Object.freeze({
+    TOP: 1,
+    BOTTOM: 2,
+    TOP_SILKSCREEN: 3,
+    BOTTOM_SILKSCREEN: 4,
+    TOP_SOLDER_MASK: 5,
+    BOTTOM_SOLDER_MASK: 6,
+    TOP_PASTE_MASK: 7,
+    BOTTOM_PASTE_MASK: 8,
+    TOP_ASSEMBLY: 9,
+    BOTTOM_ASSEMBLY: 10,
+    BOARD_OUTLINE: 11,
+    MULTI: 12,
+    // 多层：通孔焊盘 / 过孔
+    DOCUMENT: 13,
+    MECHANICAL: 14,
+    INNER_1: 15,
+    INNER_30: 44,
+    HOLE: 47,
+    COMPONENT_SHAPE: 48,
+    COMPONENT_MARKING: 49,
+    CUSTOM_1: 71,
+    CUSTOM_30: 100
+  });
 
-			// ======================== DOM 元素引用 ========================
-			const dpiSlider = document.getElementById('dpiSlider');
-			const widthInput = document.getElementById('widthInput');
-			const heightInput = document.getElementById('heightInput');
-			const unitOptions = document.querySelectorAll('.unit-option');
-			const placeImageBtn = document.getElementById('placeImageBtn');
-			const layerOptions = document.querySelectorAll('.layer-option');
-			const selectImageBtn = document.getElementById('selectImageBtn');
-			const customDpiInput = document.getElementById('customDpiInput');
-			const dpiValueItems = document.querySelectorAll('.dpi-value-item');
-			const sliceimportCheckbox = document.getElementById('sliceimport');
-			const aspectRatioCheckbox = document.getElementById('aspectRatioCheckbox');
+  // iframe/js/src/core/length.js
+  function toApiLength(value, digits = 2) {
+    const num = Number(value);
+    if (!Number.isFinite(num)) return NaN;
+    const rounded = Number(num.toFixed(digits));
+    if (rounded === 0 && num !== 0) return num;
+    return rounded;
+  }
 
+  // iframe/js/src/pcb/placement.js
+  function createFollowPlacer(options = {}) {
+    const timers = options.timers || {
+      setInterval: (fn, ms) => globalThis.setInterval(fn, ms),
+      clearInterval: (handle2) => globalThis.clearInterval(handle2)
+    };
+    const getPoint = options.getPoint;
+    const intervalMs = Number.isFinite(Number(options.intervalMs)) ? Number(options.intervalMs) : 20;
+    let handle = null;
+    let busy = false;
+    function start(apply) {
+      stop();
+      if (typeof getPoint !== "function" || typeof apply !== "function") return false;
+      handle = timers.setInterval(async () => {
+        if (busy) return;
+        busy = true;
+        try {
+          const point = await getPoint();
+          if (point) await apply(point);
+        } catch (e) {
+          stop();
+        } finally {
+          busy = false;
+        }
+      }, intervalMs);
+      return true;
+    }
+    function stop() {
+      if (handle === null) return;
+      timers.clearInterval(handle);
+      handle = null;
+    }
+    function running() {
+      return handle !== null;
+    }
+    return { start, stop, running };
+  }
 
-			// ======================== 全局变量 ========================
-			// 单位与尺寸
-			let currentUnit = 'mil';            // 当前单位 'mm' 或 'mil'
-			let currentDpi = 1200;              // 当前DPI值
-			let currentLayer = 'DOC';           // 当前图层 'TS','BS','DOC'
-			let originalAspectRatio = 1;        // 当前图片宽高比
-			let originalImageWidth = 0;			// 当前图片原始宽
-			let originalImageHeight = 0; 		// 当前图片原始高
-			
-			// 图片数据
-			let currentImage = null;             // 当前用于尺寸计算的图片File对象
-			let imagesArray = [];                // 所有选中的File对象
-			let objectUrls = [];                 // 网格预览用的objectURLs，用于释放内存
-			
-			// 放置流程控制
-			let isPlacingActive = false;          // 是否正在放置过程中
-			let isProcessing = false;             // 是否正在处理图片（防止重复点击）
-			let currentPlacedId = null;           // 当前正在跟随鼠标的图元ID
-			let followInterval = null;            // 鼠标跟随定时器ID
-			let lastPlacedX = 0;				  // 记录最后放置的X坐标（mil）
-			let lastPlacedY = 0; 				  // 记录最后放置的Y坐标（mil）
-			
-			// 切片相关
-			let isSliceEnabled = false;            // 切片开关状态
-			let createdPrimitives = [];            // 存储已创建的图元 { primitiveId, imgIndex }
-			
-			// DPI计算防递归标志
-			let isCalculatingFromDpi = false;
-			// 窗口状态标志（未使用，保留原逻辑）
-			let status = false;
-			let specialLayoutMap = null;      // 存储每个文件索引对应的列和行号
-			let useSpecialLayout = false;     // 是否启用特殊布局
+  // iframe/js/src/ui/toast.js
+  var TOAST_LEVEL = Object.freeze({
+    info: "info",
+    success: "success",
+    warn: "warning",
+    error: "error",
+    warning: "warning",
+    legacy: 2
+  });
+  var BANNER_ID = "__wolf_notice";
+  function normalizeLevel(level) {
+    if (typeof level === "number") return Number.isFinite(level) ? level : TOAST_LEVEL.info;
+    if (typeof level !== "string") return TOAST_LEVEL.info;
+    const key = level.trim().toLowerCase();
+    return Object.prototype.hasOwnProperty.call(TOAST_LEVEL, key) ? TOAST_LEVEL[key] : level;
+  }
+  function banner(doc, text, timeoutMs) {
+    if (!doc || !doc.body || typeof doc.createElement !== "function") return false;
+    let bar = doc.getElementById(BANNER_ID);
+    if (!bar) {
+      bar = doc.createElement("div");
+      bar.id = BANNER_ID;
+      bar.style.cssText = "position:fixed;left:0;right:0;top:0;padding:8px 12px;background:#5a1d1d;color:#fff;font:13px/1.5 sans-serif;z-index:9999";
+      doc.body.appendChild(bar);
+    }
+    bar.textContent = text;
+    setTimeout(() => {
+      if (typeof bar.remove === "function") bar.remove();
+    }, timeoutMs);
+    return true;
+  }
+  function toast(message, level = TOAST_LEVEL.info, opts = {}) {
+    const doc = opts.doc || globalThis.document;
+    const host = opts.host === void 0 ? getEda() : opts.host;
+    const text = message === null || message === void 0 ? "" : String(message);
+    const type = normalizeLevel(level);
+    try {
+      if (host && host.sys_Message && typeof host.sys_Message.showToastMessage === "function") {
+        host.sys_Message.showToastMessage(text, type);
+        return "host";
+      }
+    } catch (e) {
+    }
+    return banner(doc, text, opts.timeoutMs === void 0 ? 3e3 : opts.timeoutMs) ? "dom" : "none";
+  }
 
-			// ======================== 辅助函数 ========================
-			
-			/** 显示消息提示 */
-			function showMessage(msg, type = "info") {
-				eda.sys_Message.showToastMessage(msg, type);
-			}
+  // iframe/js/src/app/import-image/layout.js
+  var NAME_PATTERN = /^(T|B|L)(\d+|S).*\.(png|jpg|jpeg|bmp)$/i;
+  var ALIAS_PATTERN = /^(TOP|BOT).*\.(png|jpg|jpeg|bmp)$/i;
+  function gridSize(count) {
+    return Math.ceil(Math.sqrt(Number(count) || 0));
+  }
+  function parseFileNameOrder(files) {
+    const list = Array.isArray(files) ? files : [];
+    const parsed = list.map((file, idx) => {
+      const name = String(file && file.name ? file.name : "");
+      let match = name.match(NAME_PATTERN);
+      if (match) return { idx, type: "normal", prefix: match[1].toUpperCase(), suffix: match[2].toUpperCase(), valid: true };
+      match = name.match(ALIAS_PATTERN);
+      if (match) return { idx, type: "alias", alias: match[1].toUpperCase(), valid: true };
+      return { idx, valid: false };
+    });
+    if (!parsed.every((item) => item.valid)) return { ordered: list, layoutMap: null, useSpecial: false };
+    const lNumbers = parsed.filter((p) => p.type === "normal" && p.prefix === "L" && p.suffix !== "S").map((p) => parseInt(p.suffix, 10)).filter((num) => !isNaN(num));
+    const maxL = lNumbers.length > 0 ? Math.max(...lNumbers) : 1;
+    const items = parsed.map((p) => {
+      if (p.type === "normal") return { idx: p.idx, prefix: p.prefix, suffix: p.suffix };
+      return p.alias === "TOP" ? { idx: p.idx, prefix: "L", suffix: "1" } : { idx: p.idx, prefix: "L", suffix: String(maxL) };
+    });
+    const tGroup = items.filter((p) => p.prefix === "T" && p.suffix !== "S");
+    const bGroup = items.filter((p) => p.prefix === "B" && p.suffix !== "S");
+    const lGroup = items.filter((p) => p.prefix === "L");
+    const tsFile = items.find((p) => p.prefix === "T" && p.suffix === "S");
+    const bsFile = items.find((p) => p.prefix === "B" && p.suffix === "S");
+    tGroup.sort((a, b) => parseInt(b.suffix, 10) - parseInt(a.suffix, 10));
+    bGroup.sort((a, b) => parseInt(b.suffix, 10) - parseInt(a.suffix, 10));
+    lGroup.sort((a, b) => parseInt(a.suffix, 10) - parseInt(b.suffix, 10));
+    const lCount = lGroup.length;
+    const lValid = lCount === 0 || lCount >= 2 && lCount % 2 === 0;
+    if (!lValid) return { ordered: list, layoutMap: null, useSpecial: false };
+    const leftOrder = [...tGroup];
+    if (tsFile) leftOrder.push(tsFile);
+    let rightL = [];
+    if (lCount > 0) {
+      const half = lCount / 2;
+      leftOrder.push(...lGroup.slice(0, half));
+      rightL = lGroup.slice(half).reverse();
+    }
+    const rightOrder = [...bGroup];
+    if (bsFile) rightOrder.push(bsFile);
+    rightOrder.push(...rightL);
+    const ordered = [];
+    const layoutMap = /* @__PURE__ */ new Map();
+    const maxRows = Math.max(leftOrder.length, rightOrder.length);
+    for (let row = 0; row < maxRows; row++) {
+      if (row < leftOrder.length) {
+        layoutMap.set(ordered.length, { col: "left", row });
+        ordered.push(list[leftOrder[row].idx]);
+      }
+      if (row < rightOrder.length) {
+        layoutMap.set(ordered.length, { col: "right", row });
+        ordered.push(list[rightOrder[row].idx]);
+      }
+    }
+    return { ordered, layoutMap, useSpecial: true };
+  }
+  function computeOrigins(input) {
+    const total = Number(input.totalImages) || 0;
+    const origins = [];
+    if (input.useSpecial && input.layoutMap) {
+      for (let i = 0; i < total; i++) {
+        const pos = input.layoutMap.get(i);
+        if (!pos) {
+          origins.push({ x: input.originX, y: input.originY });
+          continue;
+        }
+        origins.push({
+          x: input.originX + (pos.col === "right" ? input.imgWidth : 0),
+          y: input.originY - pos.row * input.imgHeight
+        });
+      }
+      return origins;
+    }
+    const size = gridSize(total);
+    const side = Math.max(input.imgWidth, input.imgHeight);
+    for (let idx = 0; idx < total; idx++) {
+      const row = Math.floor(idx / size);
+      const col = idx % size;
+      origins.push({ x: input.originX + col * side, y: input.originY - row * side });
+    }
+    return origins;
+  }
 
-			/** 计算网格大小（用于预览和自动布局） */
-			function getGridSize(count) {
-				return Math.ceil(Math.sqrt(count));
-			}
+  // iframe/js/src/app/import-image/pixel.js
+  var MM_TO_MIL = 39.37007874015748;
+  var MIL_TO_MM = 0.0254;
+  var DPI_PRESETS = Object.freeze([300, 600, 900, 1200, 2400, 4800]);
+  function perInch(unit) {
+    return unit === "mm" ? 25.4 : 1e3;
+  }
+  function sizeFromDpi(pxWidth, pxHeight, dpi, unit) {
+    const scale = perInch(unit);
+    const safeDpi = Number(dpi) > 0 ? Number(dpi) : 1;
+    return {
+      width: Number(pxWidth) / safeDpi * scale,
+      height: Number(pxHeight) / safeDpi * scale
+    };
+  }
+  function dpiFromSize(pxWidth, pxHeight, width, height, unit) {
+    const scale = perInch(unit);
+    const widthInch = Number(width) / scale;
+    const heightInch = Number(height) / scale;
+    if (!(widthInch > 0) || !(heightInch > 0)) return 0;
+    const dpiX = Math.round(Number(pxWidth) / widthInch);
+    const dpiY = Math.round(Number(pxHeight) / heightInch);
+    return Math.round((dpiX + dpiY) / 2);
+  }
+  function toMilSize(width, height, unit) {
+    const w = Number(width);
+    const h = Number(height);
+    const safeW = Number.isFinite(w) ? w : 0;
+    const safeH = Number.isFinite(h) ? h : 0;
+    if (unit === "mm") return { width: safeW * MM_TO_MIL, height: safeH * MM_TO_MIL };
+    return { width: safeW, height: safeH };
+  }
 
-			/** 释放所有预览用的 ObjectURL，防止内存泄漏 */
-			function revokeAllObjectUrls() {
-				objectUrls.forEach(url => URL.revokeObjectURL(url));
-				objectUrls = [];
-			}
-
-			/** 渲染图片网格预览 */
-			function renderGrid(files, twoColumns = false) {
-				const gridContainer = document.getElementById('gridPreview');
-				gridContainer.innerHTML = '';
-				if (!files.length) {
-					gridContainer.style.display = 'none';
-					return;
-				}
-				const count = files.length;
-				gridContainer.style.display = 'grid';
-				if (twoColumns) {
-					gridContainer.style.gridTemplateColumns = `repeat(2, minmax(0, 1fr))`;
-				} else {
-					const gridSize = getGridSize(count);
-					gridContainer.style.gridTemplateColumns = `repeat(${gridSize}, minmax(0, 1fr))`;
-				}
-				files.forEach((file) => {
-					const url = URL.createObjectURL(file);
-					objectUrls.push(url);
-					const itemDiv = document.createElement('div');
-					itemDiv.className = 'grid-item';
-					const img = document.createElement('img');
-					img.src = url;
-					img.alt = file.name;
-					img.onerror = () => console.error(`图片加载失败: ${file.name}`);
-					itemDiv.appendChild(img);
-					gridContainer.appendChild(itemDiv);
-				});
-			}
-
-			/** 更新所有预览网格项的宽高比（使用当前图片比例） */
-			function updateGridItemAspectRatio(aspectRatio) {
-				const gridItems = document.querySelectorAll('.grid-item');
-				gridItems.forEach(item => {
-					item.style.aspectRatio = aspectRatio;
-				});
-			}
-
-			/** 加载图片到编辑区，用于尺寸计算和DPI同步 */
-			function loadImageToCurrent(file) {
-				if (!file) return;
-				currentImage = file;
-				const img = new Image();
-				const url = URL.createObjectURL(file);
-				img.onload = function () {
-					URL.revokeObjectURL(url);
-					originalImageWidth = img.width;
-					originalImageHeight = img.height;
-					originalAspectRatio = originalImageWidth / originalImageHeight;
-					updateGridItemAspectRatio(originalAspectRatio);
-					
-					const dpi = currentDpi || 1200;
-					const widthInch = originalImageWidth / dpi;
-					const heightInch = originalImageHeight / dpi;
-					if (currentUnit === 'mm') {
-						widthInput.value = (widthInch * 25.4).toFixed(2);
-						heightInput.value = (heightInch * 25.4).toFixed(2);
-					} else {
-						widthInput.value = (widthInch * 1000).toFixed(2);
-						heightInput.value = (heightInch * 1000).toFixed(2);
-					}
-					customDpiInput.value = dpi;
-					currentDpi = dpi;
-					syncDpiUi(dpi);
-					if (aspectRatioCheckbox.checked) {
-						const width = parseFloat(widthInput.value);
-						if (!isNaN(width)) {
-							const height = width / originalAspectRatio;
-							heightInput.value = height.toFixed(2);
-						}
-					}
-					placeImageBtn.disabled = false;
-				};
-				img.onerror = () => {
-					URL.revokeObjectURL(url);
-					console.error('无法加载图片获取尺寸');
-				};
-				img.src = url;
-			}
-
-			/** 根据当前宽高和图片原始像素计算DPI（保持横纵比开启时调用） */
-			function calculateDpi() {
-				if (!aspectRatioCheckbox.checked) return;
-				if (!currentImage || !widthInput.value || !heightInput.value) return;
-				const img = new Image();
-				img.onload = function () {
-					const width = parseFloat(widthInput.value);
-					const height = parseFloat(heightInput.value);
-					let widthInch, heightInch;
-					if (currentUnit === 'mm') {
-						widthInch = width * (1 / 25.4);
-						heightInch = height * (1 / 25.4);
-					} else {
-						widthInch = width * (1 / 1000);
-						heightInch = height * (1 / 1000);
-					}
-					const dpiX = Math.round(img.width / widthInch);
-					const dpiY = Math.round(img.height / heightInch);
-					const avgDpi = Math.round((dpiX + dpiY) / 2);
-					customDpiInput.value = avgDpi;
-					currentDpi = avgDpi;
-					syncDpiUi(avgDpi);
-				};
-				img.src = URL.createObjectURL(currentImage);
-			}
-
-			/** 根据DPI计算并更新宽度/高度输入框的值 */
-			function calculateDimensionsFromDpi() {
-				if (!currentImage || !currentDpi) return;
-				isCalculatingFromDpi = true;
-				const img = new Image();
-				img.onload = function () {
-					const widthInch = img.width / currentDpi;
-					const heightInch = img.height / currentDpi;
-					if (currentUnit === 'mm') {
-						widthInput.value = (widthInch * 25.4).toFixed(2);
-						heightInput.value = (heightInch * 25.4).toFixed(2);
-					} else {
-						widthInput.value = (widthInch * 1000).toFixed(2);
-						heightInput.value = (heightInch * 1000).toFixed(2);
-					}
-					isCalculatingFromDpi = false;
-					if (currentDpi) syncDpiUi(currentDpi);
-				};
-				img.src = URL.createObjectURL(currentImage);
-			}
-
-			/** 同步DPI控件（滑块高亮、自定义输入框） */
-			function syncDpiUi(dpiValue) {
-				const index = CONFIG.DPI_PRESETS.indexOf(dpiValue);
-				if (index !== -1) {
-					const sliderValue = 5 - index;  // 滑块最大值5，最小值0
-					dpiSlider.value = sliderValue;
-					dpiValueItems.forEach((item, i) => {
-						if (i === index) item.classList.add('active');
-						else item.classList.remove('active');
-					});
-				} else {
-					dpiValueItems.forEach(item => item.classList.remove('active'));
-				}
-				customDpiInput.value = dpiValue;
-			}
-
-			/** 设置DPI并重新计算尺寸 */
-			function setCurrentDpiAndRecalc(dpi) {
-				if (!currentImage || !aspectRatioCheckbox.checked) return;
-				currentDpi = dpi;
-				syncDpiUi(currentDpi);
-				calculateDimensionsFromDpi();
-			}
-
-			/** 将File对象转为Base64字符串 */
-			function convertToBase64(file) {
-				return new Promise((resolve, reject) => {
-					const reader = new FileReader();
-					reader.onload = () => resolve(reader.result);
-					reader.onerror = error => reject(error);
-					reader.readAsDataURL(file);
-				});
-			}
-
-			/** 获取当前图层对应的PCB图层ID */
-			function getCurrentLayerId() {
-				switch (currentLayer) {
-					case 'TS': return EPCB_LayerId.TOP_SILKSCREEN;
-					case 'BS': return EPCB_LayerId.BOTTOM_SILKSCREEN;
-					default: return EPCB_LayerId.DOCUMENT;
-				}
-			}
-
-			/** 获取当前放置尺寸（mil单位） */
-			function getCurrentPlaceSize() {
-				let width = parseFloat(widthInput.value);
-				let height = parseFloat(heightInput.value);
-				if (isNaN(width)) width = 0;
-				if (isNaN(height)) height = 0;
-				if (currentUnit === 'mm') {
-					width = width * CONFIG.MM_TO_MIL;
-					height = height * CONFIG.MM_TO_MIL;
-				}
-				return { width, height };
-			}
-
-			/** 停止鼠标跟随定时器 */
-			function stopFollowing() {
-				if (followInterval) {
-					clearInterval(followInterval);
-					followInterval = null;
-				}
-			}
-
-			// ======================== 切片核心函数 ========================
-			
-			/**
-			 * 从原图中裁剪一块区域，转为 JPEG base64
-			 * @param {HTMLImageElement} img - 原图对象
-			 * @param {number} sx - 起始X（像素）
-			 * @param {number} sy - 起始Y（像素）
-			 * @param {number} sw - 宽度（像素）
-			 * @param {number} sh - 高度（像素）
-			 * @returns {Promise<string>} base64 数据
-			 */
-			function cropImageToBase64(img, sx, sy, sw, sh) {
-				return new Promise((resolve, reject) => {
-					const canvas = document.createElement('canvas');
-					canvas.width = sw;
-					canvas.height = sh;
-					const ctx = canvas.getContext('2d');
-					ctx.drawImage(img, sx, sy, sw, sh, 0, 0, sw, sh);
-					canvas.toBlob(blob => {
-						const reader = new FileReader();
-						reader.onloadend = () => resolve(reader.result);
-						reader.onerror = reject;
-						reader.readAsDataURL(blob);
-					}, 'image/jpeg', CONFIG.JPEG_QUALITY);
-				});
-			}
-
-			/**
-			 * 对单张图片生成 tiles（切片或整图）
-			 * @param {File} file - 图片文件
-			 * @param {number} pcbWidth - 用户在PCB上设置的宽度（mil）
-			 * @param {number} pcbHeight - 用户在PCB上设置的高度（mil）
-			 * @returns {Promise<Array>} tiles数组，每个元素包含 { base64, relX, relY, width, height }
-			 */
-			async function generateTilesForFile(file, pcbWidth, pcbHeight) {
-				// 加载原图
-				const img = await new Promise((resolve, reject) => {
-					const image = new Image();
-					image.onload = () => resolve(image);
-					image.onerror = reject;
-					image.src = URL.createObjectURL(file);
-				});
-				const pxWidth = img.width;
-				const pxHeight = img.height;
-				
-				if (!isSliceEnabled) {
-					// 不切片：整张图作为一个 tile
-					const base64 = await convertToBase64(file);
-					URL.revokeObjectURL(img.src);
-					return [{
-						base64: base64,
-						relX: 0,
-						relY: 0,
-						width: pcbWidth,
-						height: pcbHeight
-					}];
-				}
-				
-				// 切片模式：计算行列数，并行生成所有 tiles
-				const cols = Math.ceil(pxWidth / CONFIG.TILE_SIZE);
-				const rows = Math.ceil(pxHeight / CONFIG.TILE_SIZE);
-				const tilePromises = [];
-				
-				for (let row = 0; row < rows; row++) {
-					for (let col = 0; col < cols; col++) {
-						const sx = col * CONFIG.TILE_SIZE;
-						const sy = row * CONFIG.TILE_SIZE;
-						const sw = Math.min(CONFIG.TILE_SIZE, pxWidth - sx);
-						const sh = Math.min(CONFIG.TILE_SIZE, pxHeight - sy);
-						tilePromises.push(
-							cropImageToBase64(img, sx, sy, sw, sh).then(base64 => ({
-								base64,
-								relX: (sx / pxWidth) * pcbWidth,
-								relY: (sy / pxHeight) * pcbHeight,
-								width: (sw / pxWidth) * pcbWidth,
-								height: (sh / pxHeight) * pcbHeight
-							}))
-						);
-					}
-				}
-				
-				const tiles = await Promise.all(tilePromises);
-				URL.revokeObjectURL(img.src);
-				return tiles;
-			}
-
-			/**
-			 * 预处理所有图片，生成完整的 tiles 列表
-			 * @param {Array} files - 图片文件数组
-			 * @param {number} pcbWidth - 统一PCB宽度（mil）
-			 * @param {number} pcbHeight - 统一PCB高度（mil）
-			 * @returns {Promise<Object>} { tilesList, totalImages }
-			 */
-			async function prepareAllTiles(files, pcbWidth, pcbHeight) {
-				const allTiles = [];
-				for (let idx = 0; idx < files.length; idx++) {
-					const file = files[idx];
-					// 如果 file 有 originalIndex 属性则使用它，否则使用 idx
-					const originalIdx = file.originalIndex !== undefined ? file.originalIndex : idx;
-					const tiles = await generateTilesForFile(file, pcbWidth, pcbHeight);
-					tiles.forEach(tile => {
-						allTiles.push({
-							...tile,
-							imgIndex: originalIdx
-						});
-					});
-				}
-				return { tilesList: allTiles, totalImages: files.length };
-			}
-
-			// ======================== PCB 放置相关函数 ========================
-			
-			/**
-			 * 放置单个 tile（跟随鼠标）
-			 * @param {Object} tile - { base64, relX, relY, width, height, imgIndex }
-			 * @param {number} imgIndex - 所属原图索引
-			 */
-			async function startPlaceTile(tile, imgIndex) {
-				try {
-					const layerId = getCurrentLayerId();
-					const colorObj = await eda.pcb_PrimitiveObject.create(
-						layerId, 0, 0, tile.base64,
-						toApiLength(tile.width), toApiLength(tile.height), 0, false, 'img', false
-					);
-					if (!colorObj) throw new Error('创建图像图元失败（API 返回空）');
-					const primitiveId = colorObj.getState_PrimitiveId();
-					currentPlacedId = primitiveId;
-					
-					// 记录图元信息（用于后续组合）
-					createdPrimitives.push({ primitiveId: primitiveId, imgIndex: imgIndex });
-					
-					stopFollowing();
-					// 启动鼠标跟随，每隔固定时间更新图元位置
-					followInterval = setInterval(async () => {
-						try {
-							const currentPoint = await eda.pcb_SelectControl.getCurrentMousePosition();
-							await eda.pcb_PrimitiveObject.modify(currentPlacedId, {
-								topLeftX: currentPoint.x,
-								topLeftY: currentPoint.y,
-							});
-							lastPlacedX = currentPoint.x;
-							lastPlacedY = currentPoint.y;
-						} catch (error) {
-							console.error('更新 tile 位置失败:', error);
-							stopFollowing();
-						}
-					}, CONFIG.MOUSE_FOLLOW_INTERVAL_MS);
-					return true;
-				} catch (err) {
-					console.error('放置 tile 失败:', err);
-					showMessage('放置失败，请重试', "error");
-					return false;
-				}
-			}
-
-			/** 完成当前图片放置，并自动放置剩余所有 tile */
-			async function finishCurrentPlaceAndContinue() {
-				stopFollowing();
-				if (!currentPlacedId) {
-					cleanUpAndClose();
-					return;
-				}
-
-				const firstTile = window.pendingTiles[0];
-				const mouseX = lastPlacedX;
-				const mouseY = lastPlacedY;
-
-				// 计算第一张原图左上角在 PCB 上的坐标（Y轴翻转适配 PCB 坐标系）
-				const originX = mouseX - firstTile.relX;
-				const originY = mouseY + firstTile.relY;
-
-				const totalImages = window.totalImagesCount;
-				const { width: imgWidth, height: imgHeight } = getCurrentPlaceSize();
-				let originCoords = [];
-
-				if (useSpecialLayout && specialLayoutMap) {
-					// 特殊布局：根据映射计算每张图片的原点坐标
-					const indexToCoord = new Array(totalImages);
-					for (let i = 0; i < totalImages; i++) {
-						const pos = specialLayoutMap.get(i);
-						if (pos) {
-							const x = originX + (pos.col === 'right' ? imgWidth : 0);
-							const y = originY - pos.row * imgHeight;
-							indexToCoord[i] = { x, y };
-						} else {
-							// 理论上不会发生，若发生则放在原点
-							indexToCoord[i] = { x: originX, y: originY };
-						}
-					}
-					originCoords = indexToCoord;
-				} else {
-					// 原网格布局（正方形网格，间距取长边）
-					const gridSize = Math.ceil(Math.sqrt(totalImages));
-					const side = Math.max(imgWidth, imgHeight);
-					for (let idx = 0; idx < totalImages; idx++) {
-						const row = Math.floor(idx / gridSize);
-						const col = idx % gridSize;
-						const x = originX + col * side;
-						const y = originY - row * side;
-						originCoords.push({ x, y });
-					}
-				}
-
-				// 批量创建剩余的所有 tile（跳过第一个）
-				const layerId = getCurrentLayerId();
-				for (let i = 1; i < window.pendingTiles.length; i++) {
-					const tile = window.pendingTiles[i];
-					const imgOrigin = originCoords[tile.imgIndex];
-					const absX = imgOrigin.x + tile.relX;
-					const absY = imgOrigin.y - tile.relY;
-					try {
-						const colorObj = await eda.pcb_PrimitiveObject.create(
-							layerId, absX, absY, tile.base64,
-							toApiLength(tile.width), toApiLength(tile.height), 0, false, 'img', false
-						);
-						if (!colorObj) throw new Error('创建图像图元失败（API 返回空）');
-						const primitiveId = colorObj.getState_PrimitiveId();
-						createdPrimitives.push({ primitiveId: primitiveId, imgIndex: tile.imgIndex });
-					} catch (err) {
-						console.error(`创建 tile 失败 (imgIndex=${tile.imgIndex}):`, err);
-					}
-				}
-
-				cleanUpAndClose();
-			}
-						/** 清理资源并关闭插件窗口 */
-			function cleanUpAndClose() {
-				currentPlacedId = null;
-				isPlacingActive = false;
-				window.pendingTiles = null;
-				window.totalImagesCount = 0;
-				createdPrimitives = [];
-				specialLayoutMap = null;      // 新增
-				useSpecialLayout = false;     // 新增
-				enableUiAfterPlace(true);
-				eda.sys_IFrame.closeIFrame('ImportImage');
-			}
-
-			/** 启用/禁用放置过程中的UI控件 */
-			function enableUiAfterPlace(enable) {
-				// selectImageBtn.disabled = !enable;
-				// placeImageBtn.disabled = !enable;
-				if (enable && imagesArray.length === 0) {
-					placeImageBtn.disabled = true;
-				}
-			}
-
-			// ======================== 主入口：开始放置 ========================
-			
-			async function handlePlaceImage() {
-				// 防止重复点击或处理中
-				if (isPlacingActive) {
-					showMessage('正在放置中，请先完成当前操作', "warn");
-					return;
-				}
-				if (isProcessing) {
-					showMessage('正在处理图片，请稍候...', "warn");
-					return;
-				}
-				if (!imagesArray.length) {
-					showMessage('请先选择图片', "error");
-					return;
-				}
-				const { width, height } = getCurrentPlaceSize();
-				if (width <= 0 || height <= 0) {
-					showMessage('请输入有效的宽度和高度', "error");
-					return;
-				}
-				
-				// 读取切片开关状态
-				isSliceEnabled = sliceimportCheckbox.checked;
-				isProcessing = true;
-				showMessage('正在处理图片，请稍候...', "info");
-				
-				let tilesData;
-				try {
-					tilesData = await prepareAllTiles(imagesArray, width, height);
-				} catch (err) {
-					console.error('图片处理失败:', err);
-					showMessage('图片处理失败，请重试', "error");
-					isProcessing = false;
-					return;
-				}
-				
-				// 保存到全局变量供放置流程使用
-				window.pendingTiles = tilesData.tilesList;
-				window.totalImagesCount = tilesData.totalImages;
-				
-				isPlacingActive = true;
-				enableUiAfterPlace(false);
-				isProcessing = false;
-				eda.sys_IFrame.hideIFrame('ImportImage');  // 隐藏插件窗口，等待用户点击画布
-				
-				// 开始放置第一个 tile
-				const firstTile = window.pendingTiles[0];
-				await startPlaceTile(firstTile, firstTile.imgIndex);
-			}
-
-			// ======================== 选择图片 ========================
-			async function handleImageSelect() {
-				if (isPlacingActive) {
-					showMessage('请先完成当前图片放置', "warn");
-					return;
-				}
-				createdPrimitives = [];
-				stopFollowing();
-				try {
-					const files = await new Promise((resolve) => {
-						const input = document.createElement('input');
-						input.type = 'file';
-						input.multiple = true;
-						input.accept = '.png,.jpg,.jpeg,.bmp';
-						input.onchange = () => resolve(Array.from(input.files));
-						input.click();
-					});
-					if (!files.length) return;
-
-					const validTypes = ['image/png', 'image/jpeg', 'image/bmp'];
-					const invalidFiles = files.filter(f => !validTypes.includes(f.type.toLowerCase()));
-					if (invalidFiles.length) {
-						showMessage('仅支持 PNG、JPG、JPEG、BMP 格式', "error");
-						return;
-					}
-
-					revokeAllObjectUrls();
-
-					// ---------- 增强版文件名解析与别名处理 ----------
-					const pattern = /^(T|B|L)(\d+|S).*\.(png|jpg|jpeg|bmp)$/i;
-					const aliasPattern = /^(TOP|BOT).*\.(png|jpg|jpeg|bmp)$/i;
-
-					// 第一步：解析所有文件，收集信息
-					const parsed = files.map((file, idx) => {
-						const name = file.name;
-						let match = name.match(pattern);
-						if (match) {
-							const prefix = match[1].toUpperCase();
-							const suffix = match[2].toUpperCase();
-							return { idx, type: 'normal', prefix, suffix, valid: true };
-						}
-						match = name.match(aliasPattern);
-						if (match) {
-							const alias = match[1].toUpperCase(); // TOP 或 BOT
-							return { idx, type: 'alias', alias, valid: true };
-						}
-						return { idx, valid: false };
-					});
-
-					const allValid = parsed.every(p => p.valid);
-					let layoutMap = null;
-					let canUseSpecial = false;
-					let orderedFiles = files; // 默认保持原顺序
-
-					if (allValid) {
-						// 收集所有 L 数字，用于计算 BOT 对应的最大 L 编号
-						const lNumbers = parsed
-							.filter(p => p.type === 'normal' && p.prefix === 'L' && p.suffix !== 'S')
-							.map(p => parseInt(p.suffix, 10))
-							.filter(num => !isNaN(num));
-						const maxL = lNumbers.length > 0 ? Math.max(...lNumbers) : 1;
-
-						// 第二步：将别名转换为等效的 normal 条目
-						const tempItems = parsed.map(p => {
-							if (p.type === 'normal') {
-								return { idx: p.idx, prefix: p.prefix, suffix: p.suffix };
-							} else {
-								if (p.alias === 'TOP') {
-									return { idx: p.idx, prefix: 'L', suffix: '1' };
-								} else {
-									return { idx: p.idx, prefix: 'L', suffix: String(maxL) };
-								}
-							}
-						});
-
-						// 分组
-						const tGroup = tempItems.filter(p => p.prefix === 'T' && p.suffix !== 'S');
-						const bGroup = tempItems.filter(p => p.prefix === 'B' && p.suffix !== 'S');
-						const lGroup = tempItems.filter(p => p.prefix === 'L');
-						const tsFile = tempItems.find(p => p.prefix === 'T' && p.suffix === 'S');
-						const bsFile = tempItems.find(p => p.prefix === 'B' && p.suffix === 'S');
-
-						// 排序：T、B 降序，L 升序
-						tGroup.sort((a, b) => parseInt(b.suffix) - parseInt(a.suffix));
-						bGroup.sort((a, b) => parseInt(b.suffix) - parseInt(a.suffix));
-						lGroup.sort((a, b) => parseInt(a.suffix) - parseInt(b.suffix));
-
-						const lCount = lGroup.length;
-						const lValid = (lCount === 0) || (lCount >= 2 && lCount % 2 === 0);
-
-						if (lValid) {
-							// 构建左右列顺序（从上到下）
-							const leftOrder = [...tGroup];
-							if (tsFile) leftOrder.push(tsFile);
-							let leftL = [], rightL = [];
-							if (lCount > 0) {
-								const half = lCount / 2;
-								leftL = lGroup.slice(0, half);
-								rightL = lGroup.slice(half).reverse(); // 右列 L 降序
-							}
-							leftOrder.push(...leftL);
-
-							const rightOrder = [...bGroup];
-							if (bsFile) rightOrder.push(bsFile);
-							rightOrder.push(...rightL);
-
-							// 按行优先顺序构建有序文件数组（用于预览网格）
-							const maxRows = Math.max(leftOrder.length, rightOrder.length);
-							const newOrderedFiles = [];
-							const newMap = new Map();
-
-							for (let row = 0; row < maxRows; row++) {
-								// 左列
-								if (row < leftOrder.length) {
-									const item = leftOrder[row];
-									const file = files[item.idx];
-									const newIdx = newOrderedFiles.length;
-									newOrderedFiles.push(file);
-									newMap.set(newIdx, { col: 'left', row });
-								}
-								// 右列
-								if (row < rightOrder.length) {
-									const item = rightOrder[row];
-									const file = files[item.idx];
-									const newIdx = newOrderedFiles.length;
-									newOrderedFiles.push(file);
-									newMap.set(newIdx, { col: 'right', row });
-								}
-							}
-
-							orderedFiles = newOrderedFiles;
-							layoutMap = newMap;
-							canUseSpecial = true;
-						}
-					}
-
-					// 保存布局信息
-					specialLayoutMap = layoutMap;
-					useSpecialLayout = canUseSpecial;
-					imagesArray = orderedFiles; // 更新为有序数组
-
-					// 渲染预览网格（若为特殊布局则显示两列）
-					renderGrid(imagesArray, useSpecialLayout);
-					document.querySelector('.preview-placeholder').style.display = 'none';
-					document.getElementById('previewImage').style.display = 'none';
-
-					// 加载第一张图片用于尺寸计算
-					loadImageToCurrent(imagesArray[0]);
-
-					isPlacingActive = false;
-					enableUiAfterPlace(true);
-				} catch (error) {
-					console.error('选择图像时出错:', error);
-				}
-			}
-
-			// ======================== 事件绑定与初始化 ========================
-			
-			// 窗口失去焦点时，认为当前图片已放置完成（用户点击了画布）
-			window.onblur = async function () {
-				if (isPlacingActive && followInterval) {
-					await finishCurrentPlaceAndContinue();
-				} else if (!isPlacingActive && status) {
-					if (followInterval) clearInterval(followInterval);
-					eda.sys_IFrame.closeIFrame('ImportImage');
-				}
-			};
-
-			// 单位切换
-			unitOptions.forEach((option) => {
-				option.addEventListener('click', function () {
-					if (this.classList.contains('active')) return;
-					unitOptions.forEach(opt => opt.classList.remove('active'));
-					this.classList.add('active');
-					const oldUnit = currentUnit;
-					currentUnit = this.dataset.unit;
-					if (currentImage && widthInput.value && heightInput.value) {
-						if (oldUnit === 'mm' && currentUnit === 'mil') {
-							widthInput.value = (parseFloat(widthInput.value) * CONFIG.MM_TO_MIL).toFixed(2);
-							heightInput.value = (parseFloat(heightInput.value) * CONFIG.MM_TO_MIL).toFixed(2);
-						} else if (oldUnit === 'mil' && currentUnit === 'mm') {
-							widthInput.value = (parseFloat(widthInput.value) * CONFIG.MIL_TO_MM).toFixed(2);
-							heightInput.value = (parseFloat(heightInput.value) * CONFIG.MIL_TO_MM).toFixed(2);
-						}
-						calculateDpi();
-					}
-				});
-			});
-
-			// 图层切换
-			layerOptions.forEach((option) => {
-				option.addEventListener('click', function () {
-					if (this.classList.contains('active')) return;
-					layerOptions.forEach(opt => opt.classList.remove('active'));
-					this.classList.add('active');
-					currentLayer = this.dataset.layer;
-				});
-			});
-
-			// 尺寸输入事件
-			widthInput.addEventListener('input', function () {
-				if (!isCalculatingFromDpi) {
-					calculateDpi();
-					if (aspectRatioCheckbox.checked && currentImage) {
-						const width = parseFloat(this.value);
-						if (!isNaN(width)) {
-							const height = width / originalAspectRatio;
-							heightInput.value = height.toFixed(2);
-						}
-					}
-				}
-			});
-			heightInput.addEventListener('input', function () {
-				if (!isCalculatingFromDpi) {
-					calculateDpi();
-					if (aspectRatioCheckbox.checked && currentImage) {
-						const height = parseFloat(this.value);
-						if (!isNaN(height)) {
-							const width = height * originalAspectRatio;
-							widthInput.value = width.toFixed(2);
-						}
-					}
-				}
-			});
-
-			// 保持横纵比开关
-			function toggleAspectRatio() {
-				const isChecked = aspectRatioCheckbox.checked;
-				if (isChecked) {
-					customDpiInput.disabled = false;
-					dpiSlider.disabled = false;
-					dpiValueItems.forEach(item => item.style.pointerEvents = 'auto');
-					if (currentImage) {
-						const img = new Image();
-						img.onload = function () {
-							originalAspectRatio = img.width / img.height;
-							if (widthInput.value && heightInput.value) {
-								const width = parseFloat(widthInput.value);
-								const height = width / originalAspectRatio;
-								heightInput.value = height.toFixed(2);
-							}
-							calculateDpi();
-						};
-						img.src = URL.createObjectURL(currentImage);
-					}
-				} else {
-					customDpiInput.disabled = true;
-					dpiSlider.disabled = true;
-					dpiValueItems.forEach(item => item.style.pointerEvents = 'none');
-					dpiValueItems.forEach(item => item.classList.remove('active'));
-					customDpiInput.value = '';
-					currentDpi = null;
-				}
-			}
-			aspectRatioCheckbox.addEventListener('change', toggleAspectRatio);
-
-			// DPI滑块事件
-			dpiSlider.addEventListener('input', function() {
-				const rawIdx = parseInt(this.value, 10);
-				const idx = 5 - rawIdx;
-				const selectedDpi = CONFIG.DPI_PRESETS[idx];
-				setCurrentDpiAndRecalc(selectedDpi);
-			});
-			// 右侧列表点击
-			dpiValueItems.forEach((item, idx) => {
-				item.addEventListener('click', () => {
-					const dpi = CONFIG.DPI_PRESETS[idx];
-					setCurrentDpiAndRecalc(dpi);
-				});
-			});
-			// 自定义DPI输入
-			customDpiInput.addEventListener('input', function() {
-				let dpiValue = parseInt(this.value, 10);
-				if (isNaN(dpiValue) || dpiValue <= 0) return;
-				currentDpi = dpiValue;
-				const index = CONFIG.DPI_PRESETS.indexOf(currentDpi);
-				if (index !== -1) {
-					const sliderValue = 5 - index;
-					dpiSlider.value = sliderValue;
-					dpiValueItems.forEach((item, i) => {
-						if (i === index) item.classList.add('active');
-						else item.classList.remove('active');
-					});
-				} else {
-					dpiValueItems.forEach(item => item.classList.remove('active'));
-				}
-				if (aspectRatioCheckbox.checked && currentImage) {
-					calculateDimensionsFromDpi();
-				}
-			});
-
-			// 切片开关监听
-			sliceimportCheckbox.addEventListener('change', function() {
-				isSliceEnabled = this.checked;
-			});
-			isSliceEnabled = sliceimportCheckbox.checked;
-			
-			// 按钮绑定
-			selectImageBtn.addEventListener('click', handleImageSelect);
-			placeImageBtn.addEventListener('click', handlePlaceImage);
-			
-			// 初始禁用放置按钮
-			placeImageBtn.disabled = true;
+  // iframe/js/src/app/import-image/index.js
+  var TILE_SIZE = 1800;
+  var JPEG_QUALITY = 0.8;
+  var FOLLOW_MS = 50;
+  var $ = (id) => document.getElementById(id);
+  var dpiSlider = $("dpiSlider");
+  var widthInput = $("widthInput");
+  var heightInput = $("heightInput");
+  var unitOptions = document.querySelectorAll(".unit-option");
+  var placeImageBtn = $("placeImageBtn");
+  var layerOptions = document.querySelectorAll(".layer-option");
+  var selectImageBtn = $("selectImageBtn");
+  var customDpiInput = $("customDpiInput");
+  var dpiValueItems = document.querySelectorAll(".dpi-value-item");
+  var sliceimportCheckbox = $("sliceimport");
+  var aspectRatioCheckbox = $("aspectRatioCheckbox");
+  var currentUnit = "mil";
+  var currentDpi = 1200;
+  var currentLayer = "DOC";
+  var originalAspectRatio = 1;
+  var currentImage = null;
+  var imagesArray = [];
+  var objectUrls = [];
+  var isPlacingActive = false;
+  var isProcessing = false;
+  var currentPlacedId = null;
+  var lastPlacedX = 0;
+  var lastPlacedY = 0;
+  var isSliceEnabled = false;
+  var isCalculatingFromDpi = false;
+  var pendingTiles = [];
+  var totalImagesCount = 0;
+  var specialLayoutMap = null;
+  var useSpecialLayout = false;
+  function revokeAllObjectUrls() {
+    objectUrls.forEach((url) => URL.revokeObjectURL(url));
+    objectUrls = [];
+  }
+  function renderGrid(files, twoColumns = false) {
+    const gridContainer = $("gridPreview");
+    gridContainer.innerHTML = "";
+    if (!files.length) {
+      gridContainer.style.display = "none";
+      return;
+    }
+    gridContainer.style.display = "grid";
+    gridContainer.style.gridTemplateColumns = twoColumns ? "repeat(2, minmax(0, 1fr))" : `repeat(${gridSize(files.length)}, minmax(0, 1fr))`;
+    for (const file of files) {
+      const url = URL.createObjectURL(file);
+      objectUrls.push(url);
+      const item = document.createElement("div");
+      item.className = "grid-item";
+      const img = document.createElement("img");
+      img.src = url;
+      img.alt = file.name;
+      img.onerror = () => console.error(`图片加载失败: ${file.name}`);
+      item.appendChild(img);
+      gridContainer.appendChild(item);
+    }
+  }
+  function updateGridItemAspectRatio(ratio) {
+    document.querySelectorAll(".grid-item").forEach((item) => item.style.aspectRatio = ratio);
+  }
+  function syncDpiUi(dpi) {
+    const index = DPI_PRESETS.indexOf(dpi);
+    if (index !== -1) {
+      dpiSlider.value = 5 - index;
+      dpiValueItems.forEach((item, i) => item.classList.toggle("active", i === index));
+    } else {
+      dpiValueItems.forEach((item) => item.classList.remove("active"));
+    }
+    customDpiInput.value = dpi;
+  }
+  function writeSize(width, height) {
+    widthInput.value = width.toFixed(2);
+    heightInput.value = height.toFixed(2);
+  }
+  function loadImageToCurrent(file) {
+    if (!file) return;
+    currentImage = file;
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      originalAspectRatio = img.width / img.height;
+      updateGridItemAspectRatio(originalAspectRatio);
+      const dpi = currentDpi || 1200;
+      const size = sizeFromDpi(img.width, img.height, dpi, currentUnit);
+      writeSize(size.width, size.height);
+      customDpiInput.value = dpi;
+      currentDpi = dpi;
+      syncDpiUi(dpi);
+      if (aspectRatioCheckbox.checked) {
+        const width = parseFloat(widthInput.value);
+        if (!isNaN(width)) heightInput.value = (width / originalAspectRatio).toFixed(2);
+      }
+      placeImageBtn.disabled = false;
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      console.error("无法加载图片获取尺寸");
+    };
+    img.src = url;
+  }
+  function calculateDpi() {
+    if (!aspectRatioCheckbox.checked || !currentImage) return;
+    if (!widthInput.value || !heightInput.value) return;
+    const img = new Image();
+    img.onload = () => {
+      const dpi = dpiFromSize(img.width, img.height, parseFloat(widthInput.value), parseFloat(heightInput.value), currentUnit);
+      if (!dpi) return;
+      customDpiInput.value = dpi;
+      currentDpi = dpi;
+      syncDpiUi(dpi);
+    };
+    img.src = URL.createObjectURL(currentImage);
+  }
+  function calculateDimensionsFromDpi() {
+    if (!currentImage || !currentDpi) return;
+    isCalculatingFromDpi = true;
+    const img = new Image();
+    img.onload = () => {
+      const size = sizeFromDpi(img.width, img.height, currentDpi, currentUnit);
+      writeSize(size.width, size.height);
+      isCalculatingFromDpi = false;
+      syncDpiUi(currentDpi);
+    };
+    img.src = URL.createObjectURL(currentImage);
+  }
+  function setCurrentDpiAndRecalc(dpi) {
+    if (!currentImage || !aspectRatioCheckbox.checked) return;
+    currentDpi = dpi;
+    syncDpiUi(currentDpi);
+    calculateDimensionsFromDpi();
+  }
+  function currentLayerId() {
+    if (currentLayer === "TS") return LAYER.TOP_SILKSCREEN;
+    if (currentLayer === "BS") return LAYER.BOTTOM_SILKSCREEN;
+    return LAYER.DOCUMENT;
+  }
+  function currentPlaceSize() {
+    return toMilSize(parseFloat(widthInput.value), parseFloat(heightInput.value), currentUnit);
+  }
+  function fileToBase64(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+  }
+  function cropToBase64(img, sx, sy, sw, sh) {
+    return new Promise((resolve, reject) => {
+      const canvas = document.createElement("canvas");
+      canvas.width = sw;
+      canvas.height = sh;
+      canvas.getContext("2d").drawImage(img, sx, sy, sw, sh, 0, 0, sw, sh);
+      canvas.toBlob(
+        (blob) => {
+          const reader = new FileReader();
+          reader.onloadend = () => resolve(reader.result);
+          reader.onerror = reject;
+          reader.readAsDataURL(blob);
+        },
+        "image/jpeg",
+        JPEG_QUALITY
+      );
+    });
+  }
+  async function generateTiles(file, pcbWidth, pcbHeight) {
+    const img = await new Promise((resolve, reject) => {
+      const image = new Image();
+      image.onload = () => resolve(image);
+      image.onerror = reject;
+      image.src = URL.createObjectURL(file);
+    });
+    const pxWidth = img.width;
+    const pxHeight = img.height;
+    if (!isSliceEnabled) {
+      const base64 = await fileToBase64(file);
+      URL.revokeObjectURL(img.src);
+      return [{ base64, relX: 0, relY: 0, width: pcbWidth, height: pcbHeight }];
+    }
+    const cols = Math.ceil(pxWidth / TILE_SIZE);
+    const rows = Math.ceil(pxHeight / TILE_SIZE);
+    const jobs = [];
+    for (let row = 0; row < rows; row++) {
+      for (let col = 0; col < cols; col++) {
+        const sx = col * TILE_SIZE;
+        const sy = row * TILE_SIZE;
+        const sw = Math.min(TILE_SIZE, pxWidth - sx);
+        const sh = Math.min(TILE_SIZE, pxHeight - sy);
+        jobs.push(
+          cropToBase64(img, sx, sy, sw, sh).then((base64) => ({
+            base64,
+            relX: sx / pxWidth * pcbWidth,
+            relY: sy / pxHeight * pcbHeight,
+            width: sw / pxWidth * pcbWidth,
+            height: sh / pxHeight * pcbHeight
+          }))
+        );
+      }
+    }
+    const tiles = await Promise.all(jobs);
+    URL.revokeObjectURL(img.src);
+    return tiles;
+  }
+  async function prepareAllTiles(files, pcbWidth, pcbHeight) {
+    const tiles = [];
+    for (let idx = 0; idx < files.length; idx++) {
+      const list = await generateTiles(files[idx], pcbWidth, pcbHeight);
+      for (const tile of list) tiles.push({ ...tile, imgIndex: idx });
+    }
+    return { tiles, totalImages: files.length };
+  }
+  var placer = createFollowPlacer({
+    getPoint: async () => {
+      const host = getEda();
+      return host && host.pcb_SelectControl ? host.pcb_SelectControl.getCurrentMousePosition() : null;
+    },
+    intervalMs: FOLLOW_MS
+  });
+  async function startPlaceTile(tile) {
+    const host = getEda();
+    try {
+      const created = await host.pcb_PrimitiveObject.create(currentLayerId(), 0, 0, tile.base64, toApiLength(tile.width), toApiLength(tile.height), 0, false, "img", false);
+      if (!created) throw new Error("创建图像图元失败（API 返回空）");
+      currentPlacedId = created.getState_PrimitiveId();
+      placer.start(async (point) => {
+        await host.pcb_PrimitiveObject.modify(currentPlacedId, { topLeftX: point.x, topLeftY: point.y });
+        lastPlacedX = point.x;
+        lastPlacedY = point.y;
+      });
+      return true;
+    } catch (err) {
+      console.error("放置 tile 失败:", err);
+      toast("放置失败，请重试", "error");
+      return false;
+    }
+  }
+  async function finishCurrentPlaceAndContinue() {
+    placer.stop();
+    const host = getEda();
+    if (!currentPlacedId) {
+      cleanUpAndClose();
+      return;
+    }
+    const firstTile = pendingTiles[0];
+    const originX = lastPlacedX - firstTile.relX;
+    const originY = lastPlacedY + firstTile.relY;
+    const { width: imgWidth, height: imgHeight } = currentPlaceSize();
+    const origins = computeOrigins({
+      totalImages: totalImagesCount,
+      imgWidth,
+      imgHeight,
+      originX,
+      originY,
+      layoutMap: specialLayoutMap,
+      useSpecial: useSpecialLayout
+    });
+    const layerId = currentLayerId();
+    for (let i = 1; i < pendingTiles.length; i++) {
+      const tile = pendingTiles[i];
+      const imageOrigin = origins[tile.imgIndex] || { x: originX, y: originY };
+      try {
+        await host.pcb_PrimitiveObject.create(
+          layerId,
+          imageOrigin.x + tile.relX,
+          imageOrigin.y - tile.relY,
+          tile.base64,
+          toApiLength(tile.width),
+          toApiLength(tile.height),
+          0,
+          false,
+          "img",
+          false
+        );
+      } catch (err) {
+        console.error(`创建 tile 失败 (imgIndex=${tile.imgIndex}):`, err);
+      }
+    }
+    cleanUpAndClose();
+  }
+  function cleanUpAndClose() {
+    currentPlacedId = null;
+    isPlacingActive = false;
+    pendingTiles = [];
+    totalImagesCount = 0;
+    specialLayoutMap = null;
+    useSpecialLayout = false;
+    if (imagesArray.length === 0) placeImageBtn.disabled = true;
+    const host = getEda();
+    if (host && host.sys_IFrame) host.sys_IFrame.closeIFrame("ImportImage");
+  }
+  async function handlePlaceImage() {
+    if (isPlacingActive) {
+      toast("正在放置中，请先完成当前操作", "warning");
+      return;
+    }
+    if (isProcessing) {
+      toast("正在处理图片，请稍候...", "warning");
+      return;
+    }
+    if (!imagesArray.length) {
+      toast("请先选择图片", "error");
+      return;
+    }
+    const { width, height } = currentPlaceSize();
+    if (width <= 0 || height <= 0) {
+      toast("请输入有效的宽度和高度", "error");
+      return;
+    }
+    const host = getEda();
+    if (!host) {
+      toast("未检测到 EDA 运行环境", "error");
+      return;
+    }
+    isSliceEnabled = sliceimportCheckbox.checked;
+    isProcessing = true;
+    toast("正在处理图片，请稍候...", "info");
+    let prepared;
+    try {
+      prepared = await prepareAllTiles(imagesArray, width, height);
+    } catch (err) {
+      console.error("图片处理失败:", err);
+      toast("图片处理失败，请重试", "error");
+      isProcessing = false;
+      return;
+    }
+    pendingTiles = prepared.tiles;
+    totalImagesCount = prepared.totalImages;
+    isPlacingActive = true;
+    isProcessing = false;
+    if (host.sys_IFrame) host.sys_IFrame.hideIFrame("ImportImage");
+    await startPlaceTile(pendingTiles[0]);
+  }
+  async function handleImageSelect() {
+    if (isPlacingActive) {
+      toast("请先完成当前图片放置", "warning");
+      return;
+    }
+    placer.stop();
+    try {
+      const files = await new Promise((resolve) => {
+        const input = document.createElement("input");
+        input.type = "file";
+        input.multiple = true;
+        input.accept = ".png,.jpg,.jpeg,.bmp";
+        input.onchange = () => resolve(Array.from(input.files));
+        input.click();
+      });
+      if (!files.length) return;
+      const validTypes = ["image/png", "image/jpeg", "image/bmp"];
+      if (files.some((file) => !validTypes.includes(String(file.type).toLowerCase()))) {
+        toast("仅支持 PNG、JPG、JPEG、BMP 格式", "error");
+        return;
+      }
+      revokeAllObjectUrls();
+      const { ordered, layoutMap, useSpecial } = parseFileNameOrder(files);
+      specialLayoutMap = layoutMap;
+      useSpecialLayout = useSpecial;
+      imagesArray = ordered;
+      renderGrid(imagesArray, useSpecialLayout);
+      document.querySelector(".preview-placeholder").style.display = "none";
+      $("previewImage").style.display = "none";
+      loadImageToCurrent(imagesArray[0]);
+      isPlacingActive = false;
+    } catch (error) {
+      console.error("选择图像时出错:", error);
+    }
+  }
+  window.onblur = async () => {
+    if (isPlacingActive) await finishCurrentPlaceAndContinue();
+  };
+  unitOptions.forEach((option) => {
+    option.addEventListener("click", () => {
+      if (option.classList.contains("active")) return;
+      unitOptions.forEach((item) => item.classList.remove("active"));
+      option.classList.add("active");
+      const oldUnit = currentUnit;
+      currentUnit = option.dataset.unit;
+      if (currentImage && widthInput.value && heightInput.value) {
+        if (oldUnit === "mm" && currentUnit === "mil") {
+          widthInput.value = (parseFloat(widthInput.value) * MM_TO_MIL).toFixed(2);
+          heightInput.value = (parseFloat(heightInput.value) * MM_TO_MIL).toFixed(2);
+        } else if (oldUnit === "mil" && currentUnit === "mm") {
+          widthInput.value = (parseFloat(widthInput.value) * MIL_TO_MM).toFixed(2);
+          heightInput.value = (parseFloat(heightInput.value) * MIL_TO_MM).toFixed(2);
+        }
+        calculateDpi();
+      }
+    });
+  });
+  layerOptions.forEach((option) => {
+    option.addEventListener("click", () => {
+      if (option.classList.contains("active")) return;
+      layerOptions.forEach((item) => item.classList.remove("active"));
+      option.classList.add("active");
+      currentLayer = option.dataset.layer;
+    });
+  });
+  widthInput.addEventListener("input", () => {
+    if (isCalculatingFromDpi) return;
+    calculateDpi();
+    if (aspectRatioCheckbox.checked && currentImage) {
+      const width = parseFloat(widthInput.value);
+      if (!isNaN(width)) heightInput.value = (width / originalAspectRatio).toFixed(2);
+    }
+  });
+  heightInput.addEventListener("input", () => {
+    if (isCalculatingFromDpi) return;
+    calculateDpi();
+    if (aspectRatioCheckbox.checked && currentImage) {
+      const height = parseFloat(heightInput.value);
+      if (!isNaN(height)) widthInput.value = (height * originalAspectRatio).toFixed(2);
+    }
+  });
+  function toggleAspectRatio() {
+    if (aspectRatioCheckbox.checked) {
+      customDpiInput.disabled = false;
+      dpiSlider.disabled = false;
+      dpiValueItems.forEach((item) => item.style.pointerEvents = "auto");
+      if (currentImage) {
+        const img = new Image();
+        img.onload = () => {
+          originalAspectRatio = img.width / img.height;
+          const width = parseFloat(widthInput.value);
+          if (!isNaN(width)) heightInput.value = (width / originalAspectRatio).toFixed(2);
+          calculateDpi();
+        };
+        img.src = URL.createObjectURL(currentImage);
+      }
+      return;
+    }
+    customDpiInput.disabled = true;
+    dpiSlider.disabled = true;
+    dpiValueItems.forEach((item) => item.style.pointerEvents = "none");
+    dpiValueItems.forEach((item) => item.classList.remove("active"));
+    customDpiInput.value = "";
+    currentDpi = null;
+  }
+  aspectRatioCheckbox.addEventListener("change", toggleAspectRatio);
+  dpiSlider.addEventListener("input", () => {
+    const index = 5 - parseInt(dpiSlider.value, 10);
+    setCurrentDpiAndRecalc(DPI_PRESETS[index]);
+  });
+  dpiValueItems.forEach((item, index) => {
+    item.addEventListener("click", () => setCurrentDpiAndRecalc(DPI_PRESETS[index]));
+  });
+  customDpiInput.addEventListener("input", () => {
+    const dpi = parseInt(customDpiInput.value, 10);
+    if (isNaN(dpi) || dpi <= 0) return;
+    currentDpi = dpi;
+    syncDpiUi(currentDpi);
+    if (aspectRatioCheckbox.checked && currentImage) calculateDimensionsFromDpi();
+  });
+  sliceimportCheckbox.addEventListener("change", () => {
+    isSliceEnabled = sliceimportCheckbox.checked;
+  });
+  isSliceEnabled = sliceimportCheckbox.checked;
+  selectImageBtn.addEventListener("click", handleImageSelect);
+  placeImageBtn.addEventListener("click", handlePlaceImage);
+  placeImageBtn.disabled = true;
+})();

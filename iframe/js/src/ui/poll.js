@@ -74,7 +74,11 @@ export function createPoll(options = {}) {
 	const isEqual = typeof options.isEqual === 'function' ? options.isEqual : sameIds;
 	const skipWhenHidden = options.skipWhenHidden !== false;
 	const doc = options.doc || globalThis.document || null;
-	const timers = options.timers || { setInterval: globalThis.setInterval, clearInterval: globalThis.clearInterval };
+	// 必须包一层：把 window.setInterval 存进对象再调用，this 不是 window，Chrome 会抛 Illegal invocation
+	const timers = options.timers || {
+		setInterval: (fn, ms) => globalThis.setInterval(fn, ms),
+		clearInterval: (handle) => globalThis.clearInterval(handle),
+	};
 
 	let handle = null;
 	let busy = false;

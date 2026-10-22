@@ -46,7 +46,11 @@ export function advanceProgress(value, opts) {
  * @sideEffects 启动后注册定时器；stop 后清除
  */
 export function createProgressTicker(options = {}) {
-	const timers = options.timers || { setInterval: globalThis.setInterval, clearInterval: globalThis.clearInterval };
+	// 必须包一层：把 window.setInterval 存进对象再调用，this 不是 window，Chrome 会抛 Illegal invocation
+	const timers = options.timers || {
+		setInterval: (fn, ms) => globalThis.setInterval(fn, ms),
+		clearInterval: (handle) => globalThis.clearInterval(handle),
+	};
 	const to = Number.isFinite(Number(options.to)) ? Number(options.to) : 99;
 	const step = Number.isFinite(Number(options.step)) ? Number(options.step) : 1;
 	const intervalMs = Number.isFinite(Number(options.intervalMs)) ? Number(options.intervalMs) : 1000;

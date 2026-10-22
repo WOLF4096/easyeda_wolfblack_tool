@@ -1,544 +1,554 @@
-// EDA 核心配置与状态管理
-        // 公共模块（HTML 中需先引入 /iframe/js/common.js）
-        const WC = window.WolfCommon;
-        if (!WC) {
-            (document.body || document.documentElement).innerHTML = '<div style="padding:24px;font:14px/1.6 sans-serif;color:#f28b82">公共模块 common.js 未加载，请重新安装扩展</div>';
-            throw new Error('[狼黑工具] 公共模块 common.js 未加载');
+/*! 由 npm run build:iframe 从 iframe/js/src 生成，请勿直接修改本文件 */
+"use strict";
+(() => {
+  // iframe/js/src/core/eda.js
+  function getEda() {
+    try {
+      if (typeof eda !== "undefined" && eda) return eda;
+    } catch (e) {
+    }
+    try {
+      if (globalThis.parent && globalThis.parent !== globalThis && globalThis.parent.eda) return globalThis.parent.eda;
+    } catch (e) {
+    }
+    return globalThis.eda || null;
+  }
+
+  // iframe/js/src/core/layer.js
+  var LAYER = Object.freeze({
+    TOP: 1,
+    BOTTOM: 2,
+    TOP_SILKSCREEN: 3,
+    BOTTOM_SILKSCREEN: 4,
+    TOP_SOLDER_MASK: 5,
+    BOTTOM_SOLDER_MASK: 6,
+    TOP_PASTE_MASK: 7,
+    BOTTOM_PASTE_MASK: 8,
+    TOP_ASSEMBLY: 9,
+    BOTTOM_ASSEMBLY: 10,
+    BOARD_OUTLINE: 11,
+    MULTI: 12,
+    // 多层：通孔焊盘 / 过孔
+    DOCUMENT: 13,
+    MECHANICAL: 14,
+    INNER_1: 15,
+    INNER_30: 44,
+    HOLE: 47,
+    COMPONENT_SHAPE: 48,
+    COMPONENT_MARKING: 49,
+    CUSTOM_1: 71,
+    CUSTOM_30: 100
+  });
+
+  // iframe/js/src/core/length.js
+  function toApiLength(value, digits = 2) {
+    const num = Number(value);
+    if (!Number.isFinite(num)) return NaN;
+    const rounded = Number(num.toFixed(digits));
+    if (rounded === 0 && num !== 0) return num;
+    return rounded;
+  }
+
+  // iframe/js/src/pcb/placement.js
+  function createFollowPlacer(options = {}) {
+    const timers = options.timers || {
+      setInterval: (fn, ms) => globalThis.setInterval(fn, ms),
+      clearInterval: (handle2) => globalThis.clearInterval(handle2)
+    };
+    const getPoint = options.getPoint;
+    const intervalMs = Number.isFinite(Number(options.intervalMs)) ? Number(options.intervalMs) : 20;
+    let handle = null;
+    let busy = false;
+    function start(apply) {
+      stop();
+      if (typeof getPoint !== "function" || typeof apply !== "function") return false;
+      handle = timers.setInterval(async () => {
+        if (busy) return;
+        busy = true;
+        try {
+          const point = await getPoint();
+          if (point) await apply(point);
+        } catch (e) {
+          stop();
+        } finally {
+          busy = false;
         }
-        const { toApiLength } = WC;
+      }, intervalMs);
+      return true;
+    }
+    function stop() {
+      if (handle === null) return;
+      timers.clearInterval(handle);
+      handle = null;
+    }
+    function running() {
+      return handle !== null;
+    }
+    return { start, stop, running };
+  }
 
-        const EDA_CONFIG = {
-            MM_TO_MIL: 39.37007874015748
-        };
-        const STATE = {
-            outputType: 'image', // 'image' | 'vector'
-            unit: 'mil',         // 修改：默认单位设为 mil
-            currentLayer: 'TOP_SILKSCREEN',
-            followInterval: null,
-            primitiveId: null,
-            layerMap: {}
-        };
+  // iframe/js/src/ui/toast.js
+  var TOAST_LEVEL = Object.freeze({
+    info: "info",
+    success: "success",
+    warn: "warning",
+    error: "error",
+    warning: "warning",
+    legacy: 2
+  });
+  var BANNER_ID = "__wolf_notice";
+  function normalizeLevel(level) {
+    if (typeof level === "number") return Number.isFinite(level) ? level : TOAST_LEVEL.info;
+    if (typeof level !== "string") return TOAST_LEVEL.info;
+    const key = level.trim().toLowerCase();
+    return Object.prototype.hasOwnProperty.call(TOAST_LEVEL, key) ? TOAST_LEVEL[key] : level;
+  }
+  function banner(doc, text, timeoutMs) {
+    if (!doc || !doc.body || typeof doc.createElement !== "function") return false;
+    let bar = doc.getElementById(BANNER_ID);
+    if (!bar) {
+      bar = doc.createElement("div");
+      bar.id = BANNER_ID;
+      bar.style.cssText = "position:fixed;left:0;right:0;top:0;padding:8px 12px;background:#5a1d1d;color:#fff;font:13px/1.5 sans-serif;z-index:9999";
+      doc.body.appendChild(bar);
+    }
+    bar.textContent = text;
+    setTimeout(() => {
+      if (typeof bar.remove === "function") bar.remove();
+    }, timeoutMs);
+    return true;
+  }
+  function toast(message, level = TOAST_LEVEL.info, opts = {}) {
+    const doc = opts.doc || globalThis.document;
+    const host = opts.host === void 0 ? getEda() : opts.host;
+    const text = message === null || message === void 0 ? "" : String(message);
+    const type = normalizeLevel(level);
+    try {
+      if (host && host.sys_Message && typeof host.sys_Message.showToastMessage === "function") {
+        host.sys_Message.showToastMessage(text, type);
+        return "host";
+      }
+    } catch (e) {
+    }
+    return banner(doc, text, opts.timeoutMs === void 0 ? 3e3 : opts.timeoutMs) ? "dom" : "none";
+  }
 
-        const layerOptionsConfig = {
-            image: [
-                { value: 'TOP_SILKSCREEN', text: '顶层丝印层', default: true },
-                { value: 'BOTTOM_SILKSCREEN', text: '底层丝印层' },
-                { value: 'DOCUMENT', text: '文档层' },
-            ],
-            vector: [
-                { value: 'TOP', text: '顶层' },
-                { value: 'TOP_SILKSCREEN', text: '顶层丝印层', default: true },
-                { value: 'TOP_SOLDER_MASK', text: '顶层阻焊层' },
-                { value: 'TOP_ASSEMBLY', text: '顶层装配层' },
-                { value: 'BOTTOM', text: '底层' },
-                { value: 'BOTTOM_SILKSCREEN', text: '底层丝印层' },
-                { value: 'BOTTOM_SOLDER_MASK', text: '底层阻焊层' },
-                { value: 'BOTTOM_ASSEMBLY', text: '底层装配层' },
-                { value: 'DOCUMENT', text: '文档层' },
-                { value: 'MECHANICAL', text: '机械层' },
-                { value: 'DRILL_DRAWING', text: '钻孔图层' },
-            ],
-        };
+  // iframe/js/src/app/import-qrcode/barcode.js
+  var COMMON_CODES = [
+    { id: "qrcode", name: "QR Code", cn: "二维码" },
+    { id: "datamatrix", name: "Data Matrix", cn: "数据矩阵码" },
+    { id: "microqrcode", name: "Micro QR Code", cn: "微型二维码" },
+    { id: "azteccode", name: "Aztec Code", cn: "阿兹特克码" },
+    { id: "code128", name: "Code 128", cn: "128码" },
+    { id: "code39", name: "Code 39", cn: "39码" },
+    { id: "pdf417", name: "PDF417", cn: "便携式数据文件" }
+  ];
+  var UNCOMMON_CODES = [
+    { id: "auspost", name: "AusPost", cn: "澳大利亚邮政码" },
+    { id: "aztecrune", name: "Aztec Runes", cn: "阿兹特克符文" },
+    { id: "bc412", name: "BC412", cn: "BC412码" },
+    { id: "channelcode", name: "Channel Code", cn: "通道码" },
+    { id: "codablockf", name: "Codablock F", cn: "F区段码" },
+    { id: "codabar", name: "Codabar", cn: "库德巴码" },
+    { id: "code11", name: "Code 11", cn: "11码" },
+    { id: "code16k", name: "Code 16K", cn: "16K码" },
+    { id: "code2of5", name: "Code 2 of 5", cn: "25码" },
+    { id: "code32", name: "Code 32", cn: "意大利药监码" },
+    { id: "code93", name: "Code 93", cn: "93码" },
+    { id: "codeone", name: "Code One", cn: "一号码" },
+    { id: "coop2of5", name: "COOP 2 of 5", cn: "COOP25码" },
+    { id: "daft", name: "DAFT Code", cn: "DAFT码" },
+    { id: "datalogic2of5", name: "Datalogic 2 of 5", cn: "Datalogic 25码" },
+    { id: "dotcode", name: "DotCode", cn: "点阵码" },
+    { id: "ean13", name: "EAN-13", cn: "欧洲商品条码13" },
+    { id: "ean14", name: "EAN-14", cn: "欧洲商品条码14" },
+    { id: "ean8", name: "EAN-8", cn: "欧洲商品条码8" },
+    { id: "flattermarken", name: "Flattermarken", cn: "Flattermarken码" },
+    { id: "gs1-128", name: "GS1-128", cn: "GS1-128码" },
+    { id: "gs1datamatrix", name: "GS1 Data Matrix", cn: "GS1数据矩阵码" },
+    { id: "gs1qrcode", name: "GS1 QR Code", cn: "GS1二维码" },
+    { id: "hanxin", name: "Han Xin Code", cn: "汉信码" },
+    { id: "hibcazteccode", name: "HIBC Aztec Code", cn: "HIBC阿兹特克码" },
+    { id: "hibccodablockf", name: "HIBC Codablock F", cn: "HIBC F区段码" },
+    { id: "hibccode128", name: "HIBC Code 128", cn: "HIBC 128码" },
+    { id: "hibccode39", name: "HIBC Code 39", cn: "HIBC 39码" },
+    { id: "hibcdatamatrix", name: "HIBC Data Matrix", cn: "HIBC数据矩阵码" },
+    { id: "hibcmicropdf417", name: "HIBC MicroPDF417", cn: "HIBC微型PDF417" },
+    { id: "hibcpdf417", name: "HIBC PDF417", cn: "HIBC PDF417" },
+    { id: "hibcqrcode", name: "HIBC QR Code", cn: "HIBC二维码" },
+    { id: "iata2of5", name: "IATA 2 of 5", cn: "IATA 25码" },
+    { id: "identcode", name: "Deutsche Post Identcode", cn: "德国邮政识别码" },
+    { id: "industrial2of5", name: "Industrial 2 of 5", cn: "工业25码" },
+    { id: "interleaved2of5", name: "Interleaved 2 of 5", cn: "交叉25码" },
+    { id: "isbn", name: "ISBN", cn: "国际标准书号" },
+    { id: "ismn", name: "ISMN", cn: "国际标准音乐出版物号" },
+    { id: "issn", name: "ISSN", cn: "国际标准连续出版物号" },
+    { id: "itf14", name: "ITF-14", cn: "ITF-14码" },
+    { id: "japanpost", name: "Japan Post", cn: "日本邮政码" },
+    { id: "kix", name: "KIX", cn: "荷兰KIX码" },
+    { id: "leitcode", name: "Deutsche Post Leitcode", cn: "德国邮政路由码" },
+    { id: "matrix2of5", name: "Matrix 2 of 5", cn: "矩阵25码" },
+    { id: "maxicode", name: "MaxiCode", cn: "MaxiCode码" },
+    { id: "micropdf417", name: "MicroPDF417", cn: "微型PDF417" },
+    { id: "msi", name: "MSI", cn: "MSI普莱西码" },
+    { id: "onecode", name: "USPS Intelligent Mail", cn: "USPS智能邮件码" },
+    { id: "pharmacode", name: "Pharmacode", cn: "制药码" },
+    { id: "pharmacode2", name: "Two-track Pharmacode", cn: "双轨制药码" },
+    { id: "planet", name: "PLANET", cn: "PLANET码" },
+    { id: "plessey", name: "Plessey", cn: "普莱西码" },
+    { id: "posicode", name: "PosiCode", cn: "PosiCode码" },
+    { id: "postnet", name: "POSTNET", cn: "POSTNET码" },
+    { id: "pzn", name: "PZN", cn: "德国药品中心码" },
+    { id: "rationalizedCodabar", name: "Rationalized Codabar", cn: "合理化库德巴码" },
+    { id: "raw", name: "Raw", cn: "原始数据码" },
+    { id: "royalmail", name: "Royal Mail", cn: "英国皇家邮政码" },
+    { id: "sscc18", name: "SSCC-18", cn: "SSCC-18码" },
+    { id: "symbol", name: "Symbol", cn: "符号码" },
+    { id: "telepen", name: "Telepen", cn: "Telepen码" },
+    { id: "telepennumeric", name: "Telepen Numeric", cn: "数字Telepen码" },
+    { id: "ultracode", name: "Ultracode", cn: "超码" },
+    { id: "upca", name: "UPC-A", cn: "通用产品代码A" },
+    { id: "upce", name: "UPC-E", cn: "通用产品代码E" }
+  ];
+  var QR_CODES_WITH_ECL = ["qrcode", "microqrcode", "gs1qrcode", "hibcqrcode"];
+  var TWO_D_CODES_NO_TEXT = ["datamatrix", "qrcode", "microqrcode", "azteccode", "pdf417", "micropdf417", "maxicode", "dotcode", "hanxin", "gs1datamatrix", "gs1qrcode", "hibcazteccode", "hibcdatamatrix", "hibcmicropdf417", "hibcpdf417", "hibcqrcode", "codeone", "aztecrune", "flattermarken", "ultracode"];
+  function buildOptions(input) {
+    let barcolor = "000000";
+    let bgcolor = "ffffff";
+    if (input.outputType === "image") {
+      barcolor = String(input.fore || "").replace(/^#/, "") || "000000";
+      bgcolor = String(input.back || "").replace(/^#/, "") || "ffffff";
+    } else if (input.outputType === "vector" && input.inverted) {
+      barcolor = "ffffff";
+      bgcolor = "000000";
+    }
+    const options = {
+      bcid: input.bcid,
+      text: input.text,
+      scale: input.scale,
+      padding: input.padding,
+      textxalign: "center",
+      barcolor,
+      textcolor: barcolor,
+      backgroundcolor: bgcolor
+    };
+    if (QR_CODES_WITH_ECL.includes(input.bcid)) options.eclevel = input.eclevel;
+    if (!TWO_D_CODES_NO_TEXT.includes(input.bcid)) options.includetext = input.includeText;
+    return options;
+  }
+  function computeDpi(maxPixels, physSize, unit) {
+    const pixels = Number(maxPixels);
+    const size = Number(physSize);
+    if (!Number.isFinite(pixels) || !Number.isFinite(size) || size <= 0) return 0;
+    if (unit === "mm") return Math.round(pixels * 25.4 / size);
+    if (unit === "mil") return Math.round(pixels * 1e3 / size);
+    return 0;
+  }
 
-        // 定义 PCB 领域常见的码
-        const commonCodes = [
-            { id: 'qrcode', name: 'QR Code', cn: '二维码' },
-            { id: 'datamatrix', name: 'Data Matrix', cn: '数据矩阵码' },
-            { id: 'microqrcode', name: 'Micro QR Code', cn: '微型二维码' },
-            { id: 'azteccode', name: 'Aztec Code', cn: '阿兹特克码' },
-            { id: 'code128', name: 'Code 128', cn: '128码' },
-            { id: 'code39', name: 'Code 39', cn: '39码' },
-            { id: 'pdf417', name: 'PDF417', cn: '便携式数据文件' }
-        ];
-
-        // 不常见的码数组... (此处省略其余码型定义以保持代码精简，按您原先的列表保留)
-        let uncommonCodes = [
-            { id: 'auspost', name: 'AusPost', cn: '澳大利亚邮政码' },
-            { id: 'aztecrune', name: 'Aztec Runes', cn: '阿兹特克符文' },
-            { id: 'bc412', name: 'BC412', cn: 'BC412码' },
-            { id: 'channelcode', name: 'Channel Code', cn: '通道码' },
-            { id: 'codablockf', name: 'Codablock F', cn: 'F区段码' },
-            { id: 'codabar', name: 'Codabar', cn: '库德巴码' },
-            { id: 'code11', name: 'Code 11', cn: '11码' },
-            { id: 'code16k', name: 'Code 16K', cn: '16K码' },
-            { id: 'code2of5', name: 'Code 2 of 5', cn: '25码' },
-            { id: 'code32', name: 'Code 32', cn: '意大利药监码' },
-            { id: 'code93', name: 'Code 93', cn: '93码' },
-            { id: 'codeone', name: 'Code One', cn: '一号码' },
-            { id: 'coop2of5', name: 'COOP 2 of 5', cn: 'COOP25码' },
-            { id: 'daft', name: 'DAFT Code', cn: 'DAFT码' },
-            { id: 'datalogic2of5', name: 'Datalogic 2 of 5', cn: 'Datalogic 25码' },
-            { id: 'dotcode', name: 'DotCode', cn: '点阵码' },
-            { id: 'ean13', name: 'EAN-13', cn: '欧洲商品条码13' },
-            { id: 'ean14', name: 'EAN-14', cn: '欧洲商品条码14' },
-            { id: 'ean8', name: 'EAN-8', cn: '欧洲商品条码8' },
-            { id: 'flattermarken', name: 'Flattermarken', cn: 'Flattermarken码' },
-            { id: 'gs1-128', name: 'GS1-128', cn: 'GS1-128码' },
-            { id: 'gs1datamatrix', name: 'GS1 Data Matrix', cn: 'GS1数据矩阵码' },
-            { id: 'gs1qrcode', name: 'GS1 QR Code', cn: 'GS1二维码' },
-            { id: 'hanxin', name: 'Han Xin Code', cn: '汉信码' },
-            { id: 'hibcazteccode', name: 'HIBC Aztec Code', cn: 'HIBC阿兹特克码' },
-            { id: 'hibccodablockf', name: 'HIBC Codablock F', cn: 'HIBC F区段码' },
-            { id: 'hibccode128', name: 'HIBC Code 128', cn: 'HIBC 128码' },
-            { id: 'hibccode39', name: 'HIBC Code 39', cn: 'HIBC 39码' },
-            { id: 'hibcdatamatrix', name: 'HIBC Data Matrix', cn: 'HIBC数据矩阵码' },
-            { id: 'hibcmicropdf417', name: 'HIBC MicroPDF417', cn: 'HIBC微型PDF417' },
-            { id: 'hibcpdf417', name: 'HIBC PDF417', cn: 'HIBC PDF417' },
-            { id: 'hibcqrcode', name: 'HIBC QR Code', cn: 'HIBC二维码' },
-            { id: 'iata2of5', name: 'IATA 2 of 5', cn: 'IATA 25码' },
-            { id: 'identcode', name: 'Deutsche Post Identcode', cn: '德国邮政识别码' },
-            { id: 'industrial2of5', name: 'Industrial 2 of 5', cn: '工业25码' },
-            { id: 'interleaved2of5', name: 'Interleaved 2 of 5', cn: '交叉25码' },
-            { id: 'isbn', name: 'ISBN', cn: '国际标准书号' },
-            { id: 'ismn', name: 'ISMN', cn: '国际标准音乐出版物号' },
-            { id: 'issn', name: 'ISSN', cn: '国际标准连续出版物号' },
-            { id: 'itf14', name: 'ITF-14', cn: 'ITF-14码' },
-            { id: 'japanpost', name: 'Japan Post', cn: '日本邮政码' },
-            { id: 'kix', name: 'KIX', cn: '荷兰KIX码' },
-            { id: 'leitcode', name: 'Deutsche Post Leitcode', cn: '德国邮政路由码' },
-            { id: 'matrix2of5', name: 'Matrix 2 of 5', cn: '矩阵25码' },
-            { id: 'maxicode', name: 'MaxiCode', cn: 'MaxiCode码' },
-            { id: 'micropdf417', name: 'MicroPDF417', cn: '微型PDF417' },
-            { id: 'msi', name: 'MSI', cn: 'MSI普莱西码' },
-            { id: 'onecode', name: 'USPS Intelligent Mail', cn: 'USPS智能邮件码' },
-            { id: 'pharmacode', name: 'Pharmacode', cn: '制药码' },
-            { id: 'pharmacode2', name: 'Two-track Pharmacode', cn: '双轨制药码' },
-            { id: 'planet', name: 'PLANET', cn: 'PLANET码' },
-            { id: 'plessey', name: 'Plessey', cn: '普莱西码' },
-            { id: 'posicode', name: 'PosiCode', cn: 'PosiCode码' },
-            { id: 'postnet', name: 'POSTNET', cn: 'POSTNET码' },
-            { id: 'pzn', name: 'PZN', cn: '德国药品中心码' },
-            { id: 'rationalizedCodabar', name: 'Rationalized Codabar', cn: '合理化库德巴码' },
-            { id: 'raw', name: 'Raw', cn: '原始数据码' },
-            { id: 'royalmail', name: 'Royal Mail', cn: '英国皇家邮政码' },
-            { id: 'sscc18', name: 'SSCC-18', cn: 'SSCC-18码' },
-            { id: 'symbol', name: 'Symbol', cn: '符号码' },
-            { id: 'telepen', name: 'Telepen', cn: 'Telepen码' },
-            { id: 'telepennumeric', name: 'Telepen Numeric', cn: '数字Telepen码' },
-            { id: 'ultracode', name: 'Ultracode', cn: '超码' },
-            { id: 'upca', name: 'UPC-A', cn: '通用产品代码A' },
-            { id: 'upce', name: 'UPC-E', cn: '通用产品代码E' }
-        ];
-
-        const qrCodesWithEcl = ['qrcode', 'microqrcode', 'gs1qrcode', 'hibcqrcode'];
-        const twoDCodesNoText = ['datamatrix', 'qrcode', 'microqrcode', 'azteccode', 'pdf417', 'micropdf417', 'maxicode', 'dotcode', 'hanxin', 'gs1datamatrix', 'gs1qrcode', 'hibcazteccode', 'hibcdatamatrix', 'hibcmicropdf417', 'hibcpdf417', 'hibcqrcode', 'codeone', 'aztecrune', 'flattermarken', 'ultracode'];
-
-        // DOM 元素获取
-        const selectElement = document.getElementById('barcode-type');
-        const dataInput = document.getElementById('barcode-data');
-        const scaleInput = document.getElementById('barcode-scale');
-        const paddingInput = document.getElementById('barcode-padding');
-        const eclevelSelect = document.getElementById('barcode-eclevel');
-        const includeTextInput = document.getElementById('barcode-include-text');
-        const scaleValueDisplay = document.getElementById('scale-value');
-        const paddingValueDisplay = document.getElementById('padding-value');
-        const resolutionInfo = document.getElementById('resolution-info');
-        const errorDiv = document.getElementById('error-message');
-        
-        // EDA 组件获取
-        const typeImageBtn = document.getElementById('type-image');
-        const typeVectorBtn = document.getElementById('type-vector');
-        const vectorControls = document.getElementById('vector-controls');
-		const imageControls = document.getElementById('image-controls');
-        const colorForeInput = document.getElementById('color-fore');
-        const colorBackInput = document.getElementById('color-back');
-        const invertCheckbox = document.getElementById('invert-image');
-        const unitMmBtn = document.getElementById('unit-mm');
-        const unitMilBtn = document.getElementById('unit-mil');
-        const qrSizeInput = document.getElementById('qr-size');
-        const layerSelect = document.getElementById('layer-select');
-        const canvasWrapper = document.getElementById('canvas-wrapper');
-
-        function initEdaLayerMap() {
-            if (typeof eda !== 'undefined' && typeof EPCB_LayerId !== 'undefined') {
-                STATE.layerMap = {
-                    'TOP': EPCB_LayerId.TOP,
-                    'TOP_SILKSCREEN': EPCB_LayerId.TOP_SILKSCREEN,
-                    'TOP_SOLDER_MASK': EPCB_LayerId.TOP_SOLDER_MASK,
-                    'TOP_ASSEMBLY': EPCB_LayerId.TOP_ASSEMBLY,
-                    'BOTTOM': EPCB_LayerId.BOTTOM,
-                    'BOTTOM_SILKSCREEN': EPCB_LayerId.BOTTOM_SILKSCREEN,
-                    'BOTTOM_SOLDER_MASK': EPCB_LayerId.BOTTOM_SOLDER_MASK,
-                    'BOTTOM_ASSEMBLY': EPCB_LayerId.BOTTOM_ASSEMBLY,
-                    'DOCUMENT': EPCB_LayerId.DOCUMENT,
-                    'MECHANICAL': EPCB_LayerId.MECHANICAL,
-                    'DRILL_DRAWING': EPCB_LayerId.DRILL_DRAWING,
-                };
-            } else {
-                STATE.layerMap = { 'TOP_SILKSCREEN': 1 };
-            }
+  // iframe/js/src/app/import-qrcode/index.js
+  var MM_TO_MIL = 39.37007874015748;
+  var LAYER_OPTIONS = {
+    image: [
+      { value: "TOP_SILKSCREEN", text: "顶层丝印层", default: true },
+      { value: "BOTTOM_SILKSCREEN", text: "底层丝印层" },
+      { value: "DOCUMENT", text: "文档层" }
+    ],
+    vector: [
+      { value: "TOP", text: "顶层" },
+      { value: "TOP_SILKSCREEN", text: "顶层丝印层", default: true },
+      { value: "BOTTOM", text: "底层" },
+      { value: "BOTTOM_SILKSCREEN", text: "底层丝印层" },
+      { value: "TOP_SOLDER_MASK", text: "顶层阻焊" },
+      { value: "BOTTOM_SOLDER_MASK", text: "底层阻焊" }
+    ]
+  };
+  var STATE = { outputType: "image", unit: "mil", currentLayer: "TOP_SILKSCREEN", layerMap: {}, primitiveId: null };
+  var $ = (id) => document.getElementById(id);
+  var selectElement = $("barcode-type");
+  var dataInput = $("barcode-data");
+  var scaleInput = $("barcode-scale");
+  var paddingInput = $("barcode-padding");
+  var eclevelSelect = $("barcode-eclevel");
+  var includeTextInput = $("barcode-include-text");
+  var scaleValueDisplay = $("scale-value");
+  var paddingValueDisplay = $("padding-value");
+  var resolutionInfo = $("resolution-info");
+  var errorDiv = $("error-message");
+  var typeImageBtn = $("type-image");
+  var typeVectorBtn = $("type-vector");
+  var vectorControls = $("vector-controls");
+  var imageControls = $("image-controls");
+  var colorForeInput = $("color-fore");
+  var colorBackInput = $("color-back");
+  var invertCheckbox = $("invert-image");
+  var unitMmBtn = $("unit-mm");
+  var unitMilBtn = $("unit-mil");
+  var qrSizeInput = $("qr-size");
+  var layerSelect = $("layer-select");
+  var canvasWrapper = $("canvas-wrapper");
+  function initLayerMap() {
+    const hostMap = globalThis.EPCB_LayerId;
+    if (hostMap) {
+      STATE.layerMap = {
+        TOP: hostMap.TOP,
+        TOP_SILKSCREEN: hostMap.TOP_SILKSCREEN,
+        TOP_SOLDER_MASK: hostMap.TOP_SOLDER_MASK,
+        TOP_ASSEMBLY: hostMap.TOP_ASSEMBLY,
+        BOTTOM: hostMap.BOTTOM,
+        BOTTOM_SILKSCREEN: hostMap.BOTTOM_SILKSCREEN,
+        BOTTOM_SOLDER_MASK: hostMap.BOTTOM_SOLDER_MASK,
+        BOTTOM_ASSEMBLY: hostMap.BOTTOM_ASSEMBLY,
+        DOCUMENT: hostMap.DOCUMENT,
+        MECHANICAL: hostMap.MECHANICAL,
+        DRILL_DRAWING: hostMap.DRILL_DRAWING
+      };
+      return;
+    }
+    STATE.layerMap = {
+      TOP: LAYER.TOP,
+      TOP_SILKSCREEN: LAYER.TOP_SILKSCREEN,
+      TOP_SOLDER_MASK: LAYER.TOP_SOLDER_MASK,
+      TOP_ASSEMBLY: LAYER.TOP_ASSEMBLY,
+      BOTTOM: LAYER.BOTTOM,
+      BOTTOM_SILKSCREEN: LAYER.BOTTOM_SILKSCREEN,
+      BOTTOM_SOLDER_MASK: LAYER.BOTTOM_SOLDER_MASK,
+      BOTTOM_ASSEMBLY: LAYER.BOTTOM_ASSEMBLY,
+      DOCUMENT: LAYER.DOCUMENT,
+      MECHANICAL: LAYER.MECHANICAL
+    };
+  }
+  function updateLayerOptions() {
+    layerSelect.innerHTML = "";
+    for (const option of LAYER_OPTIONS[STATE.outputType]) {
+      const el = document.createElement("option");
+      el.value = option.value;
+      el.textContent = option.text;
+      if (option.default) {
+        el.selected = true;
+        STATE.currentLayer = option.value;
+      }
+      layerSelect.appendChild(el);
+    }
+  }
+  function setOutputType(type) {
+    STATE.outputType = type;
+    const isImage = type === "image";
+    typeImageBtn.classList.toggle("active", isImage);
+    typeVectorBtn.classList.toggle("active", !isImage);
+    vectorControls.style.display = isImage ? "none" : "block";
+    imageControls.style.display = isImage ? "block" : "none";
+    updateLayerOptions();
+    generateBarcode();
+  }
+  function setUnit(unit) {
+    if (STATE.unit === unit) return;
+    const current = parseFloat(qrSizeInput.value) || 0;
+    if (current > 0) {
+      if (unit === "mil" && STATE.unit === "mm") qrSizeInput.value = (current * MM_TO_MIL).toFixed(2);
+      if (unit === "mm" && STATE.unit === "mil") qrSizeInput.value = (current / MM_TO_MIL).toFixed(2);
+    }
+    STATE.unit = unit;
+    unitMmBtn.classList.toggle("active", unit === "mm");
+    unitMilBtn.classList.toggle("active", unit === "mil");
+    generateBarcode();
+  }
+  function updateFormVisibility() {
+    const bcid = selectElement.value;
+    $("group-eclevel").style.display = QR_CODES_WITH_ECL.includes(bcid) ? "block" : "none";
+    $("group-include-text").style.display = TWO_D_CODES_NO_TEXT.includes(bcid) ? "none" : "block";
+  }
+  function generateBarcode() {
+    errorDiv.textContent = "";
+    const placeHint = $("place-hint");
+    const bcid = selectElement.value;
+    const text = dataInput.value;
+    if (!text) {
+      errorDiv.textContent = "输入数据不能为空。";
+      resolutionInfo.textContent = "二维码尺寸: - × - px | - DPI";
+      placeHint.style.display = "none";
+      return;
+    }
+    const options = buildOptions({
+      bcid,
+      text,
+      scale: parseInt(scaleInput.value, 10),
+      padding: parseInt(paddingInput.value * 2, 10),
+      outputType: STATE.outputType,
+      inverted: invertCheckbox.checked,
+      fore: colorForeInput.value,
+      back: colorBackInput.value,
+      eclevel: eclevelSelect.value,
+      includeText: includeTextInput.checked
+    });
+    try {
+      globalThis.bwipjs.toCanvas("barcode-canvas", options);
+      const canvas = $("barcode-canvas");
+      const dpi = computeDpi(Math.max(canvas.width, canvas.height), parseFloat(qrSizeInput.value) || 25.4, STATE.unit);
+      resolutionInfo.textContent = `尺寸: ${canvas.width} × ${canvas.height} px | ${dpi} DPI`;
+      placeHint.style.display = "block";
+      canvasWrapper.style.cursor = "pointer";
+    } catch (e) {
+      const canvas = $("barcode-canvas");
+      const ctx = canvas.getContext("2d");
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      errorDiv.textContent = "格式错误: " + e.message;
+      resolutionInfo.textContent = "尺寸: - × - px | - DPI";
+      placeHint.style.display = "none";
+      canvasWrapper.style.cursor = "not-allowed";
+    }
+  }
+  function currentLayerId() {
+    return STATE.layerMap[STATE.currentLayer] || LAYER.TOP_SILKSCREEN;
+  }
+  var placer = createFollowPlacer({
+    getPoint: async () => {
+      const host = getEda();
+      return host && host.pcb_SelectControl ? host.pcb_SelectControl.getCurrentMousePosition() : null;
+    },
+    intervalMs: 20
+  });
+  async function handlePlace() {
+    const canvas = $("barcode-canvas");
+    if (canvas.width === 0) return;
+    const host = getEda();
+    if (!host) {
+      toast("当前非 EDA 环境，请点击“保存图片”下载。", 2);
+      return;
+    }
+    try {
+      placer.stop();
+      let width = parseFloat(qrSizeInput.value) || 25.4;
+      if (STATE.unit === "mm") width *= MM_TO_MIL;
+      const height = width * (canvas.height / canvas.width);
+      const layerId = currentLayerId();
+      const base64 = canvas.toDataURL("image/png");
+      const apiWidth = toApiLength(width);
+      const apiHeight = toApiLength(height);
+      if (STATE.outputType === "image") {
+        const created = await host.pcb_PrimitiveObject.create(layerId, 0, 0, base64, apiWidth, apiHeight, 0, false, "img", false);
+        if (!created) throw new Error("创建图像图元失败（API 返回空）");
+        STATE.primitiveId = created.getState_PrimitiveId();
+        placer.start(async (pt) => host.pcb_PrimitiveObject.modify(STATE.primitiveId, { topLeftX: pt.x, topLeftY: pt.y }));
+      } else {
+        const blob = await (await fetch(base64)).blob();
+        const edaImage = await host.pcb_MathPolygon.convertImageToComplexPolygon(blob, apiWidth, apiHeight, 0.5, 0, 0, 0, true, false);
+        if (!edaImage) throw new Error("图像转换为多边形失败");
+        const created = await host.pcb_PrimitiveImage.create(0, 0, edaImage, layerId, apiWidth, apiHeight, 0, false, false);
+        if (!created) throw new Error("创建图像图元失败（API 返回空）");
+        STATE.primitiveId = created.getState_PrimitiveId();
+        placer.start(async (pt) => host.pcb_PrimitiveImage.modify(STATE.primitiveId, { x: pt.x, y: pt.y }));
+      }
+      if (host.sys_IFrame) host.sys_IFrame.hideIFrame("ImportQrcode");
+    } catch (err) {
+      toast("放置失败: " + err.message, "error");
+      placer.stop();
+    }
+  }
+  function saveAsPng() {
+    const canvas = $("barcode-canvas");
+    const rawText = dataInput.value;
+    if (!rawText || canvas.width === 0) return;
+    let fileName = rawText.replace(/[\\/:*?"<>|\r\n]/g, "_").trim();
+    if (fileName === "") fileName = "barcode";
+    const link = document.createElement("a");
+    link.download = fileName + ".png";
+    link.href = canvas.toDataURL("image/png");
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  }
+  function createThrottledColorUpdate() {
+    let last = 0;
+    let timer = null;
+    return () => {
+      const now = Date.now();
+      if (now - last >= 200) {
+        generateBarcode();
+        last = now;
+        return;
+      }
+      clearTimeout(timer);
+      timer = setTimeout(() => {
+        generateBarcode();
+        last = Date.now();
+      }, 200 - (now - last));
+    };
+  }
+  function init() {
+    const sortedUncommon = UNCOMMON_CODES.slice().sort((a, b) => a.name.localeCompare(b.name));
+    const makeOption = (item) => {
+      const opt = document.createElement("option");
+      opt.value = item.id;
+      opt.textContent = `${item.name} (${item.cn})`;
+      return opt;
+    };
+    COMMON_CODES.forEach((item) => selectElement.appendChild(makeOption(item)));
+    const separator = document.createElement("option");
+    separator.disabled = true;
+    separator.textContent = "--------";
+    selectElement.appendChild(separator);
+    sortedUncommon.forEach((item) => selectElement.appendChild(makeOption(item)));
+    initLayerMap();
+    updateLayerOptions();
+    updateFormVisibility();
+    generateBarcode();
+    selectElement.addEventListener("wheel", (event) => {
+      event.preventDefault();
+      const direction = event.deltaY > 0 ? 1 : -1;
+      let next = selectElement.selectedIndex + direction;
+      while (next >= 0 && next < selectElement.options.length) {
+        if (!selectElement.options[next].disabled) {
+          selectElement.selectedIndex = next;
+          updateFormVisibility();
+          generateBarcode();
+          break;
         }
-
-        function updateLayerOptions() {
-            layerSelect.innerHTML = '';
-            layerOptionsConfig[STATE.outputType].forEach(opt => {
-                const option = document.createElement('option');
-                option.value = opt.value;
-                option.textContent = opt.text;
-                if (opt.default) {
-                    option.selected = true;
-                    STATE.currentLayer = opt.value;
-                }
-                layerSelect.appendChild(option);
-            });
-        }
-
-        function setOutputType(type) {
-            STATE.outputType = type;
-            const isImage = type === 'image';
-            typeImageBtn.classList.toggle('active', isImage);
-            typeVectorBtn.classList.toggle('active', !isImage);
-            
-            // 【修改】根据类型切换对应的控制面板
-            vectorControls.style.display = isImage ? 'none' : 'block';
-            imageControls.style.display = isImage ? 'block' : 'none';
-            
-            updateLayerOptions();
-            generateBarcode();
-        }
-
-        function setUnit(unit) {
-            if (STATE.unit === unit) return; // 如果已经是当前单位则不处理
-            
-            let currentVal = parseFloat(qrSizeInput.value) || 0;
-            if (currentVal > 0) {
-                if (unit === 'mil' && STATE.unit === 'mm') {
-                    // mm 转换为 mil
-                    qrSizeInput.value = (currentVal * EDA_CONFIG.MM_TO_MIL).toFixed(2);
-                } else if (unit === 'mm' && STATE.unit === 'mil') {
-                    // mil 转换为 mm
-                    qrSizeInput.value = (currentVal / EDA_CONFIG.MM_TO_MIL).toFixed(2);
-                }
-            }
-
-            STATE.unit = unit;
-            unitMmBtn.classList.toggle('active', unit === 'mm');
-            unitMilBtn.classList.toggle('active', unit === 'mil');
-            generateBarcode();
-        }
-
-        function updateFormVisibility() {
-            const bcid = selectElement.value;
-            document.getElementById('group-eclevel').style.display = qrCodesWithEcl.includes(bcid) ? 'block' : 'none';
-            document.getElementById('group-include-text').style.display = twoDCodesNoText.includes(bcid) ? 'none' : 'block';
-        }
-
-        function generateBarcode() {
-            errorDiv.textContent = '';
-            
-            const bcid = selectElement.value;
-            const text = dataInput.value;
-            const scale = parseInt(scaleInput.value, 10);
-            const padding = parseInt(paddingInput.value * 2, 10);
-            const placeHint = document.getElementById('place-hint'); // 获取提示文字节点
-
-            if (!text) {
-                errorDiv.textContent = '输入数据不能为空。';
-                resolutionInfo.textContent = '二维码尺寸: - × - px | - DPI';
-                placeHint.style.display = 'none'; // 隐藏提示
-                return;
-            }
-
-            // 处理颜色
-            let barcolor = '000000';
-            let bgcolor = 'ffffff';
-            
-            if (STATE.outputType === 'image') {
-                // 【新增】图片模式下，读取取色器的值（需截掉前端的 '#' 符号）
-                barcolor = colorForeInput.value.substring(1);
-                bgcolor = colorBackInput.value.substring(1);
-            } else if (STATE.outputType === 'vector' && invertCheckbox.checked) {
-                // 矢量模式反转
-                barcolor = 'ffffff';
-                bgcolor = '000000';
-            }
-
-            let options = {
-                bcid: bcid,
-                text: text,
-                scale: scale,
-                padding: padding,
-                textxalign: 'center',
-                barcolor: barcolor,
-                textcolor: barcolor,
-                backgroundcolor: bgcolor
-            };
-
-            if (qrCodesWithEcl.includes(bcid)) options.eclevel = eclevelSelect.value;
-            if (!twoDCodesNoText.includes(bcid)) options.includetext = includeTextInput.checked;
-
-            try {
-                // 【新增】记录生成开始时间
-                const startTime = performance.now();
-
-                bwipjs.toCanvas('barcode-canvas', options);
-                
-                // 【新增】记录生成结束时间并输出到控制台
-                const endTime = performance.now();
-                console.log(`二维码生成耗时: ${(endTime - startTime).toFixed(2)} ms`);
-                
-                const canvas = document.getElementById('barcode-canvas');
-                let physSize = parseFloat(qrSizeInput.value) || 25.4;
-                
-                // 获取长边的像素大小，使 DPI 计算与长边物理尺寸匹配
-                let maxPixels = Math.max(canvas.width, canvas.height);
-                let dpi = 0;
-                if (STATE.unit === 'mm') {
-                    dpi = maxPixels * 25.4 / physSize;
-                } else if (STATE.unit === 'mil') {
-                    dpi = maxPixels * 1000 / physSize;
-                }
-                
-                resolutionInfo.textContent = `尺寸: ${canvas.width} × ${canvas.height} px | ${Math.round(dpi)} DPI`;
-                
-                // 生成成功，显示提示文字，恢复包裹层的鼠标指针样式
-                placeHint.style.display = 'block';
-                canvasWrapper.style.cursor = 'pointer';
-            } catch (e) {
-                const canvas = document.getElementById('barcode-canvas');
-                const ctx = canvas.getContext('2d');
-                ctx.clearRect(0, 0, canvas.width, canvas.height);
-                errorDiv.textContent = '格式错误: ' + e.message;
-                resolutionInfo.textContent = '尺寸: - × - px | - DPI';
-                
-                // 生成失败，隐藏提示文字，将指针设为不可点击状态
-                placeHint.style.display = 'none';
-                canvasWrapper.style.cursor = 'not-allowed';
-            }
-        }
-		
-        // ================= EDA 跟随与放置逻辑 ================= //
-        function showToast(msg) {
-            if (typeof eda !== 'undefined' && eda.sys_ToastMessage) {
-                eda.sys_ToastMessage.showMessage(msg, 2);
-            } else {
-                const statusDiv = document.getElementById('status-message');
-                statusDiv.textContent = msg;
-                statusDiv.style.display = 'block';
-                setTimeout(() => statusDiv.style.display = 'none', 3000);
-            }
-        }
-
-        function getCurrentLayerId() {
-            return STATE.layerMap[STATE.currentLayer] || (typeof EPCB_LayerId !== 'undefined' ? EPCB_LayerId.TOP_SILKSCREEN : 1);
-        }
-
-        async function handlePlaceQrCode() {
-            const canvas = document.getElementById('barcode-canvas');
-            if (canvas.width === 0) return;
-
-            // 如果不在 EDA 环境内，提示点击保存
-            if (typeof eda === 'undefined') {
-                showToast('当前非 EDA 环境，请点击“保存图片”下载。');
-                return;
-            }
-
-            try {
-                stopFollowing();
-
-                let width = parseFloat(qrSizeInput.value) || 25.4;
-                // EDA API 参数如果是 mil 计算
-                if (STATE.unit === 'mm') {
-                    width *= EDA_CONFIG.MM_TO_MIL;
-                }
-                // 这里用长边作为基础缩放基准
-                const aspectRatio = canvas.height / canvas.width;
-                let height = width * aspectRatio;
-
-                const layerId = getCurrentLayerId();
-                const base64 = canvas.toDataURL('image/png');
-
-                // API 的 width/height 是 number，字符串会被判为非法值（VALUE_OUT_OF_RANGE）
-                const apiWidth = toApiLength(width);
-                const apiHeight = toApiLength(height);
-
-                if (STATE.outputType === 'image') {
-                    const colorObj = await eda.pcb_PrimitiveObject.create(
-                        layerId, 0, 0, base64,
-                        apiWidth, apiHeight,
-                        0, false, 'img', false
-                    );
-                    if (!colorObj) throw new Error('创建图像图元失败（API 返回空）');
-                    STATE.primitiveId = colorObj.getState_PrimitiveId();
-                    startFollowing(eda.pcb_PrimitiveObject);
-                } else {
-                    const blob = await (await fetch(base64)).blob();
-                    const edaImage = await eda.pcb_MathPolygon.convertImageToComplexPolygon(
-                        blob, apiWidth, apiHeight,
-                        0.5, 0, 0, 0, true, false
-                    );
-                    if (!edaImage) throw new Error('图像转换为多边形失败');
-                    const noColorImg = await eda.pcb_PrimitiveImage.create(
-                        0, 0, edaImage, layerId,
-                        apiWidth, apiHeight,
-                        0, false, false
-                    );
-                    if (!noColorImg) throw new Error('创建图像图元失败（API 返回空）');
-                    STATE.primitiveId = noColorImg.getState_PrimitiveId();
-                    startFollowing(eda.pcb_PrimitiveImage);
-                }
-
-                // 尝试隐藏插件窗口(防止挡住视野)
-                if (eda.sys_IFrame) eda.sys_IFrame.hideIFrame('ImportQrcode');
-            } catch (err) {
-                showToast('放置失败: ' + err.message);
-                stopFollowing();
-            }
-        }
-
-        function startFollowing(primitiveModule) {
-            stopFollowing();
-            STATE.followInterval = setInterval(async () => {
-                try {
-                    const pt = await eda.pcb_SelectControl.getCurrentMousePosition();
-                    if (!pt) return;
-                    const params = primitiveModule === eda.pcb_PrimitiveObject 
-                        ? { topLeftX: pt.x, topLeftY: pt.y } 
-                        : { x: pt.x, y: pt.y };
-                    await primitiveModule.modify(STATE.primitiveId, params);
-                } catch (e) {
-                    stopFollowing();
-                }
-            }, 20);
-        }
-
-        function stopFollowing() {
-            if (STATE.followInterval) {
-                clearInterval(STATE.followInterval);
-                STATE.followInterval = null;
-            }
-        }
-        window.onblur = stopFollowing;
-
-        // 初始化绑定事件
-        window.addEventListener('load', () => {
-            uncommonCodes.sort((a, b) => a.name.localeCompare(b.name));
-            const renderOption = (item) => {
-                const opt = document.createElement('option');
-                opt.value = item.id;
-                opt.textContent = `${item.name} (${item.cn})`;
-                return opt;
-            };
-            commonCodes.forEach(item => selectElement.appendChild(renderOption(item)));
-            const separator = document.createElement('option');
-            separator.disabled = true;
-            separator.textContent = '--------';
-            selectElement.appendChild(separator);
-            uncommonCodes.forEach(item => selectElement.appendChild(renderOption(item)));
-
-            initEdaLayerMap();
-            updateLayerOptions();
-            updateFormVisibility();
-            generateBarcode();
-
-            // 滑轮切换码型
-            selectElement.addEventListener('wheel', function(event) {
-                event.preventDefault();
-                let currentIndex = selectElement.selectedIndex;
-                let direction = event.deltaY > 0 ? 1 : -1;
-                let nextIndex = currentIndex + direction;
-                while (nextIndex >= 0 && nextIndex < selectElement.options.length) {
-                    if (!selectElement.options[nextIndex].disabled) {
-                        selectElement.selectedIndex = nextIndex;
-                        updateFormVisibility();
-                        generateBarcode();
-                        break;
-                    }
-                    nextIndex += direction;
-                }
-            });
-
-			// 【新增】物理尺寸输入框的鼠标滚轮精确控制逻辑
-            qrSizeInput.addEventListener('wheel', function(event) {
-                // 阻止浏览器原生的滚动导致的小数点错乱行为
-                event.preventDefault();
-
-                let currentVal = parseFloat(this.value) || 0;
-                
-                // 根据当前设定的单位动态决定滚动步进：mil状态下步进1，mm状态下步进0.1
-                let step = STATE.unit === 'mil' ? 1 : 0.1;
-                
-                // event.deltaY > 0 代表向下滚动（数值减），反之代表向上（数值加）
-                let direction = event.deltaY > 0 ? -1 : 1;
-                let nextVal = currentVal + (step * direction);
-
-                // 读取输入框的最小限制值，防止滚成负数
-                let minVal = parseFloat(this.min) || 0.1;
-                if (nextVal < minVal) {
-                    nextVal = minVal;
-                }
-
-                // 根据单位精确保留有效小数，mil无小数，mm保留2位，杜绝 1000.1 类似现象
-                this.value = STATE.unit === 'mil' ? Math.round(nextVal) : nextVal.toFixed(2);
-
-                // 滚动后立即刷新条码尺寸和 DPI 预览
-                generateBarcode();
-            });
-			
-            // 监听器
-            selectElement.addEventListener('change', () => { updateFormVisibility(); generateBarcode(); });
-            dataInput.addEventListener('input', generateBarcode);
-            scaleInput.addEventListener('input', function() { scaleValueDisplay.textContent = this.value; generateBarcode(); });
-            paddingInput.addEventListener('input', function() { paddingValueDisplay.textContent = this.value; generateBarcode(); });
-            eclevelSelect.addEventListener('change', generateBarcode);
-            includeTextInput.addEventListener('change', generateBarcode);
-            qrSizeInput.addEventListener('input', generateBarcode);
-            invertCheckbox.addEventListener('change', generateBarcode);
-			// colorForeInput.addEventListener('input', generateBarcode);
-            // colorBackInput.addEventListener('input', generateBarcode);
-
-			// 【修改】图片颜色的节流（Throttle）控制逻辑
-            let lastColorTime = 0;
-            let colorTimeout = null;
-            
-            function throttledColorUpdate() {
-                const now = Date.now();
-                // 如果距离上次生成已经过了 200ms，立即生成
-                if (now - lastColorTime >= 200) {
-                    generateBarcode();
-                    lastColorTime = now;
-                } else {
-                    // 如果在 200ms 内，则清除旧的定时器，重置延时，保证拖动停止时能渲染最终颜色
-                    clearTimeout(colorTimeout);
-                    colorTimeout = setTimeout(() => {
-                        generateBarcode();
-                        lastColorTime = Date.now();
-                    }, 200 - (now - lastColorTime));
-                }
-            }
-
-            // 使用节流函数替代直接绑定
-            colorForeInput.addEventListener('input', throttledColorUpdate);
-            colorBackInput.addEventListener('input', throttledColorUpdate);
-			
-            layerSelect.addEventListener('change', (e) => STATE.currentLayer = e.target.value);
-            
-            typeImageBtn.addEventListener('click', () => setOutputType('image'));
-            typeVectorBtn.addEventListener('click', () => setOutputType('vector'));
-            unitMmBtn.addEventListener('click', () => setUnit('mm'));
-            unitMilBtn.addEventListener('click', () => setUnit('mil'));
-            
-            document.getElementById('generate-btn').addEventListener('click', generateBarcode);
-            canvasWrapper.addEventListener('click', function() {
-                const canvas = document.getElementById('barcode-canvas');
-                // 通过判断 canvas 的宽度或者当前包裹层样式来决定是否执行放置逻辑
-                if (canvas.width === 0 || canvasWrapper.style.cursor === 'not-allowed') {
-                    return; // 处于禁用状态，直接拦截，不执行放置
-                }
-                handlePlaceQrCode();
-            });
-            // 保存功能
-            document.getElementById('save-btn').addEventListener('click', function() {
-                const canvas = document.getElementById('barcode-canvas');
-                const rawText = dataInput.value;
-                if (!rawText || canvas.width === 0) return; 
-                let safeFileName = rawText.replace(/[\\/:*?"<>|\r\n]/g, '_').trim();
-                if (safeFileName === '') safeFileName = 'barcode';
-                const link = document.createElement('a');
-                link.download = safeFileName + '.png';
-                link.href = canvas.toDataURL('image/png');
-                document.body.appendChild(link);
-                link.click();
-                document.body.removeChild(link);
-            });
-        });
+        next += direction;
+      }
+    });
+    qrSizeInput.addEventListener("wheel", (event) => {
+      event.preventDefault();
+      const current = parseFloat(qrSizeInput.value) || 0;
+      const step = STATE.unit === "mil" ? 1 : 0.1;
+      const direction = event.deltaY > 0 ? -1 : 1;
+      const min = parseFloat(qrSizeInput.min) || 0.1;
+      const next = Math.max(min, current + step * direction);
+      qrSizeInput.value = STATE.unit === "mil" ? Math.round(next) : next.toFixed(2);
+      generateBarcode();
+    });
+    selectElement.addEventListener("change", () => {
+      updateFormVisibility();
+      generateBarcode();
+    });
+    dataInput.addEventListener("input", generateBarcode);
+    scaleInput.addEventListener("input", () => {
+      scaleValueDisplay.textContent = scaleInput.value;
+      generateBarcode();
+    });
+    paddingInput.addEventListener("input", () => {
+      paddingValueDisplay.textContent = paddingInput.value;
+      generateBarcode();
+    });
+    eclevelSelect.addEventListener("change", generateBarcode);
+    includeTextInput.addEventListener("change", generateBarcode);
+    qrSizeInput.addEventListener("input", generateBarcode);
+    invertCheckbox.addEventListener("change", generateBarcode);
+    const throttled = createThrottledColorUpdate();
+    colorForeInput.addEventListener("input", throttled);
+    colorBackInput.addEventListener("input", throttled);
+    layerSelect.addEventListener("change", (e) => STATE.currentLayer = e.target.value);
+    typeImageBtn.addEventListener("click", () => setOutputType("image"));
+    typeVectorBtn.addEventListener("click", () => setOutputType("vector"));
+    unitMmBtn.addEventListener("click", () => setUnit("mm"));
+    unitMilBtn.addEventListener("click", () => setUnit("mil"));
+    $("generate-btn").addEventListener("click", generateBarcode);
+    canvasWrapper.addEventListener("click", () => {
+      const canvas = $("barcode-canvas");
+      if (canvas.width === 0 || canvasWrapper.style.cursor === "not-allowed") return;
+      void handlePlace();
+    });
+    $("save-btn").addEventListener("click", saveAsPng);
+  }
+  window.addEventListener("load", init);
+  window.onblur = () => placer.stop();
+})();

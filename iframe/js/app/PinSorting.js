@@ -1,114 +1,188 @@
-let currentSelectedPins = [];
+/*! 由 npm run build:iframe 从 iframe/js/src 生成，请勿直接修改本文件 */
+"use strict";
+(() => {
+  // iframe/js/src/core/eda.js
+  function getEda() {
+    try {
+      if (typeof eda !== "undefined" && eda) return eda;
+    } catch (e) {
+    }
+    try {
+      if (globalThis.parent && globalThis.parent !== globalThis && globalThis.parent.eda) return globalThis.parent.eda;
+    } catch (e) {
+    }
+    return globalThis.eda || null;
+  }
 
-        // 1. 定时任务：每隔 200ms 更新选中引脚数量
-        setInterval(async () => {
-            if (typeof eda === 'undefined' || !eda.sch_SelectControl) return;
-            
-            try {
-                const primitives = await eda.sch_SelectControl.getAllSelectedPrimitives();
-                // 仅筛选类型为 Pin 的图元
-                currentSelectedPins = primitives.filter(p => p.primitiveType === 'Pin');
-                document.getElementById('pin-count').innerText = currentSelectedPins.length;
-            } catch (error) {
-                console.error("获取引脚失败:", error);
-            }
-        }, 200);
+  // iframe/js/src/ui/poll.js
+  function sameIds(a, b) {
+    const listA = Array.isArray(a) ? a : [];
+    const listB = Array.isArray(b) ? b : [];
+    if (listA.length !== listB.length) return false;
+    const ids = new Set(listA.map(idOf));
+    for (const item of listB) {
+      if (!ids.has(idOf(item))) return false;
+    }
+    return true;
+  }
+  function idOf(item) {
+    if (item === null || item === void 0) return "";
+    if (typeof item === "object") return item.id ?? item.primitiveId ?? "";
+    return item;
+  }
+  function createPoll(options = {}) {
+    const fetchItems = options.fetchItems;
+    const onItems = options.onItems;
+    const intervalMs = Number.isFinite(Number(options.intervalMs)) ? Number(options.intervalMs) : 200;
+    const isEqual = typeof options.isEqual === "function" ? options.isEqual : sameIds;
+    const skipWhenHidden = options.skipWhenHidden !== false;
+    const doc = options.doc || globalThis.document || null;
+    const timers = options.timers || {
+      setInterval: (fn, ms) => globalThis.setInterval(fn, ms),
+      clearInterval: (handle2) => globalThis.clearInterval(handle2)
+    };
+    let handle = null;
+    let busy = false;
+    let last = null;
+    let stopped = false;
+    async function tick() {
+      if (busy || stopped) return false;
+      if (skipWhenHidden && doc && doc.hidden) return false;
+      if (typeof fetchItems !== "function") return false;
+      busy = true;
+      try {
+        const items = await fetchItems();
+        if (stopped) return false;
+        if (last !== null && isEqual(items, last)) return false;
+        last = items;
+        if (typeof onItems === "function") onItems(items);
+        return true;
+      } catch (e) {
+        return false;
+      } finally {
+        busy = false;
+      }
+    }
+    function start() {
+      if (handle !== null) return;
+      stopped = false;
+      handle = timers.setInterval(() => {
+        void tick();
+      }, intervalMs);
+    }
+    function stop() {
+      stopped = true;
+      if (handle === null) return;
+      timers.clearInterval(handle);
+      handle = null;
+    }
+    function running() {
+      return handle !== null;
+    }
+    return { start, stop, running, tick };
+  }
 
-        // 2. 核心排序及修改逻辑
-        async function applySort(orderType) {
-            if (currentSelectedPins.length === 0) return;
+  // iframe/js/src/app/pin-sorting/sortKey.js
+  function normalizeRotation(rotation) {
+    const deg = ((Number(rotation) || 0) % 360 + 360) % 360;
+    return deg === 90 || deg === 270 ? 270 : 180;
+  }
+  function createTransformKey(useSplitSort) {
+    return (key) => {
+      const text = String(key === null || key === void 0 ? "" : key);
+      if (!useSplitSort) return text.split("").reverse().join("");
+      const chunks = text.match(/\d+|\D+/g);
+      return chunks ? chunks.reverse().join("") : text;
+    };
+  }
+  function createComparator(options) {
+    const prop = options.prop;
+    const endSort = options.endSort;
+    const splitSort = options.splitSort;
+    const order = options.order;
+    const transformKey = createTransformKey(splitSort);
+    const collator = new Intl.Collator(void 0, { numeric: splitSort, sensitivity: "base" });
+    return (a, b) => {
+      const rawA = (a[prop] || "").toString();
+      const rawB = (b[prop] || "").toString();
+      const valA = endSort ? transformKey(rawA) : rawA;
+      const valB = endSort ? transformKey(rawB) : rawB;
+      const result = splitSort ? collator.compare(valA, valB) : valA.localeCompare(valB);
+      return order === "asc" ? result : -result;
+    };
+  }
+  function planLayout(pins, options) {
+    const list = Array.isArray(pins) ? pins.slice() : [];
+    if (list.length === 0) return { sorted: [], targets: [], baseRotation: 180, vertical: true };
+    const spacing = Number(options.spacing);
+    const step = Number.isFinite(spacing) && spacing !== 0 ? spacing : 10;
+    list.sort(createComparator({ prop: options.prop, endSort: options.endSort, splitSort: options.splitSort, order: options.order }));
+    let minX = Infinity;
+    let maxY = -Infinity;
+    for (const pin of list) {
+      if (pin.x < minX) minX = pin.x;
+      if (pin.y > maxY) maxY = pin.y;
+    }
+    const baseRotation = normalizeRotation(list[0].rotation);
+    const vertical = baseRotation % 180 === 0;
+    const targets = list.map((pin, index) => ({
+      x: vertical ? minX : minX + index * step,
+      y: vertical ? maxY - index * step : maxY,
+      rotation: baseRotation
+    }));
+    return { sorted: list, targets, baseRotation, vertical };
+  }
 
-            // 获取UI参数
-            const targetProp = document.querySelector('input[name="sortTarget"]:checked').value;
-            const spacing = parseFloat(document.getElementById('spacing').value) || 10;
-            const useSplitSort = document.getElementById('splitSort').checked;
-            const useEndSort = document.getElementById('endSort').checked;
-
-            // 【末尾排序】仅用于排序的临时变换：只影响比较用的副本，不会写回引脚名称/编号
-            // - 勾了拆分排序：先按“字母段/数字段”切分，再颠倒段序，段内字符保持原值
-            //   如 DQ10 → [DQ, 10] → "10DQ"，DQ6 → "6DQ"，保证 DQ6 排在 DQ10 之前
-            //   （若整串逐字符颠倒会变成 "01QD"，数字被反写成 1，从而 DQ10 错误地排在 DQ6 前面）
-            // - 未勾拆分排序：整串逐字符颠倒，如 UDQS → SQDU
-            const transformKey = s => {
-                if (!useSplitSort) return s.split('').reverse().join('');
-                const chunks = s.match(/\d+|\D+/g);
-                return chunks ? chunks.reverse().join('') : s;
-            };
-
-            // 拷贝一份数组用于排序
-            let pinsToSort = [...currentSelectedPins];
-
-            // 构造 Intl.Collator 用于【拆分排序】(支持数字和字母自然分离)
-            const collator = new Intl.Collator(undefined, { 
-                numeric: useSplitSort, 
-                sensitivity: 'base' 
-            });
-
-            // 排序逻辑
-            pinsToSort.sort((a, b) => {
-                const rawA = (a[targetProp] || "").toString();
-                const rawB = (b[targetProp] || "").toString();
-
-                // 末尾排序：按颠倒后的关键字比较（原值不改动）
-                const valA = useEndSort ? transformKey(rawA) : rawA;
-                const valB = useEndSort ? transformKey(rawB) : rawB;
-                
-                const cmpResult = useSplitSort ? collator.compare(valA, valB) : valA.localeCompare(valB);
-                return orderType === 'asc' ? cmpResult : -cmpResult;
-            });
-
-            // 获取参考原点：X取最小（最靠左），Y取最大（最靠上，JLCEDA坐标Y轴向上）
-            let minX = Infinity;
-            let maxY = -Infinity;
-            for (const pin of currentSelectedPins) {
-                if (pin.x < minX) minX = pin.x;
-                if (pin.y > maxY) maxY = pin.y;
-            }
-
-            // 获取参考朝向：只允许四个方向，归一化到 180/270 两个角度
-            // 归一化：0/180 → 180 度，90/270 → 270 度（规避 EDA 的旋转翻转 bug）
-            // 朝向一致时第一个引脚归一化后的朝向即整体朝向；不一致时同样继承第一个引脚，
-            // 因此统一取排序后第一个引脚的归一化结果即可
-            const normalizeRotation = r => {
-                const deg = ((Number(r) || 0) % 360 + 360) % 360;  // 归到 [0, 360)
-                return (deg === 90 || deg === 270) ? 270 : 180;
-            };
-            const baseRotation = normalizeRotation(pinsToSort[0].rotation);
-            
-            // 判断布局方式:
-            // 0度/180度 -> 横向朝向 -> 竖向排布 (X固定)
-            // 90度/270度 -> 竖向朝向 -> 横向排布 (Y固定)
-            const isVerticalStacking = (baseRotation % 180 === 0); 
-
-            // 开始应用新坐标和参数
-            for (let i = 0; i < pinsToSort.length; i++) {
-                const pin = pinsToSort[i];
-                
-                // 坐标计算：
-                // 如果是竖排，从最上方(maxY)开始，往下排（递减Y）
-                // 如果是横排，从最左方(minX)开始，往右排（递增X）
-                const targetX = isVerticalStacking ? minX : minX + i * spacing;
-                const targetY = isVerticalStacking ? maxY - i * spacing : maxY;
-
-                // 优化：如果已经对齐且方向正确，则不执行 API 调用修改
-                if (pin.x === targetX && pin.y === targetY && pin.rotation === baseRotation) {
-                    continue; 
-                }
-
-                // 构造完整的修改对象：严格全盘继承图元对象返回值，防止属性留空导致系统分配未知参数引起翻转
-                const modifyProperty = { ...pin }; 
-                modifyProperty.x = targetX;
-                modifyProperty.y = targetY;
-                modifyProperty.rotation = baseRotation; // 应用对齐方向
-
-                try {
-                    await eda.sch_PrimitivePin.modify(pin.primitiveId, modifyProperty);
-                } catch (error) {
-                    console.error(`更新引脚 ${pin.primitiveId} 失败:`, error);
-                }
-            }
-        }
-
-        // 绑定按钮事件
-        document.getElementById('btn-asc').addEventListener('click', () => applySort('asc'));
-        document.getElementById('btn-desc').addEventListener('click', () => applySort('desc'));
+  // iframe/js/src/app/pin-sorting/index.js
+  var selectedPins = [];
+  var countEl = document.getElementById("pin-count");
+  function readOptions() {
+    const checked = document.querySelector('input[name="sortTarget"]:checked');
+    return {
+      prop: checked && checked.value ? checked.value : "name",
+      spacing: parseFloat(document.getElementById("spacing").value) || 10,
+      splitSort: document.getElementById("splitSort").checked,
+      endSort: document.getElementById("endSort").checked
+    };
+  }
+  async function applySort(order) {
+    if (selectedPins.length === 0) return;
+    const host = getEda();
+    if (!host || !host.sch_PrimitivePin) return;
+    const options = readOptions();
+    const plan = planLayout(selectedPins, { ...options, order });
+    for (let i = 0; i < plan.sorted.length; i++) {
+      const pin = plan.sorted[i];
+      const target = plan.targets[i];
+      if (pin.x === target.x && pin.y === target.y && pin.rotation === target.rotation) continue;
+      const modifyProperty = { ...pin, x: target.x, y: target.y, rotation: target.rotation };
+      try {
+        await host.sch_PrimitivePin.modify(pin.primitiveId, modifyProperty);
+      } catch (error) {
+        console.error(`更新引脚 ${pin.primitiveId} 失败:`, error);
+      }
+    }
+  }
+  var poll = createPoll({
+    intervalMs: 200,
+    fetchItems: async () => {
+      const host = getEda();
+      if (!host || !host.sch_SelectControl) return [];
+      const primitives = await host.sch_SelectControl.getAllSelectedPrimitives();
+      return primitives.filter((item) => item.primitiveType === "Pin");
+    },
+    onItems: (pins) => {
+      selectedPins = pins;
+      if (countEl) countEl.innerText = String(pins.length);
+    },
+    isEqual: (a, b) => {
+      if (a.length !== b.length) return false;
+      const ids = new Set(a.map((p) => p.primitiveId));
+      return b.every((p) => ids.has(p.primitiveId));
+    }
+  });
+  document.getElementById("btn-asc").addEventListener("click", () => applySort("asc"));
+  document.getElementById("btn-desc").addEventListener("click", () => applySort("desc"));
+  window.addEventListener("pagehide", () => poll.stop());
+  poll.start();
+})();

@@ -493,3 +493,273 @@ describe('app/in-ad-netlist', () => {
 		assert.equal(original.components.A.pinInfoMap[2], undefined);
 	});
 });
+
+describe('app/pin-sorting/sortKey', () => {
+	it('朝向归一化：0/180 → 180，90/270 → 270', async () => {
+		const { normalizeRotation } = await import('../iframe/js/src/app/pin-sorting/sortKey.js');
+		assert.equal(normalizeRotation(0), 180);
+		assert.equal(normalizeRotation(180), 180);
+		assert.equal(normalizeRotation(90), 270);
+		assert.equal(normalizeRotation(270), 270);
+		assert.equal(normalizeRotation(-90), 270, '负数要先归到 [0,360)');
+		assert.equal(normalizeRotation(360), 180);
+		assert.equal(normalizeRotation('abc'), 180);
+	});
+
+	it('末尾排序键：拆分排序按段颠倒，否则逐字符颠倒', async () => {
+		const { createTransformKey } = await import('../iframe/js/src/app/pin-sorting/sortKey.js');
+		const split = createTransformKey(true);
+		assert.equal(split('DQ10'), '10DQ', '拆分排序：DQ10 的键必须让 DQ6 排在它前面');
+		assert.equal(split('DQ6'), '6DQ');
+		const chars = createTransformKey(false);
+		assert.equal(chars('UDQS'), 'SQDU');
+	});
+
+	it('比较器：末尾排序把 DQ6 排在 DQ10 之前', async () => {
+		const { createComparator } = await import('../iframe/js/src/app/pin-sorting/sortKey.js');
+		const cmp = createComparator({ prop: 'name', endSort: true, splitSort: true, order: 'asc' });
+		const names = ['DQ10', 'DQ6'].sort((a, b) => cmp({ name: a }, { name: b }));
+		assert.deepEqual(names, ['DQ6', 'DQ10']);
+	});
+
+	it('布局：横向朝向（180）竖排、纵向朝向（270）横排', async () => {
+		const { planLayout } = await import('../iframe/js/src/app/pin-sorting/sortKey.js');
+		const pins = [{ name: 'A', number: '1', x: 100, y: 50, rotation: 180 }];
+		const vertical = planLayout(pins, { prop: 'name', spacing: 10, endSort: false, splitSort: true, order: 'asc' });
+		assert.equal(vertical.baseRotation, 180);
+		assert.equal(vertical.vertical, true);
+		assert.deepEqual(vertical.targets[0], { x: 100, y: 50, rotation: 180 });
+
+		const pins2 = [
+			{ name: 'A', number: '1', x: 100, y: 50, rotation: 90 },
+			{ name: 'B', number: '2', x: 100, y: 30, rotation: 90 },
+		];
+		const horizontal = planLayout(pins2, { prop: 'name', spacing: 10, endSort: false, splitSort: true, order: 'asc' });
+		assert.equal(horizontal.baseRotation, 270);
+		assert.equal(horizontal.vertical, false);
+		assert.deepEqual(horizontal.targets[0], { x: 100, y: 50, rotation: 270 });
+		assert.deepEqual(horizontal.targets[1], { x: 110, y: 50, rotation: 270 }, '横排：Y 固定、X 递增');
+	});
+
+	it('布局：竖排按 Y 递减，从最上方开始', async () => {
+		const { planLayout } = await import('../iframe/js/src/app/pin-sorting/sortKey.js');
+		const pins = [
+			{ name: 'B', number: '2', x: 100, y: 30, rotation: 180 },
+			{ name: 'A', number: '1', x: 100, y: 50, rotation: 180 },
+		];
+		const plan = planLayout(pins, { prop: 'name', spacing: 10, endSort: false, splitSort: true, order: 'asc' });
+		assert.deepEqual(
+			plan.sorted.map((p) => p.name),
+			['A', 'B']
+		);
+		assert.deepEqual(plan.targets[0], { x: 100, y: 50, rotation: 180 });
+		assert.deepEqual(plan.targets[1], { x: 100, y: 40, rotation: 180 });
+	});
+});
+
+describe('app/eda-bridge/protocol', () => {
+	it('地址解析兼容三种写法', async () => {
+		const { parseAddr } = await import('../iframe/js/src/app/eda-bridge/protocol.js');
+		assert.deepEqual(parseAddr('127.0.0.1:8233'), { host: '127.0.0.1', port: '8233' });
+		assert.deepEqual(parseAddr('http://127.0.0.1:9000'), { host: '127.0.0.1', port: '9000' });
+		assert.deepEqual(parseAddr('127.0.0.1'), { host: '127.0.0.1', port: '8233' });
+		assert.deepEqual(parseAddr(''), { host: '127.0.0.1', port: '8233' });
+		assert.deepEqual(parseAddr('host:abc'), { host: 'host', port: '8233' }, '非法端口回退');
+	});
+
+	it('safeJson 处理函数 / 循环引用 / Promise / 深度', async () => {
+		const { safeJson } = await import('../iframe/js/src/app/eda-bridge/protocol.js');
+		assert.equal(safeJson(undefined), null);
+		assert.equal(safeJson(() => 1), '[Function anonymous]', '匿名函数降级成占位串');
+		assert.equal(safeJson(Promise.resolve(1)), '[Promise]');
+		assert.equal(safeJson(10n), '10');
+
+		const cyclic = { a: 1 };
+		cyclic.self = cyclic;
+		const out = safeJson(cyclic);
+		assert.equal(out.a, 1);
+		assert.ok(out.self, '循环引用必须被深度上限截断而不是栈溢出');
+
+		const deep = { a: { b: { c: { d: { e: { f: 1 } } } } } };
+		assert.equal(JSON.stringify(safeJson(deep)).includes('MaxDepth'), true);
+	});
+
+	it('safeJson 限制数组长度', async () => {
+		const { safeJson, SAFE_JSON_LIMITS } = await import('../iframe/js/src/app/eda-bridge/protocol.js');
+		const arr = Array.from({ length: SAFE_JSON_LIMITS.maxArray + 50 }, (_, i) => i);
+		assert.equal(safeJson(arr).length, SAFE_JSON_LIMITS.maxArray);
+	});
+});
+
+describe('app/import-image/{pixel,layout}', () => {
+	it('像素↔物理尺寸↔DPI 可往返', async () => {
+		const { sizeFromDpi, dpiFromSize, toMilSize } = await import('../iframe/js/src/app/import-image/pixel.js');
+		const size = sizeFromDpi(1200, 600, 300, 'mm');
+		assert.equal(Math.round(size.width), 102, '1200px / 300dpi = 4 inch = 101.6mm');
+		assert.equal(Math.round(size.height), 51);
+		assert.equal(dpiFromSize(1200, 600, size.width, size.height, 'mm'), 300);
+		const mil = toMilSize(25.4, 25.4, 'mm');
+		assert.ok(Math.abs(mil.width - 1000) < 0.01, '25.4mm = 1000mil');
+		assert.deepEqual(toMilSize('abc', 10, 'mil'), { width: 0, height: 10 });
+	});
+
+	it('文件名解析：T/B/L 构成双列版式，行优先排列', async () => {
+		const { parseFileNameOrder } = await import('../iframe/js/src/app/import-image/layout.js');
+		const files = ['T2.png', 'T1.png', 'B1.png', 'L1.png', 'L2.png'].map((name) => ({ name }));
+		const { ordered, layoutMap, useSpecial } = parseFileNameOrder(files);
+		assert.equal(useSpecial, true);
+		assert.deepEqual(
+			ordered.map((f) => f.name),
+			['T2.png', 'B1.png', 'T1.png', 'L2.png', 'L1.png'],
+			'T/B 降序、按行优先交叉排列；L 左列升序、右列降序'
+		);
+		assert.deepEqual(layoutMap.get(0), { col: 'left', row: 0 });
+		assert.deepEqual(layoutMap.get(1), { col: 'right', row: 0 });
+	});
+
+	it('文件名不匹配时退回原顺序与普通网格', async () => {
+		const { parseFileNameOrder, computeOrigins } = await import('../iframe/js/src/app/import-image/layout.js');
+		const files = [{ name: 'a.png' }, { name: 'b.png' }];
+		const parsed = parseFileNameOrder(files);
+		assert.equal(parsed.useSpecial, false);
+		assert.equal(parsed.layoutMap, null);
+		assert.deepEqual(parsed.ordered, files);
+	});
+
+	it('L 数量为奇数时不启用特殊布局', async () => {
+		const { parseFileNameOrder } = await import('../iframe/js/src/app/import-image/layout.js');
+		const files = ['T1.png', 'B1.png', 'L1.png'].map((name) => ({ name }));
+		assert.equal(parseFileNameOrder(files).useSpecial, false, 'L 必须为 0 或偶数');
+	});
+
+	it('原点计算：特殊布局按行列，普通布局按正方形网格', async () => {
+		const { computeOrigins } = await import('../iframe/js/src/app/import-image/layout.js');
+		const special = computeOrigins({
+			totalImages: 2,
+			imgWidth: 100,
+			imgHeight: 50,
+			originX: 10,
+			originY: 20,
+			layoutMap: new Map([
+				[0, { col: 'left', row: 0 }],
+				[1, { col: 'right', row: 1 }],
+			]),
+			useSpecial: true,
+		});
+		assert.deepEqual(special[0], { x: 10, y: 20 });
+		assert.deepEqual(special[1], { x: 110, y: -30 }, '右列偏移一个图宽，行号越大 Y 越小');
+
+		const grid = computeOrigins({ totalImages: 4, imgWidth: 100, imgHeight: 50, originX: 0, originY: 0, layoutMap: null, useSpecial: false });
+		assert.deepEqual(grid, [
+			{ x: 0, y: 0 },
+			{ x: 100, y: 0 },
+			{ x: 0, y: -100 },
+			{ x: 100, y: -100 },
+		], '网格间距取长边');
+	});
+});
+
+describe('app/api-test/{calibration,sourceProbe}', () => {
+	it('校准表达式：四则运算与非法输入', async () => {
+		const { applyCal, applyCalStr } = await import('../iframe/js/src/app/api-test/calibration.js');
+		assert.equal(applyCal('100', '*2'), 200);
+		assert.equal(applyCal('100', '/4'), 25);
+		assert.equal(applyCal('100', '+5'), 105);
+		assert.equal(applyCal('100', '-5'), 95);
+		assert.equal(applyCal('abc', '*2'), 'abc', '非数字原样返回');
+		assert.equal(applyCal('100', ''), '100', '无校准值原样返回');
+		assert.equal(applyCalStr('10,20', '*2'), '20,40');
+		assert.equal(applyCalStr(5, '*2'), 10);
+	});
+
+	it('比对容差 0.05，坐标逐分量比较', async () => {
+		const { compare } = await import('../iframe/js/src/app/api-test/calibration.js');
+		assert.equal(compare('10,20', '10.01,19.99'), true);
+		assert.equal(compare('10,20', '10.1,20'), false);
+		assert.equal(compare(100, 100.04), true);
+		assert.equal(compare(100, 100.06), false);
+		assert.equal(compare('1,2', '1,2,3'), false);
+	});
+
+	it('倍率互转：*x / /x / 纯数字 / 越界', async () => {
+		const { ratioToCalInput, calToMultiplier, MULTIPLIER_MAX, MULTIPLIER_MIN } = await import('../iframe/js/src/app/api-test/calibration.js');
+		assert.equal(ratioToCalInput(1.0005), '', '接近 1 留空');
+		assert.equal(ratioToCalInput(2), '*2');
+		assert.equal(ratioToCalInput(0.5), '/2');
+		assert.equal(calToMultiplier(''), 1);
+		assert.equal(calToMultiplier('*2'), 2);
+		assert.equal(calToMultiplier('/4'), 0.25);
+		assert.equal(calToMultiplier('0.5'), 0.5, '用户没写符号的纯数字按乘数');
+		assert.equal(calToMultiplier('+5'), 1, '加减法无法表达成乘数');
+		assert.equal(Number.isNaN(calToMultiplier(String(MULTIPLIER_MAX * 10))), true);
+		assert.equal(Number.isNaN(calToMultiplier(String(MULTIPLIER_MIN / 10))), true);
+	});
+
+	it('源码归一：V2 下标表与 V3 字段表都要对上', async () => {
+		const { normalizeFromSource } = await import('../iframe/js/src/app/api-test/sourceProbe.js');
+		const v2Via = ['VIA', 'e1', 0, '', '', 105, 110, 12, 24, 0, 10, 5, 0, []];
+		assert.deepEqual(normalizeFromSource('Via', v2Via, null), ['105,110', 12, 24, '10']);
+
+		const v3Via = { centerX: 1, centerY: 2, holeDiameter: 3, viaDiameter: 4, topSolderExpansion: null };
+		assert.deepEqual(normalizeFromSource('Via', null, v3Via), ['1,2', 3, 4, 'null']);
+
+		const v2Line = ['LINE', 'e3', 0, '', 1, 57, 75, 87, 75, 10, 0];
+		assert.deepEqual(normalizeFromSource('Line', v2Line, null), ['57,75', 10]);
+		assert.deepEqual(normalizeFromSource('Line', null, { startX: 5, startY: 6, width: 7 }), ['5,6', 7]);
+		assert.deepEqual(normalizeFromSource('Unknown', [], null), []);
+	});
+
+	it('API 取值：阻焊扩展的三种形状', async () => {
+		const { extractFromApi } = await import('../iframe/js/src/app/api-test/sourceProbe.js');
+		const base = { x: 1, y: 2, holeDiameter: 3, diameter: 4 };
+		assert.equal(extractFromApi('Via', { ...base, solderMaskExpansion: null })[3], 'null');
+		assert.equal(extractFromApi('Via', { ...base, solderMaskExpansion: { topSolderMask: 0.2 } })[3], '0.2');
+		assert.equal(extractFromApi('Via', { ...base, solderMaskExpansion: undefined })[3], '0');
+		assert.equal(extractFromApi('Via', { ...base, solderMaskExpansion: 2 })[3], '2');
+	});
+});
+
+describe('app/{import-qrcode/create-footprint}', () => {
+	it('bwip-js 选项：纠错级别与「包含文本」按码型开关', async () => {
+		const { buildOptions, computeDpi } = await import('../iframe/js/src/app/import-qrcode/barcode.js');
+		const base = { bcid: 'qrcode', text: 'A1', scale: 4, padding: 2, outputType: 'image', inverted: false, fore: '#112233', back: '#ffffff', eclevel: 'H', includeText: true };
+		const qr = buildOptions(base);
+		assert.equal(qr.eclevel, 'H');
+		assert.equal(qr.includetext, undefined, '二维码不提供「包含文本」');
+		assert.equal(qr.barcolor, '112233', '颜色要去掉 #');
+
+		const code128 = buildOptions({ ...base, bcid: 'code128', outputType: 'vector', inverted: true });
+		assert.equal(code128.eclevel, undefined, '一维码没有纠错级别');
+		assert.equal(code128.includetext, true);
+		assert.equal(code128.barcolor, 'ffffff', '矢量 + 反转要反色');
+
+		assert.equal(computeDpi(1000, 25.4, 'mm'), 1000);
+		assert.equal(computeDpi(1000, 1000, 'mil'), 1000);
+		assert.equal(computeDpi(1000, 0, 'mm'), 0);
+	});
+
+	it('路径平移：L / ARC 命令段的坐标都要移位', async () => {
+		const { transformPath } = await import('../iframe/js/src/app/create-footprint/sourceBuilder.js');
+		assert.deepEqual(transformPath(['R', 10, 20, 5], 5, 10), ['R', 5, 10, 5]);
+		assert.deepEqual(transformPath([10, 20, 'L', 30, 40], 10, 20), [0, 0, 'L', 20, 20]);
+		// ARC 段：终点 (i+2, i+3) 与后续裸坐标都要平移，圆心在 i+4/i+5 同样会被减
+		assert.deepEqual(transformPath([0, 0, 'ARC', 0, 0, 5, 6], 1, 1), [-1, -1, 'ARC', 0, -1, 4, 5]);
+	});
+
+	it('封装源码：id 从 e1 起重新编号，坐标按原点偏移', async () => {
+		const { buildFootprintSource } = await import('../iframe/js/src/app/create-footprint/sourceBuilder.js');
+		const primitives = [
+			['PAD', 'old1', 0, '', 12, '1', 100, 200, 0, ['ROUND', 10, 10], ['ELLIPSE', 20, 20]],
+			['LINE', 'old2', 0, '', 1, 110, 200, 130, 200, 5],
+		];
+		const source = buildFootprintSource(primitives, { uuid: 'fp-1', deviceName: 'TEST', originX: 100, originY: 200 });
+		const lines = source.trim().split('\n');
+		const pad = JSON.parse(lines.find((l) => l.startsWith('["PAD"')));
+		assert.equal(pad[1], 'e1');
+		assert.equal(pad[6], 0);
+		assert.equal(pad[7], 0);
+		assert.equal(primitives[0][1], 'old1', '不能改入参');
+		assert.ok(source.includes('"uuid":"fp-1"'));
+		assert.ok(source.includes('"title":"TEST"'));
+	});
+});
