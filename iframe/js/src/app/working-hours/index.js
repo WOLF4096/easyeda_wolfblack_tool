@@ -44,9 +44,7 @@ import { formatMin, parseMin } from './reminder.js';
         let weeklyPieChart = null;
 
         let currentClusterSize = 1;
-        let currentYMax = 900;
         let manageClusterSize = 1;
-        let manageYMax = 900;
 
         const chartCache = {
             main: { lastClusterSize: -1, lastYMax: -1, lastHourInterval: -1, lastDynamicYMax: -1 },
@@ -819,11 +817,9 @@ import { formatMin, parseMin } from './reminder.js';
 
             if (isMain) {
                 currentClusterSize = clusterSize;
-                currentYMax = dataYMax;
                 document.getElementById('legend-list').innerHTML = buildLegendHtml(startIdx, endIdx, true);
             } else {
                 manageClusterSize = clusterSize;
-                manageYMax = dataYMax;
                 document.getElementById('m-legend-list').innerHTML = buildLegendHtml(startIdx, endIdx, false);
             }
 
@@ -1626,7 +1622,6 @@ import { formatMin, parseMin } from './reminder.js';
         }
 
         async function exportWeeklyReport() {
-            const body = document.getElementById('weekly-report-body');
             // 简单的截图导出方案：利用 html2canvas 或手动拼凑
             // 由于插件环境限制，我们使用 ECharts 自带的 getDataURL 并手动组合
             const barImg = weeklyBarChart.getDataURL({ type: 'png', backgroundColor: '#252526' });
@@ -1721,6 +1716,9 @@ import { formatMin, parseMin } from './reminder.js';
 		// 打包成 IIFE 后它们不再是全局的，必须显式挂到 window，否则按钮会静默失效。
 		// 只暴露 HTML 真正用到的那几个，其余仍留在模块作用域内。
 		Object.assign(window, {
+			// 下面两个只出现在「表格行」的 innerHTML 里（不是静态 HTML），漏了按钮就点不动
+			exportProjectChart,
+			confirmDeleteProject,
 			switchTab,
 			sortTable,
 			changeWeek,
@@ -1743,6 +1741,9 @@ import { formatMin, parseMin } from './reminder.js';
 		// 打包成 IIFE 后它们不再是全局的，必须显式挂到 window，否则按钮会静默失效。
 		// 只暴露 HTML 真正用到的那几个，其余仍留在模块作用域内。
 		Object.assign(window, {
+			// 下面两个只出现在「表格行」的 innerHTML 里（不是静态 HTML），漏了按钮就点不动
+			exportProjectChart,
+			confirmDeleteProject,
 			switchTab,
 			sortTable,
 			changeWeek,

@@ -1,9 +1,9 @@
 /**
- * 前端公共模块测试（iframe/js/common.js）
+ * 前端平台内核测试（`iframe/js/src/core/*`）
  *
- * 该文件是浏览器 IIFE（挂在 window.WolfCommon），不是 ESM，所以这里用
- * `new Function('window', code)` 把它放进一个假 window 里执行，再把 `eda`
- * 挂到 globalThis 上模拟宿主环境。
+ * 本文件原先测的是 `iframe/js/common.js` 那个 IIFE 门面（B7 已删除）。
+ * 门面拆成 ESM 之后，这里改成直接组合 `core/*` 的导出 —— **断言完全不变**，
+ * 只是把「在假 window 里执行 IIFE」换成了「拼一个与 WolfCommon 同形的对象」。
  *
  * 重点守护两件事：
  * 1. 版本号缓存 —— 宿主 API 只能被穿透一次（否则循环里会造成上万次跨 iframe 调用）；
@@ -12,18 +12,31 @@
  * 运行：npm test
  */
 import assert from 'node:assert/strict';
-import fs from 'node:fs';
-import path from 'node:path';
 import { afterEach, beforeEach, describe, it } from 'node:test';
 
-const COMMON_SOURCE = fs.readFileSync(path.join(process.cwd(), 'iframe', 'js', 'common.js'), 'utf8');
+import * as edaMod from '../iframe/js/src/core/eda.js';
+import * as versionMod from '../iframe/js/src/core/version.js';
+import * as layerMod from '../iframe/js/src/core/layer.js';
+import * as netlistMod from '../iframe/js/src/core/netlist.js';
+import * as lengthMod from '../iframe/js/src/core/length.js';
+import * as sourceLineMod from '../iframe/js/src/core/sourceLine.js';
+import * as utilMod from '../iframe/js/src/core/util.js';
 
-/** 在假 window 里执行 common.js，返回 WolfCommon 实例 */
+/** 把 core/* 拼成一个与旧 `WolfCommon` 同形的对象 */
+const CORE = { ...edaMod, ...versionMod, ...layerMod, ...netlistMod, ...lengthMod, ...sourceLineMod, ...utilMod };
+
+/**
+ * 取「一份干净的内核」
+ *
+ * 旧实现每次 `new Function` 都会重新执行 IIFE，天然拿到空缓存；
+ * ESM 有模块级缓存，所以这里显式清掉版本号缓存来达到同样的隔离效果。
+ *
+ * @returns {object} 与 WolfCommon 同形的对象
+ * @sideEffects 清空版本号缓存
+ */
 function loadCommon() {
-	const fakeWindow = {};
-	// eslint-disable-next-line no-new-func
-	new Function('window', COMMON_SOURCE)(fakeWindow);
-	return fakeWindow.WolfCommon;
+	versionMod.resetVersionCache();
+	return CORE;
 }
 
 /** 造一个最小可用的 EDA mock，统计版本查询次数 */

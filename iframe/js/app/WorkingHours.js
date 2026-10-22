@@ -708,9 +708,7 @@
   var weeklyBarChart = null;
   var weeklyPieChart = null;
   var currentClusterSize = 1;
-  var currentYMax = 900;
   var manageClusterSize = 1;
-  var manageYMax = 900;
   var chartCache = {
     main: { lastClusterSize: -1, lastYMax: -1, lastHourInterval: -1, lastDynamicYMax: -1 },
     manage: { lastClusterSize: -1, lastYMax: -1, lastHourInterval: -1, lastDynamicYMax: -1 }
@@ -1446,11 +1444,9 @@
     let hourInterval = Math.max(2, Math.ceil(safeDiffHours / 24) * 2);
     if (isMain) {
       currentClusterSize = clusterSize;
-      currentYMax = dataYMax;
       document.getElementById("legend-list").innerHTML = buildLegendHtml(startIdx, endIdx, true);
     } else {
       manageClusterSize = clusterSize;
-      manageYMax = dataYMax;
       document.getElementById("m-legend-list").innerHTML = buildLegendHtml(startIdx, endIdx, false);
     }
     let visibleMax = 0;
@@ -1610,6 +1606,34 @@
     dailyData.forEach((stat, dateStr) => result.push([dateStr, stat.work, stat.rest]));
     return result;
   }
+  async function exportProjectChart(uuid) {
+    const pStat = projectStats[uuid];
+    if (!pStat || pStat.startTs === Infinity) {
+      toast("当前工程暂无可导出数据", "warning");
+      return;
+    }
+    const bounds = getDayAlignedIndices(pStat.startTs, pStat.endTs);
+    const baseTs = globalTimeline[bounds.startValue].ts;
+    const totalSlots = bounds.endValue - bounds.startValue + 1;
+    const timeData = [];
+    for (let i = bounds.startValue; i <= bounds.endValue; i++) {
+      const w = globalTimeline[i].work[uuid] || 0;
+      const r = globalTimeline[i].rest[uuid] || 0;
+      if (w > 0 || r > 0) {
+        timeData.push([i - bounds.startValue, { [uuid]: w }, { [uuid]: r }]);
+      }
+    }
+    const payloadObj = {
+      pageTitle: getProjectTitleString(uuid),
+      baseTs,
+      totalSlots,
+      projectMeta: { [uuid]: { name: pStat.name, color: pidColorMap[uuid] || "#007acc" } },
+      data: timeData,
+      heatmapData: getHeatmapDataForExport(uuid)
+      // <-- 注入热力图数据
+    };
+    await triggerSecureExport(payloadObj, `工程耗时图_${pStat.name.replace(/[\/\\:\*\?"<>\|]/g, "_")}`);
+  }
   async function exportTotalChart() {
     if (globalTimeline.length === 0) {
       toast("当前暂无可导出数据", "warning");
@@ -1755,6 +1779,77 @@
         }
       }
     );
+  }
+  function confirmDeleteProject(uuid, name) {
+    name = name || globalProjectMeta[uuid] || "未命名工程";
+    eda.sys_Dialog.showConfirmationMessage(
+      `确认彻底删除 “${name}” 的全部时间记录？
+(此操作无法恢复)`,
+      "确认清除时间片记录",
+      "确认删除",
+      "取消",
+      async (mainButtonClicked) => {
+        if (mainButtonClicked) await deleteProjectData(uuid);
+      }
+    );
+  }
+  async function deleteProjectData(uuid) {
+    const mask = document.getElementById("loading-mask");
+    mask.style.display = "flex";
+    mask.innerText = "正在执行本地存储清洗...";
+    try {
+      let allConfigs = await eda.sys_Storage.getExtensionAllUserConfigs();
+      if (!allConfigs) allConfigs = {};
+      for (const dateKey in allConfigs) {
+        if (!dateKey.startsWith("STATS_")) continue;
+        let dayData;
+        try {
+          dayData = typeof allConfigs[dateKey] === "string" ? JSON.parse(allConfigs[dateKey]) : allConfigs[dateKey];
+        } catch (e) {
+          continue;
+        }
+        if (!dayData) continue;
+        let isModified = false;
+        if (dayData.slots) {
+          for (const slotId in dayData.slots) {
+            if (dayData.slots[slotId] && dayData.slots[slotId][uuid]) {
+              delete dayData.slots[slotId][uuid];
+              isModified = true;
+              if (Object.keys(dayData.slots[slotId]).length === 0) delete dayData.slots[slotId];
+            }
+          }
+        }
+        if (dayData.meta && dayData.meta[uuid]) {
+          delete dayData.meta[uuid];
+          isModified = true;
+        }
+        if (isModified) await eda.sys_Storage.setExtensionUserConfig(dateKey, JSON.stringify(dayData));
+      }
+      toast("底层驱动数据同步擦除成功", "success");
+      await loadAllData();
+      if (currentlySelectedManageUuid === uuid) {
+        currentlySelectedManageUuid = null;
+        if (manageChart) {
+          manageChart.dispose();
+          manageChart = null;
+        }
+        document.getElementById("manage-chart-title").innerText = "请点击上方工程行查看对应工程时间轴";
+        document.getElementById("manage-custom-legend").classList.add("collapsed");
+      }
+      if (SELECTED_DETAIL_UUID === uuid) {
+        SELECTED_DETAIL_UUID = null;
+        if (state.activeTab === "project") {
+          updateProjectSelector();
+          onProjectSelectorChange();
+        }
+      }
+      renderManageTable();
+      if (manageChart && currentlySelectedManageUuid) initManageChart(currentlySelectedManageUuid, globalProjectMeta[currentlySelectedManageUuid] || "");
+      mask.style.display = "none";
+    } catch (e) {
+      mask.innerText = "擦除产生未知错误: " + e.message;
+      mask.onclick = () => mask.style.display = "none";
+    }
   }
   var ReminderApp = {
     KEY: "USER_CONFIG_REMINDERS",
@@ -2155,7 +2250,6 @@
     }, true);
   }
   async function exportWeeklyReport() {
-    const body = document.getElementById("weekly-report-body");
     const barImg = weeklyBarChart.getDataURL({ type: "png", backgroundColor: "#252526" });
     const pieImg = weeklyPieChart.getDataURL({ type: "png", backgroundColor: "#252526" });
     const canvas = document.createElement("canvas");
@@ -2223,6 +2317,9 @@
     }
   })();
   Object.assign(window, {
+    // 下面两个只出现在「表格行」的 innerHTML 里（不是静态 HTML），漏了按钮就点不动
+    exportProjectChart,
+    confirmDeleteProject,
     switchTab,
     sortTable,
     changeWeek,
@@ -2238,6 +2335,9 @@
     ReminderApp
   });
   Object.assign(window, {
+    // 下面两个只出现在「表格行」的 innerHTML 里（不是静态 HTML），漏了按钮就点不动
+    exportProjectChart,
+    confirmDeleteProject,
     switchTab,
     sortTable,
     changeWeek,

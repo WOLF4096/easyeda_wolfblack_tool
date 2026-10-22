@@ -1,7 +1,7 @@
 /**
  * @//module/ core/version
  * @//description/ 编辑器版本号与「版本族」判定（V2 / V2.2 / V3 / V4），带穿透缓存
- * @//exports/ getEditorVersion, getVersionFamily, isV2, isV3, isV4, isModern
+ * @//exports/ getEditorVersion, getVersionFamily, isV2, isV3, isV4, isModern, resetVersionCache
  * @//dependencies/ core/eda
  * @//example/ const { isModern, getVersionFamily } = await import('./core/version.js')
  *            isModern() // true 表示 V3/V4，应走日志式源码格式
@@ -114,4 +114,19 @@ export function isModern() {
 export function isV2() {
 	const family = getVersionFamily();
 	return family === 'V2' || family === 'V2.2';
+}
+
+/**
+ * 清空版本号缓存
+ *
+ * 缓存的存在是为了「一次跨 iframe 调用，之后全用本地值」，但两种场景需要主动失效：
+ *   - 单元测试要在同一个进程里模拟多个版本环境；
+ *   - 宿主重连/切换工程后，编辑器版本可能已经变了。
+ *
+ * @returns {void}
+ * @sideEffects 清空模块级缓存
+ */
+export function resetVersionCache() {
+	// 缓存用 null 表示「尚未取过」（undefined 会被当成已缓存）
+	cachedVersion = null;
 }

@@ -191,3 +191,14 @@ EDA 扩展的 iframe 页面**不是文件 URL**，而是宿主拼出来的 `blob
 - ⚠️ 写盘类页面（GenerateNet / PcbToSch / ReplaceComponent）重构后**必须做逐字节对照**：
   把原函数从备份抽出来，用 `node:vm` + 桩跑，与新模块比多组配置（详见 `2026-10-22.md`）。
   本轮靠它抓到 V2 `FONTSTYLE st2` 的 `60` 写错列。
+
+## 门禁与门面（2026-10-22 收尾后）
+
+- `npm test` 的 `pretest` 会跑 `npm run check`（`check:deps` + `check:js`）。
+  - `check:deps`：分层 `core` < `format|pcb|sch|ui` < `app`，页面间禁止互依，另查环。
+  - `check:js`：ESLint 复杂度门禁（complexity ≤10 / max-depth ≤3 / 函数 ≤80 行）+ 存量基线
+    `config/eslint-baseline.json`。**基线只允许收紧**：改完代码若总违规数下降，跑 `npm run check:js:update`。
+- `iframe/js/common.js` 已删除。任何"恢复门面"的想法都要先想清楚：18 页已全部改为
+  `import { ... } from '../../core/*.js'`，`core/version.js` 的 `resetVersionCache()` 是给测试用的。
+- 行内 `onclick` 的契约由 `test/inlineHandlers.test.mjs` 双重扫描（静态 HTML + JS 模板串），
+  漏挂 window 会直接测试失败 —— 历史上有两个按钮因此点了没反应。

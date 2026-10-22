@@ -14,7 +14,6 @@ import { toast } from '../../ui/toast.js';
 import { buildFootprintSource, buildSymbolSource, getCoordsFromSource } from './sourceBuilder.js';
 
 /** 允许转成封装的图元类型 */
-const ALLOWED_TYPES = ['Pad', 'Polyline', 'Region'];
 
 /**
  * 版本拦截：V3/V4 直接把表单换成提示文字

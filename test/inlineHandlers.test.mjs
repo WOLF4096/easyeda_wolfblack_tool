@@ -57,6 +57,24 @@ const pages = fs
 	.filter((f) => f.endsWith('.html'))
 	.sort();
 
+/**
+ * 从源码里找「JS 生成的 innerHTML」中的行内处理器
+ *
+ * 为什么单独扫一遍：`renderManageTable()` 这类函数会用模板串生成带 `onclick="foo(...)"` 的行，
+ * 这些名字**不在静态 HTML 里**，只扫 HTML 会漏 —— 实测漏暴露了
+ * `exportProjectChart` / `confirmDeleteProject` 两个按钮（点了没反应）。
+ *
+ * @param {string} code 源码
+ * @returns {Set<string>} 标识符集合
+ */
+function generatedIdentifiers(code) {
+	const ids = new Set();
+	const re = /on(?:click|change|input)="([A-Za-z_$][\w$]*)\(/g;
+	let match;
+	while ((match = re.exec(code))) ids.add(match[1]);
+	return ids;
+}
+
 describe('行内事件契约（HTML ↔ 打包产物）', () => {
 	for (const page of pages) {
 		const html = fs.readFileSync(path.join(IFRAME, page), 'utf8');
@@ -73,3 +91,62 @@ describe('行内事件契约（HTML ↔ 打包产物）', () => {
 		});
 	}
 });
+
+const SRC_APP = path.join(process.cwd(), 'iframe', 'js', 'src', 'app');
+
+describe('生成代码里的行内处理器（innerHTML 模板串）', () => {
+	if (!fs.existsSync(SRC_APP)) {
+		it('跳过：尚未生成 src', () => {});
+		return;
+	}
+
+	const entries = fs
+		.readdirSync(SRC_APP, { withFileTypes: true })
+		.filter((e) => e.isDirectory())
+		.map((e) => ({ dir: e.name, file: path.join(SRC_APP, e.name, 'index.js') }))
+		.filter((e) => fs.existsSync(e.file));
+
+	for (const entry of entries) {
+		const code = fs.readFileSync(entry.file, 'utf8');
+		const ids = generatedIdentifiers(code);
+		if (ids.size === 0) continue;
+
+		it(`${entry.dir}：模板串里的 ${ids.size} 个处理器都已暴露`, () => {
+			const bundle = path.join(IFRAME, 'js', 'app', `${bundleNameOf(entry.dir)}.js`);
+			assert.ok(fs.existsSync(bundle), `缺少产物 ${bundle}，先跑 npm run build:iframe`);
+			const built = fs.readFileSync(bundle, 'utf8');
+			const missing = [...ids].filter((id) => !exposes(built, id));
+			assert.deepEqual(missing, [], `${entry.dir} 生成的行内按钮未暴露：${missing.join(', ')}`);
+		});
+	}
+});
+
+/**
+ * 页面目录名 → 产物文件名（kebab-case → PascalCase 的已知映射）
+ *
+ * @param {string} dir 目录名
+ * @returns {string} 产物名
+ */
+function bundleNameOf(dir) {
+	const map = {
+		'api-test': 'APITest',
+		about: 'About',
+		'clear-empty-properties': 'ClearEmptyProperties',
+		'code-convert': 'CodeConvert',
+		'create-footprint': 'CreateFootprint',
+		'eda-bridge': 'EDABridge',
+		'generate-net': 'GenerateNet',
+		'import-bom': 'ImportBom',
+		'import-image': 'ImportImage',
+		'import-qrcode': 'ImportQrcode',
+		'in-ad-netlist': 'InADNetlist',
+		'modify-net': 'ModifyNet',
+		'netlist-3d': 'NetlistUpdate3DModels',
+		'out-pin-net': 'OutPinNet',
+		'pcb-to-sch': 'PcbToSch',
+		'pin-sorting': 'PinSorting',
+		'replace-component': 'ReplaceComponent',
+		'working-hours': 'WorkingHours',
+	};
+	return map[dir] || dir;
+}

@@ -2,7 +2,10 @@
  * 原理图源码发射器测试
  *
  * 被测：`src/js/common/sourceEmitter.js`（后端 ESM）
- *      + `iframe/js/common.js` 里同名的镜像实现（前端 IIFE）
+ *      + `iframe/js/src/sch/emitter.js` 里同名的镜像实现（前端 ESM）
+ *
+ * 注：前端那份原先在 `iframe/js/common.js`（IIFE 门面）里，B7 删门面后搬到 `src/sch/emitter.js`，
+ * 断言语义不变 —— 仍然是「两份实现逐字节一致」。
  *
  * 重点不是"格式好看"，而是**两条实现逐字节一致** —— 两套 bundle 无法共享代码，
  * 一旦漂移就会出现"某个版本写进去打不开"这类最难查的问题。
@@ -10,19 +13,19 @@
  * 运行：npm test
  */
 import assert from 'node:assert/strict';
-import fs from 'node:fs';
-import path from 'node:path';
 import { describe, it } from 'node:test';
 
 import { createSchWireLines } from '../src/js/common/sourceEmitter.js';
+import { createSchWireLines as createSchWireLinesFrontend } from '../iframe/js/src/sch/emitter.js';
 
-/** 加载前端 IIFE 版 common.js，取 window.WolfCommon.createSchWireLines */
+/**
+ * 取前端实现
+ *
+ * @returns {Function} 前端 `createSchWireLines`
+ * @sideEffects 无
+ */
 function loadFrontendEmitter() {
-	const code = fs.readFileSync(path.join(process.cwd(), 'iframe/js/common.js'), 'utf8');
-	const fakeWindow = {};
-	// eslint-disable-next-line no-new-func
-	new Function('window', code)(fakeWindow);
-	return fakeWindow.WolfCommon.createSchWireLines;
+	return createSchWireLinesFrontend;
 }
 
 /** 顺序分配器（id 与 ticket 各自递增） */

@@ -2,7 +2,7 @@
  * @//module/ app/eda-bridge/commands
  * @//description/ 桥的指令分发：ping / import / probe / eval（默认关闭远程执行，需勾选「调试指令」）
  * @//exports/ execItems, probePaths, createCommandHandler
- * @//dependencies/ app/eda-bridge/protocol
+ * @//dependencies/ app/eda-bridge/protocol, core/eda, core/version, core/layer, core/netlist, core/sourceLine, core/length, core/util, core/log
  * @//example/ const { createCommandHandler } = await import('./commands.js')
  *            const handle = createCommandHandler({ getHost, send, log, ver: '2.2', debugAllowed })
  *            handle({ id: 'c1', cmd: 'ping' })
@@ -12,6 +12,41 @@
  */
 
 import { safeJson } from './protocol.js';
+import { NETLIST_KEY, getEda, hasEda } from '../../core/eda.js';
+import { getEditorVersion, isModern, isV2 } from '../../core/version.js';
+import { LAYER, isConductiveLayer, isInnerLayer } from '../../core/layer.js';
+import { getComponentsContainer, getNetlist, setNetlist } from '../../core/netlist.js';
+import { joinSourceLine, splitSourceLine } from '../../core/sourceLine.js';
+import { toApiLength } from '../../core/length.js';
+import { escapeHtml } from '../../core/util.js';
+import { logger } from '../../core/log.js';
+
+/**
+ * 注入给 `eval` 指令的公共对象（形如原来的 `window.WolfCommon`）
+ *
+ * 页面已经不再加载 `common.js`（模块化后源码在 `src/core/*`），但探针脚本长期以
+ * `WolfCommon.xxx` 的写法取工具函数。这里用同一批模块现组一份，保持探针契约不变 ——
+ * 否则所有历史探针都会拿到 `null` 而失败。
+ */
+const EVAL_CONTEXT = Object.freeze({
+	NETLIST_KEY,
+	getEda,
+	hasEda,
+	getEditorVersion,
+	isV2,
+	isModern,
+	LAYER,
+	isInnerLayer,
+	isConductiveLayer,
+	getNetlist,
+	setNetlist,
+	getComponentsContainer,
+	splitSourceLine,
+	joinSourceLine,
+	toApiLength,
+	escapeHtml,
+	logger,
+});
 
 /**
  * 批量建图元（component / via / line）
@@ -139,7 +174,7 @@ export function createCommandHandler(deps) {
 			if (typeof cmd.code !== 'string' || !cmd.code.trim()) throw new Error('eval 缺少 code');
 			// eslint-disable-next-line no-new-func
 			const fn = new Function('eda', 'arg', 'WolfCommon', 'return (async () => {\n' + cmd.code + '\n})();');
-			const raw = await fn(getHost() || null, cmd.arg, globalThis.WolfCommon || null);
+			const raw = await fn(getHost() || null, cmd.arg, EVAL_CONTEXT);
 			send({ id: cmd.id, ok: true, value: safeJson(raw), ms: Date.now() - startedAt });
 		} catch (e) {
 			send({ id: cmd.id, ok: false, error: String((e && (e.stack || e.message)) || e), ms: Date.now() - startedAt });
