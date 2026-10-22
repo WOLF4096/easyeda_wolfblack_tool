@@ -1152,6 +1152,17 @@ label.inline,
 	font-size: 1.5em;
 }
 
+.about-sub {
+	margin-top: 2px;
+	color: var(--vscode-text-muted);
+	font-size: 0.92em;
+}
+
+.about-sub #appVersion {
+	color: var(--vscode-syntax-number);
+	font-family: var(--vscode-font-mono);
+}
+
 .about-container h2,
 .about-container h3 {
 	padding-bottom: 8px;
@@ -1347,8 +1358,38 @@ label.inline,
 	margin-bottom: 0;
 }
 
-.usage-tag,
-.purpose-tag {
+/** 「使用方法」步骤列表 */
+.howto-list {
+	margin: 0 0 8px 18px;
+	color: var(--vscode-text-muted);
+	font-size: 0.92em;
+	line-height: 1.75;
+}
+
+.howto-list li {
+	padding-left: 2px;
+}
+
+.howto-list li::marker {
+	color: var(--vscode-accent);
+}
+
+/** 「注意」段落 */
+.details-content .note-heading {
+	margin-top: 10px;
+	margin-bottom: 4px;
+}
+
+.details-content .howto-note {
+	padding: 6px 10px;
+	color: var(--vscode-text-muted);
+	font-size: 0.9em;
+	background: rgba(206, 145, 120, 0.08);
+	border-left: 2px solid var(--vscode-syntax-string);
+	border-radius: 0 var(--vscode-radius) var(--vscode-radius) 0;
+}
+
+.usage-tag {
 	display: inline-block;
 	padding: 1px 6px;
 	margin-right: 4px;
@@ -1360,10 +1401,16 @@ label.inline,
 	font-weight: 500;
 }
 
-.purpose-tag {
-	border-color: rgba(35, 209, 96, 0.4);
-	background: rgba(35, 209, 96, 0.2);
-	color: var(--vscode-syntax-type);
+.note-tag {
+	display: inline-block;
+	padding: 1px 6px;
+	margin-right: 4px;
+	border: 1px solid rgba(206, 145, 120, 0.45);
+	border-radius: var(--vscode-radius-lg);
+	background: rgba(206, 145, 120, 0.18);
+	color: var(--vscode-syntax-string);
+	font-size: 0.85em;
+	font-weight: 500;
 }
 
 .tag-scope.pcb {

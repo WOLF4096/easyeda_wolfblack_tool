@@ -64,6 +64,14 @@ const LIB_FILES = {
 };
 
 /**
+ * 扩展版本号（用于「关于」页显示）
+ *
+ * 从 `package.json` 读，保证版本号只有一个手改点；`extension.json` 仍需手改（平台读它），
+ * 两者一致性由 `test/docConsistency.test.mjs` 核对。
+ */
+const PKG_VERSION = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8')).version;
+
+/**
  * 生成内联注入的 define 表
  *
  * 缺文件直接抛错：静默跳过会让导出报告退回 CDN 分支（构建期已被裁掉），
@@ -73,7 +81,7 @@ const LIB_FILES = {
  * @sideEffects 读 `iframe/js/<lib>` 并做 gzip
  */
 function buildInlineDefines() {
-	const defines = {};
+	const defines = { __APP_VERSION__: JSON.stringify(`v${PKG_VERSION}`) };
 	for (const [key, file] of Object.entries(LIB_FILES)) {
 		const abs = path.join(ROOT, 'iframe', 'js', file);
 		if (!fs.existsSync(abs)) throw new Error(`build:iframe — 内联库缺失：${abs}`);

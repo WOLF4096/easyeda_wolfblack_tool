@@ -75,7 +75,7 @@ iframe 页面是宿主拼的 **`blob:` 文档**（`location.href = blob:https://
 - 样式只有 `iframe/css/common.css`（18 页共用）；`.hidden` 必须留文件最末且无 `!important`；`--vscode-*` 变量名不能改；
   被 JS 查询的类名改结构时要同步改 JS。版式自检 `npm run check:layout`。
 
-## 工时统计页的架构（v1.19.0 任务 2/3 之后）
+## 工时统计页的架构（v1.20.0 起）
 
 - `index.js` 只做编排（~280 行）。`charts/options/*` 是**纯函数** option 工厂 `(data, theme, opts) => option`，
   `charts/zoomModel.js` 是缩放数值，`charts/zoomApply.js` 把窗口落到图表，`views/*Panel.js` 是各面板控制器。
@@ -105,3 +105,14 @@ iframe 页面是宿主拼的 **`blob:` 文档**（`location.href = blob:https://
 - `/__status` 的 `ver` 是**桥协议版本**，EDA 版本问 `sys_Environment.getEditorCurrentVersion()`。
 - 排查"写入被拒"：先写基线源码 → `await 300ms` → 写变体，失败重试一次（V4 文档刚重建时会误返回 false）。
 - 探针 `tools/eda-bridge/probes/*.js` 顶层有 `return`，非法模块，已在 `.prettierignore`。
+
+## 发布状态（2026-10-22 更新）
+
+- 三条写盘流程 **已由用户人工验证通过**（V4）：从 PCB 转原理图、生成物理网络三种写回、批量替换器件
+  → `CHANGELOG` 顶部"V4 待验证项"、评估报告里的 P0-1、汇报 §六"遗留 3 条"都必须改成已完成。
+- 仍未解决：V4 整份写回丢 `POURED`（铜皮需重算）；`创建封装` 仅 V2.2 可用。
+- 文档体系（v1.21.0 起）：`CHANGELOG.md` = 用户向（只写新增/修复/优化/移除，纯内部版本整段删）；
+  `CHANGELOG.dev.md` = 技术档案（原 CHANGELOG 全量）；`README.md` = 用户详情、`README.dev.md` = 构建/测试。
+  **功能说明唯一事实源 = `iframe/js/src/app/about/features.js`**（24 条，`brief` ≤32 字，字段 `steps[]`/`note`，
+  已删 `purpose`），README 表格由 `test/docConsistency.test.mjs` 强制逐条一致 —— 改文案只改这一处。
+  「关于」页版本号由 `build-iframe.mjs` 从 `package.json` 注入 `__APP_VERSION__`，不再手改。
