@@ -1,7 +1,7 @@
 /**
  * @//module/ core/netlist
  * @//description/ 网表读取/写回与 V2-V3 组件容器获取（PCB 与原理图两侧 API 名称在此归一）
- * @//exports/ getNetlist, setNetlist, getComponentsContainer
+ * @//exports/ getNetlist, setNetlist, getComponentsContainer, detectContainer, findComponentByDesignator
  * @//dependencies/ core/eda, core/log
  * @//example/ const { getNetlist, setNetlist } = await import('./core/netlist.js')
  *            const { page, json } = await getNetlist('AUTO')
@@ -119,4 +119,56 @@ export async function setNetlist(page, json) {
 export function getComponentsContainer(netlistObj) {
 	if (!netlistObj) return {};
 	return netlistObj.components ? netlistObj.components : netlistObj;
+}
+
+/**
+ * 按位号查找器件（忽略大小写）
+ *
+ * 网表里的位号大小写与用户输入不一定一致，5 个页面各自写过一遍这个循环。
+ *
+ * @param {object} container 组件容器
+ * @param {string} designator 位号（大小写不敏感）
+ * @returns {{key: string, comp: object}|null} 命中的键与器件
+ * @sideEffects 无（纯函数）
+ */
+export function findComponentByDesignator(container, designator) {
+	const target = String(designator || '').trim().toUpperCase();
+	if (!target || !container || typeof container !== 'object') return null;
+	for (const key in container) {
+		const comp = container[key];
+		const current = comp && comp.props && comp.props.Designator;
+		if (current && String(current).toUpperCase() === target) return { key: key, comp: comp };
+	}
+	return null;
+}
+
+/**
+ * 更谨慎地定位组件容器（V2 网表根对象里混着元数据时用这个）
+ *
+ * 与 `getComponentsContainer` 的区别：
+ *   - 有 `components` 字段 → 直接用（与前者一致）；
+ *   - 否则排除 `version/designRule/netClass/units/layers` 等元数据，
+ *     只保留「带 props / pins / pinInfoMap」的对象；
+ *   - 一个都没识别出来时**降级为整个对象**（兼容老工程，风险大但必要）。
+ *
+ * InADNetlist 原先在两处各手写了一遍这段逻辑，收敛到这里。
+ *
+ * @param {object} netlistObj 网表对象
+ * @returns {object} 组件容器
+ * @sideEffects 无（纯函数）
+ */
+export function detectContainer(netlistObj) {
+	if (!netlistObj || typeof netlistObj !== 'object') return {};
+	if (netlistObj.components && typeof netlistObj.components === 'object') return netlistObj.components;
+
+	const META_KEYS = ['version', 'designRule', 'netClass', 'units', 'layers'];
+	const picked = {};
+	for (const key in netlistObj) {
+		if (META_KEYS.includes(key)) continue;
+		const value = netlistObj[key];
+		if (value && typeof value === 'object' && (value.props || value.pins || value.pinInfoMap)) {
+			picked[key] = value;
+		}
+	}
+	return Object.keys(picked).length > 0 ? picked : netlistObj;
 }

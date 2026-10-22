@@ -1,7 +1,7 @@
 /**
  * @//module/ core/pins
  * @//description/ 统一的引脚网络读取：抹平 `pinInfoMap`（V3/V4）与 `pins`（V2）两种结构
- * @//exports/ getPins, collectPinNumbers
+ * @//exports/ getPins, getPinNet, setPinNet, sortPinKeys, collectPinNumbers
  * @//dependencies/ 无
  * @//example/ const { getPins } = await import('./core/pins.js')
  *            const pins = getPins(comp) // { '1': 'NET_A', '2': '' }
@@ -54,5 +54,83 @@ export function collectPinNumbers(components) {
 	for (const comp of Array.isArray(components) ? components : []) {
 		for (const pin of Object.keys(getPins(comp))) set.add(pin);
 	}
-	return Array.from(set).sort((a, b) => parseInt(a, 10) - parseInt(b, 10));
+	return Array.from(set).sort(sortPinKeys);
+}
+
+/**
+ * 取单个引脚的当前网络
+ *
+ * @param {object} comp 网表器件
+ * @param {string} pin 引脚号
+ * @returns {string} 网络名（无则空串）
+ * @sideEffects 无（纯函数）
+ */
+export function getPinNet(comp, pin) {
+	return getPins(comp)[pin] || '';
+}
+
+/**
+ * 写单个引脚的网络（自动适配两种结构）
+ *
+ * V3/V4 写 `pinInfoMap[pin].net`，V2 写 `pins[pin]`。
+ * 引脚在该结构里不存在时：`create=false` 返回 false（调用方决定怎么处理），
+ * `create=true` 则按原结构补一个（`pinInfoMap` 补 `{name,number,net}`；结构都没有就建 `pins`）。
+ *
+ * @param {object} comp 网表器件
+ * @param {string} pin 引脚号
+ * @param {string} net 新网络名
+ * @param {{create?: boolean}} [options] `create` 为 true 时允许新增引脚
+ * @returns {boolean} 是否写入成功
+ * @sideEffects **就地修改** 网表器件
+ */
+export function setPinNet(comp, pin, net, options = {}) {
+	if (!comp || typeof comp !== 'object') return false;
+	const create = options.create === true;
+
+	if (comp.pinInfoMap && typeof comp.pinInfoMap === 'object') {
+		if (comp.pinInfoMap[pin]) {
+			comp.pinInfoMap[pin].net = net;
+			return true;
+		}
+		if (create) {
+			comp.pinInfoMap[pin] = { name: '', number: pin, net: net };
+			return true;
+		}
+		return false;
+	}
+
+	if (comp.pins && typeof comp.pins === 'object') {
+		if (Object.prototype.hasOwnProperty.call(comp.pins, pin) || create) {
+			comp.pins[pin] = net;
+			return true;
+		}
+		return false;
+	}
+
+	if (create) {
+		comp.pins = {};
+		comp.pins[pin] = net;
+		return true;
+	}
+	return false;
+}
+
+/**
+ * 引脚号排序比较器
+ *
+ * 两个都是数字时按数值比（`2` 在 `10` 前面），否则按自然序（`A1` / `A2` / `B1`）。
+ * 项目里这份三元判断原样抄了 4 遍。
+ *
+ * @param {string} a 前一个引脚号
+ * @param {string} b 后一个引脚号
+ * @returns {number} 比较结果
+ * @sideEffects 无（纯函数）
+ */
+export function sortPinKeys(a, b) {
+	const na = Number(a);
+	const nb = Number(b);
+	const aNum = a !== '' && Number.isFinite(na);
+	const bNum = b !== '' && Number.isFinite(nb);
+	if (aNum && bNum) return na - nb;
+	return String(a).localeCompare(String(b), 'en', { numeric: true, sensitivity: 'base' });
 }

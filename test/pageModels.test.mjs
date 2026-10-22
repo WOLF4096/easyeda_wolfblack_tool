@@ -333,3 +333,163 @@ describe('app/out-pin-net/matrix', () => {
 		assert.deepEqual(rows[2], ['Net10', '100.00', '2.5400']);
 	});
 });
+
+describe('app/modify-net/replacePlan', () => {
+	it('解析 TSV 规则：跳过空行与缺列', async () => {
+		const { parseRules } = await import('../iframe/js/src/app/modify-net/replacePlan.js');
+		const rules = parseRules(' NET_A\tNET_X \n\n坏行\nNET_B\tNET_Y\n\tNET_Z\n');
+		assert.deepEqual(rules, [
+			{ oldName: 'NET_A', newName: 'NET_X' },
+			{ oldName: 'NET_B', newName: 'NET_Y' },
+		]);
+	});
+
+	it('映射表：键统一小写，值按开关转大写', async () => {
+		const { buildReplaceMap } = await import('../iframe/js/src/app/modify-net/replacePlan.js');
+		const map = buildReplaceMap([{ oldName: 'Net_A', newName: 'net_x' }], true);
+		assert.equal(map.get('net_a'), 'NET_X');
+		const keep = buildReplaceMap([{ oldName: 'Net_A', newName: 'net_x' }], false);
+		assert.equal(keep.get('net_a'), 'net_x');
+	});
+
+	it('改写两种引脚结构并产出逐条日志', async () => {
+		const { applyRenames } = await import('../iframe/js/src/app/modify-net/replacePlan.js');
+		const container = {
+			A: { props: { Designator: 'R1' }, pinInfoMap: { 1: { net: 'net_a' }, 2: { net: 'OTHER' } } },
+			B: { props: { Designator: 'R2' }, pins: { 1: 'NET_A' } },
+		};
+		const map = new Map([['net_a', 'NET_X']]);
+		const { count, lines } = applyRenames(container, map);
+		assert.equal(count, 2);
+		assert.equal(container.A.pinInfoMap[1].net, 'NET_X');
+		assert.equal(container.A.pinInfoMap[2].net, 'OTHER', '不匹配的网络不能动');
+		assert.equal(container.B.pins[1], 'NET_X');
+		assert.deepEqual(lines, ['替换: R1.1 [net_a -> NET_X]', '替换: R2.1 [NET_A -> NET_X]']);
+	});
+
+	it('listPinsOf 引脚按数值排序', async () => {
+		const { listPinsOf } = await import('../iframe/js/src/app/modify-net/replacePlan.js');
+		const list = listPinsOf({ pins: { 10: 'B', 2: 'A', 1: '' } });
+		assert.deepEqual(
+			list.map((p) => p.pin),
+			['1', '2', '10']
+		);
+		assert.equal(list[0].net, '');
+	});
+});
+
+describe('app/netlist-3d/transform', () => {
+	it('Transform 解析/重建：rZ 在存储序里位于 rX 之前', async () => {
+		const { parseTransform, composeTransform } = await import('../iframe/js/src/app/netlist-3d/transform.js');
+		const parsed = parseTransform('387,200,300,90,0,45.5,10,20,0');
+		assert.deepEqual(parsed, { sX: 387, sY: 200, sZ: 300, rZ: 90, rX: 0, rY: 45.5, oX: 10, oY: 20, oZ: 0 });
+		assert.equal(composeTransform(parsed), '387,200,300,90,0,45.5,10,20,0');
+		assert.deepEqual(parseTransform(''), { sX: 0, sY: 0, sZ: 0, rZ: 0, rX: 0, rY: 0, oX: 0, oY: 0, oZ: 0 });
+	});
+
+	it('单位换算：mm 显示要乘 0.0254，回写要除回去；角度不换算', async () => {
+		const { toDisplay, toRaw } = await import('../iframe/js/src/app/netlist-3d/transform.js');
+		assert.equal(toDisplay(1000, 'mm', false), 25.4);
+		assert.equal(toDisplay(1000, 'mil', false), 1000);
+		assert.equal(toDisplay(90, 'mm', true), 90, '角度不做单位换算');
+		assert.ok(Math.abs(toRaw(25.4, 'mm', false) - 1000) < 1e-6);
+		assert.equal(toRaw(90, 'mm', true), 90);
+		assert.equal(toRaw('abc', 'mil', false), 0, '非数字按 0');
+	});
+
+	it('applyInput 写字段、重建 Transform、标记已修改', async () => {
+		const { applyInput } = await import('../iframe/js/src/app/netlist-3d/transform.js');
+		const item = { sX: 0, sY: 0, sZ: 0, rZ: 0, rX: 0, rY: 0, oX: 0, oY: 0, oZ: 0, status: '待更新' };
+		applyInput(item, 'rZ', '90', 'mm');
+		assert.equal(item.rZ, 90);
+		assert.equal(item.rawTransform, '0,0,0,90,0,0,0,0,0');
+		assert.equal(item.status, '已修改');
+	});
+
+	it('状态样式覆盖「跳过 / 校验失败」，不再落到默认灰', async () => {
+		const { STATUS_CLASS } = await import('../iframe/js/src/app/netlist-3d/transform.js');
+		assert.equal(STATUS_CLASS['跳过'], 'status-ready');
+		assert.equal(STATUS_CLASS['校验失败'], 'status-error');
+		assert.equal(STATUS_CLASS['成功'], 'status-success');
+	});
+
+	it('写回校验只比 UUID 前缀（忽略 | 之后的内容）', async () => {
+		const { isModelMatch } = await import('../iframe/js/src/app/netlist-3d/transform.js');
+		const item = { rawModel: 'uuid1|extra', modelTitle: 'RES', rawTransform: '1,2,3,4,5,6,7,8,9' };
+		const ok = {
+			otherProperty: { '3D Model': 'uuid1', '3D Model Title': 'RES', '3D Model Transform': '1,2,3,4,5,6,7,8,9' },
+		};
+		assert.equal(isModelMatch(item, ok), true);
+		assert.equal(isModelMatch(item, { otherProperty: { ...ok.otherProperty, '3D Model Title': 'OTHER' } }), false);
+		assert.equal(isModelMatch(item, null), false);
+	});
+});
+
+describe('app/in-ad-netlist', () => {
+	const adText = ['( GND', 'U1-3', 'R1-2', ')', '( VCC', 'U1-1', ')'].join('\n');
+
+	it('AD 网表解析：按括号分段，位号|引脚 → 网络', async () => {
+		const { parseADNetlist } = await import('../iframe/js/src/app/in-ad-netlist/adParser.js');
+		const { netMap, errors } = parseADNetlist(adText);
+		assert.equal(netMap.get('U1|3'), 'GND');
+		assert.equal(netMap.get('R1|2'), 'GND');
+		assert.equal(netMap.get('U1|1'), 'VCC');
+		assert.deepEqual(errors, []);
+	});
+
+	it('异常输入给出可读错误', async () => {
+		const { parseADNetlist } = await import('../iframe/js/src/app/in-ad-netlist/adParser.js');
+		assert.deepEqual(parseADNetlist('').errors, ['网表内容为空']);
+		assert.deepEqual(parseADNetlist('没有括号').errors, ['未检测到有效的AD网表']);
+		const bad = parseADNetlist('( GND\nU1_3\n)');
+		assert.equal(bad.netMap.size, 0);
+		assert.match(bad.errors[0], /行格式异常/);
+	});
+
+	it('同一引脚多次出现以最后一次为准', async () => {
+		const { parseADNetlist } = await import('../iframe/js/src/app/in-ad-netlist/adParser.js');
+		const { netMap } = parseADNetlist('( OLD\nU1-1\n)\n( NEW\nU1-1\n)');
+		assert.equal(netMap.get('U1|1'), 'NEW');
+	});
+
+	it('对比行：位号自然序、缺元件/缺引脚给警告、真差异才标 isDiff', async () => {
+		const { buildCompareRows } = await import('../iframe/js/src/app/in-ad-netlist/compare.js');
+		const netMap = new Map([
+			['U10|1', 'GND'],
+			['U2|1', 'VCC'],
+			['R1|2', 'GND'],
+			['U2|9', 'GND'],
+		]);
+		const container = {
+			A: { props: { Designator: 'U2' }, pinInfoMap: { 1: { net: 'Net1' } } },
+			B: { props: { Designator: 'U10' }, pins: { 1: 'GND' } },
+		};
+		const rows = buildCompareRows(netMap, container);
+		assert.deepEqual(
+			rows.map((r) => `${r.refDes}|${r.pinNo}`),
+			['R1|2', 'U2|1', 'U2|9', 'U10|1']
+		);
+		assert.equal(rows[0].warning, true, 'R1 不存在');
+		assert.equal(rows[0].oldNet, '⚠️ 未找到元件');
+		assert.equal(rows[1].isDiff, true, 'U2.1 由 Net1 变 VCC');
+		assert.equal(rows[2].warning, true, 'U2.9 引脚未定义');
+		assert.equal(rows[3].isDiff, false, 'U10.1 网络未变');
+	});
+
+	it('写回在深拷贝上做，原网表不被修改；缺引脚时按原结构补', async () => {
+		const { applyToCopy } = await import('../iframe/js/src/app/in-ad-netlist/compare.js');
+		const original = { components: { A: { props: { Designator: 'U1' }, pinInfoMap: { 1: { net: 'OLD' } } } } };
+		const netMap = new Map([
+			['U1|1', 'NEW'],
+			['U1|2', 'GND'],
+			['U9|1', 'VCC'],
+		]);
+		const { updatedObj, updateCount, skippedCount } = applyToCopy(original, netMap);
+		assert.equal(updateCount, 2);
+		assert.equal(skippedCount, 1);
+		assert.equal(updatedObj.components.A.pinInfoMap[1].net, 'NEW');
+		assert.deepEqual(updatedObj.components.A.pinInfoMap[2], { name: '', number: '2', net: 'GND' });
+		assert.equal(original.components.A.pinInfoMap[1].net, 'OLD', '原对象必须保持不动');
+		assert.equal(original.components.A.pinInfoMap[2], undefined);
+	});
+});

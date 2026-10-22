@@ -1,434 +1,506 @@
-(function() {
-        const WC = window.WolfCommon;
-        if (!WC) {
-        	(document.body || document.documentElement).innerHTML = '<div style="padding:24px;font:14px/1.6 sans-serif;color:#f28b82">公共模块 common.js 未加载，请重新安装扩展</div>';
-        	throw new Error('[狼黑工具] 公共模块 common.js 未加载');
-        }
-        const { getNetlist, setNetlist, escapeHtml } = WC;
+/*! 由 npm run build:iframe 从 iframe/js/src 生成，请勿直接修改本文件 */
+"use strict";
+(() => {
+  // iframe/js/src/core/eda.js
+  var NETLIST_KEY = "JLCEDA";
+  function getEda() {
+    try {
+      if (typeof eda !== "undefined" && eda) return eda;
+    } catch (e) {
+    }
+    try {
+      if (globalThis.parent && globalThis.parent !== globalThis && globalThis.parent.eda) return globalThis.parent.eda;
+    } catch (e) {
+    }
+    return globalThis.eda || null;
+  }
+  function hasEda() {
+    return !!getEda();
+  }
 
-        // ---------- 全局变量 ----------
-        let currentNetlistRaw = null;      // 原始JLCEDA网表对象(深拷贝保留原始结构)
-        let designatorMap = {};             // { 位号: componentObject }
-        let adNetMap = new Map();            // key: "位号|引脚", value: 新网络名
-        let lastAdContent = "";              // 用于记录最近解析的AD内容(调试用)
-        
-        // 标志当前网表数据结构类型 (仅内部辅助)
-        let componentListRef = null;         // 组件容器引用
-        
-        // DOM 元素
-        const selectFileBtn = document.getElementById('selectFileBtn');
-        const pasteNetlistBtn = document.getElementById('pasteNetlistBtn');
-        const writeNetlistBtn = document.getElementById('writeNetlistBtn');
-        const tableBody = document.getElementById('tableBody');
-        const adStatusSpan = document.getElementById('adStatus');
-        const parseFeedbackSpan = document.getElementById('parseFeedback');
-        
-        // 隐藏文件input
-        const fileInput = document.createElement('input');
-        fileInput.type = 'file';
-        fileInput.accept = '.net, .txt, .asc, */*';
-        fileInput.style.display = 'none';
-        document.body.appendChild(fileInput);
-        
-        // ---------- 辅助函数：自然排序比较（支持数字部分）----------
-        function naturalCompare(a, b) {
-            return a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' });
+  // iframe/js/src/core/log.js
+  var LOG_LEVELS = { debug: 10, info: 20, warn: 30, error: 40 };
+  var currentLogLevel = LOG_LEVELS.info;
+  function logAt(level, ...args) {
+    if ((LOG_LEVELS[level] || 0) < currentLogLevel) return;
+    const method = level === "debug" ? "log" : level;
+    const fn = console[method] || console.log;
+    try {
+      fn.apply(console, ["[狼黑工具]", ...args]);
+    } catch (e) {
+    }
+  }
+  var logger = {
+    /**
+     * 调试日志（默认不输出）
+     *
+     * @param {...*} args 日志参数
+     * @returns {void}
+     * @sideEffects console
+     */
+    debug: (...args) => logAt("debug", ...args),
+    /**
+     * 普通信息
+     *
+     * @param {...*} args 日志参数
+     * @returns {void}
+     * @sideEffects console
+     */
+    info: (...args) => logAt("info", ...args),
+    /**
+     * 警告
+     *
+     * @param {...*} args 日志参数
+     * @returns {void}
+     * @sideEffects console
+     */
+    warn: (...args) => logAt("warn", ...args),
+    /**
+     * 错误
+     *
+     * @param {...*} args 日志参数
+     * @returns {void}
+     * @sideEffects console
+     */
+    error: (...args) => logAt("error", ...args),
+    /**
+     * 调整日志级别
+     *
+     * @param {'debug'|'info'|'warn'|'error'|'off'} level 级别名，`off` 表示全部静默
+     * @returns {void}
+     * @sideEffects 修改模块内的当前级别
+     */
+    setLevel: (level) => {
+      if (level === "off") {
+        currentLogLevel = Number.POSITIVE_INFINITY;
+        return;
+      }
+      if (LOG_LEVELS[level]) currentLogLevel = LOG_LEVELS[level];
+    }
+  };
+
+  // iframe/js/src/core/netlist.js
+  async function readNetlistFile(getFile, page) {
+    const file = await getFile();
+    if (!file) throw new Error("获取的网表为空");
+    const text = await file.text();
+    if (!text || !text.trim()) throw new Error("获取的网表为空");
+    let json;
+    try {
+      json = JSON.parse(text);
+    } catch (e) {
+      throw new Error(`网表格式无法解析（${page}）：${e && e.message || e}`);
+    }
+    return { page, text, json };
+  }
+  async function getNetlist(page = "AUTO") {
+    const edaObj = getEda();
+    if (!edaObj) {
+      throw new Error("未检测到 EDA 运行环境");
+    }
+    const readPcb = () => readNetlistFile(() => edaObj.pcb_ManufactureData.getNetlistFile(NETLIST_KEY), "PCB");
+    const readSch = () => readNetlistFile(() => edaObj.sch_ManufactureData.getNetlistFile(NETLIST_KEY), "SCH");
+    if (page === "PCB") return readPcb();
+    if (page === "SCH") return readSch();
+    try {
+      return await readPcb();
+    } catch (pcbError) {
+      logger.debug("PCB 网表不可用，回退原理图网表：", pcbError);
+      return readSch();
+    }
+  }
+  async function setNetlist(page, json) {
+    const edaObj = getEda();
+    if (!edaObj) {
+      throw new Error("未检测到 EDA 运行环境");
+    }
+    const text = typeof json === "string" ? json : JSON.stringify(json);
+    const writePcb = () => edaObj.pcb_Net.setNetlist(NETLIST_KEY, text);
+    const writeSch = () => edaObj.sch_Netlist.setNetlist(NETLIST_KEY, text);
+    if (page === "PCB") {
+      await writePcb();
+      return "PCB";
+    }
+    if (page === "SCH") {
+      await writeSch();
+      return "SCH";
+    }
+    try {
+      await writePcb();
+      return "PCB";
+    } catch (pcbError) {
+      await writeSch();
+      return "SCH";
+    }
+  }
+  function detectContainer(netlistObj) {
+    if (!netlistObj || typeof netlistObj !== "object") return {};
+    if (netlistObj.components && typeof netlistObj.components === "object") return netlistObj.components;
+    const META_KEYS = ["version", "designRule", "netClass", "units", "layers"];
+    const picked = {};
+    for (const key in netlistObj) {
+      if (META_KEYS.includes(key)) continue;
+      const value = netlistObj[key];
+      if (value && typeof value === "object" && (value.props || value.pins || value.pinInfoMap)) {
+        picked[key] = value;
+      }
+    }
+    return Object.keys(picked).length > 0 ? picked : netlistObj;
+  }
+
+  // iframe/js/src/core/util.js
+  function escapeHtml(value) {
+    if (value === null || value === void 0) return "";
+    return String(value).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+  }
+  function naturalCompare(a, b) {
+    const sa = a === null || a === void 0 ? "" : String(a);
+    const sb = b === null || b === void 0 ? "" : String(b);
+    return sa.localeCompare(sb, "en", { numeric: true, sensitivity: "base" });
+  }
+
+  // iframe/js/src/ui/toast.js
+  var TOAST_LEVEL = Object.freeze({
+    info: "info",
+    success: "success",
+    warn: "warning",
+    error: "error",
+    warning: "warning",
+    legacy: 2
+  });
+  var BANNER_ID = "__wolf_notice";
+  function normalizeLevel(level) {
+    if (typeof level === "number") return Number.isFinite(level) ? level : TOAST_LEVEL.info;
+    if (typeof level !== "string") return TOAST_LEVEL.info;
+    const key = level.trim().toLowerCase();
+    return Object.prototype.hasOwnProperty.call(TOAST_LEVEL, key) ? TOAST_LEVEL[key] : level;
+  }
+  function banner(doc, text, timeoutMs) {
+    if (!doc || !doc.body || typeof doc.createElement !== "function") return false;
+    let bar = doc.getElementById(BANNER_ID);
+    if (!bar) {
+      bar = doc.createElement("div");
+      bar.id = BANNER_ID;
+      bar.style.cssText = "position:fixed;left:0;right:0;top:0;padding:8px 12px;background:#5a1d1d;color:#fff;font:13px/1.5 sans-serif;z-index:9999";
+      doc.body.appendChild(bar);
+    }
+    bar.textContent = text;
+    setTimeout(() => {
+      if (typeof bar.remove === "function") bar.remove();
+    }, timeoutMs);
+    return true;
+  }
+  function toast(message, level = TOAST_LEVEL.info, opts = {}) {
+    const doc = opts.doc || globalThis.document;
+    const host = opts.host === void 0 ? getEda() : opts.host;
+    const text = message === null || message === void 0 ? "" : String(message);
+    const type = normalizeLevel(level);
+    try {
+      if (host && host.sys_Message && typeof host.sys_Message.showToastMessage === "function") {
+        host.sys_Message.showToastMessage(text, type);
+        return "host";
+      }
+    } catch (e) {
+    }
+    return banner(doc, text, opts.timeoutMs === void 0 ? 3e3 : opts.timeoutMs) ? "dom" : "none";
+  }
+
+  // iframe/js/src/app/in-ad-netlist/adParser.js
+  function parseADNetlist(content) {
+    const netMap = /* @__PURE__ */ new Map();
+    const errors = [];
+    if (!content || typeof content !== "string") {
+      errors.push("网表内容为空");
+      return { netMap, errors };
+    }
+    const blocks = content.match(/\(([\s\S]*?)\)/g);
+    if (!blocks || blocks.length === 0) {
+      errors.push("未检测到有效的AD网表");
+      return { netMap, errors };
+    }
+    for (const block of blocks) {
+      const lines = block.replace(/^\(|\)$/g, "").trim().split(/\r?\n/).map((line) => line.trim()).filter((line) => line !== "");
+      if (lines.length < 2) continue;
+      const netName = lines[0];
+      for (let i = 1; i < lines.length; i++) {
+        const parts = lines[i].split("-");
+        if (parts.length !== 2) {
+          errors.push(`行格式异常: ${lines[i]} , 应为 位号-引脚`);
+          continue;
         }
-        
-        // ---------- 1. 加载当前PCB网表 (JLCEDA) ----------
-        async function loadCurrentNetlist() {
-            try {
-                // 检查环境是否提供eda对象
-                if (typeof eda === 'undefined' || !eda.pcb_ManufactureData || !eda.pcb_ManufactureData.getNetlistFile) {
-                    throw new Error('当前未检测到嘉立创EDA环境，请确保在JLCEDA插件/扩展中运行');
-                }
-                const { json: parsed } = await getNetlist('PCB');
-                currentNetlistRaw = JSON.parse(JSON.stringify(parsed)); // 深拷贝原始数据
-                buildDesignatorMap();
-                console.log('[系统] 当前PCB网表加载成功，组件数量:', Object.keys(componentListRef || {}).length);
-                return true;
-            } catch (err) {
-                console.error('加载PCB网表失败:', err);
-                parseFeedbackSpan.innerText = `加载网表失败: ${err.message}`;
-                parseFeedbackSpan.style.color = '#f28b82';
-                return false;
-            }
-        }
-        
-        // 建立designatorMap, 同时识别组件列表位置 (兼容两种格式)
-        function buildDesignatorMap() {
-            if (!currentNetlistRaw) return;
-            // 情况1: 顶层有 components 字段
-            let compContainer = null;
-            if (currentNetlistRaw.components && typeof currentNetlistRaw.components === 'object') {
-                compContainer = currentNetlistRaw.components;
-            } 
-            // 情况2: 根对象直接是组件集合 (通过判断是否有以$开头的键 或 包含 version? 通常排除version/designRule)
-            else {
-                // 排除明显的元数据字段，剩下的当作组件集合
-                const excludeKeys = ['version', 'designRule', 'netClass', 'units', 'layers'];
-                let possibleComp = {};
-                for (let key in currentNetlistRaw) {
-                    if (!excludeKeys.includes(key) && currentNetlistRaw[key] && typeof currentNetlistRaw[key] === 'object') {
-                        // 如果包含 props 或者 pins/pinInfoMap 则判定为组件
-                        let obj = currentNetlistRaw[key];
-                        if (obj.props || obj.pins || obj.pinInfoMap) {
-                            possibleComp[key] = obj;
-                        }
-                    }
-                }
-                if (Object.keys(possibleComp).length > 0) {
-                    compContainer = possibleComp;
-                } else {
-                    // 降级，直接认为整个对象是组件集(风险大但兼容)
-                    compContainer = currentNetlistRaw;
-                }
-            }
-            componentListRef = compContainer;
-            designatorMap = {};
-            if (!componentListRef) return;
-            for (let key in componentListRef) {
-                let comp = componentListRef[key];
-                if (comp && comp.props && comp.props.Designator) {
-                    designatorMap[comp.props.Designator] = comp;
-                } else if (comp && comp.Designator) { // 某些扁平情况
-                    designatorMap[comp.Designator] = comp;
-                }
-            }
-        }
-        
-        // 获取某个元件的指定引脚的当前网络 (根据pinInfoMap或pins)
-        function getCurrentNetForPin(comp, pinNumber) {
-            if (!comp) return '❓ 元件缺失';
-            // 优先处理 pinInfoMap 结构 (格式A)
-            if (comp.pinInfoMap && typeof comp.pinInfoMap === 'object') {
-                let pinInfo = comp.pinInfoMap[pinNumber];
-                if (pinInfo && pinInfo.net) return pinInfo.net;
-                return '-';   // 未连接网络
-            } 
-            // 处理 pins 结构 (格式B)
-            else if (comp.pins && typeof comp.pins === 'object') {
-                let net = comp.pins[pinNumber];
-                return net ? net : '-';
-            }
-            return '? 无引脚数据';
-        }
-        
-        // ---------- 2. 解析AD网表内容 ----------
-        function parseADNetlist(content) {
-            const netMap = new Map(); // key: "位号|引脚" -> netName
-            const errors = [];
-            if (!content || typeof content !== 'string') {
-                errors.push('网表内容为空');
-                return { netMap, errors };
-            }
-            // 匹配括号包裹的段落 /\([\s\S]*?\)/g
-            const netBlocks = content.match(/\(([\s\S]*?)\)/g);
-            if (!netBlocks || netBlocks.length === 0) {
-                errors.push('未检测到有效的AD网表');
-                return { netMap, errors };
-            }
-            
-            netBlocks.forEach((block, idx) => {
-                let lines = block.replace(/^\(|\)$/g, '').trim().split(/\r?\n/);
-                lines = lines.map(l => l.trim()).filter(l => l !== '');
-                if (lines.length < 2) return;
-                const netName = lines[0];
-                for (let i = 1; i < lines.length; i++) {
-                    let part = lines[i];
-                    // 格式 "U1-3" 或者可能带空格 "R1 - 2"? 按标准AD网表是位号-引脚
-                    let parts = part.split('-');
-                    if (parts.length === 2) {
-                        let refDes = parts[0].trim();
-                        let pinNo = parts[1].trim();
-                        const key = `${refDes}|${pinNo}`;
-                        // 如果同一个引脚多次出现，以最后一个为准（与原逻辑近似）
-                        netMap.set(key, netName);
-                    } else {
-                        errors.push(`行格式异常: ${part} , 应为 位号-引脚`);
-                    }
-                }
-            });
-            return { netMap, errors };
-        }
-        
-        // ---------- 3. 根据adNetMap渲染表格 (支持位号升序 + 引脚升序) ----------
-        function renderCompareTable() {
-            if (!tableBody) return;
-            if (!currentNetlistRaw || !designatorMap || adNetMap.size === 0) {
-                tableBody.innerHTML = '<tr class="empty-table-msg"><td colspan="4">暂无网表对比数据，请先选择或粘贴AD格式网表</td></tr>';
-                adStatusSpan.innerText = '未导入AD网表';
-                return;
-            }
-            
-            // 将 Map 转换为数组以便排序
-            const items = [];
-            for (let [key, newNet] of adNetMap.entries()) {
-                const [refDes, pinNo] = key.split('|');
-                items.push({ refDes, pinNo, newNet, key });
-            }
-            
-            // 排序：位号自然升序，同一位号下引脚自然升序
-            items.sort((a, b) => {
-                // 先按位号自然排序 (支持数字部分)
-                const refCompare = naturalCompare(a.refDes, b.refDes);
-                if (refCompare !== 0) return refCompare;
-                // 位号相同，按引脚自然排序
-                return naturalCompare(a.pinNo, b.pinNo);
-            });
-            
-            const rows = [];
-            for (const item of items) {
-                const { refDes, pinNo, newNet } = item;
-                const comp = designatorMap[refDes];
-                let oldNet = '-';
-                let warningFlag = false;
-                let tooltipMsg = '';
-                if (!comp) {
-                    oldNet = '⚠️ 未找到元件';
-                    warningFlag = true;
-                    tooltipMsg = `位号 ${refDes} 在当前PCB中不存在`;
-                } else {
-                    oldNet = getCurrentNetForPin(comp, pinNo);
-                    if (oldNet === '? 无引脚数据' || oldNet === '-') {
-                        // 如果引脚无信息，可能PCB中没有此引脚定义
-                        if (!comp.pinInfoMap && !comp.pins) {
-                            warningFlag = true;
-                            tooltipMsg = `元件 ${refDes} 引脚信息结构未知`;
-                        } else if ((comp.pinInfoMap && !comp.pinInfoMap[pinNo]) || (comp.pins && !comp.pins[pinNo])) {
-                            warningFlag = true;
-                            tooltipMsg = `引脚 ${pinNo} 在元件 ${refDes} 中未定义`;
-                        }
-                    }
-                }
-                // 高亮差异: 新旧网络不同且新网络有效且旧网络不是错误提示
-                const isDiff = (!warningFlag && oldNet !== newNet && oldNet !== '⚠️ 未找到元件' && oldNet !== '? 无引脚数据');
-                const rowClass = warningFlag ? 'warning-row' : '';
-                rows.push(`
-                    <tr class="${rowClass}" title="${tooltipMsg || (isDiff ? '网络将变更' : '')}">
-                        <td><strong>${escapeHtml(refDes)}</strong></td>
-                        <td>${escapeHtml(pinNo)}</td>
-                        <td class="old-net">${escapeHtml(oldNet)} ${isDiff ? '<span class="diff-badge">→ 变更</span>' : ''}</td>
-                        <td class="new-net">${escapeHtml(newNet)}</td>
-                    </tr>
-                `);
-            }
-            
-            if (rows.length === 0) {
-                tableBody.innerHTML = '<tr class="empty-table-msg"><td colspan="4">解析后的AD网表无有效引脚连接，请检查文件内容</td></tr>';
-            } else {
-                tableBody.innerHTML = rows.join('');
-            }
-            adStatusSpan.innerText = `AD网表已导入`;
-        }
-        
-        // HTML 转义统一走 WolfCommon.escapeHtml（见 common.js）
-        
-        // ---------- 4. 核心更新逻辑: 根据adNetMap更新JLCEDA网表对象 (兼容pinInfoMap/pins) ----------
-        function applyNetlistUpdateToObject(netlistObj, netMap) {
-            // 深拷贝副本，避免修改原始引用
-            let updatedObj = JSON.parse(JSON.stringify(netlistObj));
-            // 重新获取组件容器 (跟 buildDesignatorMap 逻辑一致)
-            let compContainer = null;
-            if (updatedObj.components && typeof updatedObj.components === 'object') {
-                compContainer = updatedObj.components;
-            } else {
-                const excludeKeys = ['version', 'designRule', 'netClass', 'units', 'layers'];
-                let possibleComp = {};
-                for (let key in updatedObj) {
-                    if (!excludeKeys.includes(key) && updatedObj[key] && typeof updatedObj[key] === 'object') {
-                        if (updatedObj[key].props || updatedObj[key].pins || updatedObj[key].pinInfoMap) {
-                            possibleComp[key] = updatedObj[key];
-                        }
-                    }
-                }
-                if (Object.keys(possibleComp).length > 0) compContainer = possibleComp;
-                else compContainer = updatedObj;
-            }
-            
-            let updateCount = 0;
-            let skippedCount = 0;
-            for (let [key, newNet] of netMap.entries()) {
-                const [refDes, pinNo] = key.split('|');
-                let comp = compContainer ? Object.values(compContainer).find(c => 
-                    (c.props && c.props.Designator === refDes) || (c.Designator === refDes)
-                ) : null;
-                // 同时通过designator映射直接获取更快: 因为compContainer的key不一定是位号,我们用find更可靠
-                if (!comp && compContainer) {
-                    for (let ckey in compContainer) {
-                        let c = compContainer[ckey];
-                        if ((c.props && c.props.Designator === refDes) || (c.Designator === refDes)) {
-                            comp = c;
-                            break;
-                        }
-                    }
-                }
-                if (!comp) {
-                    console.warn(`写入时跳过: 未找到元件 ${refDes}`);
-                    skippedCount++;
-                    continue;
-                }
-                // 更新引脚网络
-                if (comp.pinInfoMap) {
-                    if (!comp.pinInfoMap[pinNo]) {
-                        comp.pinInfoMap[pinNo] = { name: '', number: pinNo, net: '' };
-                    }
-                    comp.pinInfoMap[pinNo].net = newNet;
-                    updateCount++;
-                } else if (comp.pins) {
-                    comp.pins[pinNo] = newNet;
-                    updateCount++;
-                } else {
-                    // 兜底: 如果都没有, 创建pins结构 (尽量保持原样)
-                    if (!comp.pins) comp.pins = {};
-                    comp.pins[pinNo] = newNet;
-                    updateCount++;
-                }
-            }
-            console.log(`网表更新完成: 成功更新 ${updateCount} 个引脚, 跳过 ${skippedCount} 个无效位号`);
-            return { updatedObj, updateCount, skippedCount };
-        }
-        
-        // 写入网表到PCB (调用嘉立创EDA API)
-        async function writeNetlistToPCB() {
-            if (!adNetMap || adNetMap.size === 0) {
-                parseFeedbackSpan.innerText = '没有可写入的AD网表数据，请先导入AD网表';
-                parseFeedbackSpan.style.color = '#f28b82';
-                setTimeout(() => { if(parseFeedbackSpan) parseFeedbackSpan.innerText = ''; }, 2000);
-                return;
-            }
-            if (!currentNetlistRaw) {
-                parseFeedbackSpan.innerText = '当前PCB网表未加载，请刷新重试';
-                return;
-            }
-            try {
-                // 应用网表更改
-                const { updatedObj, updateCount, skippedCount } = applyNetlistUpdateToObject(currentNetlistRaw, adNetMap);
-                const updatedJsonStr = JSON.stringify(updatedObj);
-                // 调用嘉立创EDA写入接口
-                await setNetlist('PCB', updatedJsonStr);
-                parseFeedbackSpan.style.color = '#6fcf97';
-                // 写入成功后重新加载当前网表，刷新界面数据，让旧网络变成新网络
-                await loadCurrentNetlist();
-                // 刷新表格（保留当前adNetMap展示，此时旧网络应为刚更新后的值）
-                renderCompareTable();
-                setTimeout(() => {
-                    if(parseFeedbackSpan) parseFeedbackSpan.innerText = '';
-                }, 3000);
-            } catch (err) {
-                console.error('写入网表失败:', err);
-                parseFeedbackSpan.innerText = `写入网表失败: ${err.message || err}`;
-                parseFeedbackSpan.style.color = '#f28b82';
-                setTimeout(() => {
-                    if(parseFeedbackSpan) parseFeedbackSpan.innerText = '';
-                }, 4000);
-            }
-        }
-        
-        // ---------- 5. 处理AD网表输入 (通用: 内容文本) ----------
-        async function processAdContent(adContent, source = 'file') {
-            if (!adContent || adContent.trim() === '') {
-                parseFeedbackSpan.innerText = '网表内容为空，请检查文件或剪贴板';
-                return false;
-            }
-            const { netMap, errors } = parseADNetlist(adContent);
-            if (errors.length > 0) {
-                parseFeedbackSpan.innerText = `${errors.slice(0, 2).join('; ')}`;
-                parseFeedbackSpan.style.color = '#f5a97f';
-            } else {
-                parseFeedbackSpan.innerText = `解析成功 ${netMap.size} 个引脚`;
-                parseFeedbackSpan.style.color = '#6fcf97';
-            }
-            if (netMap.size === 0) {
-                adStatusSpan.innerText = 'AD网表无有效连接';
-                tableBody.innerHTML = '<tr class="empty-table-msg"><td colspan="4">未解析到任何引脚-网络关系，请确认网表格式（括号分段，位号-引脚）</td></tr>';
-                adNetMap.clear();
-                return false;
-            }
-            // 更新全局映射
-            adNetMap = netMap;
-            lastAdContent = adContent;
-            // 刷新表格展示 (内部已包含排序)
-            renderCompareTable();
-            return true;
-        }
-        
-        // 从剪贴板获取
-        async function pasteFromClipboard() {
-            try {
-                if (!navigator.clipboard) {
-                    parseFeedbackSpan.innerText = '当前浏览器不支持剪贴板读取，请手动选择文件';
-                    return;
-                }
-                const text = await navigator.clipboard.readText();
-                if (!text.trim()) {
-                    parseFeedbackSpan.innerText = '剪贴板内容为空';
-                    return;
-                }
-                await processAdContent(text, 'paste');
-            } catch (err) {
-                console.error('读取剪贴板失败:', err);
-                parseFeedbackSpan.innerText = `读取剪贴板失败: ${err.message}，请尝试选择文件`;
-                parseFeedbackSpan.style.color = '#f28b82';
-            }
-        }
-        
-        // 选择文件并读取
-        function selectFile() {
-            fileInput.click();
-        }
-        
-        // 文件选择处理
-        fileInput.onchange = async (e) => {
-            const file = e.target.files[0];
-            if (!file) return;
-            try {
-                const content = await file.text();
-                await processAdContent(content, 'file');
-            } catch (err) {
-                parseFeedbackSpan.innerText = `读取文件失败: ${err.message}`;
-                parseFeedbackSpan.style.color = '#f28b82';
-            } finally {
-                fileInput.value = ''; // 清空以便重新选择同文件
-            }
+        const refDes = parts[0].trim();
+        const pinNo = parts[1].trim();
+        if (refDes && pinNo) netMap.set(`${refDes}|${pinNo}`, netName);
+      }
+    }
+    return { netMap, errors };
+  }
+
+  // iframe/js/src/core/pins.js
+  function getPins(comp) {
+    const out = {};
+    if (!comp || typeof comp !== "object") return out;
+    if (comp.pinInfoMap && typeof comp.pinInfoMap === "object") {
+      for (const [pin, info] of Object.entries(comp.pinInfoMap)) {
+        out[pin] = info && typeof info === "object" ? info.net || "" : String(info || "");
+      }
+      return out;
+    }
+    if (comp.pins && typeof comp.pins === "object") {
+      for (const [pin, net] of Object.entries(comp.pins)) {
+        out[pin] = net && typeof net === "object" ? net.net || "" : String(net || "");
+      }
+    }
+    return out;
+  }
+  function setPinNet(comp, pin, net, options = {}) {
+    if (!comp || typeof comp !== "object") return false;
+    const create = options.create === true;
+    if (comp.pinInfoMap && typeof comp.pinInfoMap === "object") {
+      if (comp.pinInfoMap[pin]) {
+        comp.pinInfoMap[pin].net = net;
+        return true;
+      }
+      if (create) {
+        comp.pinInfoMap[pin] = { name: "", number: pin, net };
+        return true;
+      }
+      return false;
+    }
+    if (comp.pins && typeof comp.pins === "object") {
+      if (Object.prototype.hasOwnProperty.call(comp.pins, pin) || create) {
+        comp.pins[pin] = net;
+        return true;
+      }
+      return false;
+    }
+    if (create) {
+      comp.pins = {};
+      comp.pins[pin] = net;
+      return true;
+    }
+    return false;
+  }
+
+  // iframe/js/src/app/in-ad-netlist/compare.js
+  var NO_NET = "-";
+  function buildDesignatorMap(container) {
+    const map = {};
+    if (!container || typeof container !== "object") return map;
+    for (const key in container) {
+      const comp = container[key];
+      if (!comp) continue;
+      const designator = comp.props && comp.props.Designator || comp.Designator;
+      if (designator) map[designator] = comp;
+    }
+    return map;
+  }
+  function buildCompareRows(netMap, container) {
+    const designators = buildDesignatorMap(container);
+    const items = [];
+    for (const [key, newNet] of netMap.entries()) {
+      const [refDes, pinNo] = key.split("|");
+      items.push({ refDes, pinNo, newNet });
+    }
+    items.sort((a, b) => naturalCompare(a.refDes, b.refDes) || naturalCompare(a.pinNo, b.pinNo));
+    return items.map((item) => {
+      const comp = designators[item.refDes];
+      if (!comp) {
+        return {
+          refDes: item.refDes,
+          pinNo: item.pinNo,
+          oldNet: "⚠️ 未找到元件",
+          newNet: item.newNet,
+          isDiff: false,
+          warning: true,
+          tooltip: `位号 ${item.refDes} 在当前PCB中不存在`
         };
-        
-        // ---------- 6. 初始化UI与事件绑定 ----------
-        async function init() {
-            // 检查eda环境是否存在，提供友好提示但依旧初始化UI
-            if (typeof eda === 'undefined') {
-                parseFeedbackSpan.innerText = '未检测到嘉立创EDA运行环境，演示模式仅限UI，无法读写真实网表';
-                console.warn('未检测到eda全局对象');
-                // 仍然可以模拟一个空网表避免crash，让界面展示静态效果(仅做UI展示)
-                currentNetlistRaw = { components: {} };
-                buildDesignatorMap();
-            } else {
-                const loaded = await loadCurrentNetlist();
-                if (!loaded) {
-                    parseFeedbackSpan.innerText = '加载PCB网表失败，请检查权限或重新打开插件';
-                }
-            }
-            // 初始化表格空状态
-            renderCompareTable();
-            
-            // 按钮绑定
-            selectFileBtn.addEventListener('click', selectFile);
-            pasteNetlistBtn.addEventListener('click', pasteFromClipboard);
-            writeNetlistBtn.addEventListener('click', async () => {
-                if (adNetMap.size === 0) {
-                    parseFeedbackSpan.innerText = '请先导入AD网表（选择文件或粘贴）再执行写入';
-                    parseFeedbackSpan.style.color = '#f5a97f';
-                    setTimeout(() => { if(parseFeedbackSpan) parseFeedbackSpan.innerText = ''; }, 1800);
-                    return;
-                }
-                if (typeof eda === 'undefined' || !eda.pcb_Net) {
-                    parseFeedbackSpan.innerText = '当前环境不支持写入网表(eda.pcb_Net不可用)';
-                    return;
-                }
-                await writeNetlistToPCB();
-            });
-        }
-        
-        // 启动
-        init();
-    })();
+      }
+      const pins = getPins(comp);
+      const hasPinData = comp.pinInfoMap || comp.pins;
+      const oldNet = Object.prototype.hasOwnProperty.call(pins, item.pinNo) ? pins[item.pinNo] || NO_NET : hasPinData ? NO_NET : "? 无引脚数据";
+      const missingPin = hasPinData && !Object.prototype.hasOwnProperty.call(pins, item.pinNo);
+      const unknownShape = !hasPinData;
+      return {
+        refDes: item.refDes,
+        pinNo: item.pinNo,
+        oldNet,
+        newNet: item.newNet,
+        isDiff: !missingPin && !unknownShape && oldNet !== item.newNet,
+        warning: missingPin || unknownShape,
+        tooltip: unknownShape ? `元件 ${item.refDes} 引脚信息结构未知` : missingPin ? `引脚 ${item.pinNo} 在元件 ${item.refDes} 中未定义` : ""
+      };
+    });
+  }
+  function applyToCopy(netlistObj, netMap) {
+    const updatedObj = JSON.parse(JSON.stringify(netlistObj || {}));
+    const container = detectContainer(updatedObj);
+    const designators = buildDesignatorMap(container);
+    let updateCount = 0;
+    let skippedCount = 0;
+    for (const [key, newNet] of netMap.entries()) {
+      const [refDes, pinNo] = key.split("|");
+      const comp = designators[refDes];
+      if (!comp) {
+        skippedCount++;
+        continue;
+      }
+      if (setPinNet(comp, pinNo, newNet, { create: true })) updateCount++;
+      else skippedCount++;
+    }
+    return { updatedObj, updateCount, skippedCount };
+  }
+
+  // iframe/js/src/app/in-ad-netlist/index.js
+  var currentNetlistRaw = null;
+  var adNetMap = /* @__PURE__ */ new Map();
+  var selectFileBtn = document.getElementById("selectFileBtn");
+  var pasteNetlistBtn = document.getElementById("pasteNetlistBtn");
+  var writeNetlistBtn = document.getElementById("writeNetlistBtn");
+  var tableBody = document.getElementById("tableBody");
+  var adStatusSpan = document.getElementById("adStatus");
+  var parseFeedbackSpan = document.getElementById("parseFeedback");
+  var fileInput = document.createElement("input");
+  fileInput.type = "file";
+  fileInput.accept = ".net, .txt, .asc, */*";
+  fileInput.style.display = "none";
+  document.body.appendChild(fileInput);
+  function feedback(message, color, clearMs) {
+    if (!parseFeedbackSpan) return;
+    parseFeedbackSpan.innerText = message;
+    parseFeedbackSpan.style.color = color || "";
+    if (clearMs) {
+      setTimeout(() => {
+        if (parseFeedbackSpan) parseFeedbackSpan.innerText = "";
+      }, clearMs);
+    }
+  }
+  async function loadCurrentNetlist() {
+    try {
+      if (!hasEda()) throw new Error("当前未检测到嘉立创EDA环境，请确保在JLCEDA插件/扩展中运行");
+      const { json } = await getNetlist("PCB");
+      currentNetlistRaw = JSON.parse(JSON.stringify(json));
+      return true;
+    } catch (err) {
+      console.error("加载PCB网表失败:", err);
+      feedback(`加载网表失败: ${err.message}`, "#f28b82");
+      return false;
+    }
+  }
+  function renderCompareTable() {
+    const rows = currentNetlistRaw && adNetMap.size > 0 ? buildCompareRows(adNetMap, detectContainer(currentNetlistRaw)) : [];
+    if (rows.length === 0) {
+      const message = currentNetlistRaw && adNetMap.size > 0 ? "解析后的AD网表无有效引脚连接，请检查文件内容" : "暂无网表对比数据，请先选择或粘贴AD格式网表";
+      tableBody.innerHTML = `<tr class="empty-table-msg"><td colspan="4">${message}</td></tr>`;
+      adStatusSpan.innerText = adNetMap.size === 0 ? "未导入AD网表" : "AD网表无有效连接";
+      return;
+    }
+    tableBody.innerHTML = rows.map((row) => {
+      const badge = row.isDiff ? '<span class="diff-badge">→ 变更</span>' : "";
+      const tooltip = row.tooltip || (row.isDiff ? "网络将变更" : "");
+      return `
+					<tr class="${row.warning ? "warning-row" : ""}" title="${escapeHtml(tooltip)}">
+						<td><strong>${escapeHtml(row.refDes)}</strong></td>
+						<td>${escapeHtml(row.pinNo)}</td>
+						<td class="old-net">${escapeHtml(row.oldNet)} ${badge}</td>
+						<td class="new-net">${escapeHtml(row.newNet)}</td>
+					</tr>
+				`;
+    }).join("");
+    adStatusSpan.innerText = "AD网表已导入";
+  }
+  function processAdContent(adContent) {
+    if (!adContent || adContent.trim() === "") {
+      feedback("网表内容为空，请检查文件或剪贴板", "#f28b82");
+      return false;
+    }
+    const { netMap, errors } = parseADNetlist(adContent);
+    if (errors.length > 0) feedback(errors.slice(0, 2).join("; "), "#f5a97f");
+    else feedback(`解析成功 ${netMap.size} 个引脚`, "#6fcf97");
+    if (netMap.size === 0) {
+      adNetMap = /* @__PURE__ */ new Map();
+      adStatusSpan.innerText = "AD网表无有效连接";
+      tableBody.innerHTML = '<tr class="empty-table-msg"><td colspan="4">未解析到任何引脚-网络关系，请确认网表格式（括号分段，位号-引脚）</td></tr>';
+      return false;
+    }
+    adNetMap = netMap;
+    renderCompareTable();
+    return true;
+  }
+  async function writeNetlistToPCB() {
+    if (adNetMap.size === 0) {
+      feedback("没有可写入的AD网表数据，请先导入AD网表", "#f28b82", 2e3);
+      return;
+    }
+    if (!currentNetlistRaw) {
+      feedback("当前PCB网表未加载，请刷新重试");
+      return;
+    }
+    try {
+      const { updatedObj } = applyToCopy(currentNetlistRaw, adNetMap);
+      await setNetlist("PCB", JSON.stringify(updatedObj));
+      if (parseFeedbackSpan) parseFeedbackSpan.style.color = "#6fcf97";
+      await loadCurrentNetlist();
+      renderCompareTable();
+      setTimeout(() => {
+        if (parseFeedbackSpan) parseFeedbackSpan.innerText = "";
+      }, 3e3);
+    } catch (err) {
+      console.error("写入网表失败:", err);
+      feedback(`写入网表失败: ${err.message || err}`, "#f28b82", 4e3);
+    }
+  }
+  async function pasteFromClipboard() {
+    try {
+      if (!navigator.clipboard) {
+        feedback("当前浏览器不支持剪贴板读取，请手动选择文件");
+        return;
+      }
+      const text = await navigator.clipboard.readText();
+      if (!text.trim()) {
+        feedback("剪贴板内容为空");
+        return;
+      }
+      processAdContent(text);
+    } catch (err) {
+      console.error("读取剪贴板失败:", err);
+      feedback(`读取剪贴板失败: ${err.message}，请尝试选择文件`, "#f28b82");
+    }
+  }
+  fileInput.onchange = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    try {
+      processAdContent(await file.text());
+    } catch (err) {
+      feedback(`读取文件失败: ${err.message}`, "#f28b82");
+    } finally {
+      fileInput.value = "";
+    }
+  };
+  async function init() {
+    if (!hasEda()) {
+      feedback("未检测到嘉立创EDA运行环境，演示模式仅限UI，无法读写真实网表");
+      console.warn("未检测到 EDA 环境");
+      currentNetlistRaw = { components: {} };
+    } else if (!await loadCurrentNetlist()) {
+      feedback("加载PCB网表失败，请检查权限或重新打开插件");
+    }
+    renderCompareTable();
+    selectFileBtn.addEventListener("click", () => fileInput.click());
+    pasteNetlistBtn.addEventListener("click", pasteFromClipboard);
+    writeNetlistBtn.addEventListener("click", async () => {
+      if (adNetMap.size === 0) {
+        feedback("请先导入AD网表（选择文件或粘贴）再执行写入", "#f5a97f", 1800);
+        return;
+      }
+      if (!hasEda()) {
+        feedback("当前环境不支持写入网表(eda.pcb_Net不可用)");
+        toast("当前环境不支持写入网表", 2);
+        return;
+      }
+      await writeNetlistToPCB();
+    });
+  }
+  void init();
+})();

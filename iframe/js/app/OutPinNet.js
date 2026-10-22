@@ -223,7 +223,15 @@
     for (const comp of Array.isArray(components) ? components : []) {
       for (const pin of Object.keys(getPins(comp))) set.add(pin);
     }
-    return Array.from(set).sort((a, b) => parseInt(a, 10) - parseInt(b, 10));
+    return Array.from(set).sort(sortPinKeys);
+  }
+  function sortPinKeys(a, b) {
+    const na = Number(a);
+    const nb = Number(b);
+    const aNum = a !== "" && Number.isFinite(na);
+    const bNum = b !== "" && Number.isFinite(nb);
+    if (aNum && bNum) return na - nb;
+    return String(a).localeCompare(String(b), "en", { numeric: true, sensitivity: "base" });
   }
 
   // iframe/js/src/app/out-pin-net/matrix.js
