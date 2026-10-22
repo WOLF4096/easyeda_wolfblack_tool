@@ -154,26 +154,61 @@ export function extractProps(comp) {
 	const rawName = comp.name || (comp.component && comp.component.name) || '';
 	const props = comp.otherProperty || {};
 
-	const deviceFromComponent =
-		comp.component && typeof comp.component === 'object'
-			? (comp.component.uuid && typeof comp.component.uuid === 'object' && comp.component.uuid.name) ||
-			  comp.component.name
-			: '';
-	const deviceName = props.Device || props.DeviceName || deviceFromComponent || comp.manufacturerId || '';
+	const deviceFromComponent = deviceFromComponentOf(comp);
+	const deviceName = deviceNameOf(comp, props, deviceFromComponent);
 
 	// 合并根节点属性与 otherProperty，确保 ={Value} 与 ={manufacturerId} 都能被字典找到
 	const mergedProps = { ...comp, ...props };
 	const name = resolveDynamicString(rawName, mergedProps, deviceName);
 
-	const footprint =
+	const footprint = footprintOf(comp, mergedProps);
+
+	const supplierId = comp.supplierId || '';
+	return { name: name, footprint: footprint, supplierId: supplierId };
+}
+
+/**
+ * 取 V4 图元里内嵌的器件名（`component.uuid.name` 优先，其次 `component.name`）
+ *
+ * @param {object} comp PCB 图元
+ * @returns {string|undefined} 器件名
+ * @sideEffects 无（纯函数）
+ */
+function deviceFromComponentOf(comp) {
+	if (!(comp.component && typeof comp.component === 'object')) return '';
+
+	return (comp.component.uuid && typeof comp.component.uuid === 'object' && comp.component.uuid.name) || comp.component.name;
+}
+
+/**
+ * 器件名按 V2 / V4 逐级兜底
+ *
+ * @param {object} comp PCB 图元
+ * @param {object} props `otherProperty`
+ * @param {string|undefined} deviceFromComponent 图元内嵌的器件名
+ * @returns {string|undefined} 器件名
+ * @sideEffects 无（纯函数）
+ */
+function deviceNameOf(comp, props, deviceFromComponent) {
+	return props.Device || props.DeviceName || deviceFromComponent || comp.manufacturerId || '';
+}
+
+/**
+ * 封装名按「合并属性 → otherProperty → footprint 对象/字符串」逐级兜底
+ *
+ * @param {object} comp PCB 图元
+ * @param {object} mergedProps `{ ...comp, ...otherProperty }`
+ * @returns {string} 封装名
+ * @sideEffects 无（纯函数）
+ */
+function footprintOf(comp, mergedProps) {
+	return (
 		(mergedProps && mergedProps.Footprint) ||
 		(comp.otherProperty && comp.otherProperty.Footprint) ||
 		(comp.footprint && comp.footprint.name) ||
 		(typeof comp.footprint === 'string' ? comp.footprint : '') ||
-		'';
-
-	const supplierId = comp.supplierId || '';
-	return { name: name, footprint: footprint, supplierId: supplierId };
+		''
+	);
 }
 
 /**
@@ -205,27 +240,52 @@ export function enrichComponentData(sel, pInfo) {
 
 	const attrs = pInfo.device_info.attributes || {};
 
+	applyRootAttributes(sel, pInfo, attrs);
+
+	sel.otherProperty = sel.otherProperty || {};
+	// 跳过系统强关联的结构字段，只合并文本属性
+	for (const key in attrs) {
+		if (!STRUCTURAL_ATTRS.includes(key)) sel.otherProperty[key] = attrs[key];
+	}
+
+	applyFootprint3d(sel.otherProperty, pInfo.device_info.footprint_info);
+
+	return sel;
+}
+
+/** 不从商品属性里合并的结构字段（由替换流程自己负责） */
+const STRUCTURAL_ATTRS = ['Footprint', 'Symbol', '3D Model', 'Designator'];
+
+/**
+ * 把商品信息里的厂家 / 编号写回图元根属性（就地修改）
+ *
+ * @param {object} sel 图元对象
+ * @param {object} pInfo 商品信息
+ * @param {object} attrs 商品属性字典
+ * @returns {void}
+ * @sideEffects **就地修改** `sel`
+ */
+function applyRootAttributes(sel, pInfo, attrs) {
 	sel.manufacturer = pInfo.brandName || attrs.Manufacturer || sel.manufacturer;
 	sel.manufacturerId = pInfo.model || attrs['Manufacturer Part'] || sel.manufacturerId;
 	sel.supplier = attrs.Supplier || sel.supplier || 'LCSC';
 	sel.supplierId = pInfo.code || sel.supplierId;
+}
 
-	sel.otherProperty = sel.otherProperty || {};
-	for (const key in attrs) {
-		// 跳过系统强关联的结构字段，只合并文本属性
-		if (!['Footprint', 'Symbol', '3D Model', 'Designator'].includes(key)) {
-			sel.otherProperty[key] = attrs[key];
-		}
-	}
+/**
+ * 补 3D 模型三件套（已有值时不覆盖）
+ *
+ * @param {object} otherProperty 图元属性字典（会被修改）
+ * @param {object} fpInfo 商品封装信息
+ * @returns {void}
+ * @sideEffects **就地修改** `otherProperty`
+ */
+function applyFootprint3d(otherProperty, fpInfo) {
+	if (!fpInfo || !fpInfo.model_3d) return;
 
-	const fpInfo = pInfo.device_info.footprint_info;
-	if (fpInfo && fpInfo.model_3d) {
-		const libUuid = fpInfo.creator ? fpInfo.creator.uuid : '';
-		sel.otherProperty['3D Model'] =
-			sel.otherProperty['3D Model'] || (libUuid ? `${fpInfo.model_3d.uri}|${libUuid}` : fpInfo.model_3d.uri);
-		sel.otherProperty['3D Model Title'] = sel.otherProperty['3D Model Title'] || fpInfo.model_3d.title;
-		sel.otherProperty['3D Model Transform'] = sel.otherProperty['3D Model Transform'] || fpInfo.model_3d.transform;
-	}
-
-	return sel;
+	const libUuid = fpInfo.creator ? fpInfo.creator.uuid : '';
+	otherProperty['3D Model'] =
+		otherProperty['3D Model'] || (libUuid ? `${fpInfo.model_3d.uri}|${libUuid}` : fpInfo.model_3d.uri);
+	otherProperty['3D Model Title'] = otherProperty['3D Model Title'] || fpInfo.model_3d.title;
+	otherProperty['3D Model Transform'] = otherProperty['3D Model Transform'] || fpInfo.model_3d.transform;
 }

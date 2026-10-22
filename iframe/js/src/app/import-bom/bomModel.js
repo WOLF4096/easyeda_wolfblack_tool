@@ -42,25 +42,47 @@ export function buildRows(container) {
 	if (!container || typeof container !== 'object') return rows;
 	for (const [key, component] of Object.entries(container)) {
 		if (!component || !component.props) continue;
-		const props = component.props;
-		const designator = props.Designator || '';
-		const name = resolveComponentName(props);
-		rows.push({
-			jsonKey: key,
-			uniqueId: props['Unique ID'],
-			designator: designator,
-			name: name,
-			footprint: props.FootprintName || props.Footprint || '',
-			supplier: props.Supplier || '',
-			supplierPart: props['Supplier Part'] || '',
-			manufacturerPart: props['Manufacturer Part'] || '',
-			manufacturer: props.Manufacturer || '',
-			selected: false,
-			changed: false,
-			original: snapshot(designator, name, props),
-		});
+		rows.push(toRow(key, component.props));
 	}
 	return rows;
+}
+
+/**
+ * 缺省空串（等价于原来的 `value || ''`）
+ *
+ * @param {*} value 任意值
+ * @returns {*} 原值，或空串
+ * @sideEffects 无（纯函数）
+ */
+function text(value) {
+	return value || '';
+}
+
+/**
+ * 单个器件 → BOM 行
+ *
+ * @param {string} key 容器里的 jsonKey
+ * @param {object} props 器件属性
+ * @returns {object} 行数据
+ * @sideEffects 无（纯函数）
+ */
+function toRow(key, props) {
+	const designator = text(props.Designator);
+	const name = resolveComponentName(props);
+	return {
+		jsonKey: key,
+		uniqueId: props['Unique ID'],
+		designator: designator,
+		name: name,
+		footprint: props.FootprintName || props.Footprint || '',
+		supplier: text(props.Supplier),
+		supplierPart: text(props['Supplier Part']),
+		manufacturerPart: text(props['Manufacturer Part']),
+		manufacturer: text(props.Manufacturer),
+		selected: false,
+		changed: false,
+		original: snapshot(designator, name, props),
+	};
 }
 
 /**
@@ -173,10 +195,7 @@ export function applyPaste(rows, pasteItems) {
 	const list = Array.isArray(rows) ? rows : [];
 	let updated = 0;
 	const missing = [];
-	const byDesignator = new Map();
-	for (const row of list) {
-		if (!byDesignator.has(row.designator)) byDesignator.set(row.designator, row);
-	}
+	const byDesignator = indexByDesignator(list);
 
 	for (const pasteItem of Array.isArray(pasteItems) ? pasteItems : []) {
 		for (const designator of pasteItem.designators) {
@@ -185,24 +204,70 @@ export function applyPaste(rows, pasteItems) {
 				missing.push(designator);
 				continue;
 			}
-			let supplier = pasteItem.supplier;
-			if (!supplier && pasteItem.supplierPart && pasteItem.supplierPart.trim().toUpperCase().startsWith('C')) {
-				supplier = 'LCSC';
-			}
-			const next = {
-				name: pasteItem.name,
-				manufacturerPart: pasteItem.manufacturerPart,
-				manufacturer: pasteItem.manufacturer,
-				supplierPart: pasteItem.supplierPart,
-				supplier: supplier,
-			};
-			const hasChanges = TRACKED_FIELDS.some((field) => next[field] !== row.original[field]);
-			if (!hasChanges) continue;
-			Object.assign(row, next, { changed: true, selected: true });
-			updated++;
+			updated += applyPasteRow(row, pasteItem);
 		}
 	}
 	return { updated: updated, missing: missing };
+}
+
+/**
+ * 建「位号 → 行」索引（同一位号保留首次出现的行）
+ *
+ * @param {Array<object>} rows 行数据
+ * @returns {Map<string, object>} 索引
+ * @sideEffects 无（纯函数）
+ */
+function indexByDesignator(rows) {
+	const byDesignator = new Map();
+	for (const row of rows) {
+		if (!byDesignator.has(row.designator)) byDesignator.set(row.designator, row);
+	}
+	return byDesignator;
+}
+
+/**
+ * 供应商推断：Excel 里没填供应商、但供应商编号以 `C` 开头时补 `LCSC`
+ *
+ * @param {object} pasteItem 粘贴项
+ * @returns {string|undefined} 供应商（无则保留粘贴项原值）
+ * @sideEffects 无（纯函数）
+ */
+function resolveSupplier(pasteItem) {
+	if (!pasteItem.supplier && isLcscSupplierPart(pasteItem.supplierPart)) return 'LCSC';
+	return pasteItem.supplier;
+}
+
+/**
+ * 供应商编号是否形如立创编号（`C` 开头）
+ *
+ * @param {string|undefined} supplierPart 供应商编号
+ * @returns {boolean} 是否立创编号
+ * @sideEffects 无（纯函数）
+ */
+function isLcscSupplierPart(supplierPart) {
+	return Boolean(supplierPart) && supplierPart.trim().toUpperCase().startsWith('C');
+}
+
+/**
+ * 把单个粘贴项写到命中的行；无实际改动时不碰行
+ *
+ * @param {object} row 命中的行（就地修改）
+ * @param {object} pasteItem 粘贴项
+ * @returns {number} 1 表示有改动，0 表示无改动
+ * @sideEffects 就地修改 row（name / supplier / … / changed / selected）
+ */
+function applyPasteRow(row, pasteItem) {
+	const next = {
+		name: pasteItem.name,
+		manufacturerPart: pasteItem.manufacturerPart,
+		manufacturer: pasteItem.manufacturer,
+		supplierPart: pasteItem.supplierPart,
+		supplier: resolveSupplier(pasteItem),
+	};
+	const hasChanges = TRACKED_FIELDS.some((field) => next[field] !== row.original[field]);
+	if (!hasChanges) return 0;
+	Object.assign(row, next, { changed: true, selected: true });
+	return 1;
 }
 
 /**

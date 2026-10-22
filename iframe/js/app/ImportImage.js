@@ -118,18 +118,20 @@
     }, timeoutMs);
     return true;
   }
+  function showOnHost(host, text, type) {
+    try {
+      if (!host || !host.sys_Message || typeof host.sys_Message.showToastMessage !== "function") return false;
+      host.sys_Message.showToastMessage(text, type);
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
   function toast(message, level = TOAST_LEVEL.info, opts = {}) {
     const doc = opts.doc || globalThis.document;
     const host = opts.host === void 0 ? getEda() : opts.host;
     const text = message === null || message === void 0 ? "" : String(message);
-    const type = normalizeLevel(level);
-    try {
-      if (host && host.sys_Message && typeof host.sys_Message.showToastMessage === "function") {
-        host.sys_Message.showToastMessage(text, type);
-        return "host";
-      }
-    } catch (e) {
-    }
+    if (showOnHost(host, text, normalizeLevel(level))) return "host";
     return banner(doc, text, opts.timeoutMs === void 0 ? 3e3 : opts.timeoutMs) ? "dom" : "none";
   }
 
@@ -141,7 +143,17 @@
   }
   function parseFileNameOrder(files) {
     const list = Array.isArray(files) ? files : [];
-    const parsed = list.map((file, idx) => {
+    const parsed = parseFileNames(list);
+    if (!parsed.every((item) => item.valid)) return noSpecialLayout(list);
+    const groups = splitGroups(resolveItems(parsed));
+    if (!isSideCountValid(groups.lGroup.length)) return noSpecialLayout(list);
+    return buildSpecialLayout(list, groups);
+  }
+  function noSpecialLayout(list) {
+    return { ordered: list, layoutMap: null, useSpecial: false };
+  }
+  function parseFileNames(list) {
+    return list.map((file, idx) => {
       const name = String(file && file.name ? file.name : "");
       let match = name.match(NAME_PATTERN);
       if (match) return { idx, type: "normal", prefix: match[1].toUpperCase(), suffix: match[2].toUpperCase(), valid: true };
@@ -149,13 +161,19 @@
       if (match) return { idx, type: "alias", alias: match[1].toUpperCase(), valid: true };
       return { idx, valid: false };
     });
-    if (!parsed.every((item) => item.valid)) return { ordered: list, layoutMap: null, useSpecial: false };
+  }
+  function maxSideNumber(parsed) {
     const lNumbers = parsed.filter((p) => p.type === "normal" && p.prefix === "L" && p.suffix !== "S").map((p) => parseInt(p.suffix, 10)).filter((num) => !isNaN(num));
-    const maxL = lNumbers.length > 0 ? Math.max(...lNumbers) : 1;
-    const items = parsed.map((p) => {
+    return lNumbers.length > 0 ? Math.max(...lNumbers) : 1;
+  }
+  function resolveItems(parsed) {
+    const maxL = maxSideNumber(parsed);
+    return parsed.map((p) => {
       if (p.type === "normal") return { idx: p.idx, prefix: p.prefix, suffix: p.suffix };
       return p.alias === "TOP" ? { idx: p.idx, prefix: "L", suffix: "1" } : { idx: p.idx, prefix: "L", suffix: String(maxL) };
     });
+  }
+  function splitGroups(items) {
     const tGroup = items.filter((p) => p.prefix === "T" && p.suffix !== "S");
     const bGroup = items.filter((p) => p.prefix === "B" && p.suffix !== "S");
     const lGroup = items.filter((p) => p.prefix === "L");
@@ -164,20 +182,27 @@
     tGroup.sort((a, b) => parseInt(b.suffix, 10) - parseInt(a.suffix, 10));
     bGroup.sort((a, b) => parseInt(b.suffix, 10) - parseInt(a.suffix, 10));
     lGroup.sort((a, b) => parseInt(a.suffix, 10) - parseInt(b.suffix, 10));
-    const lCount = lGroup.length;
-    const lValid = lCount === 0 || lCount >= 2 && lCount % 2 === 0;
-    if (!lValid) return { ordered: list, layoutMap: null, useSpecial: false };
-    const leftOrder = [...tGroup];
-    if (tsFile) leftOrder.push(tsFile);
+    return { tGroup, bGroup, lGroup, tsFile, bsFile };
+  }
+  function isSideCountValid(lCount) {
+    return lCount === 0 || lCount >= 2 && lCount % 2 === 0;
+  }
+  function buildSpecialLayout(list, groups) {
+    const leftOrder = [...groups.tGroup];
+    if (groups.tsFile) leftOrder.push(groups.tsFile);
     let rightL = [];
+    const lCount = groups.lGroup.length;
     if (lCount > 0) {
       const half = lCount / 2;
-      leftOrder.push(...lGroup.slice(0, half));
-      rightL = lGroup.slice(half).reverse();
+      leftOrder.push(...groups.lGroup.slice(0, half));
+      rightL = groups.lGroup.slice(half).reverse();
     }
-    const rightOrder = [...bGroup];
-    if (bsFile) rightOrder.push(bsFile);
+    const rightOrder = [...groups.bGroup];
+    if (groups.bsFile) rightOrder.push(groups.bsFile);
     rightOrder.push(...rightL);
+    return interleave(list, leftOrder, rightOrder);
+  }
+  function interleave(list, leftOrder, rightOrder) {
     const ordered = [];
     const layoutMap = /* @__PURE__ */ new Map();
     const maxRows = Math.max(leftOrder.length, rightOrder.length);

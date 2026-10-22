@@ -76,18 +76,20 @@
     }, timeoutMs);
     return true;
   }
+  function showOnHost(host, text, type) {
+    try {
+      if (!host || !host.sys_Message || typeof host.sys_Message.showToastMessage !== "function") return false;
+      host.sys_Message.showToastMessage(text, type);
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
   function toast(message, level = TOAST_LEVEL.info, opts = {}) {
     const doc = opts.doc || globalThis.document;
     const host = opts.host === void 0 ? getEda() : opts.host;
     const text = message === null || message === void 0 ? "" : String(message);
-    const type = normalizeLevel(level);
-    try {
-      if (host && host.sys_Message && typeof host.sys_Message.showToastMessage === "function") {
-        host.sys_Message.showToastMessage(text, type);
-        return "host";
-      }
-    } catch (e) {
-    }
+    if (showOnHost(host, text, normalizeLevel(level))) return "host";
     return banner(doc, text, opts.timeoutMs === void 0 ? 3e3 : opts.timeoutMs) ? "dom" : "none";
   }
 
@@ -116,22 +118,31 @@
 ["PRIMITIVE","PAD",1,1]
 `;
   }
-  function getCoordsFromSource(arr) {
-    const type = arr[0];
-    let pathObj = null;
-    if (type === "PAD") return { x: arr[6], y: arr[7] };
-    if (type === "VIA") return { x: arr[5], y: arr[6] };
-    if (type === "IMAGE") return { x: arr[4], y: arr[5] };
-    if (type === "POLY" || type === "REGION") pathObj = arr[6];
-    if (type === "FILL") pathObj = arr[7];
-    if (type === "POUR") pathObj = arr[8];
-    if (pathObj) {
-      const polyArr = Array.isArray(pathObj[0]) ? pathObj[0] : pathObj;
-      for (let i = 0; i < polyArr.length - 1; i++) {
-        if (typeof polyArr[i] === "number" && typeof polyArr[i + 1] === "number") return { x: polyArr[i], y: polyArr[i + 1] };
-      }
+  var DIRECT_COORDS = /* @__PURE__ */ new Map([
+    ["PAD", [6, 7]],
+    ["VIA", [5, 6]],
+    ["IMAGE", [4, 5]]
+  ]);
+  var PATH_FIELDS = /* @__PURE__ */ new Map([
+    ["POLY", 6],
+    ["REGION", 6],
+    ["FILL", 7],
+    ["POUR", 8]
+  ]);
+  function firstCoordOf(pathObj) {
+    if (!pathObj) return { x: void 0, y: void 0 };
+    const polyArr = Array.isArray(pathObj[0]) ? pathObj[0] : pathObj;
+    for (let i = 0; i < polyArr.length - 1; i++) {
+      if (typeof polyArr[i] === "number" && typeof polyArr[i + 1] === "number") return { x: polyArr[i], y: polyArr[i + 1] };
     }
     return { x: void 0, y: void 0 };
+  }
+  function getCoordsFromSource(arr) {
+    const direct = DIRECT_COORDS.get(arr[0]);
+    if (direct) return { x: arr[direct[0]], y: arr[direct[1]] };
+    const pathField = PATH_FIELDS.get(arr[0]);
+    if (pathField === void 0) return { x: void 0, y: void 0 };
+    return firstCoordOf(arr[pathField]);
   }
   function transformPath(arr, ox, oy) {
     const out = Array.isArray(arr) ? arr.slice() : [];
@@ -176,35 +187,51 @@
     if (Array.isArray(value)) return transformPath(value, ox, oy);
     return value;
   }
+  function shiftXY(p, ix, iy, ox, oy) {
+    p[ix] = parseFloat((p[ix] - ox).toFixed(4));
+    p[iy] = parseFloat((p[iy] - oy).toFixed(4));
+  }
+  function shiftPad(p, ox, oy) {
+    shiftXY(p, 6, 7, ox, oy);
+    const padShape = p[10];
+    if (Array.isArray(padShape) && padShape[0] === "POLYGON" && Array.isArray(padShape[1])) {
+      padShape[1] = transformPath(padShape[1], ox, oy);
+    }
+  }
+  function shiftImage(p, ox, oy) {
+    shiftXY(p, 4, 5, ox, oy);
+    p[10] = shiftPathField(p[10], ox, oy);
+  }
+  function shiftPoly(p, ox, oy) {
+    p[6] = shiftPathField(p[6], ox, oy);
+  }
+  function shiftFill(p, ox, oy) {
+    p[7] = shiftPathField(p[7], ox, oy);
+  }
+  function shiftPour(p, ox, oy) {
+    p[8] = shiftPathField(p[8], ox, oy);
+  }
+  var SHIFTERS = /* @__PURE__ */ new Map([
+    ["PAD", shiftPad],
+    ["VIA", (p, ox, oy) => shiftXY(p, 5, 6, ox, oy)],
+    ["IMAGE", shiftImage],
+    ["POLY", shiftPoly],
+    ["REGION", shiftPoly],
+    ["FILL", shiftFill],
+    ["POUR", shiftPour]
+  ]);
+  function shiftPrimitive(p, ox, oy) {
+    const shift = SHIFTERS.get(p[0]);
+    if (shift) shift(p, ox, oy);
+  }
   function buildFootprintSource(primitives, options) {
     const { uuid, deviceName, originX, originY } = options;
     let idCounter = 1;
     const lines = [];
     for (const source of Array.isArray(primitives) ? primitives : []) {
       const p = source.slice();
-      const type = p[0];
       p[1] = `e${idCounter++}`;
-      if (type === "PAD") {
-        p[6] = parseFloat((p[6] - originX).toFixed(4));
-        p[7] = parseFloat((p[7] - originY).toFixed(4));
-        const padShape = p[10];
-        if (Array.isArray(padShape) && padShape[0] === "POLYGON" && Array.isArray(padShape[1])) {
-          padShape[1] = transformPath(padShape[1], originX, originY);
-        }
-      } else if (type === "VIA") {
-        p[5] = parseFloat((p[5] - originX).toFixed(4));
-        p[6] = parseFloat((p[6] - originY).toFixed(4));
-      } else if (type === "IMAGE") {
-        p[4] = parseFloat((p[4] - originX).toFixed(4));
-        p[5] = parseFloat((p[5] - originY).toFixed(4));
-        p[10] = shiftPathField(p[10], originX, originY);
-      } else if (type === "POLY" || type === "REGION") {
-        p[6] = shiftPathField(p[6], originX, originY);
-      } else if (type === "FILL") {
-        p[7] = shiftPathField(p[7], originX, originY);
-      } else if (type === "POUR") {
-        p[8] = shiftPathField(p[8], originX, originY);
-      }
+      shiftPrimitive(p, originX, originY);
       lines.push(JSON.stringify(p));
     }
     return footprintHeader(uuid, deviceName) + lines.join("\n") + (lines.length ? "\n" : "");
@@ -284,22 +311,20 @@
     if (container) container.innerHTML = '<div class="notice-center">此功能只支持 EDA V2.2.45 版本</div>';
     return true;
   }
-  function computeOrigin(primitives) {
-    const pads = primitives.filter((item) => item[0] === "PAD");
-    if (pads.length === 1) return { originX: pads[0][6], originY: pads[0][7] };
-    if (pads.length > 1) {
-      let minX2 = Infinity;
-      let minY2 = Infinity;
-      let maxX2 = -Infinity;
-      let maxY2 = -Infinity;
-      for (const pad of pads) {
-        if (pad[6] < minX2) minX2 = pad[6];
-        if (pad[6] > maxX2) maxX2 = pad[6];
-        if (pad[7] < minY2) minY2 = pad[7];
-        if (pad[7] > maxY2) maxY2 = pad[7];
-      }
-      return { originX: (minX2 + maxX2) / 2, originY: (minY2 + maxY2) / 2 };
+  function padBounds(pads) {
+    let minX = Infinity;
+    let minY = Infinity;
+    let maxX = -Infinity;
+    let maxY = -Infinity;
+    for (const pad of pads) {
+      if (pad[6] < minX) minX = pad[6];
+      if (pad[6] > maxX) maxX = pad[6];
+      if (pad[7] < minY) minY = pad[7];
+      if (pad[7] > maxY) maxY = pad[7];
     }
+    return { minX, minY, maxX, maxY };
+  }
+  function primitiveBounds(primitives) {
     let minX = Infinity;
     let minY = Infinity;
     let maxX = -Infinity;
@@ -312,13 +337,14 @@
       if (y < minY) minY = y;
       if (y > maxY) maxY = y;
     }
-    if (minX === Infinity) {
-      minX = 0;
-      minY = 0;
-      maxX = 0;
-      maxY = 0;
-    }
-    return { originX: (minX + maxX) / 2, originY: (minY + maxY) / 2 };
+    if (minX === Infinity) return { minX: 0, minY: 0, maxX: 0, maxY: 0 };
+    return { minX, minY, maxX, maxY };
+  }
+  function computeOrigin(primitives) {
+    const pads = primitives.filter((item) => item[0] === "PAD");
+    if (pads.length === 1) return { originX: pads[0][6], originY: pads[0][7] };
+    const bounds = pads.length > 1 ? padBounds(pads) : primitiveBounds(primitives);
+    return { originX: (bounds.minX + bounds.maxX) / 2, originY: (bounds.minY + bounds.maxY) / 2 };
   }
   function collectPadNumbers(primitives) {
     const set = /* @__PURE__ */ new Set();
@@ -337,12 +363,98 @@
     const ss = now.getSeconds().toString().padStart(2, "0");
     return `NEW-${pinCount}Pin_${hh}${mm}${ss}`;
   }
+  function readInputs() {
+    return {
+      name: document.getElementById("fooNameInput").value.trim(),
+      des: document.getElementById("desNameInput").value.trim(),
+      libraryUuid: document.getElementById("libSelect").value
+    };
+  }
+  function pickSourceLines(docSource, selectedIds) {
+    const primitives = [];
+    for (const line of docSource.split("\n")) {
+      if (!line.trim()) continue;
+      try {
+        const arr = JSON.parse(line);
+        if (selectedIds.includes(arr[1])) primitives.push(arr);
+      } catch (e) {
+      }
+    }
+    return primitives;
+  }
+  async function readSelection(host) {
+    const allSelected = await host.pcb_SelectControl.getAllSelectedPrimitives();
+    if (!allSelected || allSelected.length === 0) throw new Error("请先在 PCB 中选中图元！");
+    const targets = allSelected.filter((p) => p.primitiveType !== "Component");
+    if (targets.length === 0) throw new Error("未选中有效图元");
+    const selectedIds = targets.map((p) => p.primitiveId);
+    const docSource = await host.sys_FileManager.getDocumentSource();
+    const primitives = pickSourceLines(docSource, selectedIds);
+    if (primitives.length === 0) throw new Error("无法在源码中匹配到选中的图元数据");
+    return { targets, primitives };
+  }
+  function buildNames(inputs, primitives) {
+    const { originX, originY } = computeOrigin(primitives);
+    const padNumbers = collectPadNumbers(primitives);
+    const deviceName = deviceNameOf(inputs.name, padNumbers.size);
+    const desMatch = inputs.des.match(/^[a-zA-Z]+/);
+    const finalDesignator = (desMatch ? desMatch[0].toUpperCase() : "U") + "?";
+    return { originX, originY, padNumbers, deviceName, finalDesignator };
+  }
+  async function createLibraryElements(host, libraryUuid, names) {
+    const fpUuid = await host.lib_Footprint.create(libraryUuid, names.deviceName);
+    const symUuid = await host.lib_Symbol.create(libraryUuid, names.deviceName);
+    const devUuid = await host.lib_Device.create(
+      libraryUuid,
+      names.deviceName,
+      void 0,
+      {
+        symbolType: 2,
+        symbol: { uuid: symUuid, libraryUuid },
+        footprint: { uuid: fpUuid, libraryUuid }
+      },
+      void 0,
+      { addIntoBom: true, addIntoPcb: true, designator: names.finalDesignator, name: names.deviceName }
+    );
+    return { fpUuid, symUuid, devUuid };
+  }
+  async function writeSources(host, libraryUuid, primitives, names, created) {
+    await host.lib_Footprint.updateDocumentSource(created.fpUuid, libraryUuid, buildFootprintSource(primitives, { uuid: created.fpUuid, deviceName: names.deviceName, originX: names.originX, originY: names.originY }));
+    await host.lib_Symbol.updateDocumentSource(created.symUuid, libraryUuid, buildSymbolSource({ deviceName: names.deviceName, pinNumbers: names.padNumbers }));
+  }
+  async function placeDevice(host, libraryUuid, devUuid, names) {
+    if (getEditorVersion().startsWith("2.2.43")) {
+      const created = await host.pcb_PrimitiveComponent.create({ libraryUuid, uuid: devUuid }, host.EPCB_LayerId ? host.EPCB_LayerId.TOP : 1, names.originX, names.originY, 0, false);
+      if (created && created.primitiveId) await host.pcb_PrimitiveComponent.delete(created.primitiveId);
+    }
+    await host.sch_PrimitiveComponent.create({ libraryUuid, uuid: devUuid }, 0, 0, "", 0, false, true, true);
+  }
+  var DELETE_HANDLERS = /* @__PURE__ */ new Map([
+    ["Pad", (host, id) => host.pcb_PrimitivePad.delete(id)],
+    ["Polyline", (host, id) => host.pcb_PrimitivePolyline.delete(id)],
+    ["Region", (host, id) => host.pcb_PrimitivePour.delete(id)],
+    ["Via", (host, id) => host.pcb_PrimitiveVia.delete(id)],
+    ["Image", (host, id) => host.pcb_PrimitiveImage.delete(id)]
+  ]);
+  async function deleteTargets(host, targets) {
+    for (const item of targets) {
+      try {
+        const remove = DELETE_HANDLERS.get(item.primitiveType);
+        if (remove) await remove(host, item.primitiveId);
+      } catch (e) {
+        console.warn("删除临时图元失败", e);
+      }
+    }
+  }
+  function finishSuccess(host, deviceName) {
+    if (host.sys_IFrame) host.sys_IFrame.hideIFrame("CreateFootprint");
+    document.getElementById("fooNameInput").value = "";
+    toast("成功创建封装: " + deviceName, "success");
+  }
   async function onRunClick() {
     const btn = document.getElementById("runBtn");
-    const inputVal = document.getElementById("fooNameInput").value.trim();
-    const inputDes = document.getElementById("desNameInput").value.trim();
-    const libraryUuid = document.getElementById("libSelect").value;
-    if (!libraryUuid) {
+    const inputs = readInputs();
+    if (!inputs.libraryUuid) {
       toast("请先选择一个目标库！", "warning");
       return;
     }
@@ -356,62 +468,13 @@
       btn.innerText = "处理中...";
     }
     try {
-      const allSelected = await host.pcb_SelectControl.getAllSelectedPrimitives();
-      if (!allSelected || allSelected.length === 0) throw new Error("请先在 PCB 中选中图元！");
-      const targets = allSelected.filter((p) => p.primitiveType !== "Component");
-      if (targets.length === 0) throw new Error("未选中有效图元");
-      const selectedIds = targets.map((p) => p.primitiveId);
-      const docSource = await host.sys_FileManager.getDocumentSource();
-      const primitives = [];
-      for (const line of docSource.split("\n")) {
-        if (!line.trim()) continue;
-        try {
-          const arr = JSON.parse(line);
-          if (selectedIds.includes(arr[1])) primitives.push(arr);
-        } catch (e) {
-        }
-      }
-      if (primitives.length === 0) throw new Error("无法在源码中匹配到选中的图元数据");
-      const { originX, originY } = computeOrigin(primitives);
-      const padNumbers = collectPadNumbers(primitives);
-      const deviceName = deviceNameOf(inputVal, padNumbers.size);
-      const desMatch = inputDes.match(/^[a-zA-Z]+/);
-      const finalDesignator = (desMatch ? desMatch[0].toUpperCase() : "U") + "?";
-      const fpUuid = await host.lib_Footprint.create(libraryUuid, deviceName);
-      const symUuid = await host.lib_Symbol.create(libraryUuid, deviceName);
-      const devUuid = await host.lib_Device.create(
-        libraryUuid,
-        deviceName,
-        void 0,
-        {
-          symbolType: 2,
-          symbol: { uuid: symUuid, libraryUuid },
-          footprint: { uuid: fpUuid, libraryUuid }
-        },
-        void 0,
-        { addIntoBom: true, addIntoPcb: true, designator: finalDesignator, name: deviceName }
-      );
-      await host.lib_Footprint.updateDocumentSource(fpUuid, libraryUuid, buildFootprintSource(primitives, { uuid: fpUuid, deviceName, originX, originY }));
-      await host.lib_Symbol.updateDocumentSource(symUuid, libraryUuid, buildSymbolSource({ deviceName, pinNumbers: padNumbers }));
-      if (getEditorVersion().startsWith("2.2.43")) {
-        const created = await host.pcb_PrimitiveComponent.create({ libraryUuid, uuid: devUuid }, host.EPCB_LayerId ? host.EPCB_LayerId.TOP : 1, originX, originY, 0, false);
-        if (created && created.primitiveId) await host.pcb_PrimitiveComponent.delete(created.primitiveId);
-      }
-      await host.sch_PrimitiveComponent.create({ libraryUuid, uuid: devUuid }, 0, 0, "", 0, false, true, true);
-      for (const item of targets) {
-        try {
-          if (item.primitiveType === "Pad") await host.pcb_PrimitivePad.delete(item.primitiveId);
-          else if (item.primitiveType === "Polyline") await host.pcb_PrimitivePolyline.delete(item.primitiveId);
-          else if (item.primitiveType === "Region") await host.pcb_PrimitivePour.delete(item.primitiveId);
-          else if (item.primitiveType === "Via") await host.pcb_PrimitiveVia.delete(item.primitiveId);
-          else if (item.primitiveType === "Image") await host.pcb_PrimitiveImage.delete(item.primitiveId);
-        } catch (e) {
-          console.warn("删除临时图元失败", e);
-        }
-      }
-      if (host.sys_IFrame) host.sys_IFrame.hideIFrame("CreateFootprint");
-      document.getElementById("fooNameInput").value = "";
-      toast("成功创建封装: " + deviceName, "success");
+      const { targets, primitives } = await readSelection(host);
+      const names = buildNames(inputs, primitives);
+      const created = await createLibraryElements(host, inputs.libraryUuid, names);
+      await writeSources(host, inputs.libraryUuid, primitives, names, created);
+      await placeDevice(host, inputs.libraryUuid, created.devUuid, names);
+      await deleteTargets(host, targets);
+      finishSuccess(host, names.deviceName);
     } catch (err) {
       console.error("执行错误: ", err);
       toast(err.message, "error");

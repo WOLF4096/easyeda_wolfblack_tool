@@ -62,9 +62,7 @@ function finishPart(part, pinById) {
  * @sideEffects 无（纯函数）
  */
 export function parseSymbolSource(content) {
-	const parts = [];
-	let currentPart = null;
-	let pinById = {};
+	const state = { parts: [], currentPart: null, pinById: {} };
 
 	for (const line of String(content || '').split('\n')) {
 		if (!line.trim()) continue;
@@ -76,37 +74,72 @@ export function parseSymbolSource(content) {
 		}
 		if (!Array.isArray(data)) continue;
 
-		const type = data[0];
-
-		if (type === 'PART') {
-			if (currentPart) parts.push(finishPart(currentPart, pinById));
-			currentPart = { name: data[1], pins: {} };
-			pinById = {};
-			continue;
-		}
-
-		if (!currentPart) continue;
-
-		if (type === 'PIN') {
-			pinById[data[1]] = {
-				id: data[1],
-				type: data[2],
-				x: data[4],
-				y: data[5],
-				length: data[6],
-				angle: data[7],
-				number: null,
-				name: null,
-			};
-		} else if (type === 'ATTR') {
-			// ATTR 形如 ["ATTR", attrId, parentId, 名称, 值, ...]
-			const parent = pinById[data[2]];
-			if (!parent) continue;
-			if (data[3] === 'NUMBER') parent.number = data[4];
-			else if (data[3] === 'NAME') parent.name = data[4];
-		}
+		applySymbolLine(state, data);
 	}
 
-	if (currentPart) parts.push(finishPart(currentPart, pinById));
-	return parts;
+	if (state.currentPart) state.parts.push(finishPart(state.currentPart, state.pinById));
+	return state.parts;
+}
+
+/**
+ * 把一行符号源码作用到解析状态上（就地修改）
+ *
+ * @param {{parts: Array<object>, currentPart: object|null, pinById: Record<string, object>}} state 解析状态
+ * @param {Array} data 解析后的一行
+ * @returns {void}
+ * @sideEffects **就地修改** `state`
+ */
+function applySymbolLine(state, data) {
+	const type = data[0];
+
+	if (type === 'PART') {
+		if (state.currentPart) state.parts.push(finishPart(state.currentPart, state.pinById));
+		state.currentPart = { name: data[1], pins: {} };
+		state.pinById = {};
+		return;
+	}
+
+	if (!state.currentPart) return;
+
+	if (type === 'PIN') {
+		state.pinById[data[1]] = pinFromLine(data);
+		return;
+	}
+
+	if (type === 'ATTR') applyPinAttr(state.pinById, data);
+}
+
+/**
+ * 由 PIN 行造出引脚对象（`NUMBER` / `NAME` 稍后由 ATTR 行补）
+ *
+ * @param {Array} data PIN 行
+ * @returns {object} 引脚
+ * @sideEffects 无（纯函数）
+ */
+function pinFromLine(data) {
+	return {
+		id: data[1],
+		type: data[2],
+		x: data[4],
+		y: data[5],
+		length: data[6],
+		angle: data[7],
+		number: null,
+		name: null,
+	};
+}
+
+/**
+ * 把 ATTR 行的 `NUMBER` / `NAME` 补到对应引脚上（就地修改）
+ *
+ * @param {Record<string, object>} pinById 引脚 id → 引脚
+ * @param {Array} data ATTR 行（形如 `["ATTR", attrId, parentId, 名称, 值, ...]`）
+ * @returns {void}
+ * @sideEffects **就地修改** `pinById` 里的引脚
+ */
+function applyPinAttr(pinById, data) {
+	const parent = pinById[data[2]];
+	if (!parent) return;
+	if (data[3] === 'NUMBER') parent.number = data[4];
+	else if (data[3] === 'NAME') parent.name = data[4];
 }

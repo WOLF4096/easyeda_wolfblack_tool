@@ -86,23 +86,44 @@ export function createPoll(options = {}) {
 	let stopped = false;
 
 	/**
+	 * 本轮是否该直接跳过（重入 / 已停止 / 页面隐藏 / 没有取数函数）
+	 *
+	 * @returns {boolean} 是否跳过
+	 * @sideEffects 无
+	 */
+	function shouldSkip() {
+		if (busy || stopped) return true;
+		if (skipWhenHidden && doc && doc.hidden) return true;
+		return typeof fetchItems !== 'function';
+	}
+
+	/**
+	 * 把新一批结果交给回调（结果没变就不回调）
+	 *
+	 * @param {Array} items 本轮取到的结果
+	 * @returns {boolean} 是否真正触发了 onItems
+	 * @sideEffects 调用 onItems
+	 */
+	function applyItems(items) {
+		if (stopped) return false;
+		if (last !== null && isEqual(items, last)) return false;
+		last = items;
+		if (typeof onItems === 'function') onItems(items);
+		return true;
+	}
+
+	/**
 	 * 执行一轮
 	 *
 	 * @returns {Promise<boolean>} 本轮是否真正触发了 onItems
 	 * @sideEffects 调用 fetchItems / onItems
 	 */
 	async function tick() {
-		if (busy || stopped) return false;
-		if (skipWhenHidden && doc && doc.hidden) return false;
-		if (typeof fetchItems !== 'function') return false;
+		if (shouldSkip()) return false;
 		busy = true;
 		try {
 			const items = await fetchItems();
-			if (stopped) return false;
-			if (last !== null && isEqual(items, last)) return false;
-			last = items;
-			if (typeof onItems === 'function') onItems(items);
-			return true;
+			return applyItems(items);
 		} catch (e) {
 			// 宿主在切换文档时偶尔会抛错，轮询不该因此中断
 			return false;

@@ -347,13 +347,23 @@
   function extractProps(comp) {
     const rawName = comp.name || comp.component && comp.component.name || "";
     const props = comp.otherProperty || {};
-    const deviceFromComponent = comp.component && typeof comp.component === "object" ? comp.component.uuid && typeof comp.component.uuid === "object" && comp.component.uuid.name || comp.component.name : "";
-    const deviceName = props.Device || props.DeviceName || deviceFromComponent || comp.manufacturerId || "";
+    const deviceFromComponent = deviceFromComponentOf(comp);
+    const deviceName = deviceNameOf(comp, props, deviceFromComponent);
     const mergedProps = { ...comp, ...props };
     const name = resolveDynamicString(rawName, mergedProps, deviceName);
-    const footprint = mergedProps && mergedProps.Footprint || comp.otherProperty && comp.otherProperty.Footprint || comp.footprint && comp.footprint.name || (typeof comp.footprint === "string" ? comp.footprint : "") || "";
+    const footprint = footprintOf(comp, mergedProps);
     const supplierId = comp.supplierId || "";
     return { name, footprint, supplierId };
+  }
+  function deviceFromComponentOf(comp) {
+    if (!(comp.component && typeof comp.component === "object")) return "";
+    return comp.component.uuid && typeof comp.component.uuid === "object" && comp.component.uuid.name || comp.component.name;
+  }
+  function deviceNameOf(comp, props, deviceFromComponent) {
+    return props.Device || props.DeviceName || deviceFromComponent || comp.manufacturerId || "";
+  }
+  function footprintOf(comp, mergedProps) {
+    return mergedProps && mergedProps.Footprint || comp.otherProperty && comp.otherProperty.Footprint || comp.footprint && comp.footprint.name || (typeof comp.footprint === "string" ? comp.footprint : "") || "";
   }
   function buildGroupKey(props) {
     return `${props.name}|${props.footprint}|${props.supplierId}`;
@@ -361,24 +371,27 @@
   function enrichComponentData(sel, pInfo) {
     if (!pInfo || !pInfo.device_info) return sel;
     const attrs = pInfo.device_info.attributes || {};
+    applyRootAttributes(sel, pInfo, attrs);
+    sel.otherProperty = sel.otherProperty || {};
+    for (const key in attrs) {
+      if (!STRUCTURAL_ATTRS.includes(key)) sel.otherProperty[key] = attrs[key];
+    }
+    applyFootprint3d(sel.otherProperty, pInfo.device_info.footprint_info);
+    return sel;
+  }
+  var STRUCTURAL_ATTRS = ["Footprint", "Symbol", "3D Model", "Designator"];
+  function applyRootAttributes(sel, pInfo, attrs) {
     sel.manufacturer = pInfo.brandName || attrs.Manufacturer || sel.manufacturer;
     sel.manufacturerId = pInfo.model || attrs["Manufacturer Part"] || sel.manufacturerId;
     sel.supplier = attrs.Supplier || sel.supplier || "LCSC";
     sel.supplierId = pInfo.code || sel.supplierId;
-    sel.otherProperty = sel.otherProperty || {};
-    for (const key in attrs) {
-      if (!["Footprint", "Symbol", "3D Model", "Designator"].includes(key)) {
-        sel.otherProperty[key] = attrs[key];
-      }
-    }
-    const fpInfo = pInfo.device_info.footprint_info;
-    if (fpInfo && fpInfo.model_3d) {
-      const libUuid = fpInfo.creator ? fpInfo.creator.uuid : "";
-      sel.otherProperty["3D Model"] = sel.otherProperty["3D Model"] || (libUuid ? `${fpInfo.model_3d.uri}|${libUuid}` : fpInfo.model_3d.uri);
-      sel.otherProperty["3D Model Title"] = sel.otherProperty["3D Model Title"] || fpInfo.model_3d.title;
-      sel.otherProperty["3D Model Transform"] = sel.otherProperty["3D Model Transform"] || fpInfo.model_3d.transform;
-    }
-    return sel;
+  }
+  function applyFootprint3d(otherProperty, fpInfo) {
+    if (!fpInfo || !fpInfo.model_3d) return;
+    const libUuid = fpInfo.creator ? fpInfo.creator.uuid : "";
+    otherProperty["3D Model"] = otherProperty["3D Model"] || (libUuid ? `${fpInfo.model_3d.uri}|${libUuid}` : fpInfo.model_3d.uri);
+    otherProperty["3D Model Title"] = otherProperty["3D Model Title"] || fpInfo.model_3d.title;
+    otherProperty["3D Model Transform"] = otherProperty["3D Model Transform"] || fpInfo.model_3d.transform;
   }
 
   // iframe/js/src/app/replace-component/pastePlan.js
@@ -500,13 +513,7 @@
     } catch {
       return line;
     }
-    if (head.type === "COMPONENT") {
-      const action = targetMap.get(head.id);
-      if (!action || !action.targetDeviceNameJson) return line;
-      tail.attrs = tail.attrs || {};
-      tail.attrs.DeviceName = action.targetDeviceNameJson;
-      return joinModernLine(head, tail, hasTrailingPipe);
-    }
+    if (head.type === "COMPONENT") return rewriteComponentLine(line, head, tail, targetMap, hasTrailingPipe);
     if (head.type === "ATTR") {
       const action = targetMap.get(tail.parentId);
       if (!action) return line;
@@ -516,6 +523,13 @@
       return joinModernLine(head, tail, hasTrailingPipe);
     }
     return line;
+  }
+  function rewriteComponentLine(line, head, tail, targetMap, hasTrailingPipe) {
+    const action = targetMap.get(head.id);
+    if (!action || !action.targetDeviceNameJson) return line;
+    tail.attrs = tail.attrs || {};
+    tail.attrs.DeviceName = action.targetDeviceNameJson;
+    return joinModernLine(head, tail, hasTrailingPipe);
   }
   function rewriteLine(line, targetMap) {
     if (!line || !line.trim()) return line;
@@ -546,18 +560,23 @@
   var PRESERVE_SET = new Set(PRESERVE_KEYS);
   function mergeIntoProps(props, action) {
     const targetComp = action.targetComp || {};
-    if (targetComp.otherProperty) {
-      for (const key in targetComp.otherProperty) {
-        if (!PRESERVE_SET.has(key)) props[key] = targetComp.otherProperty[key];
-      }
+    mergeOtherProperties(props, targetComp.otherProperty);
+    mergeSupplierFields(props, targetComp);
+    props.Name = action.preserveName ? action.sourceName : action.targetName;
+    props.FootprintName = action.preserveFootprint ? action.sourceFootprintName : targetComp.footprint ? targetComp.footprint.name : "";
+    props.DeviceName = targetComp.manufacturerId || "";
+  }
+  function mergeOtherProperties(props, otherProperty) {
+    if (!otherProperty) return;
+    for (const key in otherProperty) {
+      if (!PRESERVE_SET.has(key)) props[key] = otherProperty[key];
     }
+  }
+  function mergeSupplierFields(props, targetComp) {
     if (targetComp.supplier) props.Supplier = targetComp.supplier;
     if (targetComp.supplierId) props["Supplier Part"] = targetComp.supplierId;
     if (targetComp.manufacturer) props.Manufacturer = targetComp.manufacturer;
     if (targetComp.manufacturerId) props["Manufacturer Part"] = targetComp.manufacturerId;
-    props.Name = action.preserveName ? action.sourceName : action.targetName;
-    props.FootprintName = action.preserveFootprint ? action.sourceFootprintName : targetComp.footprint ? targetComp.footprint.name : "";
-    props.DeviceName = targetComp.manufacturerId || "";
   }
   function applyTargetProps(componentsNode, desigMap) {
     if (!componentsNode || typeof componentsNode !== "object") return 0;
@@ -718,14 +737,13 @@
   }
   function resolveTargetProps(sel, pInfo) {
     enrichComponentData(sel, pInfo);
-    const rawName = pInfo && pInfo.device_info && pInfo.device_info.attributes && pInfo.device_info.attributes.Name || sel.name || sel.component && sel.component.name || "";
+    const rawName = targetRawName(sel, pInfo);
     const props = sel.otherProperty || {};
     const mergedProps = { ...sel, ...props };
     const fallbackDevice = props.Device || props["Manufacturer Part"] || sel.manufacturerId || "";
     let finalName = resolveDynamicString(rawName, mergedProps, fallbackDevice);
     if (String(finalName).includes("={")) finalName = props.Value || sel.manufacturerId || finalName;
-    const fpInfo = pInfo ? pInfo.device_info.footprint_info : null;
-    const finalFootprint = fpInfo && (fpInfo.display_title || fpInfo.title) || getFootprintName(sel) || "未知封装";
+    const finalFootprint = targetFootprint(sel, pInfo);
     return {
       name: finalName,
       footprint: finalFootprint,
@@ -733,6 +751,13 @@
       uuid: getDeviceUuid(sel),
       comp: sel
     };
+  }
+  function targetRawName(sel, pInfo) {
+    return pInfo && pInfo.device_info && pInfo.device_info.attributes && pInfo.device_info.attributes.Name || sel.name || sel.component && sel.component.name || "";
+  }
+  function targetFootprint(sel, pInfo) {
+    const fpInfo = pInfo ? pInfo.device_info.footprint_info : null;
+    return fpInfo && (fpInfo.display_title || fpInfo.title) || getFootprintName(sel) || "未知封装";
   }
   async function fetchProductInfo(supplierId) {
     return null;

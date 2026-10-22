@@ -240,6 +240,26 @@
     return vertices;
   }
   function padGeometry(pad) {
+    const box = padBoxOf(pad);
+    const rawHole = pad.hole && pad.hole.length > 1 ? Number(pad.hole[1]) : 0;
+    const shaped = shapeOfPad(pad, box);
+    return {
+      id: pad.primitiveId,
+      type: "PAD",
+      net: pad.net,
+      layer: pad.layer,
+      shape: shaped.shape,
+      x: Number(pad.x),
+      y: Number(pad.y),
+      w: shaped.w,
+      h: shaped.h,
+      r: shaped.radius,
+      vertices: shaped.vertices,
+      // 孔直径在源码里单位是 10mil，这里换算成一致量纲
+      holeSize: rawHole * 10
+    };
+  }
+  function padBoxOf(pad) {
     let w = 10;
     let h = 10;
     let shapeType = "RECT";
@@ -250,51 +270,39 @@
         h = Number(pad.pad[2] || w);
       }
     }
-    const rawHole = pad.hole && pad.hole.length > 1 ? Number(pad.hole[1]) : 0;
-    let algoShape = "RECT";
-    let radius = 0;
-    let vertices = null;
-    if (shapeType === "ROUND" || shapeType === "ELLIPSE" && Math.abs(w - h) < 0.1) {
-      algoShape = "ROUND";
-      radius = w / 2;
-    } else if (shapeType === "POLYGON" && Array.isArray(pad.pad[1])) {
-      algoShape = "POLY";
-      vertices = polygonVertices(pad.pad[1]);
-      if (vertices.length > 0) {
-        let minX = Infinity;
-        let maxX = -Infinity;
-        let minY = Infinity;
-        let maxY = -Infinity;
-        for (const v of vertices) {
-          if (v.x < minX) minX = v.x;
-          if (v.x > maxX) maxX = v.x;
-          if (v.y < minY) minY = v.y;
-          if (v.y > maxY) maxY = v.y;
-        }
-        pad.x = (minX + maxX) / 2;
-        pad.y = (minY + maxY) / 2;
-        w = maxX - minX;
-        h = maxY - minY;
-      }
-    } else {
-      algoShape = "ROUND";
-      radius = Math.min(w, h) / 2;
+    return { shapeType, w, h };
+  }
+  function shapeOfPad(pad, box) {
+    if (box.shapeType === "ROUND" || box.shapeType === "ELLIPSE" && Math.abs(box.w - box.h) < 0.1) {
+      return { shape: "ROUND", w: box.w, h: box.h, radius: box.w / 2, vertices: null };
     }
-    return {
-      id: pad.primitiveId,
-      type: "PAD",
-      net: pad.net,
-      layer: pad.layer,
-      shape: algoShape,
-      x: Number(pad.x),
-      y: Number(pad.y),
-      w,
-      h,
-      r: radius,
-      vertices,
-      // 孔直径在源码里单位是 10mil，这里换算成一致量纲
-      holeSize: rawHole * 10
-    };
+    if (box.shapeType === "POLYGON" && Array.isArray(pad.pad[1])) {
+      return polyShapeOf(pad, box);
+    }
+    return { shape: "ROUND", w: box.w, h: box.h, radius: Math.min(box.w, box.h) / 2, vertices: null };
+  }
+  function polyShapeOf(pad, box) {
+    const vertices = polygonVertices(pad.pad[1]);
+    if (vertices.length === 0) {
+      return { shape: "POLY", w: box.w, h: box.h, radius: 0, vertices };
+    }
+    const bounds = vertexBounds(vertices);
+    pad.x = bounds.x;
+    pad.y = bounds.y;
+    return { shape: "POLY", w: bounds.w, h: bounds.h, radius: 0, vertices };
+  }
+  function vertexBounds(vertices) {
+    let minX = Infinity;
+    let maxX = -Infinity;
+    let minY = Infinity;
+    let maxY = -Infinity;
+    for (const v of vertices) {
+      if (v.x < minX) minX = v.x;
+      if (v.x > maxX) maxX = v.x;
+      if (v.y < minY) minY = v.y;
+      if (v.y > maxY) maxY = v.y;
+    }
+    return { x: (minX + maxX) / 2, y: (minY + maxY) / 2, w: maxX - minX, h: maxY - minY };
   }
   async function readAllPads(host) {
     try {
@@ -539,31 +547,47 @@
   }
   function checkConnectivityHighPrecision(a, b) {
     if (!areLayersConnected(a, b)) return false;
-    if (a.shape === "POLY" || b.shape === "POLY") {
-      const polyA = a.shape === "POLY" ? a : b;
-      const other = a.shape === "POLY" ? b : a;
-      return polyTouches(polyA, other);
-    }
+    if (a.shape === "POLY" || b.shape === "POLY") return polyTouchesEither(a, b);
     if (a.shape === "line" && b.shape === "line") return isTwoLinesTouching(a, b);
-    const n = a.shape === "line" ? a : b.shape === "line" ? b : null;
-    const r = a.shape === "line" ? b : b.shape === "line" ? a : null;
-    if (n && r) {
-      if (r.shape === "ROUND") {
-        const e = distToSegmentSquared(r.x, r.y, n.x1, n.y1, n.x2, n.y2);
-        const t = r.r + n.w / 2;
-        return e <= t * t;
-      }
-      if (r.shape === "RECT") {
-        const pad = n.w / 2 + 0.1;
-        return isLineIntersectRect(n.x1, n.y1, n.x2, n.y2, { x: r.x, y: r.y, w: r.w + 2 * pad, h: r.h + 2 * pad });
-      }
+    const pair = linePartnerPair(a, b);
+    if (pair) return linePartnerTouches(pair.linePrim, pair.otherPrim);
+    if (a.shape === "ROUND" && b.shape === "ROUND") return roundTouches(a, b);
+    return boxTouches(a, b);
+  }
+  function polyTouchesEither(a, b) {
+    const polyA = a.shape === "POLY" ? a : b;
+    const other = a.shape === "POLY" ? b : a;
+    return polyTouches(polyA, other);
+  }
+  function linePartnerPair(a, b) {
+    const linePrim = a.shape === "line" ? a : b.shape === "line" ? b : null;
+    const otherPrim = a.shape === "line" ? b : b.shape === "line" ? a : null;
+    return linePrim && otherPrim ? { linePrim, otherPrim } : null;
+  }
+  function linePartnerTouches(n, r) {
+    if (r.shape === "ROUND") {
+      const e = distToSegmentSquared(r.x, r.y, n.x1, n.y1, n.x2, n.y2);
+      const t = r.r + n.w / 2;
+      return e <= t * t;
     }
-    if (a.shape === "ROUND" && b.shape === "ROUND") {
-      return (a.x - b.x) ** 2 + (a.y - b.y) ** 2 < (a.r + b.r) ** 2;
+    if (r.shape === "RECT") {
+      const pad = n.w / 2 + 0.1;
+      return isLineIntersectRect(n.x1, n.y1, n.x2, n.y2, { x: r.x, y: r.y, w: r.w + 2 * pad, h: r.h + 2 * pad });
     }
+    return boxTouches(n, r);
+  }
+  function roundTouches(a, b) {
+    return (a.x - b.x) ** 2 + (a.y - b.y) ** 2 < (a.r + b.r) ** 2;
+  }
+  function boxTouches(a, b) {
     return Math.abs(a.x - b.x) < (a.w + b.w) / 2 && Math.abs(a.y - b.y) < (a.h + b.h) / 2;
   }
   function polyTouches(polyA, other) {
+    if (edgesCross(polyA, other)) return true;
+    if (otherInsidePoly(polyA, other)) return true;
+    return polyInsideOther(polyA, other);
+  }
+  function edgesCross(polyA, other) {
     const linesA = getEdges(polyA);
     const linesB = getEdges(other);
     for (const la of linesA) {
@@ -571,17 +595,25 @@
         if (lineIntersect(la[0], la[1], la[2], la[3], lb[0], lb[1], lb[2], lb[3])) return true;
       }
     }
+    return false;
+  }
+  function otherInsidePoly(polyA, other) {
     if (other.vertices) {
       for (const v of other.vertices) if (isPointInPoly(v.x, v.y, polyA.vertices)) return true;
-    } else if (other.shape === "line") {
-      if (isPointInPoly(other.x1, other.y1, polyA.vertices)) return true;
-      if (isPointInPoly(other.x2, other.y2, polyA.vertices)) return true;
-    } else if (isPointInPoly(other.x, other.y, polyA.vertices)) {
-      return true;
+      return false;
     }
+    if (other.shape === "line") {
+      if (isPointInPoly(other.x1, other.y1, polyA.vertices)) return true;
+      return isPointInPoly(other.x2, other.y2, polyA.vertices);
+    }
+    return isPointInPoly(other.x, other.y, polyA.vertices);
+  }
+  function polyInsideOther(polyA, other) {
     if (other.vertices) {
       for (const v of polyA.vertices) if (isPointInPoly(v.x, v.y, other.vertices)) return true;
-    } else if (other.shape === "RECT") {
+      return false;
+    }
+    if (other.shape === "RECT") {
       for (const v of polyA.vertices) if (isPointInRect(v.x, v.y, other)) return true;
     }
     return false;
@@ -645,6 +677,20 @@
 
   // iframe/js/src/app/generate-net/sourceParser.js
   function polyFromShape(shapeData) {
+    const data = unwrapShapeData(shapeData);
+    if (!Array.isArray(data) || data.length === 0) return null;
+    const rectData = rectDataOf(data);
+    let vertices;
+    if (rectData) {
+      vertices = rectVertices(rectData);
+    } else {
+      vertices = getPolyVertices(data);
+      if (vertices.length <= 2) return null;
+    }
+    if (vertices.length === 0) return null;
+    return { vertices, bounds: boundsOf(vertices) };
+  }
+  function unwrapShapeData(shapeData) {
     let data = shapeData;
     let safeCounter = 0;
     while (Array.isArray(data) && data.length > 0 && Array.isArray(data[0])) {
@@ -652,24 +698,23 @@
       data = data[0];
       if (++safeCounter > 5) break;
     }
-    if (!Array.isArray(data) || data.length === 0) return null;
-    let rectData = null;
-    if (Array.isArray(data[0]) && data[0][0] === "R") rectData = data[0];
-    else if (data[0] === "R") rectData = data;
-    let vertices = [];
-    if (rectData) {
-      const rx = Number(rectData[1]);
-      const ry = Number(rectData[2]);
-      const rw = Number(rectData[3]);
-      const rh = Number(rectData[4]);
-      const rot = Number(rectData[5] || 0);
-      const radius = Number(rectData[6] || 0);
-      vertices = getRotatedRectVertices(rx, ry, rw, rh, rot, radius);
-    } else {
-      vertices = getPolyVertices(data);
-      if (vertices.length <= 2) return null;
-    }
-    if (vertices.length === 0) return null;
+    return data;
+  }
+  function rectDataOf(data) {
+    if (Array.isArray(data[0]) && data[0][0] === "R") return data[0];
+    if (data[0] === "R") return data;
+    return null;
+  }
+  function rectVertices(rectData) {
+    const rx = Number(rectData[1]);
+    const ry = Number(rectData[2]);
+    const rw = Number(rectData[3]);
+    const rh = Number(rectData[4]);
+    const rot = Number(rectData[5] || 0);
+    const radius = Number(rectData[6] || 0);
+    return getRotatedRectVertices(rx, ry, rw, rh, rot, radius);
+  }
+  function boundsOf(vertices) {
     let minX = Infinity;
     let maxX = -Infinity;
     let minY = Infinity;
@@ -680,89 +725,106 @@
       if (v.y < minY) minY = v.y;
       if (v.y > maxY) maxY = v.y;
     }
-    return {
-      vertices,
-      bounds: { x: (minX + maxX) / 2, y: (minY + maxY) / 2, w: maxX - minX, h: maxY - minY }
-    };
+    return { x: (minX + maxX) / 2, y: (minY + maxY) / 2, w: maxX - minX, h: maxY - minY };
   }
   function parseV2Primitives(lines, ctx) {
-    const primitives = [];
-    const innerLayerIds = [];
+    const state = { primitives: [], innerLayerIds: [], ctx };
     for (const line of lines) {
-      if (!line.trim() || !line.startsWith("[")) continue;
-      let item;
-      try {
-        item = JSON.parse(line.replace(/^\s*/, ""));
-      } catch {
-        logger.debug("跳过无法解析的源码行");
-        continue;
-      }
-      const type = item[0];
+      const item = parseV2Item(line);
+      if (!item) continue;
       if (item[3] && typeof item[3] === "string" && item[3] !== "") ctx.allUsedNetNames.add(item[3]);
-      if (type === "LAYER") {
-        if (isInnerLayer(Number(item[1])) && Number(item[4]) === 3) innerLayerIds.push(Number(item[1]));
-      } else if (type === "LINE") {
-        primitives.push({
-          id: item[1],
-          type: "LINE",
-          net: item[3],
-          layer: item[4],
-          shape: "line",
-          x1: Number(item[5]),
-          y1: Number(item[6]),
-          x2: Number(item[7]),
-          y2: Number(item[8]),
-          w: Number(item[9])
-        });
-      } else if (type === "VIA") {
-        const dia = Number(item[8]);
-        primitives.push({
-          id: item[1],
-          type: "VIA",
-          net: item[3],
-          layer: LAYER_MULTI,
-          _rawRange: item[4],
-          shape: "ROUND",
-          x: Number(item[5]),
-          y: Number(item[6]),
-          w: dia,
-          h: dia,
-          r: dia / 2
-        });
-      } else if (type === "ARC") {
-        primitives.push(
-          ...expandArcLines({
-            id: item[1],
-            net: item[3],
-            layer: item[4],
-            x1: Number(item[5]),
-            y1: Number(item[6]),
-            x2: Number(item[7]),
-            y2: Number(item[8]),
-            angle: Number(item[9]),
-            w: Number(item[10]) || 0.15
-          })
-        );
-      } else if (type === "FILL" || type === "POLY") {
-        if (type === "FILL" && item[4] === LAYER_MULTI) continue;
-        const poly = polyFromShape(item[7]);
-        if (poly) {
-          primitives.push({
-            id: item[1],
-            type,
-            net: item[3],
-            layer: item[4],
-            shape: "POLY",
-            vertices: poly.vertices,
-            ...poly.bounds
-          });
-        }
-      } else if (type === "PAD_NET") {
-        ctx.padIdToPinInfo[item[1] + item[4]] = { compId: item[1], pin: item[2] };
-      }
+      applyV2Item(item, state);
     }
-    return { primitives, innerLayerIds };
+    return { primitives: state.primitives, innerLayerIds: state.innerLayerIds };
   }
+  function parseV2Item(line) {
+    if (!line.trim() || !line.startsWith("[")) return null;
+    try {
+      return JSON.parse(line.replace(/^\s*/, ""));
+    } catch {
+      logger.debug("跳过无法解析的源码行");
+      return null;
+    }
+  }
+  function applyV2Item(item, state) {
+    const type = item[0];
+    const handler = Object.prototype.hasOwnProperty.call(V2_HANDLERS, type) ? V2_HANDLERS[type] : null;
+    if (handler) handler(item, state);
+  }
+  function v2Layer(item, state) {
+    if (isInnerLayer(Number(item[1])) && Number(item[4]) === 3) state.innerLayerIds.push(Number(item[1]));
+  }
+  function v2Line(item, state) {
+    state.primitives.push({
+      id: item[1],
+      type: "LINE",
+      net: item[3],
+      layer: item[4],
+      shape: "line",
+      x1: Number(item[5]),
+      y1: Number(item[6]),
+      x2: Number(item[7]),
+      y2: Number(item[8]),
+      w: Number(item[9])
+    });
+  }
+  function v2Via(item, state) {
+    const dia = Number(item[8]);
+    state.primitives.push({
+      id: item[1],
+      type: "VIA",
+      net: item[3],
+      layer: LAYER_MULTI,
+      _rawRange: item[4],
+      shape: "ROUND",
+      x: Number(item[5]),
+      y: Number(item[6]),
+      w: dia,
+      h: dia,
+      r: dia / 2
+    });
+  }
+  function v2Arc(item, state) {
+    state.primitives.push(
+      ...expandArcLines({
+        id: item[1],
+        net: item[3],
+        layer: item[4],
+        x1: Number(item[5]),
+        y1: Number(item[6]),
+        x2: Number(item[7]),
+        y2: Number(item[8]),
+        angle: Number(item[9]),
+        w: Number(item[10]) || 0.15
+      })
+    );
+  }
+  function v2FillPoly(item, state) {
+    if (item[0] === "FILL" && item[4] === LAYER_MULTI) return;
+    const poly = polyFromShape(item[7]);
+    if (!poly) return;
+    state.primitives.push({
+      id: item[1],
+      type: item[0],
+      net: item[3],
+      layer: item[4],
+      shape: "POLY",
+      vertices: poly.vertices,
+      ...poly.bounds
+    });
+  }
+  function v2PadNet(item, state) {
+    state.ctx.padIdToPinInfo[item[1] + item[4]] = { compId: item[1], pin: item[2] };
+  }
+  var V2_HANDLERS = Object.freeze({
+    LAYER: v2Layer,
+    LINE: v2Line,
+    VIA: v2Via,
+    ARC: v2Arc,
+    FILL: v2FillPoly,
+    POLY: v2FillPoly,
+    PAD_NET: v2PadNet
+  });
   function parseV3LineObjects(line) {
     if (!line.trim()) return null;
     let cleanLine = line.trim();
@@ -862,13 +924,7 @@
   function onFill(item, state, netName) {
     if (item.type === "REGION" || item.type === "POLY") return;
     if (item.type === "FILL" && item.layerId === LAYER_MULTI) return;
-    let shapeData = null;
-    if (item.path) shapeData = item.path;
-    else if (item.points) shapeData = item.points;
-    else if (item.width && item.height && item.x !== void 0) {
-      shapeData = ["R", item.x, item.y, item.width, item.height, item.rotation || 0, item.cornerRadius || 0];
-    }
-    const poly = polyFromShape(shapeData);
+    const poly = polyFromShape(fillShapeData(item));
     if (!poly) return;
     state.primitives.push({
       id: item.id,
@@ -880,6 +936,14 @@
       vertices: poly.vertices,
       ...poly.bounds
     });
+  }
+  function fillShapeData(item) {
+    if (item.path) return item.path;
+    if (item.points) return item.points;
+    if (item.width && item.height && item.x !== void 0) {
+      return ["R", item.x, item.y, item.width, item.height, item.rotation || 0, item.cornerRadius || 0];
+    }
+    return null;
   }
   var V3_HANDLERS = Object.freeze({
     ATTR: onAttr,
@@ -972,16 +1036,7 @@
     for (const key in grid) {
       const cellItems = grid[key];
       if (cellItems.length < 2) continue;
-      for (let i = 0; i < cellItems.length; i++) {
-        for (let j = i + 1; j < cellItems.length; j++) {
-          const a = cellItems[i];
-          const b = cellItems[j];
-          const pairId = a.id < b.id ? `${a.id}|${b.id}` : `${b.id}|${a.id}`;
-          if (processedPairs.has(pairId)) continue;
-          processedPairs.add(pairId);
-          if (checkConnectivityHighPrecision(a, b)) uf.union(a.id, b.id);
-        }
-      }
+      linkCellPairs(cellItems, uf, processedPairs);
     }
     const clusters = {};
     for (const p of copperPrimitives) {
@@ -991,21 +1046,30 @@
     }
     return clusters;
   }
+  function linkCellPairs(cellItems, uf, processedPairs) {
+    for (let i = 0; i < cellItems.length; i++) {
+      for (let j = i + 1; j < cellItems.length; j++) {
+        const a = cellItems[i];
+        const b = cellItems[j];
+        const pairId = a.id < b.id ? `${a.id}|${b.id}` : `${b.id}|${a.id}`;
+        if (processedPairs.has(pairId)) continue;
+        processedPairs.add(pairId);
+        if (checkConnectivityHighPrecision(a, b)) uf.union(a.id, b.id);
+      }
+    }
+  }
   function attachPinInfo(group, padIdToPinInfo) {
     for (const item of group) {
       if (item.type !== "PAD") continue;
-      let pinInfo = padIdToPinInfo[item.id];
-      if (!pinInfo) {
-        const idText = String(item.id);
-        for (const key in padIdToPinInfo) {
-          if (idText.endsWith(key)) {
-            pinInfo = padIdToPinInfo[key];
-            break;
-          }
-        }
-      }
+      const pinInfo = padIdToPinInfo[item.id] || findPinInfoBySuffix(String(item.id), padIdToPinInfo);
       if (pinInfo) item._pinInfo = pinInfo;
     }
+  }
+  function findPinInfoBySuffix(idText, padIdToPinInfo) {
+    for (const key in padIdToPinInfo) {
+      if (idText.endsWith(key)) return padIdToPinInfo[key];
+    }
+    return null;
   }
   function computeClusters(primitives, allPads, innerLayerIds, padIdToPinInfo) {
     applyBlindLayers(primitives, innerLayerIds);
@@ -1017,21 +1081,20 @@
   }
 
   // iframe/js/src/core/pins.js
-  function getPins(comp) {
+  function netOf(value) {
+    if (value && typeof value === "object") return value.net || "";
+    return String(value || "");
+  }
+  function readPinMap(map) {
     const out = {};
-    if (!comp || typeof comp !== "object") return out;
-    if (comp.pinInfoMap && typeof comp.pinInfoMap === "object") {
-      for (const [pin, info] of Object.entries(comp.pinInfoMap)) {
-        out[pin] = info && typeof info === "object" ? info.net || "" : String(info || "");
-      }
-      return out;
-    }
-    if (comp.pins && typeof comp.pins === "object") {
-      for (const [pin, net] of Object.entries(comp.pins)) {
-        out[pin] = net && typeof net === "object" ? net.net || "" : String(net || "");
-      }
-    }
+    for (const [pin, value] of Object.entries(map)) out[pin] = netOf(value);
     return out;
+  }
+  function getPins(comp) {
+    if (!comp || typeof comp !== "object") return {};
+    if (comp.pinInfoMap && typeof comp.pinInfoMap === "object") return readPinMap(comp.pinInfoMap);
+    if (comp.pins && typeof comp.pins === "object") return readPinMap(comp.pins);
+    return {};
   }
   function getPinNet(comp, pin) {
     return getPins(comp)[pin] || "";
@@ -1109,48 +1172,61 @@
   }
   function planNetlistOperations(clusters, allUsedNetNames, componentsContainer) {
     const namer = createNetNamer(allUsedNetNames);
-    const pinsByDesignator = {};
-    for (const rootId of Object.keys(clusters || {})) {
-      const group = clusters[rootId];
-      if (!hasMultiple(group)) continue;
-      const finalNetName = namer.nameFor(voteNets(group));
-      const updates = {};
-      for (const item of group) {
-        if (item.type !== "PAD" || !item._pinInfo) continue;
-        const pinInfo = item._pinInfo;
-        if (!updates[pinInfo.des]) updates[pinInfo.des] = {};
-        updates[pinInfo.des][pinInfo.pin] = finalNetName;
-      }
-      for (const des in updates) {
-        pinsByDesignator[des] = Object.assign(pinsByDesignator[des] || {}, updates[des]);
-      }
-    }
-    const designatorToCompId = {};
-    for (const compId in componentsContainer || {}) {
-      const comp = componentsContainer[compId];
-      if (comp && comp.props && comp.props.Designator) designatorToCompId[comp.props.Designator] = compId;
-    }
+    const pinsByDesignator = collectPinUpdates(clusters, namer);
+    const designatorToCompId = designatorIndex(componentsContainer);
     const operations = [];
     for (const des in pinsByDesignator) {
       const compId = designatorToCompId[des];
       if (!compId) continue;
       const comp = componentsContainer[compId];
       if (!comp) continue;
-      const pinUpdates = pinsByDesignator[des];
-      for (const pin in pinUpdates) {
-        const newNet = pinUpdates[pin];
-        const oldNet = getPinNet(comp, pin);
-        if (oldNet === newNet) continue;
-        operations.push({
-          des,
-          pin,
-          oldNet: oldNet || "—",
-          newNet,
-          status: "pending"
-        });
-      }
+      pushDesignatorOperations(operations, des, comp, pinsByDesignator[des]);
     }
     return operations;
+  }
+  function collectPinUpdates(clusters, namer) {
+    const pinsByDesignator = {};
+    for (const rootId of Object.keys(clusters || {})) {
+      const group = clusters[rootId];
+      if (!hasMultiple(group)) continue;
+      const finalNetName = namer.nameFor(voteNets(group));
+      mergeGroupUpdates(pinsByDesignator, group, finalNetName);
+    }
+    return pinsByDesignator;
+  }
+  function mergeGroupUpdates(pinsByDesignator, group, finalNetName) {
+    const updates = {};
+    for (const item of group) {
+      if (item.type !== "PAD" || !item._pinInfo) continue;
+      const pinInfo = item._pinInfo;
+      if (!updates[pinInfo.des]) updates[pinInfo.des] = {};
+      updates[pinInfo.des][pinInfo.pin] = finalNetName;
+    }
+    for (const des in updates) {
+      pinsByDesignator[des] = Object.assign(pinsByDesignator[des] || {}, updates[des]);
+    }
+  }
+  function designatorIndex(componentsContainer) {
+    const designatorToCompId = {};
+    for (const compId in componentsContainer || {}) {
+      const comp = componentsContainer[compId];
+      if (comp && comp.props && comp.props.Designator) designatorToCompId[comp.props.Designator] = compId;
+    }
+    return designatorToCompId;
+  }
+  function pushDesignatorOperations(operations, des, comp, pinUpdates) {
+    for (const pin in pinUpdates) {
+      const newNet = pinUpdates[pin];
+      const oldNet = getPinNet(comp, pin);
+      if (oldNet === newNet) continue;
+      operations.push({
+        des,
+        pin,
+        oldNet: oldNet || "—",
+        newNet,
+        status: "pending"
+      });
+    }
   }
   function applyPinUpdates(componentsContainer, pinUpdatesByDesignator) {
     let updateCount = 0;
@@ -1162,32 +1238,42 @@
       const pinUpdates = pinUpdatesByDesignator.get(des);
       if (!pinUpdates) continue;
       if (compData.pinInfoMap) {
-        for (const pinNum in pinUpdates) {
-          const targetNet = pinUpdates[pinNum];
-          const pinKey = String(pinNum);
-          if (compData.pinInfoMap[pinKey]) {
-            if (compData.pinInfoMap[pinKey].net !== targetNet) {
-              compData.pinInfoMap[pinKey].net = targetNet;
-              updateCount += 1;
-            }
-          } else {
-            compData.pinInfoMap[pinKey] = { net: targetNet, number: pinKey };
-            updateCount += 1;
-          }
+        updateCount += applyToPinInfoMap(compData.pinInfoMap, pinUpdates);
+        continue;
+      }
+      updateCount += applyToPins(compData, pinUpdates);
+    }
+    return updateCount;
+  }
+  function applyToPinInfoMap(pinInfoMap, pinUpdates) {
+    let count = 0;
+    for (const pinNum in pinUpdates) {
+      const targetNet = pinUpdates[pinNum];
+      const pinKey = String(pinNum);
+      if (pinInfoMap[pinKey]) {
+        if (pinInfoMap[pinKey].net !== targetNet) {
+          pinInfoMap[pinKey].net = targetNet;
+          count += 1;
         }
         continue;
       }
-      if (!compData.pins) compData.pins = {};
-      for (const pinNum in pinUpdates) {
-        const targetNet = pinUpdates[pinNum];
-        const pinKey = String(pinNum);
-        if (compData.pins[pinKey] !== targetNet) {
-          compData.pins[pinKey] = targetNet;
-          updateCount += 1;
-        }
+      pinInfoMap[pinKey] = { net: targetNet, number: pinKey };
+      count += 1;
+    }
+    return count;
+  }
+  function applyToPins(compData, pinUpdates) {
+    if (!compData.pins) compData.pins = {};
+    let count = 0;
+    for (const pinNum in pinUpdates) {
+      const targetNet = pinUpdates[pinNum];
+      const pinKey = String(pinNum);
+      if (compData.pins[pinKey] !== targetNet) {
+        compData.pins[pinKey] = targetNet;
+        count += 1;
       }
     }
-    return updateCount;
+    return count;
   }
 
   // iframe/js/src/core/sourceLine.js

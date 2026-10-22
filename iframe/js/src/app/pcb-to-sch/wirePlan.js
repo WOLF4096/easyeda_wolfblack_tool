@@ -56,31 +56,47 @@ export function planWires(input) {
 	};
 
 	for (const entry of Object.entries(input.comp.pins || {})) {
-		const pinNumber = entry[0];
-		const netName = entry[1];
-		if (!netName) continue;
-
-		const pinInfo = symbolPins[pinNumber];
-		if (!pinInfo) continue;
-
-		const pinX = input.compX + pinInfo.x;
-		const pinY = input.isV2 ? input.compY + pinInfo.y : input.compY - pinInfo.y;
-		const spread = WIRE_END[pinInfo.angle] || WIRE_END[0];
-		const end = spread(pinX, pinY, input.wireLength, yDir);
-
-		lines.push(
-			...createSchWireLines({
-				net: netName,
-				startX: pinX,
-				startY: pinY,
-				endX: end.endX,
-				endY: end.endY,
-				rotation: end.netT,
-				isModern: !input.isV2,
-				nextRow: nextRow,
-			})
-		);
+		pushWireForPin(lines, input, symbolPins, entry, yDir, nextRow);
 	}
 
 	return lines;
+}
+
+/**
+ * 为一个引脚追加导线行（就地追加到 `lines`）
+ *
+ * @param {string[]} lines 已生成的源码行
+ * @param {object} input `planWires` 的入参
+ * @param {Record<string, object>} symbolPins 符号里的引脚表
+ * @param {Array} entry `[引脚号, 网络名]`
+ * @param {number} yDir Y 轴方向
+ * @param {() => {id: number, ticket: number}} nextRow 取下一行 id
+ * @returns {void}
+ * @sideEffects 追加 `lines`、调用 `nextRow()`
+ */
+function pushWireForPin(lines, input, symbolPins, entry, yDir, nextRow) {
+	const pinNumber = entry[0];
+	const netName = entry[1];
+	if (!netName) return;
+
+	const pinInfo = symbolPins[pinNumber];
+	if (!pinInfo) return;
+
+	const pinX = input.compX + pinInfo.x;
+	const pinY = input.isV2 ? input.compY + pinInfo.y : input.compY - pinInfo.y;
+	const spread = WIRE_END[pinInfo.angle] || WIRE_END[0];
+	const end = spread(pinX, pinY, input.wireLength, yDir);
+
+	lines.push(
+		...createSchWireLines({
+			net: netName,
+			startX: pinX,
+			startY: pinY,
+			endX: end.endX,
+			endY: end.endY,
+			rotation: end.netT,
+			isModern: !input.isV2,
+			nextRow: nextRow,
+		})
+	);
 }

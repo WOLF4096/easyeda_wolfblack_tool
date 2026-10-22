@@ -46,16 +46,7 @@ function clusterByGrid(copperPrimitives) {
 	for (const key in grid) {
 		const cellItems = grid[key];
 		if (cellItems.length < 2) continue;
-		for (let i = 0; i < cellItems.length; i++) {
-			for (let j = i + 1; j < cellItems.length; j++) {
-				const a = cellItems[i];
-				const b = cellItems[j];
-				const pairId = a.id < b.id ? `${a.id}|${b.id}` : `${b.id}|${a.id}`;
-				if (processedPairs.has(pairId)) continue;
-				processedPairs.add(pairId);
-				if (checkConnectivityHighPrecision(a, b)) uf.union(a.id, b.id);
-			}
-		}
+		linkCellPairs(cellItems, uf, processedPairs);
 	}
 
 	const clusters = {};
@@ -65,6 +56,28 @@ function clusterByGrid(copperPrimitives) {
 		clusters[root].push(p);
 	}
 	return clusters;
+}
+
+/**
+ * 同一格内的图元两两判定并合并
+ *
+ * @param {Array<object>} cellItems 该格的图元
+ * @param {UnionFind} uf 并查集（就地修改）
+ * @param {Set<string>} processedPairs 已判定过的图元对（就地修改）
+ * @returns {void}
+ * @sideEffects **就地修改** `uf` 与 `processedPairs`
+ */
+function linkCellPairs(cellItems, uf, processedPairs) {
+	for (let i = 0; i < cellItems.length; i++) {
+		for (let j = i + 1; j < cellItems.length; j++) {
+			const a = cellItems[i];
+			const b = cellItems[j];
+			const pairId = a.id < b.id ? `${a.id}|${b.id}` : `${b.id}|${a.id}`;
+			if (processedPairs.has(pairId)) continue;
+			processedPairs.add(pairId);
+			if (checkConnectivityHighPrecision(a, b)) uf.union(a.id, b.id);
+		}
+	}
 }
 
 /**
@@ -82,18 +95,26 @@ function attachPinInfo(group, padIdToPinInfo) {
 	for (const item of group) {
 		if (item.type !== 'PAD') continue;
 
-		let pinInfo = padIdToPinInfo[item.id];
-		if (!pinInfo) {
-			const idText = String(item.id);
-			for (const key in padIdToPinInfo) {
-				if (idText.endsWith(key)) {
-					pinInfo = padIdToPinInfo[key];
-					break;
-				}
-			}
-		}
+		const pinInfo = padIdToPinInfo[item.id] || findPinInfoBySuffix(String(item.id), padIdToPinInfo);
 		if (pinInfo) item._pinInfo = pinInfo;
 	}
+}
+
+/**
+ * 后缀兜底查找：焊盘 id 可能带前缀，用「以查找键结尾」匹配
+ *
+ * 返回第一个命中的键（`for...in` 顺序与原实现一致，别改成先收集再挑）。
+ *
+ * @param {string} idText 焊盘 id 文本
+ * @param {Record<string, object>} padIdToPinInfo 焊盘 id → 引脚信息
+ * @returns {object|null} 引脚信息；没命中返回 null
+ * @sideEffects 无（纯函数）
+ */
+function findPinInfoBySuffix(idText, padIdToPinInfo) {
+	for (const key in padIdToPinInfo) {
+		if (idText.endsWith(key)) return padIdToPinInfo[key];
+	}
+	return null;
 }
 
 /**

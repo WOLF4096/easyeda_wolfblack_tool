@@ -47,16 +47,8 @@ const PRESERVE_SET = new Set(PRESERVE_KEYS);
 function mergeIntoProps(props, action) {
 	const targetComp = action.targetComp || {};
 
-	if (targetComp.otherProperty) {
-		for (const key in targetComp.otherProperty) {
-			if (!PRESERVE_SET.has(key)) props[key] = targetComp.otherProperty[key];
-		}
-	}
-
-	if (targetComp.supplier) props.Supplier = targetComp.supplier;
-	if (targetComp.supplierId) props['Supplier Part'] = targetComp.supplierId;
-	if (targetComp.manufacturer) props.Manufacturer = targetComp.manufacturer;
-	if (targetComp.manufacturerId) props['Manufacturer Part'] = targetComp.manufacturerId;
+	mergeOtherProperties(props, targetComp.otherProperty);
+	mergeSupplierFields(props, targetComp);
 
 	props.Name = action.preserveName ? action.sourceName : action.targetName;
 	props.FootprintName = action.preserveFootprint
@@ -65,6 +57,37 @@ function mergeIntoProps(props, action) {
 			? targetComp.footprint.name
 			: '';
 	props.DeviceName = targetComp.manufacturerId || '';
+}
+
+/**
+ * 合并目标器件的文本属性（受保护键除外）
+ *
+ * @param {object} props 网表器件属性（会被修改）
+ * @param {object} otherProperty 目标图元的属性字典
+ * @returns {void}
+ * @sideEffects **就地修改** `props`
+ */
+function mergeOtherProperties(props, otherProperty) {
+	if (!otherProperty) return;
+
+	for (const key in otherProperty) {
+		if (!PRESERVE_SET.has(key)) props[key] = otherProperty[key];
+	}
+}
+
+/**
+ * 合并供应商 / 厂家字段（取到值才覆盖）
+ *
+ * @param {object} props 网表器件属性（会被修改）
+ * @param {object} targetComp 目标图元
+ * @returns {void}
+ * @sideEffects **就地修改** `props`
+ */
+function mergeSupplierFields(props, targetComp) {
+	if (targetComp.supplier) props.Supplier = targetComp.supplier;
+	if (targetComp.supplierId) props['Supplier Part'] = targetComp.supplierId;
+	if (targetComp.manufacturer) props.Manufacturer = targetComp.manufacturer;
+	if (targetComp.manufacturerId) props['Manufacturer Part'] = targetComp.manufacturerId;
 }
 
 /**

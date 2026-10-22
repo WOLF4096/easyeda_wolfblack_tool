@@ -110,6 +110,80 @@ const handleCommand = createCommandHandler({
 });
 
 /**
+ * 宿主是否具备「按 id 取 Object 图元」所需的三组 API
+ *
+ * @param {object|null} host EDA 宿主对象
+ * @returns {boolean} 是否可用
+ * @sideEffects 无
+ */
+function hasObjectApi(host) {
+	return !!(host && host.pcb_SelectControl && host.pcb_SelectControl.getAllSelectedPrimitives_PrimitiveId && host.pcb_PrimitiveObject && host.pcb_PrimitiveObject.get);
+}
+
+/**
+ * 选中集返回值归一成数组（可能是真正的数组，也可能是类数组）
+ *
+ * @param {*} ids 选中集返回值
+ * @returns {Array} id 列表
+ * @sideEffects 无
+ */
+function toIdList(ids) {
+	if (Array.isArray(ids)) return ids;
+	return ids && typeof ids.length === 'number' ? Array.prototype.slice.call(ids) : [];
+}
+
+/**
+ * 是否是需要采样的 Object 图元（尺寸必须是数字）
+ *
+ * @param {*} obj API 返回的图元
+ * @returns {boolean} 是否命中
+ * @sideEffects 无
+ */
+function isSampledObject(obj) {
+	return !!(obj && obj.primitiveType === 'Object' && typeof obj.width === 'number' && typeof obj.height === 'number');
+}
+
+/**
+ * 从 Object 图元取出要上报的参数
+ *
+ * @param {object} obj Object 图元
+ * @param {*} fallbackId 选中集里的 id（图元没带 id 时兜底）
+ * @returns {object} 选中参数
+ * @sideEffects 无
+ */
+function selectionOf(obj, fallbackId) {
+	return {
+		topLeftX: obj.topLeftX,
+		topLeftY: obj.topLeftY,
+		width: obj.width,
+		height: obj.height,
+		rotation: obj.rotation || 0,
+		mirror: !!obj.mirror,
+		primitiveId: obj.primitiveId || String(fallbackId),
+	};
+}
+
+/**
+ * 在选中集里找第一个 Object 图元
+ *
+ * @param {object} host EDA 宿主对象
+ * @param {Array} list 选中 id 列表
+ * @returns {Promise<object|null>} 选中参数；没找到为 null
+ * @sideEffects eda API（pcb_PrimitiveObject.get）
+ */
+async function findFirstObject(host, list) {
+	for (let i = 0; i < list.length; i++) {
+		try {
+			const obj = await host.pcb_PrimitiveObject.get(list[i]);
+			if (isSampledObject(obj)) return selectionOf(obj, list[i]);
+		} catch (e) {
+			/* 该对象不是 Object，跳过 */
+		}
+	}
+	return null;
+}
+
+/**
  * 采样当前选中对象（只认 Object 类型，取第一个命中的）
  *
  * @returns {Promise<void>}
@@ -120,34 +194,10 @@ async function sampleSelection() {
 	selBusy = true;
 	try {
 		const host = getEda();
-		if (
-			host &&
-			host.pcb_SelectControl &&
-			host.pcb_SelectControl.getAllSelectedPrimitives_PrimitiveId &&
-			host.pcb_PrimitiveObject &&
-			host.pcb_PrimitiveObject.get
-		) {
+		if (hasObjectApi(host)) {
 			const ids = await host.pcb_SelectControl.getAllSelectedPrimitives_PrimitiveId();
-			const list = Array.isArray(ids) ? ids : ids && typeof ids.length === 'number' ? Array.prototype.slice.call(ids) : [];
-			for (let i = 0; i < list.length; i++) {
-				try {
-					const obj = await host.pcb_PrimitiveObject.get(list[i]);
-					if (obj && obj.primitiveType === 'Object' && typeof obj.width === 'number' && typeof obj.height === 'number') {
-						lastSel = {
-							topLeftX: obj.topLeftX,
-							topLeftY: obj.topLeftY,
-							width: obj.width,
-							height: obj.height,
-							rotation: obj.rotation || 0,
-							mirror: !!obj.mirror,
-							primitiveId: obj.primitiveId || String(list[i]),
-						};
-						break;
-					}
-				} catch (e) {
-					/* 该对象不是 Object，跳过 */
-				}
-			}
+			const found = await findFirstObject(host, toIdList(ids));
+			if (found) lastSel = found;
 		}
 	} catch (e) {
 		/* 忽略单次采样失败 */

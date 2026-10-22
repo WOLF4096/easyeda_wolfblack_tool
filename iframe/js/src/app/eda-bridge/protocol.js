@@ -37,37 +37,39 @@ export function parseAddr(input) {
 	return { host: host, port: port };
 }
 
+/** 标量类型 → 降级后的值（不在表里的类型继续往下走） */
+const SCALARS = new Map([
+	['number', (value) => value],
+	['boolean', (value) => value],
+	['string', (value) => value],
+	['bigint', (value) => String(value)],
+	['function', (value) => '[Function ' + (value.name || 'anonymous') + ']'],
+	['symbol', (value) => String(value)],
+]);
+
 /**
- * 把任意值转成可 JSON 序列化的形状
+ * Promise / Blob / Node 这类对象只报类型，避免污染结果
  *
- * EDA 的返回值经常带循环引用、函数、DOM 节点，直接 `JSON.stringify` 会抛错，
- * 导致「指令执行成功但结果回不来」。这里按类型降级，并限制深度/数组长度/键数量。
- *
- * @param {*} value 任意值
- * @param {number} [depth=0] 当前深度（内部递归用）
- * @returns {*} 可安全序列化的值
- * @sideEffects 无（纯函数，不修改入参）
+ * @param {*} value 任意对象
+ * @returns {string|undefined} 占位串；普通对象返回 undefined
+ * @sideEffects 无（纯函数）
  */
-export function safeJson(value, depth = 0) {
-	if (value === null) return null;
-	if (value === undefined) return null;
-
-	const type = typeof value;
-	if (type === 'number' || type === 'boolean' || type === 'string') return value;
-	if (type === 'bigint') return String(value);
-	if (type === 'function') return '[Function ' + (value.name || 'anonymous') + ']';
-	if (type === 'symbol') return String(value);
-	if (depth > SAFE_JSON_LIMITS.maxDepth) return '[MaxDepth]';
-
-	if (Array.isArray(value)) {
-		return value.slice(0, SAFE_JSON_LIMITS.maxArray).map((item) => safeJson(item, depth + 1));
-	}
-
-	// Promise / Blob / Node 这类对象只报类型，避免污染结果
+function specialObjectOf(value) {
 	if (typeof value.then === 'function') return '[Promise]';
 	if (typeof Blob !== 'undefined' && value instanceof Blob) return '[Blob ' + value.size + 'B]';
 	if (typeof Node !== 'undefined' && value instanceof Node) return '[Node ' + value.nodeName + ']';
+	return undefined;
+}
 
+/**
+ * 普通对象：逐键降级，限制键数量
+ *
+ * @param {object} value 对象
+ * @param {number} depth 当前深度
+ * @returns {object} 可安全序列化的普通对象
+ * @sideEffects 无（纯函数）
+ */
+function plainObjectOf(value, depth) {
 	const out = {};
 	let count = 0;
 	for (const key in value) {
@@ -82,4 +84,32 @@ export function safeJson(value, depth = 0) {
 		}
 	}
 	return out;
+}
+
+/**
+ * 把任意值转成可 JSON 序列化的形状
+ *
+ * EDA 的返回值经常带循环引用、函数、DOM 节点，直接 `JSON.stringify` 会抛错，
+ * 导致「指令执行成功但结果回不来」。这里按类型降级，并限制深度/数组长度/键数量。
+ *
+ * @param {*} value 任意值
+ * @param {number} [depth=0] 当前深度（内部递归用）
+ * @returns {*} 可安全序列化的值
+ * @sideEffects 无（纯函数，不修改入参）
+ */
+export function safeJson(value, depth = 0) {
+	if (value === null || value === undefined) return null;
+
+	const scalar = SCALARS.get(typeof value);
+	if (scalar) return scalar(value);
+	if (depth > SAFE_JSON_LIMITS.maxDepth) return '[MaxDepth]';
+
+	if (Array.isArray(value)) {
+		return value.slice(0, SAFE_JSON_LIMITS.maxArray).map((item) => safeJson(item, depth + 1));
+	}
+
+	const special = specialObjectOf(value);
+	if (special !== undefined) return special;
+
+	return plainObjectOf(value, depth);
 }

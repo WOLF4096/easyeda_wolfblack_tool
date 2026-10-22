@@ -12,6 +12,33 @@
  */
 
 /**
+ * 把一个引脚的值归一成网络名
+ *
+ * V3/V4 是 `{ net, name, number }` 对象，V2 是裸字符串；空值统一成空串。
+ *
+ * @param {*} value 引脚值
+ * @returns {string} 网络名
+ * @sideEffects 无（纯函数）
+ */
+function netOf(value) {
+	if (value && typeof value === 'object') return value.net || '';
+	return String(value || '');
+}
+
+/**
+ * 读一份「引脚 → 值」映射
+ *
+ * @param {object} map `pinInfoMap` 或 `pins`
+ * @returns {Record<string, string>} 新的扁平对象
+ * @sideEffects 无（纯函数）
+ */
+function readPinMap(map) {
+	const out = {};
+	for (const [pin, value] of Object.entries(map)) out[pin] = netOf(value);
+	return out;
+}
+
+/**
  * 取一个器件的引脚 → 网络映射
  *
  * V3/V4：`pinInfoMap: { pin: { net, name, number } }`
@@ -22,22 +49,12 @@
  * @sideEffects 无（纯函数，返回新对象）
  */
 export function getPins(comp) {
-	const out = {};
-	if (!comp || typeof comp !== 'object') return out;
+	if (!comp || typeof comp !== 'object') return {};
 
-	if (comp.pinInfoMap && typeof comp.pinInfoMap === 'object') {
-		for (const [pin, info] of Object.entries(comp.pinInfoMap)) {
-			out[pin] = info && typeof info === 'object' ? info.net || '' : String(info || '');
-		}
-		return out;
-	}
+	if (comp.pinInfoMap && typeof comp.pinInfoMap === 'object') return readPinMap(comp.pinInfoMap);
 
-	if (comp.pins && typeof comp.pins === 'object') {
-		for (const [pin, net] of Object.entries(comp.pins)) {
-			out[pin] = net && typeof net === 'object' ? net.net || '' : String(net || '');
-		}
-	}
-	return out;
+	if (comp.pins && typeof comp.pins === 'object') return readPinMap(comp.pins);
+	return {};
 }
 
 /**
@@ -70,6 +87,42 @@ export function getPinNet(comp, pin) {
 }
 
 /**
+ * 写 `pinInfoMap`（V3/V4）结构
+ *
+ * @param {object} comp 网表器件
+ * @param {string} pin 引脚号
+ * @param {string} net 新网络名
+ * @param {boolean} create 允许新增引脚
+ * @returns {boolean} 是否写入成功
+ * @sideEffects **就地修改** 网表器件
+ */
+function writePinInfoMap(comp, pin, net, create) {
+	if (comp.pinInfoMap[pin]) {
+		comp.pinInfoMap[pin].net = net;
+		return true;
+	}
+	if (!create) return false;
+	comp.pinInfoMap[pin] = { name: '', number: pin, net: net };
+	return true;
+}
+
+/**
+ * 写 `pins`（V2）结构
+ *
+ * @param {object} comp 网表器件
+ * @param {string} pin 引脚号
+ * @param {string} net 新网络名
+ * @param {boolean} create 允许新增引脚
+ * @returns {boolean} 是否写入成功
+ * @sideEffects **就地修改** 网表器件
+ */
+function writePins(comp, pin, net, create) {
+	if (!create && !Object.prototype.hasOwnProperty.call(comp.pins, pin)) return false;
+	comp.pins[pin] = net;
+	return true;
+}
+
+/**
  * 写单个引脚的网络（自动适配两种结构）
  *
  * V3/V4 写 `pinInfoMap[pin].net`，V2 写 `pins[pin]`。
@@ -87,32 +140,14 @@ export function setPinNet(comp, pin, net, options = {}) {
 	if (!comp || typeof comp !== 'object') return false;
 	const create = options.create === true;
 
-	if (comp.pinInfoMap && typeof comp.pinInfoMap === 'object') {
-		if (comp.pinInfoMap[pin]) {
-			comp.pinInfoMap[pin].net = net;
-			return true;
-		}
-		if (create) {
-			comp.pinInfoMap[pin] = { name: '', number: pin, net: net };
-			return true;
-		}
-		return false;
-	}
+	if (comp.pinInfoMap && typeof comp.pinInfoMap === 'object') return writePinInfoMap(comp, pin, net, create);
 
-	if (comp.pins && typeof comp.pins === 'object') {
-		if (Object.prototype.hasOwnProperty.call(comp.pins, pin) || create) {
-			comp.pins[pin] = net;
-			return true;
-		}
-		return false;
-	}
+	if (comp.pins && typeof comp.pins === 'object') return writePins(comp, pin, net, create);
 
-	if (create) {
-		comp.pins = {};
-		comp.pins[pin] = net;
-		return true;
-	}
-	return false;
+	if (!create) return false;
+	comp.pins = {};
+	comp.pins[pin] = net;
+	return true;
 }
 
 /**

@@ -74,6 +74,28 @@ function banner(doc, text, timeoutMs) {
 }
 
 /**
+ * 尝试走宿主 toast
+ *
+ * 宿主缺失、字段缺失、或调用本身抛错，都算「没走通」，由调用方降级为页面横幅。
+ *
+ * @param {object|null} host 宿主对象
+ * @param {string} text 文案
+ * @param {string|number} type 归一后的级别
+ * @returns {boolean} 是否已交给宿主显示
+ * @sideEffects eda API（sys_Message.showToastMessage）
+ */
+function showOnHost(host, text, type) {
+	try {
+		if (!host || !host.sys_Message || typeof host.sys_Message.showToastMessage !== 'function') return false;
+		host.sys_Message.showToastMessage(text, type);
+		return true;
+	} catch (e) {
+		/* 宿主 toast 不可用 → 走页面横幅 */
+		return false;
+	}
+}
+
+/**
  * 显示一条轻提示
  *
  * @param {string} message 文案（非字符串会被 String 化）
@@ -89,16 +111,8 @@ export function toast(message, level = TOAST_LEVEL.info, opts = {}) {
 	const doc = opts.doc || globalThis.document;
 	const host = opts.host === undefined ? getEda() : opts.host;
 	const text = message === null || message === undefined ? '' : String(message);
-	const type = normalizeLevel(level);
 
-	try {
-		if (host && host.sys_Message && typeof host.sys_Message.showToastMessage === 'function') {
-			host.sys_Message.showToastMessage(text, type);
-			return 'host';
-		}
-	} catch (e) {
-		/* 宿主 toast 不可用 → 走页面横幅 */
-	}
+	if (showOnHost(host, text, normalizeLevel(level))) return 'host';
 
 	return banner(doc, text, opts.timeoutMs === undefined ? 3000 : opts.timeoutMs) ? 'dom' : 'none';
 }

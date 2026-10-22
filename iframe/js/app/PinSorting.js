@@ -45,18 +45,24 @@
     let busy = false;
     let last = null;
     let stopped = false;
+    function shouldSkip() {
+      if (busy || stopped) return true;
+      if (skipWhenHidden && doc && doc.hidden) return true;
+      return typeof fetchItems !== "function";
+    }
+    function applyItems(items) {
+      if (stopped) return false;
+      if (last !== null && isEqual(items, last)) return false;
+      last = items;
+      if (typeof onItems === "function") onItems(items);
+      return true;
+    }
     async function tick() {
-      if (busy || stopped) return false;
-      if (skipWhenHidden && doc && doc.hidden) return false;
-      if (typeof fetchItems !== "function") return false;
+      if (shouldSkip()) return false;
       busy = true;
       try {
         const items = await fetchItems();
-        if (stopped) return false;
-        if (last !== null && isEqual(items, last)) return false;
-        last = items;
-        if (typeof onItems === "function") onItems(items);
-        return true;
+        return applyItems(items);
       } catch (e) {
         return false;
       } finally {

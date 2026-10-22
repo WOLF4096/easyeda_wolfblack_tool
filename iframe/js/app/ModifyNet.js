@@ -230,49 +230,44 @@
   }
 
   // iframe/js/src/core/pins.js
-  function getPins(comp) {
+  function netOf(value) {
+    if (value && typeof value === "object") return value.net || "";
+    return String(value || "");
+  }
+  function readPinMap(map) {
     const out = {};
-    if (!comp || typeof comp !== "object") return out;
-    if (comp.pinInfoMap && typeof comp.pinInfoMap === "object") {
-      for (const [pin, info] of Object.entries(comp.pinInfoMap)) {
-        out[pin] = info && typeof info === "object" ? info.net || "" : String(info || "");
-      }
-      return out;
-    }
-    if (comp.pins && typeof comp.pins === "object") {
-      for (const [pin, net] of Object.entries(comp.pins)) {
-        out[pin] = net && typeof net === "object" ? net.net || "" : String(net || "");
-      }
-    }
+    for (const [pin, value] of Object.entries(map)) out[pin] = netOf(value);
     return out;
+  }
+  function getPins(comp) {
+    if (!comp || typeof comp !== "object") return {};
+    if (comp.pinInfoMap && typeof comp.pinInfoMap === "object") return readPinMap(comp.pinInfoMap);
+    if (comp.pins && typeof comp.pins === "object") return readPinMap(comp.pins);
+    return {};
+  }
+  function writePinInfoMap(comp, pin, net, create) {
+    if (comp.pinInfoMap[pin]) {
+      comp.pinInfoMap[pin].net = net;
+      return true;
+    }
+    if (!create) return false;
+    comp.pinInfoMap[pin] = { name: "", number: pin, net };
+    return true;
+  }
+  function writePins(comp, pin, net, create) {
+    if (!create && !Object.prototype.hasOwnProperty.call(comp.pins, pin)) return false;
+    comp.pins[pin] = net;
+    return true;
   }
   function setPinNet(comp, pin, net, options = {}) {
     if (!comp || typeof comp !== "object") return false;
     const create = options.create === true;
-    if (comp.pinInfoMap && typeof comp.pinInfoMap === "object") {
-      if (comp.pinInfoMap[pin]) {
-        comp.pinInfoMap[pin].net = net;
-        return true;
-      }
-      if (create) {
-        comp.pinInfoMap[pin] = { name: "", number: pin, net };
-        return true;
-      }
-      return false;
-    }
-    if (comp.pins && typeof comp.pins === "object") {
-      if (Object.prototype.hasOwnProperty.call(comp.pins, pin) || create) {
-        comp.pins[pin] = net;
-        return true;
-      }
-      return false;
-    }
-    if (create) {
-      comp.pins = {};
-      comp.pins[pin] = net;
-      return true;
-    }
-    return false;
+    if (comp.pinInfoMap && typeof comp.pinInfoMap === "object") return writePinInfoMap(comp, pin, net, create);
+    if (comp.pins && typeof comp.pins === "object") return writePins(comp, pin, net, create);
+    if (!create) return false;
+    comp.pins = {};
+    comp.pins[pin] = net;
+    return true;
   }
   function sortPinKeys(a, b) {
     const na = Number(a);
@@ -310,20 +305,27 @@
     for (const key in container) {
       const comp = container[key];
       if (!comp || typeof comp !== "object") continue;
-      const designator = comp.props && comp.props.Designator || key;
+      const designator = resolveDesignator(comp, key);
       const pins = getPins(comp);
       for (const pin of Object.keys(pins).sort(sortPinKeys)) {
-        const current = pins[pin];
-        const netKey = current ? String(current).toLowerCase() : "";
-        if (!netKey || !replaceMap.has(netKey)) continue;
-        const next = replaceMap.get(netKey);
-        if (setPinNet(comp, pin, next)) {
-          lines.push(`替换: ${designator}.${pin} [${current} -> ${next}]`);
+        const line = renamePin(comp, designator, pin, pins[pin], replaceMap);
+        if (line) {
+          lines.push(line);
           count++;
         }
       }
     }
     return { count, lines };
+  }
+  function resolveDesignator(comp, key) {
+    return comp.props && comp.props.Designator || key;
+  }
+  function renamePin(comp, designator, pin, current, replaceMap) {
+    const netKey = current ? String(current).toLowerCase() : "";
+    if (!netKey || !replaceMap.has(netKey)) return null;
+    const next = replaceMap.get(netKey);
+    if (!setPinNet(comp, pin, next)) return null;
+    return `替换: ${designator}.${pin} [${current} -> ${next}]`;
   }
   function listPinsOf(comp) {
     const pins = getPins(comp);

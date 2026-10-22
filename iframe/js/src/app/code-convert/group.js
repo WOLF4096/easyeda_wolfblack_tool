@@ -103,35 +103,18 @@ export function groupComponents(componentsData) {
 	const list = Array.isArray(componentsData) ? componentsData : [];
 	const groups = [];
 	const map = new Map();
-	const idCount = new Map();
-
-	for (const component of list) {
-		if (component.uniqueId) idCount.set(component.uniqueId, (idCount.get(component.uniqueId) || 0) + 1);
-	}
+	const idCount = countUniqueIds(list);
 
 	for (const component of list) {
 		const key = JSON.stringify([component.name, component.value, component.footprint]);
 		let group = map.get(key);
 		if (!group) {
-			group = {
-				uniqueIds: [],
-				designators: [],
-				footprint: component.footprint,
-				compType: component.compType,
-				rawValue: component.rawValue,
-				name: component.name,
-				value: component.value,
-				shouldModify: component.shouldModify,
-				modified: component.modified,
-				hasError: false,
-			};
+			group = createGroup(component);
 			map.set(key, group);
 			groups.push(group);
 		}
 
-		const isDuplicate = Boolean(component.uniqueId) && idCount.get(component.uniqueId) > 1;
-		const isEmpty = !component.uniqueId;
-		if (isDuplicate || isEmpty) {
+		if (hasIdError(component, idCount)) {
 			group.hasError = true;
 			group.modified = false;
 		}
@@ -150,6 +133,56 @@ export function groupComponents(componentsData) {
 }
 
 /**
+ * 统计每个唯一 ID 出现的次数（空 ID 不计数）
+ *
+ * @param {Array<object>} list processComponents 的结果
+ * @returns {Map<string, number>} 计数表
+ * @sideEffects 无（纯函数）
+ */
+function countUniqueIds(list) {
+	const idCount = new Map();
+	for (const component of list) {
+		if (component.uniqueId) idCount.set(component.uniqueId, (idCount.get(component.uniqueId) || 0) + 1);
+	}
+	return idCount;
+}
+
+/**
+ * 该行是否带唯一 ID 问题（为空或重复）
+ *
+ * @param {object} component 行数据
+ * @param {Map<string, number>} idCount 唯一 ID 计数表
+ * @returns {boolean} 是否为空或重复
+ * @sideEffects 无（纯函数）
+ */
+function hasIdError(component, idCount) {
+	if (!component.uniqueId) return true;
+	return idCount.get(component.uniqueId) > 1;
+}
+
+/**
+ * 由首行数据建一个空分组
+ *
+ * @param {object} component 首个命中该组的行
+ * @returns {object} 分组
+ * @sideEffects 无（纯函数）
+ */
+function createGroup(component) {
+	return {
+		uniqueIds: [],
+		designators: [],
+		footprint: component.footprint,
+		compType: component.compType,
+		rawValue: component.rawValue,
+		name: component.name,
+		value: component.value,
+		shouldModify: component.shouldModify,
+		modified: component.modified,
+		hasError: false,
+	};
+}
+
+/**
  * 把勾选的组写回器件属性
  *
  * 原实现对每个唯一 ID 都全量扫一遍组件（O(n²)，上千器件时明显卡）；这里先建索引。
@@ -160,6 +193,24 @@ export function groupComponents(componentsData) {
  * @sideEffects 就地修改 `component.props.Name` 与 `.Value`
  */
 export function applyConversion(groups, componentsMap) {
+	const index = indexByUniqueId(componentsMap);
+
+	let count = 0;
+	for (const group of Array.isArray(groups) ? groups : []) {
+		if (!isApplicable(group)) continue;
+		count += applyGroup(group, index);
+	}
+	return count;
+}
+
+/**
+ * 建「唯一 ID → 器件」索引（重复 ID 保留首个）
+ *
+ * @param {object} componentsMap 组件容器
+ * @returns {Map<string, object>} 索引
+ * @sideEffects 无（纯函数）
+ */
+function indexByUniqueId(componentsMap) {
 	const index = new Map();
 	for (const key in componentsMap) {
 		const component = componentsMap[key];
@@ -167,18 +218,37 @@ export function applyConversion(groups, componentsMap) {
 		const uniqueId = component.props['Unique ID'];
 		if (uniqueId && !index.has(uniqueId)) index.set(uniqueId, component);
 	}
+	return index;
+}
 
+/**
+ * 该组是否可写回（勾选、需要改、且无唯一 ID 问题）
+ *
+ * @param {object} group 分组
+ * @returns {boolean} 是否可写回
+ * @sideEffects 无（纯函数）
+ */
+function isApplicable(group) {
+	return Boolean(group.modified && group.shouldModify && !group.hasError);
+}
+
+/**
+ * 把分组值写回组内所有器件
+ *
+ * @param {object} group 分组
+ * @param {Map<string, object>} index 唯一 ID → 器件
+ * @returns {number} 实际改动的器件数
+ * @sideEffects 就地修改 `component.props.Name` 与 `.Value`
+ */
+function applyGroup(group, index) {
 	let count = 0;
-	for (const group of Array.isArray(groups) ? groups : []) {
-		if (!group.modified || !group.shouldModify || group.hasError) continue;
-		for (const uniqueId of group.uniqueIds) {
-			if (!uniqueId || uniqueId === EMPTY_ID) continue;
-			const component = index.get(uniqueId);
-			if (!component) continue;
-			component.props.Name = group.value;
-			component.props.Value = group.value;
-			count++;
-		}
+	for (const uniqueId of group.uniqueIds) {
+		if (!uniqueId || uniqueId === EMPTY_ID) continue;
+		const component = index.get(uniqueId);
+		if (!component) continue;
+		component.props.Name = group.value;
+		component.props.Value = group.value;
+		count++;
 	}
 	return count;
 }

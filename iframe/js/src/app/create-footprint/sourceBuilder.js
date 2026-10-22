@@ -45,6 +45,37 @@ function footprintHeader(uuid, deviceName) {
 `;
 }
 
+/** 直接存坐标的类型 → [x 下标, y 下标] */
+const DIRECT_COORDS = new Map([
+	['PAD', [6, 7]],
+	['VIA', [5, 6]],
+	['IMAGE', [4, 5]],
+]);
+
+/** 坐标在路径字段里的类型 → 数组下标 */
+const PATH_FIELDS = new Map([
+	['POLY', 6],
+	['REGION', 6],
+	['FILL', 7],
+	['POUR', 8],
+]);
+
+/**
+ * 取路径里第一对相邻数字
+ *
+ * @param {Array} pathObj 路径（单层或双层数组）
+ * @returns {{x: number|undefined, y: number|undefined}} 坐标
+ * @sideEffects 无（纯函数）
+ */
+function firstCoordOf(pathObj) {
+	if (!pathObj) return { x: undefined, y: undefined };
+	const polyArr = Array.isArray(pathObj[0]) ? pathObj[0] : pathObj;
+	for (let i = 0; i < polyArr.length - 1; i++) {
+		if (typeof polyArr[i] === 'number' && typeof polyArr[i + 1] === 'number') return { x: polyArr[i], y: polyArr[i + 1] };
+	}
+	return { x: undefined, y: undefined };
+}
+
 /**
  * 从源码数组里取「基准坐标」
  *
@@ -55,22 +86,11 @@ function footprintHeader(uuid, deviceName) {
  * @sideEffects 无（纯函数）
  */
 export function getCoordsFromSource(arr) {
-	const type = arr[0];
-	let pathObj = null;
-	if (type === 'PAD') return { x: arr[6], y: arr[7] };
-	if (type === 'VIA') return { x: arr[5], y: arr[6] };
-	if (type === 'IMAGE') return { x: arr[4], y: arr[5] };
-	if (type === 'POLY' || type === 'REGION') pathObj = arr[6];
-	if (type === 'FILL') pathObj = arr[7];
-	if (type === 'POUR') pathObj = arr[8];
-
-	if (pathObj) {
-		const polyArr = Array.isArray(pathObj[0]) ? pathObj[0] : pathObj;
-		for (let i = 0; i < polyArr.length - 1; i++) {
-			if (typeof polyArr[i] === 'number' && typeof polyArr[i + 1] === 'number') return { x: polyArr[i], y: polyArr[i + 1] };
-		}
-	}
-	return { x: undefined, y: undefined };
+	const direct = DIRECT_COORDS.get(arr[0]);
+	if (direct) return { x: arr[direct[0]], y: arr[direct[1]] };
+	const pathField = PATH_FIELDS.get(arr[0]);
+	if (pathField === undefined) return { x: undefined, y: undefined };
+	return firstCoordOf(arr[pathField]);
 }
 
 /**
@@ -142,6 +162,117 @@ function shiftPathField(value, ox, oy) {
 }
 
 /**
+ * 平移一对方括号里的坐标（保留 4 位小数）
+ *
+ * @param {Array} p 源码数组（会被就地改写）
+ * @param {number} ix X 下标
+ * @param {number} iy Y 下标
+ * @param {number} ox X 偏移
+ * @param {number} oy Y 偏移
+ * @returns {void}
+ * @sideEffects 改写 `p`
+ */
+function shiftXY(p, ix, iy, ox, oy) {
+	p[ix] = parseFloat((p[ix] - ox).toFixed(4));
+	p[iy] = parseFloat((p[iy] - oy).toFixed(4));
+}
+
+/**
+ * 平移 PAD（异形焊盘的 POLYGON 路径也要跟着挪）
+ *
+ * @param {Array} p 源码数组（会被就地改写）
+ * @param {number} ox X 偏移
+ * @param {number} oy Y 偏移
+ * @returns {void}
+ * @sideEffects 改写 `p`
+ */
+function shiftPad(p, ox, oy) {
+	shiftXY(p, 6, 7, ox, oy);
+	const padShape = p[10];
+	if (Array.isArray(padShape) && padShape[0] === 'POLYGON' && Array.isArray(padShape[1])) {
+		padShape[1] = transformPath(padShape[1], ox, oy);
+	}
+}
+
+/**
+ * 平移 IMAGE（坐标 + 图片路径）
+ *
+ * @param {Array} p 源码数组（会被就地改写）
+ * @param {number} ox X 偏移
+ * @param {number} oy Y 偏移
+ * @returns {void}
+ * @sideEffects 改写 `p`
+ */
+function shiftImage(p, ox, oy) {
+	shiftXY(p, 4, 5, ox, oy);
+	p[10] = shiftPathField(p[10], ox, oy);
+}
+
+/**
+ * 平移 POLY / REGION（路径在下标 6）
+ *
+ * @param {Array} p 源码数组（会被就地改写）
+ * @param {number} ox X 偏移
+ * @param {number} oy Y 偏移
+ * @returns {void}
+ * @sideEffects 改写 `p`
+ */
+function shiftPoly(p, ox, oy) {
+	p[6] = shiftPathField(p[6], ox, oy);
+}
+
+/**
+ * 平移 FILL（路径在下标 7）
+ *
+ * @param {Array} p 源码数组（会被就地改写）
+ * @param {number} ox X 偏移
+ * @param {number} oy Y 偏移
+ * @returns {void}
+ * @sideEffects 改写 `p`
+ */
+function shiftFill(p, ox, oy) {
+	p[7] = shiftPathField(p[7], ox, oy);
+}
+
+/**
+ * 平移 POUR（路径在下标 8）
+ *
+ * @param {Array} p 源码数组（会被就地改写）
+ * @param {number} ox X 偏移
+ * @param {number} oy Y 偏移
+ * @returns {void}
+ * @sideEffects 改写 `p`
+ */
+function shiftPour(p, ox, oy) {
+	p[8] = shiftPathField(p[8], ox, oy);
+}
+
+/** 图元类型 → 平移函数（未列出的类型原样输出） */
+const SHIFTERS = new Map([
+	['PAD', shiftPad],
+	['VIA', (p, ox, oy) => shiftXY(p, 5, 6, ox, oy)],
+	['IMAGE', shiftImage],
+	['POLY', shiftPoly],
+	['REGION', shiftPoly],
+	['FILL', shiftFill],
+	['POUR', shiftPour],
+]);
+
+/**
+ * 按类型平移一条图元
+ *
+ * @param {Array} p 源码数组（会被就地改写）
+ * @param {number} ox X 偏移
+ * @param {number} oy Y 偏移
+ * @returns {void}
+ * @sideEffects 改写 `p`
+ */
+function shiftPrimitive(p, ox, oy) {
+	const shift = SHIFTERS.get(p[0]);
+	if (shift) shift(p, ox, oy);
+}
+
+/**
  * 生成完整封装源码
  *
  * @param {Array<Array>} primitives 选中的图元源码行（会被复制后改写，不改入参）
@@ -156,31 +287,8 @@ export function buildFootprintSource(primitives, options) {
 
 	for (const source of Array.isArray(primitives) ? primitives : []) {
 		const p = source.slice();
-		const type = p[0];
 		p[1] = `e${idCounter++}`;
-
-		if (type === 'PAD') {
-			p[6] = parseFloat((p[6] - originX).toFixed(4));
-			p[7] = parseFloat((p[7] - originY).toFixed(4));
-			const padShape = p[10];
-			if (Array.isArray(padShape) && padShape[0] === 'POLYGON' && Array.isArray(padShape[1])) {
-				padShape[1] = transformPath(padShape[1], originX, originY);
-			}
-		} else if (type === 'VIA') {
-			p[5] = parseFloat((p[5] - originX).toFixed(4));
-			p[6] = parseFloat((p[6] - originY).toFixed(4));
-		} else if (type === 'IMAGE') {
-			p[4] = parseFloat((p[4] - originX).toFixed(4));
-			p[5] = parseFloat((p[5] - originY).toFixed(4));
-			p[10] = shiftPathField(p[10], originX, originY);
-		} else if (type === 'POLY' || type === 'REGION') {
-			p[6] = shiftPathField(p[6], originX, originY);
-		} else if (type === 'FILL') {
-			p[7] = shiftPathField(p[7], originX, originY);
-		} else if (type === 'POUR') {
-			p[8] = shiftPathField(p[8], originX, originY);
-		}
-
+		shiftPrimitive(p, originX, originY);
 		lines.push(JSON.stringify(p));
 	}
 

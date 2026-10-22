@@ -138,25 +138,51 @@ export function buildRows(netlist) {
 	for (const key in container) {
 		const component = container[key];
 		if (!component || !component.props) continue;
-		const props = component.props;
-		const designator = props.Designator;
-		if (!designator) continue;
-
-		const rawModel = props['3D Model'] || '';
-		const transform = props['3D Model Transform'] || DEFAULT_TRANSFORM;
-		rows.push({
-			id: designator,
-			designator: designator,
-			footprint: props.FootprintName || props['Footprint Name'] || props.Footprint || '-',
-			modelTitle: props['3D Model Title'] || '没有找到 3D 模型',
-			rawModel: rawModel,
-			rawTransform: transform,
-			...parseTransform(transform),
-			status: rawModel ? '待更新' : '无模型',
-			primitiveId: null,
-		});
+		const row = toRow(component.props);
+		if (row) rows.push(row);
 	}
 	return rows;
+}
+
+/**
+ * 按顺序取第一个真值（等价于原来的 `a || b || c || fallback` 链）
+ *
+ * @param {Array<*>} values 候选值
+ * @param {*} fallback 全为空时的兜底
+ * @returns {*} 第一个真值，或 fallback
+ * @sideEffects 无（纯函数）
+ */
+function firstFilled(values, fallback) {
+	for (const value of values) {
+		if (value) return value;
+	}
+	return fallback;
+}
+
+/**
+ * 单个器件 → 行数据（无位号返回 null，由调用方跳过）
+ *
+ * @param {object} props 器件属性
+ * @returns {object|null} 行数据
+ * @sideEffects 无（纯函数）
+ */
+function toRow(props) {
+	const designator = props.Designator;
+	if (!designator) return null;
+
+	const rawModel = props['3D Model'] || '';
+	const transform = props['3D Model Transform'] || DEFAULT_TRANSFORM;
+	return {
+		id: designator,
+		designator: designator,
+		footprint: firstFilled([props.FootprintName, props['Footprint Name'], props.Footprint], '-'),
+		modelTitle: props['3D Model Title'] || '没有找到 3D 模型',
+		rawModel: rawModel,
+		rawTransform: transform,
+		...parseTransform(transform),
+		status: rawModel ? '待更新' : '无模型',
+		primitiveId: null,
+	};
 }
 
 /**

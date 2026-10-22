@@ -142,18 +142,20 @@
     }, timeoutMs);
     return true;
   }
+  function showOnHost(host, text, type) {
+    try {
+      if (!host || !host.sys_Message || typeof host.sys_Message.showToastMessage !== "function") return false;
+      host.sys_Message.showToastMessage(text, type);
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
   function toast(message, level = TOAST_LEVEL.info, opts = {}) {
     const doc = opts.doc || globalThis.document;
     const host = opts.host === void 0 ? getEda() : opts.host;
     const text = message === null || message === void 0 ? "" : String(message);
-    const type = normalizeLevel(level);
-    try {
-      if (host && host.sys_Message && typeof host.sys_Message.showToastMessage === "function") {
-        host.sys_Message.showToastMessage(text, type);
-        return "host";
-      }
-    } catch (e) {
-    }
+    if (showOnHost(host, text, normalizeLevel(level))) return "host";
     return banner(doc, text, opts.timeoutMs === void 0 ? 3e3 : opts.timeoutMs) ? "dom" : "none";
   }
 
@@ -214,24 +216,33 @@
     for (const key in container) {
       const component = container[key];
       if (!component || !component.props) continue;
-      const props = component.props;
-      const designator = props.Designator;
-      if (!designator) continue;
-      const rawModel = props["3D Model"] || "";
-      const transform = props["3D Model Transform"] || DEFAULT_TRANSFORM;
-      rows.push({
-        id: designator,
-        designator,
-        footprint: props.FootprintName || props["Footprint Name"] || props.Footprint || "-",
-        modelTitle: props["3D Model Title"] || "没有找到 3D 模型",
-        rawModel,
-        rawTransform: transform,
-        ...parseTransform(transform),
-        status: rawModel ? "待更新" : "无模型",
-        primitiveId: null
-      });
+      const row = toRow(component.props);
+      if (row) rows.push(row);
     }
     return rows;
+  }
+  function firstFilled(values, fallback) {
+    for (const value of values) {
+      if (value) return value;
+    }
+    return fallback;
+  }
+  function toRow(props) {
+    const designator = props.Designator;
+    if (!designator) return null;
+    const rawModel = props["3D Model"] || "";
+    const transform = props["3D Model Transform"] || DEFAULT_TRANSFORM;
+    return {
+      id: designator,
+      designator,
+      footprint: firstFilled([props.FootprintName, props["Footprint Name"], props.Footprint], "-"),
+      modelTitle: props["3D Model Title"] || "没有找到 3D 模型",
+      rawModel,
+      rawTransform: transform,
+      ...parseTransform(transform),
+      status: rawModel ? "待更新" : "无模型",
+      primitiveId: null
+    };
   }
   function isModelMatch(item, result) {
     if (!result || !result.otherProperty) return false;
@@ -368,6 +379,18 @@
       return "失败";
     }
   }
+  function buildPcbMap(pcbComps) {
+    const pcbMap = {};
+    for (const comp of pcbComps) {
+      if (comp && comp.designator && comp.primitiveId) pcbMap[comp.designator] = comp.primitiveId;
+    }
+    return pcbMap;
+  }
+  async function resolveStatus(host, item, primId) {
+    if (!primId) return "未找到";
+    if (!item.rawModel || item.rawModel.trim() === "") return "跳过";
+    return await updateOne(host, item, primId);
+  }
   async function batchUpdate() {
     const host = getEda();
     if (!host) return;
@@ -378,22 +401,13 @@
     progressBg.style.width = "0%";
     statusText.textContent = "正在获取PCB器件...";
     try {
-      const pcbComps = await host.pcb_PrimitiveComponent.getAll();
-      const pcbMap = {};
-      for (const comp of pcbComps) {
-        if (comp && comp.designator && comp.primitiveId) pcbMap[comp.designator] = comp.primitiveId;
-      }
+      const pcbMap = buildPcbMap(await host.pcb_PrimitiveComponent.getAll());
       const total = appState.data.length;
       let successCount = 0;
       for (let i = 0; i < total; i++) {
         const item = appState.data[i];
-        const primId = pcbMap[item.designator];
-        if (!primId) item.status = "未找到";
-        else if (!item.rawModel || item.rawModel.trim() === "") item.status = "跳过";
-        else {
-          item.status = await updateOne(host, item, primId);
-          if (item.status === "成功") successCount++;
-        }
+        item.status = await resolveStatus(host, item, pcbMap[item.designator]);
+        if (item.status === "成功") successCount++;
         const percent = Math.round((i + 1) / total * 100);
         progressBg.style.width = percent + "%";
         statusText.textContent = `进度：${i + 1} / ${total} (${percent}%)，正在处理: ${item.designator}`;

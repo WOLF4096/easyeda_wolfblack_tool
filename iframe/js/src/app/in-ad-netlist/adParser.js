@@ -33,27 +33,38 @@ export function parseADNetlist(content) {
 		return { netMap: netMap, errors: errors };
 	}
 
-	for (const block of blocks) {
-		const lines = block
-			.replace(/^\(|\)$/g, '')
-			.trim()
-			.split(/\r?\n/)
-			.map((line) => line.trim())
-			.filter((line) => line !== '');
-		if (lines.length < 2) continue;
-
-		const netName = lines[0];
-		for (let i = 1; i < lines.length; i++) {
-			const parts = lines[i].split('-');
-			if (parts.length !== 2) {
-				errors.push(`行格式异常: ${lines[i]} , 应为 位号-引脚`);
-				continue;
-			}
-			const refDes = parts[0].trim();
-			const pinNo = parts[1].trim();
-			if (refDes && pinNo) netMap.set(`${refDes}|${pinNo}`, netName);
-		}
-	}
+	for (const block of blocks) parseBlock(block, netMap, errors);
 
 	return { netMap: netMap, errors: errors };
+}
+
+/**
+ * 解析单个网络段 `( 网络名 \n 位号-引脚 \n ... )`
+ *
+ * @param {string} block 含首尾括号的段
+ * @param {Map<string, string>} netMap 就地写入的映射表
+ * @param {string[]} errors 就地追加的错误说明
+ * @returns {void}
+ * @sideEffects 修改入参 netMap / errors
+ */
+function parseBlock(block, netMap, errors) {
+	const lines = block
+		.replace(/^\(|\)$/g, '')
+		.trim()
+		.split(/\r?\n/)
+		.map((line) => line.trim())
+		.filter((line) => line !== '');
+	if (lines.length < 2) return;
+
+	const netName = lines[0];
+	for (let i = 1; i < lines.length; i++) {
+		const parts = lines[i].split('-');
+		if (parts.length !== 2) {
+			errors.push(`行格式异常: ${lines[i]} , 应为 位号-引脚`);
+			continue;
+		}
+		const refDes = parts[0].trim();
+		const pinNo = parts[1].trim();
+		if (refDes && pinNo) netMap.set(`${refDes}|${pinNo}`, netName);
+	}
 }

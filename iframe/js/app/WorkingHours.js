@@ -127,71 +127,92 @@
     }
     return { timeline, tsMap };
   }
-  function buildDataset(configs, options = {}) {
-    const currentUuid = options.currentUuid || null;
-    const currentName = options.currentName || "未命名工程";
-    const now = options.now || /* @__PURE__ */ new Date();
-    const days = collectDayConfigs(configs);
+  function collectProjectMeta(days) {
     const projectMeta = {};
+    for (const day of days) {
+      if (day.dayData.meta) Object.assign(projectMeta, day.dayData.meta);
+    }
+    return projectMeta;
+  }
+  function dayRange(days, todayTs) {
     let minTs = Infinity;
     let maxTs = -Infinity;
     for (const day of days) {
-      if (day.dayData.meta) Object.assign(projectMeta, day.dayData.meta);
       if (day.ts < minTs) minTs = day.ts;
       if (day.ts > maxTs) maxTs = day.ts;
     }
-    const todayTs = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0).getTime();
     if (minTs === Infinity) {
       minTs = todayTs;
       maxTs = todayTs;
     }
     if (todayTs < minTs) minTs = todayTs;
     if (todayTs > maxTs) maxTs = todayTs;
-    const { timeline, tsMap } = buildTimeline(minTs, maxTs);
+    return { minTs, maxTs };
+  }
+  function emptyStat(name, uuid) {
+    return { name, uuid, totalWork: 0, totalRest: 0, startTs: Infinity, endTs: -Infinity };
+  }
+  function initProjectStats(projectMeta, currentUuid, currentName) {
     const projectStats = {};
-    for (const pId of Object.keys(projectMeta)) {
-      projectStats[pId] = { name: projectMeta[pId], uuid: pId, totalWork: 0, totalRest: 0, startTs: Infinity, endTs: -Infinity };
-    }
+    for (const pId of Object.keys(projectMeta)) projectStats[pId] = emptyStat(projectMeta[pId], pId);
     if (currentUuid && !projectStats[currentUuid]) {
       projectMeta[currentUuid] = currentName;
-      projectStats[currentUuid] = {
-        name: currentName,
-        uuid: currentUuid,
-        totalWork: 0,
-        totalRest: 0,
-        startTs: Infinity,
-        endTs: -Infinity
-      };
+      projectStats[currentUuid] = emptyStat(currentName, currentUuid);
     }
+    return projectStats;
+  }
+  function tallyProject(stat, slotTs, wTime, rTime) {
+    if (!stat) return;
+    stat.totalWork += wTime;
+    stat.totalRest += rTime;
+    if (wTime > 0 || rTime > 0) {
+      if (slotTs < stat.startTs) stat.startTs = slotTs;
+      if (slotTs > stat.endTs) stat.endTs = slotTs;
+    }
+  }
+  function applySlot(slot, slotTs, timeline, tsMap, projectStats) {
+    const tlIndex = tsMap.get(slotTs);
+    if (tlIndex === void 0) return;
+    const cell = timeline[tlIndex];
+    for (const projEntry of Object.entries(slot)) {
+      const pId = projEntry[0];
+      const wTime = projEntry[1][0] || 0;
+      const rTime = projEntry[1][1] || 0;
+      cell.work[pId] = wTime;
+      cell.rest[pId] = rTime;
+      tallyProject(projectStats[pId], slotTs, wTime, rTime);
+    }
+  }
+  function fillTimeline(days, timeline, tsMap, projectStats) {
     for (const day of days) {
       const slots = day.dayData.slots;
       if (!slots) continue;
       for (const slotEntry of Object.entries(slots)) {
         const slotTs = day.ts + parseInt(slotEntry[0], 10) * SLOT_MS;
-        const tlIndex = tsMap.get(slotTs);
-        if (tlIndex === void 0) continue;
-        for (const projEntry of Object.entries(slotEntry[1])) {
-          const pId = projEntry[0];
-          const wTime = projEntry[1][0] || 0;
-          const rTime = projEntry[1][1] || 0;
-          timeline[tlIndex].work[pId] = wTime;
-          timeline[tlIndex].rest[pId] = rTime;
-          const stat = projectStats[pId];
-          if (!stat) continue;
-          stat.totalWork += wTime;
-          stat.totalRest += rTime;
-          if (wTime > 0 || rTime > 0) {
-            if (slotTs < stat.startTs) stat.startTs = slotTs;
-            if (slotTs > stat.endTs) stat.endTs = slotTs;
-          }
-        }
+        applySlot(slotEntry[1], slotTs, timeline, tsMap, projectStats);
       }
     }
-    const sortedProjectIds = Object.keys(projectMeta).sort((a, b) => projectStats[b].totalWork - projectStats[a].totalWork);
+  }
+  function buildColorMap(sortedProjectIds) {
     const pidColorMap = {};
     sortedProjectIds.forEach((pId, idx) => {
       pidColorMap[pId] = COLOR_PALETTE[idx % COLOR_PALETTE.length];
     });
+    return pidColorMap;
+  }
+  function buildDataset(configs, options = {}) {
+    const currentUuid = options.currentUuid || null;
+    const currentName = options.currentName || "未命名工程";
+    const now = options.now || /* @__PURE__ */ new Date();
+    const days = collectDayConfigs(configs);
+    const projectMeta = collectProjectMeta(days);
+    const todayTs = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0).getTime();
+    const { minTs, maxTs } = dayRange(days, todayTs);
+    const { timeline, tsMap } = buildTimeline(minTs, maxTs);
+    const projectStats = initProjectStats(projectMeta, currentUuid, currentName);
+    fillTimeline(days, timeline, tsMap, projectStats);
+    const sortedProjectIds = Object.keys(projectMeta).sort((a, b) => projectStats[b].totalWork - projectStats[a].totalWork);
+    const pidColorMap = buildColorMap(sortedProjectIds);
     return {
       timeline,
       tsMap,
@@ -342,18 +363,20 @@
     }, timeoutMs);
     return true;
   }
+  function showOnHost(host, text, type) {
+    try {
+      if (!host || !host.sys_Message || typeof host.sys_Message.showToastMessage !== "function") return false;
+      host.sys_Message.showToastMessage(text, type);
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
   function toast(message, level = TOAST_LEVEL.info, opts = {}) {
     const doc = opts.doc || globalThis.document;
     const host = opts.host === void 0 ? getEda() : opts.host;
     const text = message === null || message === void 0 ? "" : String(message);
-    const type = normalizeLevel(level);
-    try {
-      if (host && host.sys_Message && typeof host.sys_Message.showToastMessage === "function") {
-        host.sys_Message.showToastMessage(text, type);
-        return "host";
-      }
-    } catch (e) {
-    }
+    if (showOnHost(host, text, normalizeLevel(level))) return "host";
     return banner(doc, text, opts.timeoutMs === void 0 ? 3e3 : opts.timeoutMs) ? "dom" : "none";
   }
 

@@ -33,6 +33,74 @@ export function sniffDelimiter(text) {
 }
 
 /**
+ * 收下一个字段（字段内容已攒在 state.field 里）
+ *
+ * @param {{row: string[], field: string}} state 解析状态
+ * @returns {void}
+ * @sideEffects **就地修改** state
+ */
+function pushField(state) {
+	state.row.push(state.field);
+	state.field = '';
+}
+
+/**
+ * 收下一行
+ *
+ * @param {{rows: string[][], row: string[], field: string}} state 解析状态
+ * @returns {void}
+ * @sideEffects **就地修改** state
+ */
+function pushRow(state) {
+	pushField(state);
+	state.rows.push(state.row);
+	state.row = [];
+}
+
+/**
+ * 处理引号内的一个字符
+ *
+ * @param {{field: string, quoted: boolean}} state 解析状态
+ * @param {string} raw 原文
+ * @param {number} i 当前下标
+ * @returns {number} 下一个待处理下标（`""` 转义会多吞一个字符）
+ * @sideEffects **就地修改** state
+ */
+function consumeQuoted(state, raw, i) {
+	const ch = raw[i];
+	if (ch !== '"') {
+		state.field += ch;
+	} else if (raw[i + 1] === '"') {
+		state.field += '"';
+		return i + 1;
+	} else {
+		state.quoted = false;
+	}
+	return i;
+}
+
+/**
+ * 处理引号外的一个字符
+ *
+ * @param {{rows: string[][], row: string[], field: string, quoted: boolean}} state 解析状态
+ * @param {string} raw 原文
+ * @param {number} i 当前下标
+ * @param {string} delimiter 分隔符
+ * @returns {number} 下一个待处理下标
+ * @sideEffects **就地修改** state
+ */
+function consumeChar(state, raw, i, delimiter) {
+	if (state.quoted) return consumeQuoted(state, raw, i);
+
+	const ch = raw[i];
+	if (ch === '"') state.quoted = true;
+	else if (ch === delimiter) pushField(state);
+	else if (ch === '\n') pushRow(state);
+	else if (ch !== '\r') state.field += ch;
+	return i;
+}
+
+/**
  * 解析分隔文本（支持双引号包裹与 `""` 转义）
  *
  * @param {string} text 原始文本
@@ -44,44 +112,17 @@ export function sniffDelimiter(text) {
 export function parseDelimited(text, options = {}) {
 	const raw = String(text || '');
 	const delimiter = options.delimiter || sniffDelimiter(raw);
-	const rows = [];
-	let row = [];
-	let field = '';
-	let quoted = false;
+	const state = { rows: [], row: [], field: '', quoted: false };
 
 	for (let i = 0; i < raw.length; i++) {
-		const ch = raw[i];
-		if (quoted) {
-			if (ch !== '"') {
-				field += ch;
-			} else if (raw[i + 1] === '"') {
-				field += '"';
-				i++;
-			} else {
-				quoted = false;
-			}
-			continue;
-		}
-		if (ch === '"') {
-			quoted = true;
-		} else if (ch === delimiter) {
-			row.push(field);
-			field = '';
-		} else if (ch === '\n') {
-			row.push(field);
-			rows.push(row);
-			row = [];
-			field = '';
-		} else if (ch !== '\r') {
-			field += ch;
-		}
+		i = consumeChar(state, raw, i, delimiter);
 	}
 
-	if (field !== '' || row.length > 0) {
-		row.push(field);
-		rows.push(row);
+	if (state.field !== '' || state.row.length > 0) {
+		state.row.push(state.field);
+		state.rows.push(state.row);
 	}
-	return rows.filter((r) => r.length > 1 || (r[0] || '').trim() !== '');
+	return state.rows.filter((r) => r.length > 1 || (r[0] || '').trim() !== '');
 }
 
 /**
@@ -128,6 +169,32 @@ export function toCsv(rows, options = {}) {
 }
 
 /**
+ * 判断当前环境是否具备「造 <a> + createObjectURL」的能力
+ *
+ * @param {Document} doc 文档对象
+ * @param {object} urlApi URL 实现
+ * @returns {boolean} 是否可下载
+ * @sideEffects 无（纯函数）
+ */
+function canDownload(doc, urlApi) {
+	return Boolean(doc && typeof doc.createElement === 'function' && urlApi && typeof urlApi.createObjectURL === 'function');
+}
+
+/**
+ * 挂到 body → 点击 → 立刻摘掉（三步顺序不能调换）
+ *
+ * @param {Document} doc 文档对象
+ * @param {object} a 临时链接元素
+ * @returns {void}
+ * @sideEffects DOM（appendChild / click / remove）
+ */
+function mountAndClick(doc, a) {
+	if (doc.body && typeof doc.body.appendChild === 'function') doc.body.appendChild(a);
+	if (typeof a.click === 'function') a.click();
+	if (typeof a.remove === 'function') a.remove();
+}
+
+/**
  * 触发浏览器下载
  *
  * @param {string} fileName 文件名
@@ -141,15 +208,13 @@ export function toCsv(rows, options = {}) {
 export function downloadBlob(fileName, blob, options = {}) {
 	const doc = options.doc || globalThis.document;
 	const urlApi = options.urlApi || globalThis.URL;
-	if (!doc || typeof doc.createElement !== 'function' || !urlApi || typeof urlApi.createObjectURL !== 'function') return false;
+	if (!canDownload(doc, urlApi)) return false;
 
 	const href = urlApi.createObjectURL(blob);
 	const a = doc.createElement('a');
 	a.href = href;
 	a.download = fileName;
-	if (doc.body && typeof doc.body.appendChild === 'function') doc.body.appendChild(a);
-	if (typeof a.click === 'function') a.click();
-	if (typeof a.remove === 'function') a.remove();
+	mountAndClick(doc, a);
 	if (typeof urlApi.revokeObjectURL === 'function') urlApi.revokeObjectURL(href);
 	return true;
 }

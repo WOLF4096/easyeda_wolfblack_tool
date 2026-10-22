@@ -209,17 +209,23 @@
   }
 
   // iframe/js/src/ui/download.js
+  function canDownload(doc, urlApi) {
+    return Boolean(doc && typeof doc.createElement === "function" && urlApi && typeof urlApi.createObjectURL === "function");
+  }
+  function mountAndClick(doc, a) {
+    if (doc.body && typeof doc.body.appendChild === "function") doc.body.appendChild(a);
+    if (typeof a.click === "function") a.click();
+    if (typeof a.remove === "function") a.remove();
+  }
   function downloadBlob(fileName, blob, options = {}) {
     const doc = options.doc || globalThis.document;
     const urlApi = options.urlApi || globalThis.URL;
-    if (!doc || typeof doc.createElement !== "function" || !urlApi || typeof urlApi.createObjectURL !== "function") return false;
+    if (!canDownload(doc, urlApi)) return false;
     const href = urlApi.createObjectURL(blob);
     const a = doc.createElement("a");
     a.href = href;
     a.download = fileName;
-    if (doc.body && typeof doc.body.appendChild === "function") doc.body.appendChild(a);
-    if (typeof a.click === "function") a.click();
-    if (typeof a.remove === "function") a.remove();
+    mountAndClick(doc, a);
     if (typeof urlApi.revokeObjectURL === "function") urlApi.revokeObjectURL(href);
     return true;
   }
@@ -261,18 +267,20 @@
     }, timeoutMs);
     return true;
   }
+  function showOnHost(host, text, type) {
+    try {
+      if (!host || !host.sys_Message || typeof host.sys_Message.showToastMessage !== "function") return false;
+      host.sys_Message.showToastMessage(text, type);
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
   function toast(message, level = TOAST_LEVEL.info, opts = {}) {
     const doc = opts.doc || globalThis.document;
     const host = opts.host === void 0 ? getEda() : opts.host;
     const text = message === null || message === void 0 ? "" : String(message);
-    const type = normalizeLevel(level);
-    try {
-      if (host && host.sys_Message && typeof host.sys_Message.showToastMessage === "function") {
-        host.sys_Message.showToastMessage(text, type);
-        return "host";
-      }
-    } catch (e) {
-    }
+    if (showOnHost(host, text, normalizeLevel(level))) return "host";
     return banner(doc, text, opts.timeoutMs === void 0 ? 3e3 : opts.timeoutMs) ? "dom" : "none";
   }
 
@@ -366,18 +374,29 @@
     const symbols = projectJson2.symbols || {};
     const footprints = projectJson2.footprints || {};
     for (const comp of components2) {
-      const device = comp.deviceUuid ? devices[comp.deviceUuid] : null;
-      if (device) {
-        comp.deviceName = device.title || "";
-        comp.symbolUuid = device.attributes && device.attributes.Symbol || "";
-        comp.symbolName = comp.symbolUuid && symbols[comp.symbolUuid] ? symbols[comp.symbolUuid].title || "" : "";
-      } else {
-        comp.deviceName = "";
-        comp.symbolUuid = "";
-        comp.symbolName = "";
-      }
-      comp.footprintName = comp.footprintUuid && footprints[comp.footprintUuid] ? footprints[comp.footprintUuid].title || "" : "";
+      applyDeviceFields(comp, devices, symbols);
+      comp.footprintName = footprintTitleOf(comp.footprintUuid, footprints);
     }
+  }
+  function applyDeviceFields(comp, devices, symbols) {
+    const device = comp.deviceUuid ? devices[comp.deviceUuid] : null;
+    if (!device) {
+      comp.deviceName = "";
+      comp.symbolUuid = "";
+      comp.symbolName = "";
+      return;
+    }
+    comp.deviceName = device.title || "";
+    comp.symbolUuid = device.attributes && device.attributes.Symbol || "";
+    comp.symbolName = symbolTitleOf(comp.symbolUuid, symbols);
+  }
+  function symbolTitleOf(symbolUuid, symbols) {
+    const symbol = symbolUuid ? symbols[symbolUuid] : null;
+    return symbol ? symbol.title || "" : "";
+  }
+  function footprintTitleOf(footprintUuid, footprints) {
+    const footprint = footprintUuid ? footprints[footprintUuid] : null;
+    return footprint ? footprint.title || "" : "";
   }
   function mergeComponentsForDisplay(components2) {
     const groups = /* @__PURE__ */ new Map();
@@ -439,9 +458,7 @@
     return part;
   }
   function parseSymbolSource(content) {
-    const parts = [];
-    let currentPart = null;
-    let pinById = {};
+    const state = { parts: [], currentPart: null, pinById: {} };
     for (const line of String(content || "").split("\n")) {
       if (!line.trim()) continue;
       let data;
@@ -451,34 +468,43 @@
         continue;
       }
       if (!Array.isArray(data)) continue;
-      const type = data[0];
-      if (type === "PART") {
-        if (currentPart) parts.push(finishPart(currentPart, pinById));
-        currentPart = { name: data[1], pins: {} };
-        pinById = {};
-        continue;
-      }
-      if (!currentPart) continue;
-      if (type === "PIN") {
-        pinById[data[1]] = {
-          id: data[1],
-          type: data[2],
-          x: data[4],
-          y: data[5],
-          length: data[6],
-          angle: data[7],
-          number: null,
-          name: null
-        };
-      } else if (type === "ATTR") {
-        const parent = pinById[data[2]];
-        if (!parent) continue;
-        if (data[3] === "NUMBER") parent.number = data[4];
-        else if (data[3] === "NAME") parent.name = data[4];
-      }
+      applySymbolLine(state, data);
     }
-    if (currentPart) parts.push(finishPart(currentPart, pinById));
-    return parts;
+    if (state.currentPart) state.parts.push(finishPart(state.currentPart, state.pinById));
+    return state.parts;
+  }
+  function applySymbolLine(state, data) {
+    const type = data[0];
+    if (type === "PART") {
+      if (state.currentPart) state.parts.push(finishPart(state.currentPart, state.pinById));
+      state.currentPart = { name: data[1], pins: {} };
+      state.pinById = {};
+      return;
+    }
+    if (!state.currentPart) return;
+    if (type === "PIN") {
+      state.pinById[data[1]] = pinFromLine(data);
+      return;
+    }
+    if (type === "ATTR") applyPinAttr(state.pinById, data);
+  }
+  function pinFromLine(data) {
+    return {
+      id: data[1],
+      type: data[2],
+      x: data[4],
+      y: data[5],
+      length: data[6],
+      angle: data[7],
+      number: null,
+      name: null
+    };
+  }
+  function applyPinAttr(pinById, data) {
+    const parent = pinById[data[2]];
+    if (!parent) return;
+    if (data[3] === "NUMBER") parent.number = data[4];
+    else if (data[3] === "NAME") parent.name = data[4];
   }
 
   // iframe/js/src/app/pcb-to-sch/layout.js
@@ -610,29 +636,32 @@
       return { id: n, ticket: n };
     };
     for (const entry of Object.entries(input.comp.pins || {})) {
-      const pinNumber = entry[0];
-      const netName = entry[1];
-      if (!netName) continue;
-      const pinInfo = symbolPins[pinNumber];
-      if (!pinInfo) continue;
-      const pinX = input.compX + pinInfo.x;
-      const pinY = input.isV2 ? input.compY + pinInfo.y : input.compY - pinInfo.y;
-      const spread = WIRE_END[pinInfo.angle] || WIRE_END[0];
-      const end = spread(pinX, pinY, input.wireLength, yDir);
-      lines.push(
-        ...createSchWireLines({
-          net: netName,
-          startX: pinX,
-          startY: pinY,
-          endX: end.endX,
-          endY: end.endY,
-          rotation: end.netT,
-          isModern: !input.isV2,
-          nextRow
-        })
-      );
+      pushWireForPin(lines, input, symbolPins, entry, yDir, nextRow);
     }
     return lines;
+  }
+  function pushWireForPin(lines, input, symbolPins, entry, yDir, nextRow) {
+    const pinNumber = entry[0];
+    const netName = entry[1];
+    if (!netName) return;
+    const pinInfo = symbolPins[pinNumber];
+    if (!pinInfo) return;
+    const pinX = input.compX + pinInfo.x;
+    const pinY = input.isV2 ? input.compY + pinInfo.y : input.compY - pinInfo.y;
+    const spread = WIRE_END[pinInfo.angle] || WIRE_END[0];
+    const end = spread(pinX, pinY, input.wireLength, yDir);
+    lines.push(
+      ...createSchWireLines({
+        net: netName,
+        startX: pinX,
+        startY: pinY,
+        endX: end.endX,
+        endY: end.endY,
+        rotation: end.netT,
+        isModern: !input.isV2,
+        nextRow
+      })
+    );
   }
 
   // iframe/js/src/app/pcb-to-sch/sourceBuilder.js
@@ -1198,18 +1227,21 @@
       return;
     }
     const lines = ["唯一ID,位号,引脚编号,引脚名称,引脚网络"];
-    for (const comp of components) {
-      const symbolParts = symbolPinsDatabase[comp.symbolUuid] || [];
-      for (const entry of Object.entries(comp.pins || {})) {
-        const pinNumber = entry[0];
-        if (!pinNumber) continue;
-        const pinName = pinNameOf(symbolParts, pinNumber);
-        lines.push([comp.uniqueId || "", comp.designator || "", pinNumber, pinName, entry[1] || ""].map(csvCell).join(","));
-      }
-    }
+    for (const comp of components) lines.push(...netLinesOf(comp));
     const filename = `${currentPcbUuid || "netlist"}_${stamp()}_netlist.csv`;
     updateProgress(100, `导出网络成功：${filename}`);
     downloadText(filename, lines.join("\n"), { mime: "text/csv", bom: true });
+  }
+  function netLinesOf(comp) {
+    const lines = [];
+    const symbolParts = symbolPinsDatabase[comp.symbolUuid] || [];
+    for (const entry of Object.entries(comp.pins || {})) {
+      const pinNumber = entry[0];
+      if (!pinNumber) continue;
+      const pinName = pinNameOf(symbolParts, pinNumber);
+      lines.push([comp.uniqueId || "", comp.designator || "", pinNumber, pinName, entry[1] || ""].map(csvCell).join(","));
+    }
+    return lines;
   }
   function pinNameOf(symbolParts, pinNumber) {
     for (const part of symbolParts) {

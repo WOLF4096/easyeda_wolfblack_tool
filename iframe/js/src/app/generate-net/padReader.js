@@ -45,6 +45,37 @@ function polygonVertices(pathData) {
  * @sideEffects **就地修改** `pad` 的 `x` / `y`（异形焊盘改用真实几何中心）
  */
 export function padGeometry(pad) {
+	const box = padBoxOf(pad);
+	const rawHole = pad.hole && pad.hole.length > 1 ? Number(pad.hole[1]) : 0;
+
+	// 形状判定会顺带改写异形焊盘的 `pad.x` / `pad.y`
+	const shaped = shapeOfPad(pad, box);
+
+	return {
+		id: pad.primitiveId,
+		type: 'PAD',
+		net: pad.net,
+		layer: pad.layer,
+		shape: shaped.shape,
+		x: Number(pad.x),
+		y: Number(pad.y),
+		w: shaped.w,
+		h: shaped.h,
+		r: shaped.radius,
+		vertices: shaped.vertices,
+		// 孔直径在源码里单位是 10mil，这里换算成一致量纲
+		holeSize: rawHole * 10,
+	};
+}
+
+/**
+ * 取焊盘声明的形状类型与标称宽高（POLYGON 不读尺寸，留给轮廓自己算）
+ *
+ * @param {object} pad 宿主焊盘
+ * @returns {{shapeType: string, w: number, h: number}} 形状类型与宽高
+ * @sideEffects 无（纯函数）
+ */
+function padBoxOf(pad) {
 	let w = 10;
 	let h = 10;
 	let shapeType = 'RECT';
@@ -57,59 +88,72 @@ export function padGeometry(pad) {
 		}
 	}
 
-	const rawHole = pad.hole && pad.hole.length > 1 ? Number(pad.hole[1]) : 0;
+	return { shapeType: shapeType, w: w, h: h };
+}
 
-	let algoShape = 'RECT';
-	let radius = 0;
-	let vertices = null;
+/**
+ * 形状判定：算成哪种算法图元
+ *
+ * @param {object} pad 宿主焊盘
+ * @param {{shapeType: string, w: number, h: number}} box 标称形状与宽高
+ * @returns {{shape: string, w: number, h: number, radius: number, vertices: Array<object>|null}} 算法形状
+ * @sideEffects **就地修改** `pad` 的 `x` / `y`（仅异形焊盘）
+ */
+function shapeOfPad(pad, box) {
+	if (box.shapeType === 'ROUND' || (box.shapeType === 'ELLIPSE' && Math.abs(box.w - box.h) < 0.1)) {
+		return { shape: 'ROUND', w: box.w, h: box.h, radius: box.w / 2, vertices: null };
+	}
+	if (box.shapeType === 'POLYGON' && Array.isArray(pad.pad[1])) {
+		return polyShapeOf(pad, box);
+	}
+	// API 的角度/弧度返回值两版不一致 → 一律按最短边内切圆，杜绝边缘误触
+	return { shape: 'ROUND', w: box.w, h: box.h, radius: Math.min(box.w, box.h) / 2, vertices: null };
+}
 
-	if (shapeType === 'ROUND' || (shapeType === 'ELLIPSE' && Math.abs(w - h) < 0.1)) {
-		algoShape = 'ROUND';
-		radius = w / 2;
-	} else if (shapeType === 'POLYGON' && Array.isArray(pad.pad[1])) {
-		// 注意：轮廓点解析失败时会停在 POLY 且 vertices 为空 → 该焊盘不参与连通
-		// （比按 10mil 默认圆处理更安全：宁可漏连，不可错连）
-		algoShape = 'POLY';
-		vertices = polygonVertices(pad.pad[1]);
-
-		if (vertices.length > 0) {
-			// 异形焊盘：用真实包围盒替代 API 给的坐标（否则网格加速会漏格）
-			let minX = Infinity;
-			let maxX = -Infinity;
-			let minY = Infinity;
-			let maxY = -Infinity;
-			for (const v of vertices) {
-				if (v.x < minX) minX = v.x;
-				if (v.x > maxX) maxX = v.x;
-				if (v.y < minY) minY = v.y;
-				if (v.y > maxY) maxY = v.y;
-			}
-			pad.x = (minX + maxX) / 2;
-			pad.y = (minY + maxY) / 2;
-			w = maxX - minX;
-			h = maxY - minY;
-		}
-	} else {
-		// API 的角度/弧度返回值两版不一致 → 一律按最短边内切圆，杜绝边缘误触
-		algoShape = 'ROUND';
-		radius = Math.min(w, h) / 2;
+/**
+ * 异形焊盘：解析轮廓，并用真实包围盒替代 API 给的坐标与尺寸
+ *
+ * 注意：轮廓点解析失败时会停在 POLY 且 vertices 为空 → 该焊盘不参与连通
+ * （比按 10mil 默认圆处理更安全：宁可漏连，不可错连）
+ *
+ * @param {object} pad 宿主焊盘
+ * @param {{shapeType: string, w: number, h: number}} box 标称形状与宽高
+ * @returns {{shape: string, w: number, h: number, radius: number, vertices: Array<object>}} 算法形状
+ * @sideEffects **就地修改** `pad` 的 `x` / `y`
+ */
+function polyShapeOf(pad, box) {
+	const vertices = polygonVertices(pad.pad[1]);
+	if (vertices.length === 0) {
+		return { shape: 'POLY', w: box.w, h: box.h, radius: 0, vertices: vertices };
 	}
 
-	return {
-		id: pad.primitiveId,
-		type: 'PAD',
-		net: pad.net,
-		layer: pad.layer,
-		shape: algoShape,
-		x: Number(pad.x),
-		y: Number(pad.y),
-		w: w,
-		h: h,
-		r: radius,
-		vertices: vertices,
-		// 孔直径在源码里单位是 10mil，这里换算成一致量纲
-		holeSize: rawHole * 10,
-	};
+	// 异形焊盘：用真实包围盒替代 API 给的坐标（否则网格加速会漏格）
+	const bounds = vertexBounds(vertices);
+	pad.x = bounds.x;
+	pad.y = bounds.y;
+	return { shape: 'POLY', w: bounds.w, h: bounds.h, radius: 0, vertices: vertices };
+}
+
+/**
+ * 顶点包围盒（中心 + 宽高）
+ *
+ * @param {Array<{x: number, y: number}>} vertices 顶点
+ * @returns {{x: number, y: number, w: number, h: number}} 包围盒
+ * @sideEffects 无（纯函数）
+ */
+function vertexBounds(vertices) {
+	let minX = Infinity;
+	let maxX = -Infinity;
+	let minY = Infinity;
+	let maxY = -Infinity;
+	for (const v of vertices) {
+		if (v.x < minX) minX = v.x;
+		if (v.x > maxX) maxX = v.x;
+		if (v.y < minY) minY = v.y;
+		if (v.y > maxY) maxY = v.y;
+	}
+
+	return { x: (minX + maxX) / 2, y: (minY + maxY) / 2, w: maxX - minX, h: maxY - minY };
 }
 
 /**

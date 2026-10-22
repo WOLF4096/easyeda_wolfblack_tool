@@ -94,13 +94,7 @@ function rewriteModernLine(line, targetMap) {
 		return line;
 	}
 
-	if (head.type === 'COMPONENT') {
-		const action = targetMap.get(head.id);
-		if (!action || !action.targetDeviceNameJson) return line;
-		tail.attrs = tail.attrs || {};
-		tail.attrs.DeviceName = action.targetDeviceNameJson;
-		return joinModernLine(head, tail, hasTrailingPipe);
-	}
+	if (head.type === 'COMPONENT') return rewriteComponentLine(line, head, tail, targetMap, hasTrailingPipe);
 
 	if (head.type === 'ATTR') {
 		const action = targetMap.get(tail.parentId);
@@ -112,6 +106,25 @@ function rewriteModernLine(line, targetMap) {
 	}
 
 	return line;
+}
+
+/**
+ * 改写 `COMPONENT` 行的 `attrs.DeviceName`（V4 器件引用的权威字段）
+ *
+ * @param {string} line 原始行（未命中时原样返回）
+ * @param {object} head 前半段对象
+ * @param {object} tail 后半段对象
+ * @param {Map<string, object>} targetMap 图元 ID → 替换动作
+ * @param {boolean} hasTrailingPipe 原行是否有行尾 `|`
+ * @returns {string} 改写后的行
+ * @sideEffects 无（纯函数）
+ */
+function rewriteComponentLine(line, head, tail, targetMap, hasTrailingPipe) {
+	const action = targetMap.get(head.id);
+	if (!action || !action.targetDeviceNameJson) return line;
+	tail.attrs = tail.attrs || {};
+	tail.attrs.DeviceName = action.targetDeviceNameJson;
+	return joinModernLine(head, tail, hasTrailingPipe);
 }
 
 /**

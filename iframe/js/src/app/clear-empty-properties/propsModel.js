@@ -68,24 +68,36 @@ export function buildRows(container) {
 	for (const key in container) {
 		const comp = container[key];
 		if (!comp || !comp.props || !comp.props.Designator) continue;
-		const supplier = comp.props.Supplier || '';
-		const isEmptySupplier = supplier.trim() === '';
-		rows.push({
-			id: key,
-			designator: comp.props.Designator || '',
-			name: comp.props.Name || '',
-			// 优先读取 FootprintName，没有则降级读取 Footprint
-			footprint: comp.props.FootprintName || comp.props.Footprint || '',
-			supplier: supplier,
-			// UI 勾选状态：Supplier 为空时勾选行与「更多属性」，否则全不选
-			selected: isEmptySupplier,
-			clearBase: false,
-			clearKey: false,
-			clearMore: isEmptySupplier,
-			refProps: comp.props,
-		});
+		rows.push(toRow(key, comp.props));
 	}
 	return rows;
+}
+
+/**
+ * 单个器件 → 行数据
+ *
+ * @param {string} key 容器键
+ * @param {object} props 器件属性
+ * @returns {object} 行数据
+ * @sideEffects 无（纯函数）
+ */
+function toRow(key, props) {
+	const supplier = props.Supplier || '';
+	const isEmptySupplier = supplier.trim() === '';
+	return {
+		id: key,
+		designator: props.Designator || '',
+		name: props.Name || '',
+		// 优先读取 FootprintName，没有则降级读取 Footprint
+		footprint: props.FootprintName || props.Footprint || '',
+		supplier: supplier,
+		// UI 勾选状态：Supplier 为空时勾选行与「更多属性」，否则全不选
+		selected: isEmptySupplier,
+		clearBase: false,
+		clearKey: false,
+		clearMore: isEmptySupplier,
+		refProps: props,
+	};
 }
 
 /**
@@ -103,22 +115,61 @@ export function clearBySelection(rows) {
 	let props = 0;
 
 	for (const row of list) {
-		if (!row.selected || !(row.clearBase || row.clearKey || row.clearMore)) continue;
-		let modified = false;
-		const target = row.refProps || {};
-		for (const key in target) {
-			const category = categoryOf(key);
-			if (category === 'preserve') continue;
-			const shouldClear = (category === 'base' && row.clearBase) || (category === 'key' && row.clearKey) || (category === 'more' && row.clearMore);
-			if (!shouldClear || target[key] === '') continue;
-			target[key] = '';
-			modified = true;
-			props++;
-		}
-		if (modified) components++;
+		if (!isRowActive(row)) continue;
+		const cleared = clearRow(row);
+		if (cleared > 0) components++;
+		props += cleared;
 	}
 
 	return { components: components, props: props };
+}
+
+/**
+ * 行是否参与清空（已勾选且至少勾了一个分类）
+ *
+ * @param {object} row 行数据
+ * @returns {boolean} 是否参与
+ * @sideEffects 无（纯函数）
+ */
+function isRowActive(row) {
+	if (!row.selected) return false;
+	return Boolean(row.clearBase || row.clearKey || row.clearMore);
+}
+
+/**
+ * 分类是否被该行勾选
+ *
+ * @param {'preserve'|'base'|'key'|'more'} category 属性分类
+ * @param {object} row 行数据
+ * @returns {boolean} 是否清空
+ * @sideEffects 无（纯函数）
+ */
+function shouldClearKey(category, row) {
+	if (category === 'base') return Boolean(row.clearBase);
+	if (category === 'key') return Boolean(row.clearKey);
+	if (category === 'more') return Boolean(row.clearMore);
+	return false;
+}
+
+/**
+ * 清空一行里勾选分类的属性
+ *
+ * @param {object} row 行数据（就地修改 refProps）
+ * @returns {number} 实际清空的属性数
+ * @sideEffects 就地修改 `row.refProps` 的键值
+ */
+function clearRow(row) {
+	let cleared = 0;
+	const target = row.refProps || {};
+	for (const key in target) {
+		const category = categoryOf(key);
+		if (category === 'preserve') continue;
+		if (!shouldClearKey(category, row)) continue;
+		if (target[key] === '') continue;
+		target[key] = '';
+		cleared++;
+	}
+	return cleared;
 }
 
 /**

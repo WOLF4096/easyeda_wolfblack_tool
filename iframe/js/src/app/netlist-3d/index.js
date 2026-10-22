@@ -213,6 +213,36 @@ async function updateOne(host, item, primId) {
 }
 
 /**
+ * 建「位号 → 图元 id」索引
+ *
+ * @param {Array<object>} pcbComps `pcb_PrimitiveComponent.getAll()` 的返回
+ * @returns {Record<string, string>} 位号索引
+ * @sideEffects 无（纯函数）
+ */
+function buildPcbMap(pcbComps) {
+	const pcbMap = {};
+	for (const comp of pcbComps) {
+		if (comp && comp.designator && comp.primitiveId) pcbMap[comp.designator] = comp.primitiveId;
+	}
+	return pcbMap;
+}
+
+/**
+ * 算出单个器件本轮的处置结果（只算不改状态列）
+ *
+ * @param {object} host 宿主对象
+ * @param {object} item 行数据
+ * @param {string} primId 图元 id（可能不存在）
+ * @returns {Promise<'成功'|'校验失败'|'失败'|'未找到'|'跳过'>} 新状态
+ * @sideEffects eda API（经由 updateOne 写图元）
+ */
+async function resolveStatus(host, item, primId) {
+	if (!primId) return '未找到';
+	if (!item.rawModel || item.rawModel.trim() === '') return '跳过';
+	return await updateOne(host, item, primId);
+}
+
+/**
  * 批量更新
  *
  * @returns {Promise<void>}
@@ -230,25 +260,14 @@ async function batchUpdate() {
 	statusText.textContent = '正在获取PCB器件...';
 
 	try {
-		const pcbComps = await host.pcb_PrimitiveComponent.getAll();
-		const pcbMap = {};
-		for (const comp of pcbComps) {
-			if (comp && comp.designator && comp.primitiveId) pcbMap[comp.designator] = comp.primitiveId;
-		}
-
+		const pcbMap = buildPcbMap(await host.pcb_PrimitiveComponent.getAll());
 		const total = appState.data.length;
 		let successCount = 0;
 
 		for (let i = 0; i < total; i++) {
 			const item = appState.data[i];
-			const primId = pcbMap[item.designator];
-
-			if (!primId) item.status = '未找到';
-			else if (!item.rawModel || item.rawModel.trim() === '') item.status = '跳过';
-			else {
-				item.status = await updateOne(host, item, primId);
-				if (item.status === '成功') successCount++;
-			}
+			item.status = await resolveStatus(host, item, pcbMap[item.designator]);
+			if (item.status === '成功') successCount++;
 
 			const percent = Math.round(((i + 1) / total) * 100);
 			progressBg.style.width = percent + '%';

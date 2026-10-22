@@ -65,30 +65,9 @@ export function planPrimitiveOperations(clusters, allUsedNetNames) {
  */
 export function planNetlistOperations(clusters, allUsedNetNames, componentsContainer) {
 	const namer = createNetNamer(allUsedNetNames);
-	const pinsByDesignator = {};
+	const pinsByDesignator = collectPinUpdates(clusters, namer);
 
-	for (const rootId of Object.keys(clusters || {})) {
-		const group = clusters[rootId];
-		if (!hasMultiple(group)) continue;
-
-		const finalNetName = namer.nameFor(voteNets(group));
-		const updates = {};
-		for (const item of group) {
-			if (item.type !== 'PAD' || !item._pinInfo) continue;
-			const pinInfo = item._pinInfo;
-			if (!updates[pinInfo.des]) updates[pinInfo.des] = {};
-			updates[pinInfo.des][pinInfo.pin] = finalNetName;
-		}
-		for (const des in updates) {
-			pinsByDesignator[des] = Object.assign(pinsByDesignator[des] || {}, updates[des]);
-		}
-	}
-
-	const designatorToCompId = {};
-	for (const compId in componentsContainer || {}) {
-		const comp = componentsContainer[compId];
-		if (comp && comp.props && comp.props.Designator) designatorToCompId[comp.props.Designator] = compId;
-	}
+	const designatorToCompId = designatorIndex(componentsContainer);
 
 	const operations = [];
 	for (const des in pinsByDesignator) {
@@ -97,22 +76,97 @@ export function planNetlistOperations(clusters, allUsedNetNames, componentsConta
 		const comp = componentsContainer[compId];
 		if (!comp) continue;
 
-		const pinUpdates = pinsByDesignator[des];
-		for (const pin in pinUpdates) {
-			const newNet = pinUpdates[pin];
-			const oldNet = getPinNet(comp, pin);
-			if (oldNet === newNet) continue;
-			operations.push({
-				des: des,
-				pin: pin,
-				oldNet: oldNet || '—',
-				newNet: newNet,
-				status: 'pending',
-			});
-		}
+		pushDesignatorOperations(operations, des, comp, pinsByDesignator[des]);
 	}
 
 	return operations;
+}
+
+/**
+ * 阶段 1：逐分量定名，累积「位号 → {引脚: 网络}」
+ *
+ * ⚠️ `nameFor` 是按分量顺序消耗名字的，遍历顺序必须与拆分前一致。
+ *
+ * @param {Record<string, Array<object>>} clusters 连通分量
+ * @param {object} namer 定名器
+ * @returns {Record<string, Record<string, string>>} 位号 → 引脚 → 网络
+ * @sideEffects **就地消耗** `namer` 里的网络名
+ */
+function collectPinUpdates(clusters, namer) {
+	const pinsByDesignator = {};
+
+	for (const rootId of Object.keys(clusters || {})) {
+		const group = clusters[rootId];
+		if (!hasMultiple(group)) continue;
+
+		const finalNetName = namer.nameFor(voteNets(group));
+		mergeGroupUpdates(pinsByDesignator, group, finalNetName);
+	}
+
+	return pinsByDesignator;
+}
+
+/**
+ * 单个分量内：把 PAD 的引脚写到对应位号下
+ *
+ * @param {Record<string, Record<string, string>>} pinsByDesignator 累积表（就地修改）
+ * @param {Array<object>} group 一个连通分量
+ * @param {string} finalNetName 该分量的网络名
+ * @returns {void}
+ * @sideEffects **就地修改** `pinsByDesignator`
+ */
+function mergeGroupUpdates(pinsByDesignator, group, finalNetName) {
+	const updates = {};
+	for (const item of group) {
+		if (item.type !== 'PAD' || !item._pinInfo) continue;
+		const pinInfo = item._pinInfo;
+		if (!updates[pinInfo.des]) updates[pinInfo.des] = {};
+		updates[pinInfo.des][pinInfo.pin] = finalNetName;
+	}
+	for (const des in updates) {
+		pinsByDesignator[des] = Object.assign(pinsByDesignator[des] || {}, updates[des]);
+	}
+}
+
+/**
+ * 阶段 2：位号 → 器件 id
+ *
+ * @param {object} componentsContainer 网表组件容器
+ * @returns {Record<string, string>} 位号 → 器件 id
+ * @sideEffects 无（纯函数）
+ */
+function designatorIndex(componentsContainer) {
+	const designatorToCompId = {};
+	for (const compId in componentsContainer || {}) {
+		const comp = componentsContainer[compId];
+		if (comp && comp.props && comp.props.Designator) designatorToCompId[comp.props.Designator] = compId;
+	}
+	return designatorToCompId;
+}
+
+/**
+ * 阶段 3：单个位号的引脚更新 → 操作项
+ *
+ * @param {Array<object>} operations 操作列表（就地追加）
+ * @param {string} des 位号
+ * @param {object} comp 网表组件
+ * @param {Record<string, string>} pinUpdates 引脚 → 新网络
+ * @returns {void}
+ * @sideEffects **就地追加** `operations`
+ */
+function pushDesignatorOperations(operations, des, comp, pinUpdates) {
+	for (const pin in pinUpdates) {
+		const newNet = pinUpdates[pin];
+		const oldNet = getPinNet(comp, pin);
+		if (oldNet === newNet) continue;
+		operations.push({
+			des: des,
+			pin: pin,
+			oldNet: oldNet || '—',
+			newNet: newNet,
+			status: 'pending',
+		});
+	}
 }
 
 /**
@@ -136,32 +190,64 @@ export function applyPinUpdates(componentsContainer, pinUpdatesByDesignator) {
 		if (!pinUpdates) continue;
 
 		if (compData.pinInfoMap) {
-			for (const pinNum in pinUpdates) {
-				const targetNet = pinUpdates[pinNum];
-				const pinKey = String(pinNum);
-				if (compData.pinInfoMap[pinKey]) {
-					if (compData.pinInfoMap[pinKey].net !== targetNet) {
-						compData.pinInfoMap[pinKey].net = targetNet;
-						updateCount += 1;
-					}
-				} else {
-					compData.pinInfoMap[pinKey] = { net: targetNet, number: pinKey };
-					updateCount += 1;
-				}
-			}
+			updateCount += applyToPinInfoMap(compData.pinInfoMap, pinUpdates);
 			continue;
 		}
 
-		if (!compData.pins) compData.pins = {};
-		for (const pinNum in pinUpdates) {
-			const targetNet = pinUpdates[pinNum];
-			const pinKey = String(pinNum);
-			if (compData.pins[pinKey] !== targetNet) {
-				compData.pins[pinKey] = targetNet;
-				updateCount += 1;
-			}
-		}
+		updateCount += applyToPins(compData, pinUpdates);
 	}
 
 	return updateCount;
+}
+
+/**
+ * 写 `pinInfoMap` 结构：已存在则改 `net`，不存在则新建一条
+ *
+ * @param {Record<string, object>} pinInfoMap 引脚信息表（就地修改）
+ * @param {Record<string, string>} pinUpdates 引脚 → 新网络
+ * @returns {number} 改动数
+ * @sideEffects **就地修改** `pinInfoMap`
+ */
+function applyToPinInfoMap(pinInfoMap, pinUpdates) {
+	let count = 0;
+
+	for (const pinNum in pinUpdates) {
+		const targetNet = pinUpdates[pinNum];
+		const pinKey = String(pinNum);
+		if (pinInfoMap[pinKey]) {
+			if (pinInfoMap[pinKey].net !== targetNet) {
+				pinInfoMap[pinKey].net = targetNet;
+				count += 1;
+			}
+			continue;
+		}
+		pinInfoMap[pinKey] = { net: targetNet, number: pinKey };
+		count += 1;
+	}
+
+	return count;
+}
+
+/**
+ * 写 `pins` 结构（就地修改，缺省时补一个空表）
+ *
+ * @param {object} compData 网表组件（就地修改）
+ * @param {Record<string, string>} pinUpdates 引脚 → 新网络
+ * @returns {number} 改动数
+ * @sideEffects **就地修改** `compData.pins`
+ */
+function applyToPins(compData, pinUpdates) {
+	if (!compData.pins) compData.pins = {};
+	let count = 0;
+
+	for (const pinNum in pinUpdates) {
+		const targetNet = pinUpdates[pinNum];
+		const pinKey = String(pinNum);
+		if (compData.pins[pinKey] !== targetNet) {
+			compData.pins[pinKey] = targetNet;
+			count += 1;
+		}
+	}
+
+	return count;
 }

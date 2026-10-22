@@ -226,6 +226,57 @@ function plainCodeToNumber(code, fourDigitRule) {
 	return parseFloat(code);
 }
 
+/** 电阻里被视为「零」的写法 */
+const ZERO_RESISTOR_CODES = ['0', '00', '000', '0R'];
+
+/** 电阻的内嵌单位 → 倍率 */
+const RESISTOR_MULTIPLIERS = { R: 1, K: 1000, M: 1000000 };
+
+/**
+ * `R01` 这种「R 开头」写法（R 后面直接是小数部分）
+ *
+ * @param {string} upper 已大写的编码
+ * @returns {number|null} 电阻值；无法解析为 null
+ * @sideEffects 无（纯函数）
+ */
+function parseLeadingR(upper) {
+	const numericValue = parseFloat('0.' + upper.substring(1));
+	return isNaN(numericValue) ? null : numericValue;
+}
+
+/**
+ * 把 `4R7` / `2K2` 拆成整数部分、小数部分与单位字符
+ *
+ * @param {string} upper 已大写的编码
+ * @returns {{integerPart: string, decimalPart: string, unitChar: string}|null} 拆分结果；不匹配为 null
+ * @sideEffects 无（纯函数）
+ */
+function splitResistorUnit(upper) {
+	const match = upper.match(/^([0-9]*\.?[0-9]*)[RKM]([0-9]*)$/);
+	if (!match) return null;
+
+	const integerPart = match[1] || '0';
+	const unitChar = upper.includes('K') ? 'K' : upper.includes('M') ? 'M' : 'R';
+	const decimalPart = match[2] || '';
+	return { integerPart: integerPart, decimalPart: decimalPart, unitChar: unitChar };
+}
+
+/**
+ * 把拆分结果换算成电阻值（Ω）
+ *
+ * @param {{integerPart: string, decimalPart: string, unitChar: string}} parts 拆分结果
+ * @returns {number|null} 电阻值；无法解析为 null
+ * @sideEffects 无（纯函数）
+ */
+function resistorValueOf(parts) {
+	const head = parts.decimalPart ? parseFloat(parts.integerPart + '.' + parts.decimalPart) : parseFloat(parts.integerPart);
+	if (isNaN(head)) return null;
+	// 0R5 这种「整数部分为 0」的写法按小数处理
+	const numericValue = parts.integerPart === '0' && parts.decimalPart ? parseFloat('0.' + parts.decimalPart) : head;
+
+	return numericValue * (RESISTOR_MULTIPLIERS[parts.unitChar] || 1);
+}
+
 /**
  * 解析带单位的电阻（`4R7` / `2K2` / `R01` / `0R5`）
  *
@@ -235,28 +286,14 @@ function plainCodeToNumber(code, fourDigitRule) {
  */
 function parseResistorWithUnit(code) {
 	const upper = String(code).toUpperCase();
-	if (upper === '0' || upper === '00' || upper === '000' || upper === '0R') return 0;
+	if (ZERO_RESISTOR_CODES.includes(upper)) return 0;
 
 	// R 开头（R01 = 0.01Ω）
-	if (upper.startsWith('R') && upper.length >= 2) {
-		const numericValue = parseFloat('0.' + upper.substring(1));
-		return isNaN(numericValue) ? null : numericValue;
-	}
+	if (upper.startsWith('R') && upper.length >= 2) return parseLeadingR(upper);
 
-	const match = upper.match(/^([0-9]*\.?[0-9]*)[RKM]([0-9]*)$/);
-	if (!match) return parseFloat(upper);
-
-	const integerPart = match[1] || '0';
-	const unitChar = upper.includes('K') ? 'K' : upper.includes('M') ? 'M' : 'R';
-	const decimalPart = match[2] || '';
-
-	let numericValue = decimalPart ? parseFloat(integerPart + '.' + decimalPart) : parseFloat(integerPart);
-	if (isNaN(numericValue)) return null;
-	// 0R5 这种「整数部分为 0」的写法按小数处理
-	if (integerPart === '0' && decimalPart) numericValue = parseFloat('0.' + decimalPart);
-
-	const multipliers = { R: 1, K: 1000, M: 1000000 };
-	return numericValue * (multipliers[unitChar] || 1);
+	const parts = splitResistorUnit(upper);
+	if (!parts) return parseFloat(upper);
+	return resistorValueOf(parts);
 }
 
 /**
@@ -320,6 +357,51 @@ function joinDecimal(integerPart, decimalPart) {
 	return isNaN(value) ? null : value;
 }
 
+/** 各类型的单位阶梯（factor 为该单位换算到基准单位的倍数，从小到大） */
+const VALUE_UNITS = {
+	R: [
+		{ unit: 'mΩ', factor: 0.001 },
+		{ unit: 'Ω', factor: 1 },
+		{ unit: 'kΩ', factor: 1000 },
+		{ unit: 'MΩ', factor: 1000000 },
+	],
+	C: [
+		{ unit: 'pF', factor: 1 },
+		{ unit: 'nF', factor: 1000 },
+		{ unit: 'uF', factor: 1000000 },
+		{ unit: 'mF', factor: 1000000000 },
+		{ unit: 'F', factor: 1000000000000 },
+	],
+	L: [
+		{ unit: 'nH', factor: 0.001 },
+		{ unit: 'uH', factor: 1 },
+		{ unit: 'mH', factor: 1000 },
+		{ unit: 'H', factor: 1000000 },
+	],
+};
+
+/** 零值文案（类型不认识时退回 `'0'`） */
+const ZERO_TEXT = { R: '0Ω', C: '0pF', L: '0uH' };
+
+/**
+ * 选出「不超过该数值的最大单位」
+ *
+ * @param {Array<{unit: string, factor: number}>} typeUnits 单位阶梯（从小到大）
+ * @param {number} absValue 数值的绝对值
+ * @returns {{unit: string, factor: number}} 选中的单位
+ * @sideEffects 无（纯函数）
+ */
+function bestUnitOf(typeUnits, absValue) {
+	let bestUnit = typeUnits[0];
+	for (let i = typeUnits.length - 1; i >= 0; i--) {
+		if (absValue >= typeUnits[i].factor || i === 0) {
+			bestUnit = typeUnits[i];
+			break;
+		}
+	}
+	return bestUnit;
+}
+
 /**
  * 数值 → 带单位的展示文本
  *
@@ -333,47 +415,12 @@ function joinDecimal(integerPart, decimalPart) {
 export function formatValue(value, type) {
 	if (value === undefined || value === null || isNaN(value)) return null;
 
-	if (value === 0) {
-		if (type === 'R') return '0Ω';
-		if (type === 'C') return '0pF';
-		if (type === 'L') return '0uH';
-		return '0';
-	}
+	if (value === 0) return ZERO_TEXT[type] || '0';
 
-	const units = {
-		R: [
-			{ unit: 'mΩ', factor: 0.001 },
-			{ unit: 'Ω', factor: 1 },
-			{ unit: 'kΩ', factor: 1000 },
-			{ unit: 'MΩ', factor: 1000000 },
-		],
-		C: [
-			{ unit: 'pF', factor: 1 },
-			{ unit: 'nF', factor: 1000 },
-			{ unit: 'uF', factor: 1000000 },
-			{ unit: 'mF', factor: 1000000000 },
-			{ unit: 'F', factor: 1000000000000 },
-		],
-		L: [
-			{ unit: 'nH', factor: 0.001 },
-			{ unit: 'uH', factor: 1 },
-			{ unit: 'mH', factor: 1000 },
-			{ unit: 'H', factor: 1000000 },
-		],
-	};
-
-	const typeUnits = units[type];
+	const typeUnits = VALUE_UNITS[type];
 	if (!typeUnits) return value.toString();
 
-	const absValue = Math.abs(value);
-	let bestUnit = typeUnits[0];
-	for (let i = typeUnits.length - 1; i >= 0; i--) {
-		if (absValue >= typeUnits[i].factor || i === 0) {
-			bestUnit = typeUnits[i];
-			break;
-		}
-	}
-
+	const bestUnit = bestUnitOf(typeUnits, Math.abs(value));
 	const displayValue = Number((value / bestUnit.factor).toFixed(3)).toString();
 	return displayValue + bestUnit.unit;
 }

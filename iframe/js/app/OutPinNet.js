@@ -134,17 +134,23 @@
     };
     return list.map((row) => (Array.isArray(row) ? row : [row]).map(escapeCell).join(delimiter)).join(newline);
   }
+  function canDownload(doc, urlApi) {
+    return Boolean(doc && typeof doc.createElement === "function" && urlApi && typeof urlApi.createObjectURL === "function");
+  }
+  function mountAndClick(doc, a) {
+    if (doc.body && typeof doc.body.appendChild === "function") doc.body.appendChild(a);
+    if (typeof a.click === "function") a.click();
+    if (typeof a.remove === "function") a.remove();
+  }
   function downloadBlob(fileName, blob, options = {}) {
     const doc = options.doc || globalThis.document;
     const urlApi = options.urlApi || globalThis.URL;
-    if (!doc || typeof doc.createElement !== "function" || !urlApi || typeof urlApi.createObjectURL !== "function") return false;
+    if (!canDownload(doc, urlApi)) return false;
     const href = urlApi.createObjectURL(blob);
     const a = doc.createElement("a");
     a.href = href;
     a.download = fileName;
-    if (doc.body && typeof doc.body.appendChild === "function") doc.body.appendChild(a);
-    if (typeof a.click === "function") a.click();
-    if (typeof a.remove === "function") a.remove();
+    mountAndClick(doc, a);
     if (typeof urlApi.revokeObjectURL === "function") urlApi.revokeObjectURL(href);
     return true;
   }
@@ -186,37 +192,38 @@
     }, timeoutMs);
     return true;
   }
+  function showOnHost(host, text, type) {
+    try {
+      if (!host || !host.sys_Message || typeof host.sys_Message.showToastMessage !== "function") return false;
+      host.sys_Message.showToastMessage(text, type);
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
   function toast(message, level = TOAST_LEVEL.info, opts = {}) {
     const doc = opts.doc || globalThis.document;
     const host = opts.host === void 0 ? getEda() : opts.host;
     const text = message === null || message === void 0 ? "" : String(message);
-    const type = normalizeLevel(level);
-    try {
-      if (host && host.sys_Message && typeof host.sys_Message.showToastMessage === "function") {
-        host.sys_Message.showToastMessage(text, type);
-        return "host";
-      }
-    } catch (e) {
-    }
+    if (showOnHost(host, text, normalizeLevel(level))) return "host";
     return banner(doc, text, opts.timeoutMs === void 0 ? 3e3 : opts.timeoutMs) ? "dom" : "none";
   }
 
   // iframe/js/src/core/pins.js
-  function getPins(comp) {
+  function netOf(value) {
+    if (value && typeof value === "object") return value.net || "";
+    return String(value || "");
+  }
+  function readPinMap(map) {
     const out = {};
-    if (!comp || typeof comp !== "object") return out;
-    if (comp.pinInfoMap && typeof comp.pinInfoMap === "object") {
-      for (const [pin, info] of Object.entries(comp.pinInfoMap)) {
-        out[pin] = info && typeof info === "object" ? info.net || "" : String(info || "");
-      }
-      return out;
-    }
-    if (comp.pins && typeof comp.pins === "object") {
-      for (const [pin, net] of Object.entries(comp.pins)) {
-        out[pin] = net && typeof net === "object" ? net.net || "" : String(net || "");
-      }
-    }
+    for (const [pin, value] of Object.entries(map)) out[pin] = netOf(value);
     return out;
+  }
+  function getPins(comp) {
+    if (!comp || typeof comp !== "object") return {};
+    if (comp.pinInfoMap && typeof comp.pinInfoMap === "object") return readPinMap(comp.pinInfoMap);
+    if (comp.pins && typeof comp.pins === "object") return readPinMap(comp.pins);
+    return {};
   }
   function collectPinNumbers(components) {
     const set = /* @__PURE__ */ new Set();

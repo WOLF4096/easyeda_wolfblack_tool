@@ -76,7 +76,7 @@ async function main() {
 	}
 
 	const startedAt = Date.now();
-	const WC = loadWolfCommon();
+	const WC = await loadWolfCommon();
 	const PCB = await loadPcbConstants();
 
 	const samples = [];

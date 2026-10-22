@@ -133,18 +133,22 @@
       return "SCH";
     }
   }
-  function detectContainer(netlistObj) {
-    if (!netlistObj || typeof netlistObj !== "object") return {};
-    if (netlistObj.components && typeof netlistObj.components === "object") return netlistObj.components;
-    const META_KEYS = ["version", "designRule", "netClass", "units", "layers"];
+  var META_KEYS = ["version", "designRule", "netClass", "units", "layers"];
+  function isComponentLike(value) {
+    return Boolean(value && typeof value === "object" && (value.props || value.pins || value.pinInfoMap));
+  }
+  function pickComponents(netlistObj) {
     const picked = {};
     for (const key in netlistObj) {
       if (META_KEYS.includes(key)) continue;
-      const value = netlistObj[key];
-      if (value && typeof value === "object" && (value.props || value.pins || value.pinInfoMap)) {
-        picked[key] = value;
-      }
+      if (isComponentLike(netlistObj[key])) picked[key] = netlistObj[key];
     }
+    return picked;
+  }
+  function detectContainer(netlistObj) {
+    if (!netlistObj || typeof netlistObj !== "object") return {};
+    if (netlistObj.components && typeof netlistObj.components === "object") return netlistObj.components;
+    const picked = pickComponents(netlistObj);
     return Object.keys(picked).length > 0 ? picked : netlistObj;
   }
 
@@ -190,18 +194,20 @@
     }, timeoutMs);
     return true;
   }
+  function showOnHost(host, text, type) {
+    try {
+      if (!host || !host.sys_Message || typeof host.sys_Message.showToastMessage !== "function") return false;
+      host.sys_Message.showToastMessage(text, type);
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
   function toast(message, level = TOAST_LEVEL.info, opts = {}) {
     const doc = opts.doc || globalThis.document;
     const host = opts.host === void 0 ? getEda() : opts.host;
     const text = message === null || message === void 0 ? "" : String(message);
-    const type = normalizeLevel(level);
-    try {
-      if (host && host.sys_Message && typeof host.sys_Message.showToastMessage === "function") {
-        host.sys_Message.showToastMessage(text, type);
-        return "host";
-      }
-    } catch (e) {
-    }
+    if (showOnHost(host, text, normalizeLevel(level))) return "host";
     return banner(doc, text, opts.timeoutMs === void 0 ? 3e3 : opts.timeoutMs) ? "dom" : "none";
   }
 
@@ -218,68 +224,64 @@
       errors.push("未检测到有效的AD网表");
       return { netMap, errors };
     }
-    for (const block of blocks) {
-      const lines = block.replace(/^\(|\)$/g, "").trim().split(/\r?\n/).map((line) => line.trim()).filter((line) => line !== "");
-      if (lines.length < 2) continue;
-      const netName = lines[0];
-      for (let i = 1; i < lines.length; i++) {
-        const parts = lines[i].split("-");
-        if (parts.length !== 2) {
-          errors.push(`行格式异常: ${lines[i]} , 应为 位号-引脚`);
-          continue;
-        }
-        const refDes = parts[0].trim();
-        const pinNo = parts[1].trim();
-        if (refDes && pinNo) netMap.set(`${refDes}|${pinNo}`, netName);
-      }
-    }
+    for (const block of blocks) parseBlock(block, netMap, errors);
     return { netMap, errors };
+  }
+  function parseBlock(block, netMap, errors) {
+    const lines = block.replace(/^\(|\)$/g, "").trim().split(/\r?\n/).map((line) => line.trim()).filter((line) => line !== "");
+    if (lines.length < 2) return;
+    const netName = lines[0];
+    for (let i = 1; i < lines.length; i++) {
+      const parts = lines[i].split("-");
+      if (parts.length !== 2) {
+        errors.push(`行格式异常: ${lines[i]} , 应为 位号-引脚`);
+        continue;
+      }
+      const refDes = parts[0].trim();
+      const pinNo = parts[1].trim();
+      if (refDes && pinNo) netMap.set(`${refDes}|${pinNo}`, netName);
+    }
   }
 
   // iframe/js/src/core/pins.js
-  function getPins(comp) {
+  function netOf(value) {
+    if (value && typeof value === "object") return value.net || "";
+    return String(value || "");
+  }
+  function readPinMap(map) {
     const out = {};
-    if (!comp || typeof comp !== "object") return out;
-    if (comp.pinInfoMap && typeof comp.pinInfoMap === "object") {
-      for (const [pin, info] of Object.entries(comp.pinInfoMap)) {
-        out[pin] = info && typeof info === "object" ? info.net || "" : String(info || "");
-      }
-      return out;
-    }
-    if (comp.pins && typeof comp.pins === "object") {
-      for (const [pin, net] of Object.entries(comp.pins)) {
-        out[pin] = net && typeof net === "object" ? net.net || "" : String(net || "");
-      }
-    }
+    for (const [pin, value] of Object.entries(map)) out[pin] = netOf(value);
     return out;
+  }
+  function getPins(comp) {
+    if (!comp || typeof comp !== "object") return {};
+    if (comp.pinInfoMap && typeof comp.pinInfoMap === "object") return readPinMap(comp.pinInfoMap);
+    if (comp.pins && typeof comp.pins === "object") return readPinMap(comp.pins);
+    return {};
+  }
+  function writePinInfoMap(comp, pin, net, create) {
+    if (comp.pinInfoMap[pin]) {
+      comp.pinInfoMap[pin].net = net;
+      return true;
+    }
+    if (!create) return false;
+    comp.pinInfoMap[pin] = { name: "", number: pin, net };
+    return true;
+  }
+  function writePins(comp, pin, net, create) {
+    if (!create && !Object.prototype.hasOwnProperty.call(comp.pins, pin)) return false;
+    comp.pins[pin] = net;
+    return true;
   }
   function setPinNet(comp, pin, net, options = {}) {
     if (!comp || typeof comp !== "object") return false;
     const create = options.create === true;
-    if (comp.pinInfoMap && typeof comp.pinInfoMap === "object") {
-      if (comp.pinInfoMap[pin]) {
-        comp.pinInfoMap[pin].net = net;
-        return true;
-      }
-      if (create) {
-        comp.pinInfoMap[pin] = { name: "", number: pin, net };
-        return true;
-      }
-      return false;
-    }
-    if (comp.pins && typeof comp.pins === "object") {
-      if (Object.prototype.hasOwnProperty.call(comp.pins, pin) || create) {
-        comp.pins[pin] = net;
-        return true;
-      }
-      return false;
-    }
-    if (create) {
-      comp.pins = {};
-      comp.pins[pin] = net;
-      return true;
-    }
-    return false;
+    if (comp.pinInfoMap && typeof comp.pinInfoMap === "object") return writePinInfoMap(comp, pin, net, create);
+    if (comp.pins && typeof comp.pins === "object") return writePins(comp, pin, net, create);
+    if (!create) return false;
+    comp.pins = {};
+    comp.pins[pin] = net;
+    return true;
   }
 
   // iframe/js/src/app/in-ad-netlist/compare.js
@@ -303,34 +305,45 @@
       items.push({ refDes, pinNo, newNet });
     }
     items.sort((a, b) => naturalCompare(a.refDes, b.refDes) || naturalCompare(a.pinNo, b.pinNo));
-    return items.map((item) => {
-      const comp = designators[item.refDes];
-      if (!comp) {
-        return {
-          refDes: item.refDes,
-          pinNo: item.pinNo,
-          oldNet: "⚠️ 未找到元件",
-          newNet: item.newNet,
-          isDiff: false,
-          warning: true,
-          tooltip: `位号 ${item.refDes} 在当前PCB中不存在`
-        };
-      }
-      const pins = getPins(comp);
-      const hasPinData = comp.pinInfoMap || comp.pins;
-      const oldNet = Object.prototype.hasOwnProperty.call(pins, item.pinNo) ? pins[item.pinNo] || NO_NET : hasPinData ? NO_NET : "? 无引脚数据";
-      const missingPin = hasPinData && !Object.prototype.hasOwnProperty.call(pins, item.pinNo);
-      const unknownShape = !hasPinData;
-      return {
-        refDes: item.refDes,
-        pinNo: item.pinNo,
-        oldNet,
-        newNet: item.newNet,
-        isDiff: !missingPin && !unknownShape && oldNet !== item.newNet,
-        warning: missingPin || unknownShape,
-        tooltip: unknownShape ? `元件 ${item.refDes} 引脚信息结构未知` : missingPin ? `引脚 ${item.pinNo} 在元件 ${item.refDes} 中未定义` : ""
-      };
-    });
+    return items.map((item) => toCompareRow(item, designators[item.refDes]));
+  }
+  function missingComponentRow(item) {
+    return {
+      refDes: item.refDes,
+      pinNo: item.pinNo,
+      oldNet: "⚠️ 未找到元件",
+      newNet: item.newNet,
+      isDiff: false,
+      warning: true,
+      tooltip: `位号 ${item.refDes} 在当前PCB中不存在`
+    };
+  }
+  function oldNetOf(pins, pinNo, hasPin, hasPinData) {
+    if (hasPin) return pins[pinNo] || NO_NET;
+    return hasPinData ? NO_NET : "? 无引脚数据";
+  }
+  function tooltipOf(item, unknownShape, missingPin) {
+    if (unknownShape) return `元件 ${item.refDes} 引脚信息结构未知`;
+    if (missingPin) return `引脚 ${item.pinNo} 在元件 ${item.refDes} 中未定义`;
+    return "";
+  }
+  function toCompareRow(item, comp) {
+    if (!comp) return missingComponentRow(item);
+    const pins = getPins(comp);
+    const hasPinData = comp.pinInfoMap || comp.pins;
+    const hasPin = Object.prototype.hasOwnProperty.call(pins, item.pinNo);
+    const oldNet = oldNetOf(pins, item.pinNo, hasPin, hasPinData);
+    const missingPin = hasPinData && !hasPin;
+    const unknownShape = !hasPinData;
+    return {
+      refDes: item.refDes,
+      pinNo: item.pinNo,
+      oldNet,
+      newNet: item.newNet,
+      isDiff: !missingPin && !unknownShape && oldNet !== item.newNet,
+      warning: missingPin || unknownShape,
+      tooltip: tooltipOf(item, unknownShape, missingPin)
+    };
   }
   function applyToCopy(netlistObj, netMap) {
     const updatedObj = JSON.parse(JSON.stringify(netlistObj || {}));

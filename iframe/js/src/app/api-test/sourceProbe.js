@@ -68,46 +68,78 @@ export function findSourceLine(code, id) {
 export function normalizeFromSource(type, rawV2, rawV3) {
 	if (!rawV2 && !rawV3) return [];
 
-	if (rawV3) {
-		const std = { x: 0, y: 0, val1: 0, val2: 0, val3: '0' };
-		const solder = (value) => (value === null ? 'null' : (value ?? '0'));
-		switch (type) {
-			case 'Via':
-				std.x = rawV3.centerX;
-				std.y = rawV3.centerY;
-				std.val1 = rawV3.holeDiameter;
-				std.val2 = rawV3.viaDiameter;
-				std.val3 = solder(rawV3.topSolderExpansion);
-				break;
-			case 'Pad':
-				std.x = rawV3.centerX;
-				std.y = rawV3.centerY;
-				std.val1 = rawV3.hole?.width;
-				std.val2 = rawV3.defaultPad?.width;
-				std.val3 = solder(rawV3.topSolderExpansion);
-				break;
-			case 'Line':
-				std.x = rawV3.startX;
-				std.y = rawV3.startY;
-				std.val1 = rawV3.width;
-				break;
-			case 'Arc':
-				std.x = rawV3.startX;
-				std.y = rawV3.startY;
-				std.val1 = rawV3.width;
-				std.val2 = rawV3.angle;
-				break;
-			case 'Polyline':
-				std.x = rawV3.path?.[0];
-				std.y = rawV3.path?.[1];
-				std.val1 = rawV3.width;
-				break;
-			default:
-				return [];
-		}
-		return shape(type, std);
-	}
+	if (rawV3) return fromV3(type, rawV3);
+	return fromV2(type, rawV2);
+}
 
+/**
+ * 阻焊扩展归一（null 与「缺失」要能区分，界面用字符串展示）
+ *
+ * @param {*} value 原始值
+ * @returns {string|number} 展示值
+ * @sideEffects 无（纯函数）
+ */
+function solderText(value) {
+	if (value === null) return 'null';
+	return value ?? '0';
+}
+
+/**
+ * V3 字段表归一
+ *
+ * @param {string} type 图元类型
+ * @param {object} rawV3 V3 数据体
+ * @returns {Array<string|number>} 标准量数组；未知类型为空数组
+ * @sideEffects 无（纯函数）
+ */
+function fromV3(type, rawV3) {
+	const std = { x: 0, y: 0, val1: 0, val2: 0, val3: '0' };
+	switch (type) {
+		case 'Via':
+			std.x = rawV3.centerX;
+			std.y = rawV3.centerY;
+			std.val1 = rawV3.holeDiameter;
+			std.val2 = rawV3.viaDiameter;
+			std.val3 = solderText(rawV3.topSolderExpansion);
+			break;
+		case 'Pad':
+			std.x = rawV3.centerX;
+			std.y = rawV3.centerY;
+			std.val1 = rawV3.hole?.width;
+			std.val2 = rawV3.defaultPad?.width;
+			std.val3 = solderText(rawV3.topSolderExpansion);
+			break;
+		case 'Line':
+			std.x = rawV3.startX;
+			std.y = rawV3.startY;
+			std.val1 = rawV3.width;
+			break;
+		case 'Arc':
+			std.x = rawV3.startX;
+			std.y = rawV3.startY;
+			std.val1 = rawV3.width;
+			std.val2 = rawV3.angle;
+			break;
+		case 'Polyline':
+			std.x = rawV3.path?.[0];
+			std.y = rawV3.path?.[1];
+			std.val1 = rawV3.width;
+			break;
+		default:
+			return [];
+	}
+	return shape(type, std);
+}
+
+/**
+ * V2 下标表归一
+ *
+ * @param {string} type 图元类型
+ * @param {Array} rawV2 V2 数组行
+ * @returns {Array<string|number>} 标准量数组；未知类型为空数组
+ * @sideEffects 无（纯函数）
+ */
+function fromV2(type, rawV2) {
 	const fields = V2_FIELDS[type];
 	if (!fields) return [];
 	const at = (index) => rawV2[index];

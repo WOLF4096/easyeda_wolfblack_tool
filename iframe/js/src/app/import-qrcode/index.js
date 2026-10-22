@@ -259,36 +259,70 @@ async function handlePlace() {
 	try {
 		placer.stop();
 
-		let width = parseFloat(qrSizeInput.value) || 25.4;
-		if (STATE.unit === 'mm') width *= MM_TO_MIL;
-		const height = width * (canvas.height / canvas.width);
-
+		const size = computePlaceSize(canvas);
 		const layerId = currentLayerId();
 		const base64 = canvas.toDataURL('image/png');
-		// API 的 width/height 是 number，字符串会被判为非法值（VALUE_OUT_OF_RANGE）
-		const apiWidth = toApiLength(width);
-		const apiHeight = toApiLength(height);
 
-		if (STATE.outputType === 'image') {
-			const created = await host.pcb_PrimitiveObject.create(layerId, 0, 0, base64, apiWidth, apiHeight, 0, false, 'img', false);
-			if (!created) throw new Error('创建图像图元失败（API 返回空）');
-			STATE.primitiveId = created.getState_PrimitiveId();
-			placer.start(async (pt) => host.pcb_PrimitiveObject.modify(STATE.primitiveId, { topLeftX: pt.x, topLeftY: pt.y }));
-		} else {
-			const blob = await (await fetch(base64)).blob();
-			const edaImage = await host.pcb_MathPolygon.convertImageToComplexPolygon(blob, apiWidth, apiHeight, 0.5, 0, 0, 0, true, false);
-			if (!edaImage) throw new Error('图像转换为多边形失败');
-			const created = await host.pcb_PrimitiveImage.create(0, 0, edaImage, layerId, apiWidth, apiHeight, 0, false, false);
-			if (!created) throw new Error('创建图像图元失败（API 返回空）');
-			STATE.primitiveId = created.getState_PrimitiveId();
-			placer.start(async (pt) => host.pcb_PrimitiveImage.modify(STATE.primitiveId, { x: pt.x, y: pt.y }));
-		}
+		if (STATE.outputType === 'image') await placeAsImage(host, layerId, base64, size);
+		else await placeAsVector(host, layerId, base64, size);
 
 		if (host.sys_IFrame) host.sys_IFrame.hideIFrame('ImportQrcode');
 	} catch (err) {
 		toast('放置失败: ' + err.message, 'error');
 		placer.stop();
 	}
+}
+
+/**
+ * 按界面单位算出放置尺寸（mil），并转成 API 要求的 number
+ *
+ * @param {HTMLCanvasElement} canvas 预览画布
+ * @returns {{apiWidth: number, apiHeight: number}} 宽高（mil）
+ * @sideEffects 无（纯函数）
+ */
+function computePlaceSize(canvas) {
+	let width = parseFloat(qrSizeInput.value) || 25.4;
+	if (STATE.unit === 'mm') width *= MM_TO_MIL;
+	const height = width * (canvas.height / canvas.width);
+	// API 的 width/height 是 number，字符串会被判为非法值（VALUE_OUT_OF_RANGE）
+	return { apiWidth: toApiLength(width), apiHeight: toApiLength(height) };
+}
+
+/**
+ * 以位图方式放置图元并开始跟随
+ *
+ * @param {object} host 宿主对象
+ * @param {number} layerId 层号
+ * @param {string} base64 PNG dataURL
+ * @param {{apiWidth: number, apiHeight: number}} size 尺寸（mil）
+ * @returns {Promise<void>}
+ * @sideEffects eda API（建图元、改图元位置）、修改 STATE.primitiveId
+ */
+async function placeAsImage(host, layerId, base64, size) {
+	const created = await host.pcb_PrimitiveObject.create(layerId, 0, 0, base64, size.apiWidth, size.apiHeight, 0, false, 'img', false);
+	if (!created) throw new Error('创建图像图元失败（API 返回空）');
+	STATE.primitiveId = created.getState_PrimitiveId();
+	placer.start(async (pt) => host.pcb_PrimitiveObject.modify(STATE.primitiveId, { topLeftX: pt.x, topLeftY: pt.y }));
+}
+
+/**
+ * 以矢量（多边形）方式放置图元并开始跟随
+ *
+ * @param {object} host 宿主对象
+ * @param {number} layerId 层号
+ * @param {string} base64 PNG dataURL
+ * @param {{apiWidth: number, apiHeight: number}} size 尺寸（mil）
+ * @returns {Promise<void>}
+ * @sideEffects eda API（取 blob、转多边形、建图元、改图元位置）、修改 STATE.primitiveId
+ */
+async function placeAsVector(host, layerId, base64, size) {
+	const blob = await (await fetch(base64)).blob();
+	const edaImage = await host.pcb_MathPolygon.convertImageToComplexPolygon(blob, size.apiWidth, size.apiHeight, 0.5, 0, 0, 0, true, false);
+	if (!edaImage) throw new Error('图像转换为多边形失败');
+	const created = await host.pcb_PrimitiveImage.create(0, 0, edaImage, layerId, size.apiWidth, size.apiHeight, 0, false, false);
+	if (!created) throw new Error('创建图像图元失败（API 返回空）');
+	STATE.primitiveId = created.getState_PrimitiveId();
+	placer.start(async (pt) => host.pcb_PrimitiveImage.modify(STATE.primitiveId, { x: pt.x, y: pt.y }));
 }
 
 /**

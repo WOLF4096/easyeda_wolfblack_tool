@@ -63,18 +63,20 @@
     }, timeoutMs);
     return true;
   }
+  function showOnHost(host, text, type) {
+    try {
+      if (!host || !host.sys_Message || typeof host.sys_Message.showToastMessage !== "function") return false;
+      host.sys_Message.showToastMessage(text, type);
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
   function toast(message, level = TOAST_LEVEL.info, opts = {}) {
     const doc = opts.doc || globalThis.document;
     const host = opts.host === void 0 ? getEda() : opts.host;
     const text = message === null || message === void 0 ? "" : String(message);
-    const type = normalizeLevel(level);
-    try {
-      if (host && host.sys_Message && typeof host.sys_Message.showToastMessage === "function") {
-        host.sys_Message.showToastMessage(text, type);
-        return "host";
-      }
-    } catch (e) {
-    }
+    if (showOnHost(host, text, normalizeLevel(level))) return "host";
     return banner(doc, text, opts.timeoutMs === void 0 ? 3e3 : opts.timeoutMs) ? "dom" : "none";
   }
 
@@ -121,13 +123,30 @@
   }
   function calToMultiplier(text) {
     if (!text || text.trim() === "") return 1;
-    const op = text.charAt(0);
-    const num = parseFloat(text.substring(1));
-    if (op === "*" && !isNaN(num)) return roundMultiplier(num);
-    if (op === "/" && !isNaN(num) && num !== 0) return roundMultiplier(1 / num);
+    switch (text.charAt(0)) {
+      case "*":
+        return multipliedBy(parseFloat(text.substring(1)));
+      case "/":
+        return dividedBy(parseFloat(text.substring(1)));
+      case "+":
+      case "-":
+        return 1;
+      default:
+        return pureMultiplier(text);
+    }
+  }
+  function multipliedBy(num) {
+    if (isNaN(num)) return 1;
+    return roundMultiplier(num);
+  }
+  function dividedBy(num) {
+    if (isNaN(num) || num === 0) return 1;
+    return roundMultiplier(1 / num);
+  }
+  function pureMultiplier(text) {
     const pure = parseFloat(text);
-    if (!isNaN(pure) && op !== "+" && op !== "-") return roundMultiplier(pure);
-    return 1;
+    if (isNaN(pure)) return 1;
+    return roundMultiplier(pure);
   }
   function roundMultiplier(value) {
     if (!Number.isFinite(value) || value < MULTIPLIER_MIN || value > MULTIPLIER_MAX) return Number.NaN;
@@ -188,45 +207,52 @@
   }
   function normalizeFromSource(type, rawV2, rawV3) {
     if (!rawV2 && !rawV3) return [];
-    if (rawV3) {
-      const std2 = { x: 0, y: 0, val1: 0, val2: 0, val3: "0" };
-      const solder = (value) => value === null ? "null" : value ?? "0";
-      switch (type) {
-        case "Via":
-          std2.x = rawV3.centerX;
-          std2.y = rawV3.centerY;
-          std2.val1 = rawV3.holeDiameter;
-          std2.val2 = rawV3.viaDiameter;
-          std2.val3 = solder(rawV3.topSolderExpansion);
-          break;
-        case "Pad":
-          std2.x = rawV3.centerX;
-          std2.y = rawV3.centerY;
-          std2.val1 = rawV3.hole?.width;
-          std2.val2 = rawV3.defaultPad?.width;
-          std2.val3 = solder(rawV3.topSolderExpansion);
-          break;
-        case "Line":
-          std2.x = rawV3.startX;
-          std2.y = rawV3.startY;
-          std2.val1 = rawV3.width;
-          break;
-        case "Arc":
-          std2.x = rawV3.startX;
-          std2.y = rawV3.startY;
-          std2.val1 = rawV3.width;
-          std2.val2 = rawV3.angle;
-          break;
-        case "Polyline":
-          std2.x = rawV3.path?.[0];
-          std2.y = rawV3.path?.[1];
-          std2.val1 = rawV3.width;
-          break;
-        default:
-          return [];
-      }
-      return shape(type, std2);
+    if (rawV3) return fromV3(type, rawV3);
+    return fromV2(type, rawV2);
+  }
+  function solderText(value) {
+    if (value === null) return "null";
+    return value ?? "0";
+  }
+  function fromV3(type, rawV3) {
+    const std = { x: 0, y: 0, val1: 0, val2: 0, val3: "0" };
+    switch (type) {
+      case "Via":
+        std.x = rawV3.centerX;
+        std.y = rawV3.centerY;
+        std.val1 = rawV3.holeDiameter;
+        std.val2 = rawV3.viaDiameter;
+        std.val3 = solderText(rawV3.topSolderExpansion);
+        break;
+      case "Pad":
+        std.x = rawV3.centerX;
+        std.y = rawV3.centerY;
+        std.val1 = rawV3.hole?.width;
+        std.val2 = rawV3.defaultPad?.width;
+        std.val3 = solderText(rawV3.topSolderExpansion);
+        break;
+      case "Line":
+        std.x = rawV3.startX;
+        std.y = rawV3.startY;
+        std.val1 = rawV3.width;
+        break;
+      case "Arc":
+        std.x = rawV3.startX;
+        std.y = rawV3.startY;
+        std.val1 = rawV3.width;
+        std.val2 = rawV3.angle;
+        break;
+      case "Polyline":
+        std.x = rawV3.path?.[0];
+        std.y = rawV3.path?.[1];
+        std.val1 = rawV3.width;
+        break;
+      default:
+        return [];
     }
+    return shape(type, std);
+  }
+  function fromV2(type, rawV2) {
     const fields = V2_FIELDS[type];
     if (!fields) return [];
     const at = (index) => rawV2[index];

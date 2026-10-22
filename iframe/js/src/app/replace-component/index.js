@@ -281,11 +281,7 @@ function applyFetchedTarget(supplierId, payload) {
 function resolveTargetProps(sel, pInfo) {
 	enrichComponentData(sel, pInfo);
 
-	const rawName =
-		(pInfo && pInfo.device_info && pInfo.device_info.attributes && pInfo.device_info.attributes.Name) ||
-		sel.name ||
-		(sel.component && sel.component.name) ||
-		'';
+	const rawName = targetRawName(sel, pInfo);
 	const props = sel.otherProperty || {};
 	const mergedProps = { ...sel, ...props };
 	const fallbackDevice = props.Device || props['Manufacturer Part'] || sel.manufacturerId || '';
@@ -293,8 +289,7 @@ function resolveTargetProps(sel, pInfo) {
 	let finalName = resolveDynamicString(rawName, mergedProps, fallbackDevice);
 	if (String(finalName).includes('={')) finalName = props.Value || sel.manufacturerId || finalName;
 
-	const fpInfo = pInfo ? pInfo.device_info.footprint_info : null;
-	const finalFootprint = (fpInfo && (fpInfo.display_title || fpInfo.title)) || getFootprintName(sel) || '未知封装';
+	const finalFootprint = targetFootprint(sel, pInfo);
 
 	return {
 		name: finalName,
@@ -303,6 +298,36 @@ function resolveTargetProps(sel, pInfo) {
 		uuid: getDeviceUuid(sel),
 		comp: sel,
 	};
+}
+
+/**
+ * 临时器件的原始名称（商品信息优先，其次图元上的 name）
+ *
+ * @param {object} sel 临时器件图元
+ * @param {object|null} pInfo 商品信息（现状恒为 null）
+ * @returns {string} 原始名称
+ * @sideEffects 无（纯函数）
+ */
+function targetRawName(sel, pInfo) {
+	return (
+		(pInfo && pInfo.device_info && pInfo.device_info.attributes && pInfo.device_info.attributes.Name) ||
+		sel.name ||
+		(sel.component && sel.component.name) ||
+		''
+	);
+}
+
+/**
+ * 目标封装名（商品信息 → 图元封装名 → 「未知封装」）
+ *
+ * @param {object} sel 临时器件图元
+ * @param {object|null} pInfo 商品信息（现状恒为 null）
+ * @returns {string} 封装名
+ * @sideEffects 无（纯函数）
+ */
+function targetFootprint(sel, pInfo) {
+	const fpInfo = pInfo ? pInfo.device_info.footprint_info : null;
+	return (fpInfo && (fpInfo.display_title || fpInfo.title)) || getFootprintName(sel) || '未知封装';
 }
 
 /**

@@ -60,6 +60,65 @@ const EVAL_CONTEXT = Object.freeze({
  * @returns {Promise<{ok: boolean, count: number, errors: string[]}>} 执行结果
  * @sideEffects eda API（pcb_PrimitiveComponent/Via/Line.create、lib_Device、lib_LibrariesList）
  */
+/**
+ * 建单条图元
+ *
+ * @param {object} item 图元描述
+ * @param {object} host EDA 宿主对象
+ * @param {string|null} sysLibUuid 系统库 uuid（只有 component 用）
+ * @returns {Promise<boolean>} 是否已处理；false 表示未知类型
+ * @sideEffects eda API（pcb_PrimitiveComponent/Via/Line.create、lib_Device）
+ */
+async function createOne(item, host, sysLibUuid) {
+	if (item.type === 'component') {
+		const uuid = item.uuid || (await resolveUuid(item.cno, host));
+		await host.pcb_PrimitiveComponent.create({ libraryUuid: sysLibUuid, uuid: uuid }, item.layer || 1, item.x, item.y, item.rot || 0, !!item.lock);
+		return true;
+	}
+	if (item.type === 'via') {
+		await host.pcb_PrimitiveVia.create('', item.x, item.y, item.innerD, item.outerD, 0, null, null, false);
+		return true;
+	}
+	if (item.type === 'line') {
+		await host.pcb_PrimitiveLine.create('', item.layer || 1, item.x1, item.y1, item.x2, item.y2, item.width || 0.5, false);
+		return true;
+	}
+	return false;
+}
+
+/**
+ * 执行单条图元（失败只记账，不中断整批）
+ *
+ * @param {object} item 图元描述
+ * @param {number} index 下标
+ * @param {object} host EDA 宿主对象
+ * @param {string|null} sysLibUuid 系统库 uuid
+ * @param {string[]} errors 错误收集器
+ * @returns {Promise<number>} 成功条数（0 或 1）
+ * @sideEffects eda API、追加 `errors`
+ */
+async function execOne(item, index, host, sysLibUuid, errors) {
+	try {
+		if (await createOne(item, host, sysLibUuid)) return 1;
+		errors.push(`第${index + 1}个：未知类型 ${item.type}`);
+	} catch (err) {
+		errors.push(`第${index + 1}个(${item.type})：${(err && err.message) || err}`);
+	}
+	return 0;
+}
+
+/**
+ * 导入完成的日志文案
+ *
+ * @param {number} count 成功条数
+ * @param {number} errorCount 失败条数
+ * @returns {string} 文案
+ * @sideEffects 无（纯函数）
+ */
+function importSummary(count, errorCount) {
+	return `导入完成：成功 ${count}${errorCount ? '，失败 ' + errorCount : ''}`;
+}
+
 export async function execItems(items, host, log) {
 	if (!host || !host.pcb_PrimitiveVia) throw new Error('当前环境未检测到 EDA API，请在立创EDA专业版中运行本页面');
 	const list = Array.isArray(items) ? items : [];
@@ -73,26 +132,10 @@ export async function execItems(items, host, log) {
 	}
 
 	for (let i = 0; i < list.length; i++) {
-		const item = list[i];
-		try {
-			if (item.type === 'component') {
-				const uuid = item.uuid || (await resolveUuid(item.cno, host));
-				await host.pcb_PrimitiveComponent.create({ libraryUuid: sysLibUuid, uuid: uuid }, item.layer || 1, item.x, item.y, item.rot || 0, !!item.lock);
-			} else if (item.type === 'via') {
-				await host.pcb_PrimitiveVia.create('', item.x, item.y, item.innerD, item.outerD, 0, null, null, false);
-			} else if (item.type === 'line') {
-				await host.pcb_PrimitiveLine.create('', item.layer || 1, item.x1, item.y1, item.x2, item.y2, item.width || 0.5, false);
-			} else {
-				errors.push(`第${i + 1}个：未知类型 ${item.type}`);
-				continue;
-			}
-			count++;
-		} catch (err) {
-			errors.push(`第${i + 1}个(${item.type})：${(err && err.message) || err}`);
-		}
+		count += await execOne(list[i], i, host, sysLibUuid, errors);
 	}
 
-	if (log) log(`导入完成：成功 ${count}${errors.length ? '，失败 ' + errors.length : ''}`);
+	if (log) log(importSummary(count, errors.length));
 	return { ok: errors.length === 0, count: count, errors: errors };
 }
 
@@ -140,6 +183,77 @@ export function probePaths(paths, host) {
 }
 
 /**
+ * 通用执行通道（调试用，需勾选开关）
+ *
+ * @param {object} cmd 指令
+ * @param {object} ctx 处理上下文（getHost / send / ver 等）
+ * @returns {Promise<void>}
+ * @sideEffects eda API、任意代码执行
+ */
+async function handleEval(cmd, ctx) {
+	const startedAt = Date.now();
+	try {
+		if (typeof cmd.code !== 'string' || !cmd.code.trim()) throw new Error('eval 缺少 code');
+		// eslint-disable-next-line no-new-func
+		const fn = new Function('eda', 'arg', 'WolfCommon', 'return (async () => {\n' + cmd.code + '\n})();');
+		const raw = await fn(ctx.getHost() || null, cmd.arg, EVAL_CONTEXT);
+		ctx.send({ id: cmd.id, ok: true, value: safeJson(raw), ms: Date.now() - startedAt });
+	} catch (e) {
+		ctx.send({ id: cmd.id, ok: false, error: String((e && (e.stack || e.message)) || e), ms: Date.now() - startedAt });
+	}
+}
+
+/**
+ * ping：回协议版本、宿主可用性、调试开关状态
+ *
+ * @param {object} cmd 指令
+ * @param {object} ctx 处理上下文
+ * @returns {void}
+ * @sideEffects 回传结果
+ */
+function handlePing(cmd, ctx) {
+	ctx.send({ id: cmd.id, ver: ctx.ver, ok: true, hasEda: ctx.hasApi(), debug: ctx.debugAllowed() });
+}
+
+/**
+ * eval / probe：都要求「调试指令」已勾选
+ *
+ * @param {object} cmd 指令
+ * @param {object} ctx 处理上下文
+ * @returns {Promise<void>}
+ * @sideEffects eda API、任意代码执行（eval）
+ */
+async function handleDebug(cmd, ctx) {
+	if (!ctx.debugAllowed()) {
+		ctx.send({ id: cmd.id, ok: false, error: '调试指令未开启：请勾选「调试指令」后重试' });
+		return;
+	}
+	if (cmd.cmd === 'eval') await handleEval(cmd, ctx);
+	else ctx.send({ id: cmd.id, ok: true, value: probePaths(cmd.paths, ctx.getHost()) });
+}
+
+/**
+ * import：批量建图元
+ *
+ * @param {object} cmd 指令
+ * @param {object} ctx 处理上下文
+ * @returns {Promise<void>}
+ * @sideEffects eda API、回传结果、日志
+ */
+async function handleImport(cmd, ctx) {
+	const items = cmd.items || [];
+	ctx.log('收到指令：导入 ' + items.length + ' 个对象');
+	try {
+		const result = await execItems(items, ctx.getHost(), ctx.log);
+		result.errors.slice(0, 5).forEach((item) => ctx.log(item));
+		ctx.send({ id: cmd.id, ok: result.ok, count: result.count, errors: result.errors });
+	} catch (e) {
+		ctx.log('执行异常：' + ((e && e.message) || e));
+		ctx.send({ id: cmd.id, ok: false, count: 0, error: String((e && e.message) || e) });
+	}
+}
+
+/**
  * 创建指令处理器
  *
  * @param {object} deps 依赖
@@ -152,34 +266,17 @@ export function probePaths(paths, host) {
  * @sideEffects 依指令而定（eval 会执行任意代码、import 会建图元）
  */
 export function createCommandHandler(deps) {
-	const getHost = deps.getHost;
-	const send = deps.send;
-	const log = deps.log || (() => {});
-	const debugAllowed = deps.debugAllowed;
-	const hasApi = () => {
-		const host = getHost();
-		return !!host && !!host.pcb_PrimitiveVia;
+	const ctx = {
+		getHost: deps.getHost,
+		send: deps.send,
+		log: deps.log || (() => {}),
+		debugAllowed: deps.debugAllowed,
+		ver: deps.ver,
+		hasApi: () => {
+			const host = ctx.getHost();
+			return !!host && !!host.pcb_PrimitiveVia;
+		},
 	};
-
-	/**
-	 * 通用执行通道（调试用，需勾选开关）
-	 *
-	 * @param {object} cmd 指令
-	 * @returns {Promise<void>}
-	 * @sideEffects eda API、任意代码执行
-	 */
-	async function handleEval(cmd) {
-		const startedAt = Date.now();
-		try {
-			if (typeof cmd.code !== 'string' || !cmd.code.trim()) throw new Error('eval 缺少 code');
-			// eslint-disable-next-line no-new-func
-			const fn = new Function('eda', 'arg', 'WolfCommon', 'return (async () => {\n' + cmd.code + '\n})();');
-			const raw = await fn(getHost() || null, cmd.arg, EVAL_CONTEXT);
-			send({ id: cmd.id, ok: true, value: safeJson(raw), ms: Date.now() - startedAt });
-		} catch (e) {
-			send({ id: cmd.id, ok: false, error: String((e && (e.stack || e.message)) || e), ms: Date.now() - startedAt });
-		}
-	}
 
 	/**
 	 * 指令分发（策略表）
@@ -192,34 +289,20 @@ export function createCommandHandler(deps) {
 		if (!cmd || !cmd.id) return;
 
 		if (cmd.cmd === 'ping') {
-			send({ id: cmd.id, ver: deps.ver, ok: true, hasEda: hasApi(), debug: debugAllowed() });
+			handlePing(cmd, ctx);
 			return;
 		}
 
 		if (cmd.cmd === 'eval' || cmd.cmd === 'probe') {
-			if (!debugAllowed()) {
-				send({ id: cmd.id, ok: false, error: '调试指令未开启：请勾选「调试指令」后重试' });
-				return;
-			}
-			if (cmd.cmd === 'eval') await handleEval(cmd);
-			else send({ id: cmd.id, ok: true, value: probePaths(cmd.paths, getHost()) });
+			await handleDebug(cmd, ctx);
 			return;
 		}
 
 		if (cmd.cmd !== 'import') {
-			send({ id: cmd.id, ok: false, error: '未知指令 ' + cmd.cmd });
+			ctx.send({ id: cmd.id, ok: false, error: '未知指令 ' + cmd.cmd });
 			return;
 		}
 
-		const items = cmd.items || [];
-		log('收到指令：导入 ' + items.length + ' 个对象');
-		try {
-			const result = await execItems(items, getHost(), log);
-			result.errors.slice(0, 5).forEach((item) => log(item));
-			send({ id: cmd.id, ok: result.ok, count: result.count, errors: result.errors });
-		} catch (e) {
-			log('执行异常：' + ((e && e.message) || e));
-			send({ id: cmd.id, ok: false, count: 0, error: String((e && e.message) || e) });
-		}
+		await handleImport(cmd, ctx);
 	};
 }

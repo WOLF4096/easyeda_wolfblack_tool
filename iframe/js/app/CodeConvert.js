@@ -397,23 +397,33 @@
     }
     return parseFloat(code);
   }
-  function parseResistorWithUnit(code) {
-    const upper = String(code).toUpperCase();
-    if (upper === "0" || upper === "00" || upper === "000" || upper === "0R") return 0;
-    if (upper.startsWith("R") && upper.length >= 2) {
-      const numericValue2 = parseFloat("0." + upper.substring(1));
-      return isNaN(numericValue2) ? null : numericValue2;
-    }
+  var ZERO_RESISTOR_CODES = ["0", "00", "000", "0R"];
+  var RESISTOR_MULTIPLIERS = { R: 1, K: 1e3, M: 1e6 };
+  function parseLeadingR(upper) {
+    const numericValue = parseFloat("0." + upper.substring(1));
+    return isNaN(numericValue) ? null : numericValue;
+  }
+  function splitResistorUnit(upper) {
     const match = upper.match(/^([0-9]*\.?[0-9]*)[RKM]([0-9]*)$/);
-    if (!match) return parseFloat(upper);
+    if (!match) return null;
     const integerPart = match[1] || "0";
     const unitChar = upper.includes("K") ? "K" : upper.includes("M") ? "M" : "R";
     const decimalPart = match[2] || "";
-    let numericValue = decimalPart ? parseFloat(integerPart + "." + decimalPart) : parseFloat(integerPart);
-    if (isNaN(numericValue)) return null;
-    if (integerPart === "0" && decimalPart) numericValue = parseFloat("0." + decimalPart);
-    const multipliers = { R: 1, K: 1e3, M: 1e6 };
-    return numericValue * (multipliers[unitChar] || 1);
+    return { integerPart, decimalPart, unitChar };
+  }
+  function resistorValueOf(parts) {
+    const head = parts.decimalPart ? parseFloat(parts.integerPart + "." + parts.decimalPart) : parseFloat(parts.integerPart);
+    if (isNaN(head)) return null;
+    const numericValue = parts.integerPart === "0" && parts.decimalPart ? parseFloat("0." + parts.decimalPart) : head;
+    return numericValue * (RESISTOR_MULTIPLIERS[parts.unitChar] || 1);
+  }
+  function parseResistorWithUnit(code) {
+    const upper = String(code).toUpperCase();
+    if (ZERO_RESISTOR_CODES.includes(upper)) return 0;
+    if (upper.startsWith("R") && upper.length >= 2) return parseLeadingR(upper);
+    const parts = splitResistorUnit(upper);
+    if (!parts) return parseFloat(upper);
+    return resistorValueOf(parts);
   }
   function parseCapacitorWithUnit(code) {
     const upper = String(code).toUpperCase().replace("F", "");
@@ -442,38 +452,29 @@
     const value = decimalPart ? parseFloat(head + "." + decimalPart) : parseFloat(head);
     return isNaN(value) ? null : value;
   }
-  function formatValue(value, type) {
-    if (value === void 0 || value === null || isNaN(value)) return null;
-    if (value === 0) {
-      if (type === "R") return "0Ω";
-      if (type === "C") return "0pF";
-      if (type === "L") return "0uH";
-      return "0";
-    }
-    const units = {
-      R: [
-        { unit: "mΩ", factor: 1e-3 },
-        { unit: "Ω", factor: 1 },
-        { unit: "kΩ", factor: 1e3 },
-        { unit: "MΩ", factor: 1e6 }
-      ],
-      C: [
-        { unit: "pF", factor: 1 },
-        { unit: "nF", factor: 1e3 },
-        { unit: "uF", factor: 1e6 },
-        { unit: "mF", factor: 1e9 },
-        { unit: "F", factor: 1e12 }
-      ],
-      L: [
-        { unit: "nH", factor: 1e-3 },
-        { unit: "uH", factor: 1 },
-        { unit: "mH", factor: 1e3 },
-        { unit: "H", factor: 1e6 }
-      ]
-    };
-    const typeUnits = units[type];
-    if (!typeUnits) return value.toString();
-    const absValue = Math.abs(value);
+  var VALUE_UNITS = {
+    R: [
+      { unit: "mΩ", factor: 1e-3 },
+      { unit: "Ω", factor: 1 },
+      { unit: "kΩ", factor: 1e3 },
+      { unit: "MΩ", factor: 1e6 }
+    ],
+    C: [
+      { unit: "pF", factor: 1 },
+      { unit: "nF", factor: 1e3 },
+      { unit: "uF", factor: 1e6 },
+      { unit: "mF", factor: 1e9 },
+      { unit: "F", factor: 1e12 }
+    ],
+    L: [
+      { unit: "nH", factor: 1e-3 },
+      { unit: "uH", factor: 1 },
+      { unit: "mH", factor: 1e3 },
+      { unit: "H", factor: 1e6 }
+    ]
+  };
+  var ZERO_TEXT = { R: "0Ω", C: "0pF", L: "0uH" };
+  function bestUnitOf(typeUnits, absValue) {
     let bestUnit = typeUnits[0];
     for (let i = typeUnits.length - 1; i >= 0; i--) {
       if (absValue >= typeUnits[i].factor || i === 0) {
@@ -481,6 +482,14 @@
         break;
       }
     }
+    return bestUnit;
+  }
+  function formatValue(value, type) {
+    if (value === void 0 || value === null || isNaN(value)) return null;
+    if (value === 0) return ZERO_TEXT[type] || "0";
+    const typeUnits = VALUE_UNITS[type];
+    if (!typeUnits) return value.toString();
+    const bestUnit = bestUnitOf(typeUnits, Math.abs(value));
     const displayValue = Number((value / bestUnit.factor).toFixed(3)).toString();
     return displayValue + bestUnit.unit;
   }
@@ -540,32 +549,16 @@
     const list = Array.isArray(componentsData) ? componentsData : [];
     const groups = [];
     const map = /* @__PURE__ */ new Map();
-    const idCount = /* @__PURE__ */ new Map();
-    for (const component of list) {
-      if (component.uniqueId) idCount.set(component.uniqueId, (idCount.get(component.uniqueId) || 0) + 1);
-    }
+    const idCount = countUniqueIds(list);
     for (const component of list) {
       const key = JSON.stringify([component.name, component.value, component.footprint]);
       let group = map.get(key);
       if (!group) {
-        group = {
-          uniqueIds: [],
-          designators: [],
-          footprint: component.footprint,
-          compType: component.compType,
-          rawValue: component.rawValue,
-          name: component.name,
-          value: component.value,
-          shouldModify: component.shouldModify,
-          modified: component.modified,
-          hasError: false
-        };
+        group = createGroup(component);
         map.set(key, group);
         groups.push(group);
       }
-      const isDuplicate = Boolean(component.uniqueId) && idCount.get(component.uniqueId) > 1;
-      const isEmpty = !component.uniqueId;
-      if (isDuplicate || isEmpty) {
+      if (hasIdError(component, idCount)) {
         group.hasError = true;
         group.modified = false;
       }
@@ -580,7 +573,41 @@
     });
     return groups;
   }
+  function countUniqueIds(list) {
+    const idCount = /* @__PURE__ */ new Map();
+    for (const component of list) {
+      if (component.uniqueId) idCount.set(component.uniqueId, (idCount.get(component.uniqueId) || 0) + 1);
+    }
+    return idCount;
+  }
+  function hasIdError(component, idCount) {
+    if (!component.uniqueId) return true;
+    return idCount.get(component.uniqueId) > 1;
+  }
+  function createGroup(component) {
+    return {
+      uniqueIds: [],
+      designators: [],
+      footprint: component.footprint,
+      compType: component.compType,
+      rawValue: component.rawValue,
+      name: component.name,
+      value: component.value,
+      shouldModify: component.shouldModify,
+      modified: component.modified,
+      hasError: false
+    };
+  }
   function applyConversion(groups, componentsMap2) {
+    const index = indexByUniqueId(componentsMap2);
+    let count = 0;
+    for (const group of Array.isArray(groups) ? groups : []) {
+      if (!isApplicable(group)) continue;
+      count += applyGroup(group, index);
+    }
+    return count;
+  }
+  function indexByUniqueId(componentsMap2) {
     const index = /* @__PURE__ */ new Map();
     for (const key in componentsMap2) {
       const component = componentsMap2[key];
@@ -588,17 +615,20 @@
       const uniqueId = component.props["Unique ID"];
       if (uniqueId && !index.has(uniqueId)) index.set(uniqueId, component);
     }
+    return index;
+  }
+  function isApplicable(group) {
+    return Boolean(group.modified && group.shouldModify && !group.hasError);
+  }
+  function applyGroup(group, index) {
     let count = 0;
-    for (const group of Array.isArray(groups) ? groups : []) {
-      if (!group.modified || !group.shouldModify || group.hasError) continue;
-      for (const uniqueId of group.uniqueIds) {
-        if (!uniqueId || uniqueId === EMPTY_ID) continue;
-        const component = index.get(uniqueId);
-        if (!component) continue;
-        component.props.Name = group.value;
-        component.props.Value = group.value;
-        count++;
-      }
+    for (const uniqueId of group.uniqueIds) {
+      if (!uniqueId || uniqueId === EMPTY_ID) continue;
+      const component = index.get(uniqueId);
+      if (!component) continue;
+      component.props.Name = group.value;
+      component.props.Value = group.value;
+      count++;
     }
     return count;
   }

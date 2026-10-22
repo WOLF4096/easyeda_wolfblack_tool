@@ -372,32 +372,92 @@ export function areLayersConnected(a, b) {
 export function checkConnectivityHighPrecision(a, b) {
 	if (!areLayersConnected(a, b)) return false;
 
-	if (a.shape === 'POLY' || b.shape === 'POLY') {
-		const polyA = a.shape === 'POLY' ? a : b;
-		const other = a.shape === 'POLY' ? b : a;
-		return polyTouches(polyA, other);
-	}
+	if (a.shape === 'POLY' || b.shape === 'POLY') return polyTouchesEither(a, b);
 
+	// ⚠️ 顺序不可调换：两条线必须在「线段 + 其他图元」配对之前判定。
+	// 否则会落到下面的包围盒兜底（线没有 h → NaN → 恒判不相连）。
 	if (a.shape === 'line' && b.shape === 'line') return isTwoLinesTouching(a, b);
 
-	const n = a.shape === 'line' ? a : b.shape === 'line' ? b : null;
-	const r = a.shape === 'line' ? b : b.shape === 'line' ? a : null;
-	if (n && r) {
-		if (r.shape === 'ROUND') {
-			const e = distToSegmentSquared(r.x, r.y, n.x1, n.y1, n.x2, n.y2);
-			const t = r.r + n.w / 2;
-			return e <= t * t;
-		}
-		if (r.shape === 'RECT') {
-			const pad = n.w / 2 + 0.1;
-			return isLineIntersectRect(n.x1, n.y1, n.x2, n.y2, { x: r.x, y: r.y, w: r.w + 2 * pad, h: r.h + 2 * pad });
-		}
-	}
+	const pair = linePartnerPair(a, b);
+	if (pair) return linePartnerTouches(pair.linePrim, pair.otherPrim);
 
-	if (a.shape === 'ROUND' && b.shape === 'ROUND') {
-		return (a.x - b.x) ** 2 + (a.y - b.y) ** 2 < (a.r + b.r) ** 2;
-	}
+	if (a.shape === 'ROUND' && b.shape === 'ROUND') return roundTouches(a, b);
 
+	return boxTouches(a, b);
+}
+
+/**
+ * 多边形分支：挑出多边形当主动判定方，另一个当被判定方
+ *
+ * @param {object} a 图元一
+ * @param {object} b 图元二
+ * @returns {boolean} 是否相接
+ * @sideEffects 无（纯函数）
+ */
+function polyTouchesEither(a, b) {
+	const polyA = a.shape === 'POLY' ? a : b;
+	const other = a.shape === 'POLY' ? b : a;
+	return polyTouches(polyA, other);
+}
+
+/**
+ * 取出「线段 + 另一个图元」的配对
+ *
+ * @param {object} a 图元一
+ * @param {object} b 图元二
+ * @returns {{linePrim: object, otherPrim: object}|null} 配对；两者都不是线段返回 null
+ * @sideEffects 无（纯函数）
+ */
+function linePartnerPair(a, b) {
+	const linePrim = a.shape === 'line' ? a : b.shape === 'line' ? b : null;
+	const otherPrim = a.shape === 'line' ? b : b.shape === 'line' ? a : null;
+	return linePrim && otherPrim ? { linePrim: linePrim, otherPrim: otherPrim } : null;
+}
+
+/**
+ * 线段 vs 圆（圆心距）/ 矩形（外扩半宽后求交）
+ *
+ * 其余形状仍要落到包围盒兜底（与拆分前的行为一致）。
+ *
+ * @param {object} n 线段图元
+ * @param {object} r 另一图元
+ * @returns {boolean} 是否相接
+ * @sideEffects 无（纯函数）
+ */
+function linePartnerTouches(n, r) {
+	if (r.shape === 'ROUND') {
+		const e = distToSegmentSquared(r.x, r.y, n.x1, n.y1, n.x2, n.y2);
+		const t = r.r + n.w / 2;
+		return e <= t * t;
+	}
+	if (r.shape === 'RECT') {
+		const pad = n.w / 2 + 0.1;
+		return isLineIntersectRect(n.x1, n.y1, n.x2, n.y2, { x: r.x, y: r.y, w: r.w + 2 * pad, h: r.h + 2 * pad });
+	}
+	return boxTouches(n, r);
+}
+
+/**
+ * 圆 vs 圆：圆心距严格小于半径和
+ *
+ * @param {object} a 圆一
+ * @param {object} b 圆二
+ * @returns {boolean} 是否相接
+ * @sideEffects 无（纯函数）
+ */
+function roundTouches(a, b) {
+	return (a.x - b.x) ** 2 + (a.y - b.y) ** 2 < (a.r + b.r) ** 2;
+}
+
+/**
+ * 兜底：包围盒重叠
+ *
+ * @param {object} a 图元一
+ * @param {object} b 图元二
+ * @returns {boolean} 是否重叠
+ * @sideEffects 无（纯函数）
+ */
+function boxTouches(a, b) {
 	return Math.abs(a.x - b.x) < (a.w + b.w) / 2 && Math.abs(a.y - b.y) < (a.h + b.h) / 2;
 }
 
@@ -410,33 +470,71 @@ export function checkConnectivityHighPrecision(a, b) {
  * @sideEffects 无（纯函数）
  */
 function polyTouches(polyA, other) {
+	// 三个阶段刻意串行短路：任一段成立即返回，顺序变了判定结果可能变
+	if (edgesCross(polyA, other)) return true;
+
+	if (otherInsidePoly(polyA, other)) return true;
+
+	return polyInsideOther(polyA, other);
+}
+
+/**
+ * 阶段 1：边缘交叉
+ *
+ * @param {object} polyA 多边形
+ * @param {object} other 另一个图元
+ * @returns {boolean} 是否有边交叉
+ * @sideEffects 无（纯函数）
+ */
+function edgesCross(polyA, other) {
 	const linesA = getEdges(polyA);
 	const linesB = getEdges(other);
 
-	// 1. 边缘交叉
 	for (const la of linesA) {
 		for (const lb of linesB) {
 			if (lineIntersect(la[0], la[1], la[2], la[3], lb[0], lb[1], lb[2], lb[3])) return true;
 		}
 	}
 
-	// 2. 对方在图内（按对方形状选判定点，纯几何图形才用中心点）
+	return false;
+}
+
+/**
+ * 阶段 2：对方在图内（按对方形状选判定点，纯几何图形才用中心点）
+ *
+ * @param {object} polyA 多边形
+ * @param {object} other 另一个图元
+ * @returns {boolean} 对方的判定点是否在图内
+ * @sideEffects 无（纯函数）
+ */
+function otherInsidePoly(polyA, other) {
 	if (other.vertices) {
 		for (const v of other.vertices) if (isPointInPoly(v.x, v.y, polyA.vertices)) return true;
-	} else if (other.shape === 'line') {
-		if (isPointInPoly(other.x1, other.y1, polyA.vertices)) return true;
-		if (isPointInPoly(other.x2, other.y2, polyA.vertices)) return true;
-	} else if (isPointInPoly(other.x, other.y, polyA.vertices)) {
-		return true;
+		return false;
 	}
+	if (other.shape === 'line') {
+		if (isPointInPoly(other.x1, other.y1, polyA.vertices)) return true;
+		return isPointInPoly(other.x2, other.y2, polyA.vertices);
+	}
+	return isPointInPoly(other.x, other.y, polyA.vertices);
+}
 
-	// 3. 反向包含
+/**
+ * 阶段 3：反向包含（多边形的顶点在对方内部）
+ *
+ * @param {object} polyA 多边形
+ * @param {object} other 另一个图元
+ * @returns {boolean} 是否被对方包含
+ * @sideEffects 无（纯函数）
+ */
+function polyInsideOther(polyA, other) {
 	if (other.vertices) {
 		for (const v of polyA.vertices) if (isPointInPoly(v.x, v.y, other.vertices)) return true;
-	} else if (other.shape === 'RECT') {
+		return false;
+	}
+	if (other.shape === 'RECT') {
 		for (const v of polyA.vertices) if (isPointInRect(v.x, v.y, other)) return true;
 	}
-
 	return false;
 }
 

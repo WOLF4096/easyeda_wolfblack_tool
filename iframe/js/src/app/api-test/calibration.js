@@ -106,14 +106,54 @@ export function ratioToCalInput(ratio) {
 export function calToMultiplier(text) {
 	if (!text || text.trim() === '') return 1;
 
-	const op = text.charAt(0);
-	const num = parseFloat(text.substring(1));
-	if (op === '*' && !isNaN(num)) return roundMultiplier(num);
-	if (op === '/' && !isNaN(num) && num !== 0) return roundMultiplier(1 / num);
+	switch (text.charAt(0)) {
+		case '*':
+			return multipliedBy(parseFloat(text.substring(1)));
+		case '/':
+			return dividedBy(parseFloat(text.substring(1)));
+		case '+':
+		case '-':
+			return 1;
+		default:
+			return pureMultiplier(text);
+	}
+}
 
+/**
+ * `*x` → x
+ *
+ * @param {number} num 解析出的数字
+ * @returns {number} 乘数；非法为 1
+ * @sideEffects 无（纯函数）
+ */
+function multipliedBy(num) {
+	if (isNaN(num)) return 1;
+	return roundMultiplier(num);
+}
+
+/**
+ * `/x` → 1/x
+ *
+ * @param {number} num 解析出的数字
+ * @returns {number} 乘数；非法或 0 为 1
+ * @sideEffects 无（纯函数）
+ */
+function dividedBy(num) {
+	if (isNaN(num) || num === 0) return 1;
+	return roundMultiplier(1 / num);
+}
+
+/**
+ * 用户没写符号时按纯数字当乘数
+ *
+ * @param {string} text 校准表达式
+ * @returns {number} 乘数；非法为 1
+ * @sideEffects 无（纯函数）
+ */
+function pureMultiplier(text) {
 	const pure = parseFloat(text);
-	if (!isNaN(pure) && op !== '+' && op !== '-') return roundMultiplier(pure);
-	return 1;
+	if (isNaN(pure)) return 1;
+	return roundMultiplier(pure);
 }
 
 /**

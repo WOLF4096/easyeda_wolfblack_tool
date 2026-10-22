@@ -53,36 +53,85 @@ export function buildCompareRows(netMap, container) {
 	}
 	items.sort((a, b) => naturalCompare(a.refDes, b.refDes) || naturalCompare(a.pinNo, b.pinNo));
 
-	return items.map((item) => {
-		const comp = designators[item.refDes];
-		if (!comp) {
-			return {
-				refDes: item.refDes,
-				pinNo: item.pinNo,
-				oldNet: '⚠️ 未找到元件',
-				newNet: item.newNet,
-				isDiff: false,
-				warning: true,
-				tooltip: `位号 ${item.refDes} 在当前PCB中不存在`,
-			};
-		}
+	return items.map((item) => toCompareRow(item, designators[item.refDes]));
+}
 
-		const pins = getPins(comp);
-		const hasPinData = comp.pinInfoMap || comp.pins;
-		const oldNet = Object.prototype.hasOwnProperty.call(pins, item.pinNo) ? pins[item.pinNo] || NO_NET : hasPinData ? NO_NET : '? 无引脚数据';
-		const missingPin = hasPinData && !Object.prototype.hasOwnProperty.call(pins, item.pinNo);
-		const unknownShape = !hasPinData;
+/**
+ * 「当前 PCB 里没有该位号」的对比行
+ *
+ * @param {{refDes: string, pinNo: string, newNet: string}} item 对比项
+ * @returns {object} 对比行
+ * @sideEffects 无（纯函数）
+ */
+function missingComponentRow(item) {
+	return {
+		refDes: item.refDes,
+		pinNo: item.pinNo,
+		oldNet: '⚠️ 未找到元件',
+		newNet: item.newNet,
+		isDiff: false,
+		warning: true,
+		tooltip: `位号 ${item.refDes} 在当前PCB中不存在`,
+	};
+}
 
-		return {
-			refDes: item.refDes,
-			pinNo: item.pinNo,
-			oldNet: oldNet,
-			newNet: item.newNet,
-			isDiff: !missingPin && !unknownShape && oldNet !== item.newNet,
-			warning: missingPin || unknownShape,
-			tooltip: unknownShape ? `元件 ${item.refDes} 引脚信息结构未知` : missingPin ? `引脚 ${item.pinNo} 在元件 ${item.refDes} 中未定义` : '',
-		};
-	});
+/**
+ * 旧网络名：引脚表里有该引脚就取它（空值记占位），否则按有无引脚结构区分
+ *
+ * @param {object} pins 引脚表
+ * @param {string} pinNo 引脚号
+ * @param {boolean} hasPin 引脚表里是否有该引脚
+ * @param {boolean} hasPinData 器件是否带引脚结构
+ * @returns {string} 旧网络名
+ * @sideEffects 无（纯函数）
+ */
+function oldNetOf(pins, pinNo, hasPin, hasPinData) {
+	if (hasPin) return pins[pinNo] || NO_NET;
+	return hasPinData ? NO_NET : '? 无引脚数据';
+}
+
+/**
+ * 对比行提示文案
+ *
+ * @param {{refDes: string, pinNo: string}} item 对比项
+ * @param {boolean} unknownShape 引脚结构未知
+ * @param {boolean} missingPin 引脚未定义
+ * @returns {string} 提示文案（无提示时为空串）
+ * @sideEffects 无（纯函数）
+ */
+function tooltipOf(item, unknownShape, missingPin) {
+	if (unknownShape) return `元件 ${item.refDes} 引脚信息结构未知`;
+	if (missingPin) return `引脚 ${item.pinNo} 在元件 ${item.refDes} 中未定义`;
+	return '';
+}
+
+/**
+ * 单个对比项 → 对比行
+ *
+ * @param {{refDes: string, pinNo: string, newNet: string}} item 对比项
+ * @param {object|undefined} comp 当前网表里对应的器件
+ * @returns {object} 对比行
+ * @sideEffects 无（纯函数）
+ */
+function toCompareRow(item, comp) {
+	if (!comp) return missingComponentRow(item);
+
+	const pins = getPins(comp);
+	const hasPinData = comp.pinInfoMap || comp.pins;
+	const hasPin = Object.prototype.hasOwnProperty.call(pins, item.pinNo);
+	const oldNet = oldNetOf(pins, item.pinNo, hasPin, hasPinData);
+	const missingPin = hasPinData && !hasPin;
+	const unknownShape = !hasPinData;
+
+	return {
+		refDes: item.refDes,
+		pinNo: item.pinNo,
+		oldNet: oldNet,
+		newNet: item.newNet,
+		isDiff: !missingPin && !unknownShape && oldNet !== item.newNet,
+		warning: missingPin || unknownShape,
+		tooltip: tooltipOf(item, unknownShape, missingPin),
+	};
 }
 
 /**

@@ -34,21 +34,21 @@
     if (!/^\d+$/.test(port)) port = "8233";
     return { host, port };
   }
-  function safeJson(value, depth = 0) {
-    if (value === null) return null;
-    if (value === void 0) return null;
-    const type = typeof value;
-    if (type === "number" || type === "boolean" || type === "string") return value;
-    if (type === "bigint") return String(value);
-    if (type === "function") return "[Function " + (value.name || "anonymous") + "]";
-    if (type === "symbol") return String(value);
-    if (depth > SAFE_JSON_LIMITS.maxDepth) return "[MaxDepth]";
-    if (Array.isArray(value)) {
-      return value.slice(0, SAFE_JSON_LIMITS.maxArray).map((item) => safeJson(item, depth + 1));
-    }
+  var SCALARS = /* @__PURE__ */ new Map([
+    ["number", (value) => value],
+    ["boolean", (value) => value],
+    ["string", (value) => value],
+    ["bigint", (value) => String(value)],
+    ["function", (value) => "[Function " + (value.name || "anonymous") + "]"],
+    ["symbol", (value) => String(value)]
+  ]);
+  function specialObjectOf(value) {
     if (typeof value.then === "function") return "[Promise]";
     if (typeof Blob !== "undefined" && value instanceof Blob) return "[Blob " + value.size + "B]";
     if (typeof Node !== "undefined" && value instanceof Node) return "[Node " + value.nodeName + "]";
+    return void 0;
+  }
+  function plainObjectOf(value, depth) {
     const out = {};
     let count = 0;
     for (const key in value) {
@@ -63,6 +63,18 @@
       }
     }
     return out;
+  }
+  function safeJson(value, depth = 0) {
+    if (value === null || value === void 0) return null;
+    const scalar = SCALARS.get(typeof value);
+    if (scalar) return scalar(value);
+    if (depth > SAFE_JSON_LIMITS.maxDepth) return "[MaxDepth]";
+    if (Array.isArray(value)) {
+      return value.slice(0, SAFE_JSON_LIMITS.maxArray).map((item) => safeJson(item, depth + 1));
+    }
+    const special = specialObjectOf(value);
+    if (special !== void 0) return special;
+    return plainObjectOf(value, depth);
   }
 
   // iframe/js/src/core/version.js
@@ -317,6 +329,34 @@
     escapeHtml,
     logger
   });
+  async function createOne(item, host, sysLibUuid) {
+    if (item.type === "component") {
+      const uuid = item.uuid || await resolveUuid(item.cno, host);
+      await host.pcb_PrimitiveComponent.create({ libraryUuid: sysLibUuid, uuid }, item.layer || 1, item.x, item.y, item.rot || 0, !!item.lock);
+      return true;
+    }
+    if (item.type === "via") {
+      await host.pcb_PrimitiveVia.create("", item.x, item.y, item.innerD, item.outerD, 0, null, null, false);
+      return true;
+    }
+    if (item.type === "line") {
+      await host.pcb_PrimitiveLine.create("", item.layer || 1, item.x1, item.y1, item.x2, item.y2, item.width || 0.5, false);
+      return true;
+    }
+    return false;
+  }
+  async function execOne(item, index, host, sysLibUuid, errors) {
+    try {
+      if (await createOne(item, host, sysLibUuid)) return 1;
+      errors.push(`第${index + 1}个：未知类型 ${item.type}`);
+    } catch (err) {
+      errors.push(`第${index + 1}个(${item.type})：${err && err.message || err}`);
+    }
+    return 0;
+  }
+  function importSummary(count, errorCount) {
+    return `导入完成：成功 ${count}${errorCount ? "，失败 " + errorCount : ""}`;
+  }
   async function execItems(items, host, log2) {
     if (!host || !host.pcb_PrimitiveVia) throw new Error("当前环境未检测到 EDA API，请在立创EDA专业版中运行本页面");
     const list = Array.isArray(items) ? items : [];
@@ -327,25 +367,9 @@
       sysLibUuid = await host.lib_LibrariesList.getSystemLibraryUuid();
     }
     for (let i = 0; i < list.length; i++) {
-      const item = list[i];
-      try {
-        if (item.type === "component") {
-          const uuid = item.uuid || await resolveUuid(item.cno, host);
-          await host.pcb_PrimitiveComponent.create({ libraryUuid: sysLibUuid, uuid }, item.layer || 1, item.x, item.y, item.rot || 0, !!item.lock);
-        } else if (item.type === "via") {
-          await host.pcb_PrimitiveVia.create("", item.x, item.y, item.innerD, item.outerD, 0, null, null, false);
-        } else if (item.type === "line") {
-          await host.pcb_PrimitiveLine.create("", item.layer || 1, item.x1, item.y1, item.x2, item.y2, item.width || 0.5, false);
-        } else {
-          errors.push(`第${i + 1}个：未知类型 ${item.type}`);
-          continue;
-        }
-        count++;
-      } catch (err) {
-        errors.push(`第${i + 1}个(${item.type})：${err && err.message || err}`);
-      }
+      count += await execOne(list[i], i, host, sysLibUuid, errors);
     }
-    if (log2) log2(`导入完成：成功 ${count}${errors.length ? "，失败 " + errors.length : ""}`);
+    if (log2) log2(importSummary(count, errors.length));
     return { ok: errors.length === 0, count, errors };
   }
   async function resolveUuid(cno, host) {
@@ -370,56 +394,68 @@
     }
     return out;
   }
-  function createCommandHandler(deps) {
-    const getHost = deps.getHost;
-    const send2 = deps.send;
-    const log2 = deps.log || (() => {
-    });
-    const debugAllowed2 = deps.debugAllowed;
-    const hasApi = () => {
-      const host = getHost();
-      return !!host && !!host.pcb_PrimitiveVia;
-    };
-    async function handleEval(cmd) {
-      const startedAt = Date.now();
-      try {
-        if (typeof cmd.code !== "string" || !cmd.code.trim()) throw new Error("eval 缺少 code");
-        const fn = new Function("eda", "arg", "WolfCommon", "return (async () => {\n" + cmd.code + "\n})();");
-        const raw = await fn(getHost() || null, cmd.arg, EVAL_CONTEXT);
-        send2({ id: cmd.id, ok: true, value: safeJson(raw), ms: Date.now() - startedAt });
-      } catch (e) {
-        send2({ id: cmd.id, ok: false, error: String(e && (e.stack || e.message) || e), ms: Date.now() - startedAt });
-      }
+  async function handleEval(cmd, ctx) {
+    const startedAt = Date.now();
+    try {
+      if (typeof cmd.code !== "string" || !cmd.code.trim()) throw new Error("eval 缺少 code");
+      const fn = new Function("eda", "arg", "WolfCommon", "return (async () => {\n" + cmd.code + "\n})();");
+      const raw = await fn(ctx.getHost() || null, cmd.arg, EVAL_CONTEXT);
+      ctx.send({ id: cmd.id, ok: true, value: safeJson(raw), ms: Date.now() - startedAt });
+    } catch (e) {
+      ctx.send({ id: cmd.id, ok: false, error: String(e && (e.stack || e.message) || e), ms: Date.now() - startedAt });
     }
+  }
+  function handlePing(cmd, ctx) {
+    ctx.send({ id: cmd.id, ver: ctx.ver, ok: true, hasEda: ctx.hasApi(), debug: ctx.debugAllowed() });
+  }
+  async function handleDebug(cmd, ctx) {
+    if (!ctx.debugAllowed()) {
+      ctx.send({ id: cmd.id, ok: false, error: "调试指令未开启：请勾选「调试指令」后重试" });
+      return;
+    }
+    if (cmd.cmd === "eval") await handleEval(cmd, ctx);
+    else ctx.send({ id: cmd.id, ok: true, value: probePaths(cmd.paths, ctx.getHost()) });
+  }
+  async function handleImport(cmd, ctx) {
+    const items = cmd.items || [];
+    ctx.log("收到指令：导入 " + items.length + " 个对象");
+    try {
+      const result = await execItems(items, ctx.getHost(), ctx.log);
+      result.errors.slice(0, 5).forEach((item) => ctx.log(item));
+      ctx.send({ id: cmd.id, ok: result.ok, count: result.count, errors: result.errors });
+    } catch (e) {
+      ctx.log("执行异常：" + (e && e.message || e));
+      ctx.send({ id: cmd.id, ok: false, count: 0, error: String(e && e.message || e) });
+    }
+  }
+  function createCommandHandler(deps) {
+    const ctx = {
+      getHost: deps.getHost,
+      send: deps.send,
+      log: deps.log || (() => {
+      }),
+      debugAllowed: deps.debugAllowed,
+      ver: deps.ver,
+      hasApi: () => {
+        const host = ctx.getHost();
+        return !!host && !!host.pcb_PrimitiveVia;
+      }
+    };
     return async function handle(cmd) {
       if (!cmd || !cmd.id) return;
       if (cmd.cmd === "ping") {
-        send2({ id: cmd.id, ver: deps.ver, ok: true, hasEda: hasApi(), debug: debugAllowed2() });
+        handlePing(cmd, ctx);
         return;
       }
       if (cmd.cmd === "eval" || cmd.cmd === "probe") {
-        if (!debugAllowed2()) {
-          send2({ id: cmd.id, ok: false, error: "调试指令未开启：请勾选「调试指令」后重试" });
-          return;
-        }
-        if (cmd.cmd === "eval") await handleEval(cmd);
-        else send2({ id: cmd.id, ok: true, value: probePaths(cmd.paths, getHost()) });
+        await handleDebug(cmd, ctx);
         return;
       }
       if (cmd.cmd !== "import") {
-        send2({ id: cmd.id, ok: false, error: "未知指令 " + cmd.cmd });
+        ctx.send({ id: cmd.id, ok: false, error: "未知指令 " + cmd.cmd });
         return;
       }
-      const items = cmd.items || [];
-      log2("收到指令：导入 " + items.length + " 个对象");
-      try {
-        const result = await execItems(items, getHost(), log2);
-        result.errors.slice(0, 5).forEach((item) => log2(item));
-        send2({ id: cmd.id, ok: result.ok, count: result.count, errors: result.errors });
-      } catch (e) {
-        log2("执行异常：" + (e && e.message || e));
-        send2({ id: cmd.id, ok: false, count: 0, error: String(e && e.message || e) });
-      }
+      await handleImport(cmd, ctx);
     };
   }
 
@@ -473,32 +509,46 @@
     debugAllowed,
     ver: VER
   });
+  function hasObjectApi(host) {
+    return !!(host && host.pcb_SelectControl && host.pcb_SelectControl.getAllSelectedPrimitives_PrimitiveId && host.pcb_PrimitiveObject && host.pcb_PrimitiveObject.get);
+  }
+  function toIdList(ids) {
+    if (Array.isArray(ids)) return ids;
+    return ids && typeof ids.length === "number" ? Array.prototype.slice.call(ids) : [];
+  }
+  function isSampledObject(obj) {
+    return !!(obj && obj.primitiveType === "Object" && typeof obj.width === "number" && typeof obj.height === "number");
+  }
+  function selectionOf(obj, fallbackId) {
+    return {
+      topLeftX: obj.topLeftX,
+      topLeftY: obj.topLeftY,
+      width: obj.width,
+      height: obj.height,
+      rotation: obj.rotation || 0,
+      mirror: !!obj.mirror,
+      primitiveId: obj.primitiveId || String(fallbackId)
+    };
+  }
+  async function findFirstObject(host, list) {
+    for (let i = 0; i < list.length; i++) {
+      try {
+        const obj = await host.pcb_PrimitiveObject.get(list[i]);
+        if (isSampledObject(obj)) return selectionOf(obj, list[i]);
+      } catch (e) {
+      }
+    }
+    return null;
+  }
   async function sampleSelection() {
     if (selBusy) return;
     selBusy = true;
     try {
       const host = getEda();
-      if (host && host.pcb_SelectControl && host.pcb_SelectControl.getAllSelectedPrimitives_PrimitiveId && host.pcb_PrimitiveObject && host.pcb_PrimitiveObject.get) {
+      if (hasObjectApi(host)) {
         const ids = await host.pcb_SelectControl.getAllSelectedPrimitives_PrimitiveId();
-        const list = Array.isArray(ids) ? ids : ids && typeof ids.length === "number" ? Array.prototype.slice.call(ids) : [];
-        for (let i = 0; i < list.length; i++) {
-          try {
-            const obj = await host.pcb_PrimitiveObject.get(list[i]);
-            if (obj && obj.primitiveType === "Object" && typeof obj.width === "number" && typeof obj.height === "number") {
-              lastSel = {
-                topLeftX: obj.topLeftX,
-                topLeftY: obj.topLeftY,
-                width: obj.width,
-                height: obj.height,
-                rotation: obj.rotation || 0,
-                mirror: !!obj.mirror,
-                primitiveId: obj.primitiveId || String(list[i])
-              };
-              break;
-            }
-          } catch (e) {
-          }
-        }
+        const found = await findFirstObject(host, toIdList(ids));
+        if (found) lastSel = found;
       }
     } catch (e) {
     }

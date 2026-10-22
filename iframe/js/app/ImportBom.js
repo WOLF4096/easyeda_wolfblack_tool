@@ -80,15 +80,15 @@
   async function readNetlistFile(getFile, page) {
     const file = await getFile();
     if (!file) throw new Error("获取的网表为空");
-    const text = await file.text();
-    if (!text || !text.trim()) throw new Error("获取的网表为空");
+    const text2 = await file.text();
+    if (!text2 || !text2.trim()) throw new Error("获取的网表为空");
     let json;
     try {
-      json = JSON.parse(text);
+      json = JSON.parse(text2);
     } catch (e) {
       throw new Error(`网表格式无法解析（${page}）：${e && e.message || e}`);
     }
-    return { page, text, json };
+    return { page, text: text2, json };
   }
   async function getNetlist(page = "AUTO") {
     const edaObj = getEda();
@@ -111,9 +111,9 @@
     if (!edaObj) {
       throw new Error("未检测到 EDA 运行环境");
     }
-    const text = typeof json === "string" ? json : JSON.stringify(json);
-    const writePcb = () => edaObj.pcb_Net.setNetlist(NETLIST_KEY, text);
-    const writeSch = () => edaObj.sch_Netlist.setNetlist(NETLIST_KEY, text);
+    const text2 = typeof json === "string" ? json : JSON.stringify(json);
+    const writePcb = () => edaObj.pcb_Net.setNetlist(NETLIST_KEY, text2);
+    const writeSch = () => edaObj.sch_Netlist.setNetlist(NETLIST_KEY, text2);
     if (page === "PCB") {
       await writePcb();
       return "PCB";
@@ -156,9 +156,9 @@
         return "";
       }
       const version = edaObj.sys_Environment.getEditorCurrentVersion();
-      const text = version === null || version === void 0 ? "" : String(version).trim();
-      if (text) cachedVersion = text;
-      return text;
+      const text2 = version === null || version === void 0 ? "" : String(version).trim();
+      if (text2) cachedVersion = text2;
+      return text2;
     } catch (e) {
       return "";
     }
@@ -202,7 +202,7 @@
     const baseClass = options.baseClass || "status";
     const barBaseClass = options.barBaseClass || "status-bar";
     const widthProp = options.widthProp || "width";
-    function text(message, level) {
+    function text2(message, level) {
       if (!textEl) return;
       textEl.textContent = message === null || message === void 0 ? "" : String(message);
       textEl.className = classOf(baseClass, level);
@@ -216,15 +216,15 @@
     }
     function progress(done, total, suffix, level) {
       const p = percentOf(done, total);
-      text(`${done} / ${total} ${p}%${suffix ? "　" + suffix : ""}`, level);
+      text2(`${done} / ${total} ${p}%${suffix ? "　" + suffix : ""}`, level);
       width(p, level);
       return p;
     }
     function reset() {
-      text("", "");
+      text2("", "");
       width(0, "");
     }
-    return { text, progress, width, reset };
+    return { text: text2, progress, width, reset };
   }
 
   // iframe/js/src/ui/table.js
@@ -267,25 +267,30 @@
     if (!container || typeof container !== "object") return rows;
     for (const [key, component] of Object.entries(container)) {
       if (!component || !component.props) continue;
-      const props = component.props;
-      const designator = props.Designator || "";
-      const name = resolveComponentName(props);
-      rows.push({
-        jsonKey: key,
-        uniqueId: props["Unique ID"],
-        designator,
-        name,
-        footprint: props.FootprintName || props.Footprint || "",
-        supplier: props.Supplier || "",
-        supplierPart: props["Supplier Part"] || "",
-        manufacturerPart: props["Manufacturer Part"] || "",
-        manufacturer: props.Manufacturer || "",
-        selected: false,
-        changed: false,
-        original: snapshot(designator, name, props)
-      });
+      rows.push(toRow(key, component.props));
     }
     return rows;
+  }
+  function text(value) {
+    return value || "";
+  }
+  function toRow(key, props) {
+    const designator = text(props.Designator);
+    const name = resolveComponentName(props);
+    return {
+      jsonKey: key,
+      uniqueId: props["Unique ID"],
+      designator,
+      name,
+      footprint: props.FootprintName || props.Footprint || "",
+      supplier: text(props.Supplier),
+      supplierPart: text(props["Supplier Part"]),
+      manufacturerPart: text(props["Manufacturer Part"]),
+      manufacturer: text(props.Manufacturer),
+      selected: false,
+      changed: false,
+      original: snapshot(designator, name, props)
+    };
   }
   function snapshot(designator, name, props) {
     return {
@@ -355,10 +360,7 @@
     const list = Array.isArray(rows) ? rows : [];
     let updated = 0;
     const missing = [];
-    const byDesignator = /* @__PURE__ */ new Map();
-    for (const row of list) {
-      if (!byDesignator.has(row.designator)) byDesignator.set(row.designator, row);
-    }
+    const byDesignator = indexByDesignator(list);
     for (const pasteItem of Array.isArray(pasteItems) ? pasteItems : []) {
       for (const designator of pasteItem.designators) {
         const row = byDesignator.get(designator);
@@ -366,24 +368,37 @@
           missing.push(designator);
           continue;
         }
-        let supplier = pasteItem.supplier;
-        if (!supplier && pasteItem.supplierPart && pasteItem.supplierPart.trim().toUpperCase().startsWith("C")) {
-          supplier = "LCSC";
-        }
-        const next = {
-          name: pasteItem.name,
-          manufacturerPart: pasteItem.manufacturerPart,
-          manufacturer: pasteItem.manufacturer,
-          supplierPart: pasteItem.supplierPart,
-          supplier
-        };
-        const hasChanges = TRACKED_FIELDS.some((field) => next[field] !== row.original[field]);
-        if (!hasChanges) continue;
-        Object.assign(row, next, { changed: true, selected: true });
-        updated++;
+        updated += applyPasteRow(row, pasteItem);
       }
     }
     return { updated, missing };
+  }
+  function indexByDesignator(rows) {
+    const byDesignator = /* @__PURE__ */ new Map();
+    for (const row of rows) {
+      if (!byDesignator.has(row.designator)) byDesignator.set(row.designator, row);
+    }
+    return byDesignator;
+  }
+  function resolveSupplier(pasteItem) {
+    if (!pasteItem.supplier && isLcscSupplierPart(pasteItem.supplierPart)) return "LCSC";
+    return pasteItem.supplier;
+  }
+  function isLcscSupplierPart(supplierPart) {
+    return Boolean(supplierPart) && supplierPart.trim().toUpperCase().startsWith("C");
+  }
+  function applyPasteRow(row, pasteItem) {
+    const next = {
+      name: pasteItem.name,
+      manufacturerPart: pasteItem.manufacturerPart,
+      manufacturer: pasteItem.manufacturer,
+      supplierPart: pasteItem.supplierPart,
+      supplier: resolveSupplier(pasteItem)
+    };
+    const hasChanges = TRACKED_FIELDS.some((field) => next[field] !== row.original[field]);
+    if (!hasChanges) return 0;
+    Object.assign(row, next, { changed: true, selected: true });
+    return 1;
   }
   function applyToComponent(row, comp) {
     if (!comp) return false;
@@ -403,8 +418,8 @@
   }
 
   // iframe/js/src/app/import-bom/pasteParser.js
-  function parsePaste(text) {
-    const raw = String(text === null || text === void 0 ? "" : text).trim();
+  function parsePaste(text2) {
+    const raw = String(text2 === null || text2 === void 0 ? "" : text2).trim();
     const items = [];
     if (!raw) return items;
     const lines = raw.split("\n");
@@ -429,9 +444,9 @@
     return items;
   }
   function splitDesignators(field, separator) {
-    const text = String(field || "").trim();
-    if (!text.includes(separator)) return text ? [text] : [];
-    return text.split(separator).map((d) => d.trim()).filter((d) => d);
+    const text2 = String(field || "").trim();
+    if (!text2.includes(separator)) return text2 ? [text2] : [];
+    return text2.split(separator).map((d) => d.trim()).filter((d) => d);
   }
 
   // iframe/js/src/app/import-bom/index.js
@@ -535,8 +550,8 @@
   }
   async function handlePaste() {
     try {
-      const text = await navigator.clipboard.readText();
-      const stat = applyPaste(tableData, parsePaste(text));
+      const text2 = await navigator.clipboard.readText();
+      const stat = applyPaste(tableData, parsePaste(text2));
       renderTable();
       updateMasterCheckbox();
       updateSelectAllButton();

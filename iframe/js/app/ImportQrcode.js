@@ -118,18 +118,20 @@
     }, timeoutMs);
     return true;
   }
+  function showOnHost(host, text, type) {
+    try {
+      if (!host || !host.sys_Message || typeof host.sys_Message.showToastMessage !== "function") return false;
+      host.sys_Message.showToastMessage(text, type);
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
   function toast(message, level = TOAST_LEVEL.info, opts = {}) {
     const doc = opts.doc || globalThis.document;
     const host = opts.host === void 0 ? getEda() : opts.host;
     const text = message === null || message === void 0 ? "" : String(message);
-    const type = normalizeLevel(level);
-    try {
-      if (host && host.sys_Message && typeof host.sys_Message.showToastMessage === "function") {
-        host.sys_Message.showToastMessage(text, type);
-        return "host";
-      }
-    } catch (e) {
-    }
+    if (showOnHost(host, text, normalizeLevel(level))) return "host";
     return banner(doc, text, opts.timeoutMs === void 0 ? 3e3 : opts.timeoutMs) ? "dom" : "none";
   }
 
@@ -417,32 +419,37 @@
     }
     try {
       placer.stop();
-      let width = parseFloat(qrSizeInput.value) || 25.4;
-      if (STATE.unit === "mm") width *= MM_TO_MIL;
-      const height = width * (canvas.height / canvas.width);
+      const size = computePlaceSize(canvas);
       const layerId = currentLayerId();
       const base64 = canvas.toDataURL("image/png");
-      const apiWidth = toApiLength(width);
-      const apiHeight = toApiLength(height);
-      if (STATE.outputType === "image") {
-        const created = await host.pcb_PrimitiveObject.create(layerId, 0, 0, base64, apiWidth, apiHeight, 0, false, "img", false);
-        if (!created) throw new Error("创建图像图元失败（API 返回空）");
-        STATE.primitiveId = created.getState_PrimitiveId();
-        placer.start(async (pt) => host.pcb_PrimitiveObject.modify(STATE.primitiveId, { topLeftX: pt.x, topLeftY: pt.y }));
-      } else {
-        const blob = await (await fetch(base64)).blob();
-        const edaImage = await host.pcb_MathPolygon.convertImageToComplexPolygon(blob, apiWidth, apiHeight, 0.5, 0, 0, 0, true, false);
-        if (!edaImage) throw new Error("图像转换为多边形失败");
-        const created = await host.pcb_PrimitiveImage.create(0, 0, edaImage, layerId, apiWidth, apiHeight, 0, false, false);
-        if (!created) throw new Error("创建图像图元失败（API 返回空）");
-        STATE.primitiveId = created.getState_PrimitiveId();
-        placer.start(async (pt) => host.pcb_PrimitiveImage.modify(STATE.primitiveId, { x: pt.x, y: pt.y }));
-      }
+      if (STATE.outputType === "image") await placeAsImage(host, layerId, base64, size);
+      else await placeAsVector(host, layerId, base64, size);
       if (host.sys_IFrame) host.sys_IFrame.hideIFrame("ImportQrcode");
     } catch (err) {
       toast("放置失败: " + err.message, "error");
       placer.stop();
     }
+  }
+  function computePlaceSize(canvas) {
+    let width = parseFloat(qrSizeInput.value) || 25.4;
+    if (STATE.unit === "mm") width *= MM_TO_MIL;
+    const height = width * (canvas.height / canvas.width);
+    return { apiWidth: toApiLength(width), apiHeight: toApiLength(height) };
+  }
+  async function placeAsImage(host, layerId, base64, size) {
+    const created = await host.pcb_PrimitiveObject.create(layerId, 0, 0, base64, size.apiWidth, size.apiHeight, 0, false, "img", false);
+    if (!created) throw new Error("创建图像图元失败（API 返回空）");
+    STATE.primitiveId = created.getState_PrimitiveId();
+    placer.start(async (pt) => host.pcb_PrimitiveObject.modify(STATE.primitiveId, { topLeftX: pt.x, topLeftY: pt.y }));
+  }
+  async function placeAsVector(host, layerId, base64, size) {
+    const blob = await (await fetch(base64)).blob();
+    const edaImage = await host.pcb_MathPolygon.convertImageToComplexPolygon(blob, size.apiWidth, size.apiHeight, 0.5, 0, 0, 0, true, false);
+    if (!edaImage) throw new Error("图像转换为多边形失败");
+    const created = await host.pcb_PrimitiveImage.create(0, 0, edaImage, layerId, size.apiWidth, size.apiHeight, 0, false, false);
+    if (!created) throw new Error("创建图像图元失败（API 返回空）");
+    STATE.primitiveId = created.getState_PrimitiveId();
+    placer.start(async (pt) => host.pcb_PrimitiveImage.modify(STATE.primitiveId, { x: pt.x, y: pt.y }));
   }
   function saveAsPng() {
     const canvas = $("barcode-canvas");

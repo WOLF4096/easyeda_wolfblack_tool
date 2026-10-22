@@ -142,6 +142,36 @@ export function findComponentByDesignator(container, designator) {
 	return null;
 }
 
+/** 网表根对象里不属于「组件容器」的元数据键 */
+const META_KEYS = ['version', 'designRule', 'netClass', 'units', 'layers'];
+
+/**
+ * 判断一个值是否像器件容器（带 props / pins / pinInfoMap 之一）
+ *
+ * @param {*} value 待判断的值
+ * @returns {boolean} 是否像器件容器
+ * @sideEffects 无（纯函数）
+ */
+function isComponentLike(value) {
+	return Boolean(value && typeof value === 'object' && (value.props || value.pins || value.pinInfoMap));
+}
+
+/**
+ * 从网表根对象里挑出像器件的键（跳过元数据）
+ *
+ * @param {object} netlistObj 网表根对象
+ * @returns {object} 挑出的子集（一个都没识别出来时为空对象）
+ * @sideEffects 无（纯函数）
+ */
+function pickComponents(netlistObj) {
+	const picked = {};
+	for (const key in netlistObj) {
+		if (META_KEYS.includes(key)) continue;
+		if (isComponentLike(netlistObj[key])) picked[key] = netlistObj[key];
+	}
+	return picked;
+}
+
 /**
  * 更谨慎地定位组件容器（V2 网表根对象里混着元数据时用这个）
  *
@@ -161,14 +191,6 @@ export function detectContainer(netlistObj) {
 	if (!netlistObj || typeof netlistObj !== 'object') return {};
 	if (netlistObj.components && typeof netlistObj.components === 'object') return netlistObj.components;
 
-	const META_KEYS = ['version', 'designRule', 'netClass', 'units', 'layers'];
-	const picked = {};
-	for (const key in netlistObj) {
-		if (META_KEYS.includes(key)) continue;
-		const value = netlistObj[key];
-		if (value && typeof value === 'object' && (value.props || value.pins || value.pinInfoMap)) {
-			picked[key] = value;
-		}
-	}
+	const picked = pickComponents(netlistObj);
 	return Object.keys(picked).length > 0 ? picked : netlistObj;
 }

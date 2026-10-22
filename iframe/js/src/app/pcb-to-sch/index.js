@@ -499,19 +499,30 @@ function onExportNet() {
 
 	const lines = ['唯一ID,位号,引脚编号,引脚名称,引脚网络'];
 
-	for (const comp of components) {
-		const symbolParts = symbolPinsDatabase[comp.symbolUuid] || [];
-		for (const entry of Object.entries(comp.pins || {})) {
-			const pinNumber = entry[0];
-			if (!pinNumber) continue;
-			const pinName = pinNameOf(symbolParts, pinNumber);
-			lines.push([comp.uniqueId || '', comp.designator || '', pinNumber, pinName, entry[1] || ''].map(csvCell).join(','));
-		}
-	}
+	for (const comp of components) lines.push(...netLinesOf(comp));
 
 	const filename = `${currentPcbUuid || 'netlist'}_${stamp()}_netlist.csv`;
 	updateProgress(100, `导出网络成功：${filename}`);
 	downloadText(filename, lines.join('\n'), { mime: 'text/csv', bom: true });
+}
+
+/**
+ * 单个器件的网表行（每个有引脚号的引脚一行）
+ *
+ * @param {object} comp 器件
+ * @returns {string[]} CSV 行
+ * @sideEffects 无（纯函数）
+ */
+function netLinesOf(comp) {
+	const lines = [];
+	const symbolParts = symbolPinsDatabase[comp.symbolUuid] || [];
+	for (const entry of Object.entries(comp.pins || {})) {
+		const pinNumber = entry[0];
+		if (!pinNumber) continue;
+		const pinName = pinNameOf(symbolParts, pinNumber);
+		lines.push([comp.uniqueId || '', comp.designator || '', pinNumber, pinName, entry[1] || ''].map(csvCell).join(','));
+	}
+	return lines;
 }
 
 /**

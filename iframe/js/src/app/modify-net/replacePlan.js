@@ -66,20 +66,48 @@ export function applyRenames(container, replaceMap) {
 	for (const key in container) {
 		const comp = container[key];
 		if (!comp || typeof comp !== 'object') continue;
-		const designator = (comp.props && comp.props.Designator) || key;
+		const designator = resolveDesignator(comp, key);
 		const pins = getPins(comp);
 		for (const pin of Object.keys(pins).sort(sortPinKeys)) {
-			const current = pins[pin];
-			const netKey = current ? String(current).toLowerCase() : '';
-			if (!netKey || !replaceMap.has(netKey)) continue;
-			const next = replaceMap.get(netKey);
-			if (setPinNet(comp, pin, next)) {
-				lines.push(`替换: ${designator}.${pin} [${current} -> ${next}]`);
+			const line = renamePin(comp, designator, pin, pins[pin], replaceMap);
+			if (line) {
+				lines.push(line);
 				count++;
 			}
 		}
 	}
 	return { count: count, lines: lines };
+}
+
+/**
+ * 器件位号（优先 `props.Designator`，否则退回容器键）
+ *
+ * @param {object} comp 网表器件
+ * @param {string} key 容器键
+ * @returns {string} 位号
+ * @sideEffects 无（纯函数）
+ */
+function resolveDesignator(comp, key) {
+	return (comp.props && comp.props.Designator) || key;
+}
+
+/**
+ * 改写单个引脚的网络名；没有命中规则或写失败时不动
+ *
+ * @param {object} comp 网表器件（就地修改）
+ * @param {string} designator 位号
+ * @param {string} pin 引脚号
+ * @param {string} current 当前网络名
+ * @param {Map<string, string>} replaceMap 映射表
+ * @returns {string|null} 命中并写入时的日志行，否则 null
+ * @sideEffects 就地修改 comp 的引脚网络名
+ */
+function renamePin(comp, designator, pin, current, replaceMap) {
+	const netKey = current ? String(current).toLowerCase() : '';
+	if (!netKey || !replaceMap.has(netKey)) return null;
+	const next = replaceMap.get(netKey);
+	if (!setPinNet(comp, pin, next)) return null;
+	return `替换: ${designator}.${pin} [${current} -> ${next}]`;
 }
 
 /**

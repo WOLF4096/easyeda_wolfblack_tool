@@ -173,20 +173,58 @@ export function enrichWithSymbol(components, projectJson) {
 	const footprints = projectJson.footprints || {};
 
 	for (const comp of components) {
-		const device = comp.deviceUuid ? devices[comp.deviceUuid] : null;
-		if (device) {
-			comp.deviceName = device.title || '';
-			comp.symbolUuid = (device.attributes && device.attributes.Symbol) || '';
-			comp.symbolName = comp.symbolUuid && symbols[comp.symbolUuid] ? symbols[comp.symbolUuid].title || '' : '';
-		} else {
-			comp.deviceName = '';
-			comp.symbolUuid = '';
-			comp.symbolName = '';
-		}
-
-		comp.footprintName =
-			comp.footprintUuid && footprints[comp.footprintUuid] ? footprints[comp.footprintUuid].title || '' : '';
+		applyDeviceFields(comp, devices, symbols);
+		comp.footprintName = footprintTitleOf(comp.footprintUuid, footprints);
 	}
+}
+
+/**
+ * 按器件 uuid 补 `deviceName` / `symbolUuid` / `symbolName`（就地修改）
+ *
+ * @param {object} comp 器件
+ * @param {object} devices 器件库
+ * @param {object} symbols 符号库
+ * @returns {void}
+ * @sideEffects **就地修改** `comp`
+ */
+function applyDeviceFields(comp, devices, symbols) {
+	const device = comp.deviceUuid ? devices[comp.deviceUuid] : null;
+	if (!device) {
+		comp.deviceName = '';
+		comp.symbolUuid = '';
+		comp.symbolName = '';
+		return;
+	}
+
+	comp.deviceName = device.title || '';
+	comp.symbolUuid = (device.attributes && device.attributes.Symbol) || '';
+	comp.symbolName = symbolTitleOf(comp.symbolUuid, symbols);
+}
+
+/**
+ * 取符号标题（找不到时为空串）
+ *
+ * @param {string} symbolUuid 符号 uuid
+ * @param {object} symbols 符号库
+ * @returns {string} 标题
+ * @sideEffects 无（纯函数）
+ */
+function symbolTitleOf(symbolUuid, symbols) {
+	const symbol = symbolUuid ? symbols[symbolUuid] : null;
+	return symbol ? symbol.title || '' : '';
+}
+
+/**
+ * 取封装标题（找不到时为空串）
+ *
+ * @param {string} footprintUuid 封装 uuid
+ * @param {object} footprints 封装库
+ * @returns {string} 标题
+ * @sideEffects 无（纯函数）
+ */
+function footprintTitleOf(footprintUuid, footprints) {
+	const footprint = footprintUuid ? footprints[footprintUuid] : null;
+	return footprint ? footprint.title || '' : '';
 }
 
 /**

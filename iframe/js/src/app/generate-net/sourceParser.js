@@ -27,30 +27,13 @@ import { LAYER_MULTI, expandArcLines, getPolyVertices, getRotatedRectVertices } 
  * @sideEffects 无（纯函数）
  */
 function polyFromShape(shapeData) {
-	let data = shapeData;
-	// 深挖嵌套：`[[...]]` 这种多包一层的情况在真实工程里很常见
-	let safeCounter = 0;
-	while (Array.isArray(data) && data.length > 0 && Array.isArray(data[0])) {
-		if (data[0][0] === 'R' || typeof data[0][0] === 'number') break;
-		data = data[0];
-		if (++safeCounter > 5) break;
-	}
-
+	const data = unwrapShapeData(shapeData);
 	if (!Array.isArray(data) || data.length === 0) return null;
 
-	let rectData = null;
-	if (Array.isArray(data[0]) && data[0][0] === 'R') rectData = data[0];
-	else if (data[0] === 'R') rectData = data;
-
-	let vertices = [];
+	const rectData = rectDataOf(data);
+	let vertices;
 	if (rectData) {
-		const rx = Number(rectData[1]);
-		const ry = Number(rectData[2]);
-		const rw = Number(rectData[3]);
-		const rh = Number(rectData[4]);
-		const rot = Number(rectData[5] || 0);
-		const radius = Number(rectData[6] || 0);
-		vertices = getRotatedRectVertices(rx, ry, rw, rh, rot, radius);
+		vertices = rectVertices(rectData);
 	} else {
 		vertices = getPolyVertices(data);
 		if (vertices.length <= 2) return null;
@@ -58,6 +41,65 @@ function polyFromShape(shapeData) {
 
 	if (vertices.length === 0) return null;
 
+	return { vertices: vertices, bounds: boundsOf(vertices) };
+}
+
+/**
+ * 深挖嵌套：`[[...]]` 这种多包一层的情况在真实工程里很常见
+ *
+ * @param {Array} shapeData 路径数据
+ * @returns {Array} 剥掉外层包裹后的数据
+ * @sideEffects 无（纯函数）
+ */
+function unwrapShapeData(shapeData) {
+	let data = shapeData;
+	let safeCounter = 0;
+	while (Array.isArray(data) && data.length > 0 && Array.isArray(data[0])) {
+		if (data[0][0] === 'R' || typeof data[0][0] === 'number') break;
+		data = data[0];
+		if (++safeCounter > 5) break;
+	}
+	return data;
+}
+
+/**
+ * 识别矩形写法：`["R", ...]` 或 `[["R", ...]]`
+ *
+ * @param {Array} data 已剥壳的路径数据
+ * @returns {Array|null} 矩形描述；不是矩形返回 null
+ * @sideEffects 无（纯函数）
+ */
+function rectDataOf(data) {
+	if (Array.isArray(data[0]) && data[0][0] === 'R') return data[0];
+	if (data[0] === 'R') return data;
+	return null;
+}
+
+/**
+ * 矩形描述 → 顶点（圆角用圆弧采样）
+ *
+ * @param {Array} rectData 矩形描述 `["R", x, y, w, h, rot, radius]`
+ * @returns {Array<{x: number, y: number}>} 顶点
+ * @sideEffects 无（纯函数）
+ */
+function rectVertices(rectData) {
+	const rx = Number(rectData[1]);
+	const ry = Number(rectData[2]);
+	const rw = Number(rectData[3]);
+	const rh = Number(rectData[4]);
+	const rot = Number(rectData[5] || 0);
+	const radius = Number(rectData[6] || 0);
+	return getRotatedRectVertices(rx, ry, rw, rh, rot, radius);
+}
+
+/**
+ * 顶点包围盒（中心 + 宽高）
+ *
+ * @param {Array<{x: number, y: number}>} vertices 顶点
+ * @returns {{x: number, y: number, w: number, h: number}} 包围盒
+ * @sideEffects 无（纯函数）
+ */
+function boundsOf(vertices) {
 	let minX = Infinity;
 	let maxX = -Infinity;
 	let minY = Infinity;
@@ -69,10 +111,7 @@ function polyFromShape(shapeData) {
 		if (v.y > maxY) maxY = v.y;
 	}
 
-	return {
-		vertices: vertices,
-		bounds: { x: (minX + maxX) / 2, y: (minY + maxY) / 2, w: maxX - minX, h: maxY - minY },
-	};
+	return { x: (minX + maxX) / 2, y: (minY + maxY) / 2, w: maxX - minX, h: maxY - minY };
 }
 
 /**
@@ -84,88 +123,141 @@ function polyFromShape(shapeData) {
  * @sideEffects **就地修改** `ctx.allUsedNetNames` 与 `ctx.padIdToPinInfo`
  */
 export function parseV2Primitives(lines, ctx) {
-	const primitives = [];
-	const innerLayerIds = [];
+	const state = { primitives: [], innerLayerIds: [], ctx: ctx };
 
 	for (const line of lines) {
-		if (!line.trim() || !line.startsWith('[')) continue;
-		let item;
-		try {
-			item = JSON.parse(line.replace(/^\s*/, ''));
-		} catch {
-			logger.debug('跳过无法解析的源码行');
-			continue;
-		}
+		const item = parseV2Item(line);
+		if (!item) continue;
 
-		const type = item[0];
 		if (item[3] && typeof item[3] === 'string' && item[3] !== '') ctx.allUsedNetNames.add(item[3]);
 
-		if (type === 'LAYER') {
-			if (isInnerLayer(Number(item[1])) && Number(item[4]) === 3) innerLayerIds.push(Number(item[1]));
-		} else if (type === 'LINE') {
-			primitives.push({
-				id: item[1],
-				type: 'LINE',
-				net: item[3],
-				layer: item[4],
-				shape: 'line',
-				x1: Number(item[5]),
-				y1: Number(item[6]),
-				x2: Number(item[7]),
-				y2: Number(item[8]),
-				w: Number(item[9]),
-			});
-		} else if (type === 'VIA') {
-			const dia = Number(item[8]);
-			primitives.push({
-				id: item[1],
-				type: 'VIA',
-				net: item[3],
-				layer: LAYER_MULTI,
-				_rawRange: item[4],
-				shape: 'ROUND',
-				x: Number(item[5]),
-				y: Number(item[6]),
-				w: dia,
-				h: dia,
-				r: dia / 2,
-			});
-		} else if (type === 'ARC') {
-			primitives.push(
-				...expandArcLines({
-					id: item[1],
-					net: item[3],
-					layer: item[4],
-					x1: Number(item[5]),
-					y1: Number(item[6]),
-					x2: Number(item[7]),
-					y2: Number(item[8]),
-					angle: Number(item[9]),
-					w: Number(item[10]) || 0.15,
-				})
-			);
-		} else if (type === 'FILL' || type === 'POLY') {
-			// 多层（12）的 FILL 是焊盘/过孔内部的填充，不参与连通
-			if (type === 'FILL' && item[4] === LAYER_MULTI) continue;
-			const poly = polyFromShape(item[7]);
-			if (poly) {
-				primitives.push({
-					id: item[1],
-					type: type,
-					net: item[3],
-					layer: item[4],
-					shape: 'POLY',
-					vertices: poly.vertices,
-					...poly.bounds,
-				});
-			}
-		} else if (type === 'PAD_NET') {
-			ctx.padIdToPinInfo[item[1] + item[4]] = { compId: item[1], pin: item[2] };
-		}
+		applyV2Item(item, state);
 	}
 
-	return { primitives: primitives, innerLayerIds: innerLayerIds };
+	return { primitives: state.primitives, innerLayerIds: state.innerLayerIds };
 }
+
+/**
+ * 解析一行 V2 数组源码
+ *
+ * @param {string} line 单行
+ * @returns {Array|null} 解析结果；非数组行或解析失败返回 null
+ * @sideEffects 无（纯函数，日志除外）
+ */
+function parseV2Item(line) {
+	if (!line.trim() || !line.startsWith('[')) return null;
+	try {
+		return JSON.parse(line.replace(/^\s*/, ''));
+	} catch {
+		logger.debug('跳过无法解析的源码行');
+		return null;
+	}
+}
+
+/**
+ * 按图元类型分派
+ *
+ * 用 hasOwnProperty 而非直接取值：类型串来自用户源码，不能命中原型链上的成员。
+ *
+ * @param {Array} item 解析出的数组
+ * @param {object} state 收集器
+ * @returns {void}
+ * @sideEffects **就地修改** `state`
+ */
+function applyV2Item(item, state) {
+	const type = item[0];
+	const handler = Object.prototype.hasOwnProperty.call(V2_HANDLERS, type) ? V2_HANDLERS[type] : null;
+	if (handler) handler(item, state);
+}
+
+/** LAYER 行：记录实际使用的内层 */
+function v2Layer(item, state) {
+	if (isInnerLayer(Number(item[1])) && Number(item[4]) === 3) state.innerLayerIds.push(Number(item[1]));
+}
+
+/** LINE 行 */
+function v2Line(item, state) {
+	state.primitives.push({
+		id: item[1],
+		type: 'LINE',
+		net: item[3],
+		layer: item[4],
+		shape: 'line',
+		x1: Number(item[5]),
+		y1: Number(item[6]),
+		x2: Number(item[7]),
+		y2: Number(item[8]),
+		w: Number(item[9]),
+	});
+}
+
+/** VIA 行 */
+function v2Via(item, state) {
+	const dia = Number(item[8]);
+	state.primitives.push({
+		id: item[1],
+		type: 'VIA',
+		net: item[3],
+		layer: LAYER_MULTI,
+		_rawRange: item[4],
+		shape: 'ROUND',
+		x: Number(item[5]),
+		y: Number(item[6]),
+		w: dia,
+		h: dia,
+		r: dia / 2,
+	});
+}
+
+/** ARC 行：拆成折线 */
+function v2Arc(item, state) {
+	state.primitives.push(
+		...expandArcLines({
+			id: item[1],
+			net: item[3],
+			layer: item[4],
+			x1: Number(item[5]),
+			y1: Number(item[6]),
+			x2: Number(item[7]),
+			y2: Number(item[8]),
+			angle: Number(item[9]),
+			w: Number(item[10]) || 0.15,
+		})
+	);
+}
+
+/** FILL / POLY 行：转多边形 */
+function v2FillPoly(item, state) {
+	// 多层（12）的 FILL 是焊盘/过孔内部的填充，不参与连通
+	if (item[0] === 'FILL' && item[4] === LAYER_MULTI) return;
+	const poly = polyFromShape(item[7]);
+	if (!poly) return;
+	state.primitives.push({
+		id: item[1],
+		type: item[0],
+		net: item[3],
+		layer: item[4],
+		shape: 'POLY',
+		vertices: poly.vertices,
+		...poly.bounds,
+	});
+}
+
+/** PAD_NET 行 */
+function v2PadNet(item, state) {
+	state.ctx.padIdToPinInfo[item[1] + item[4]] = { compId: item[1], pin: item[2] };
+}
+
+/** 类型 → 处理函数（新增图元类型只需在这里加一行） */
+const V2_HANDLERS = Object.freeze({
+	LAYER: v2Layer,
+	LINE: v2Line,
+	VIA: v2Via,
+	ARC: v2Arc,
+	FILL: v2FillPoly,
+	POLY: v2FillPoly,
+	PAD_NET: v2PadNet,
+});
 
 /**
  * 解析一行 V3/V4 日志格式源码（`{a}||{b}|` 可能含多个对象）
@@ -309,14 +401,7 @@ function onFill(item, state, netName) {
 	if (item.type === 'REGION' || item.type === 'POLY') return;
 	if (item.type === 'FILL' && item.layerId === LAYER_MULTI) return;
 
-	let shapeData = null;
-	if (item.path) shapeData = item.path;
-	else if (item.points) shapeData = item.points;
-	else if (item.width && item.height && item.x !== undefined) {
-		shapeData = ['R', item.x, item.y, item.width, item.height, item.rotation || 0, item.cornerRadius || 0];
-	}
-
-	const poly = polyFromShape(shapeData);
+	const poly = polyFromShape(fillShapeData(item));
 	if (!poly) return;
 
 	state.primitives.push({
@@ -329,6 +414,22 @@ function onFill(item, state, netName) {
 		vertices: poly.vertices,
 		...poly.bounds,
 	});
+}
+
+/**
+ * FILL 行的几何来源：`path` → `points` → 矩形描述
+ *
+ * @param {object} item 合并后的对象
+ * @returns {Array|null} 路径数据；三者皆无返回 null
+ * @sideEffects 无（纯函数）
+ */
+function fillShapeData(item) {
+	if (item.path) return item.path;
+	if (item.points) return item.points;
+	if (item.width && item.height && item.x !== undefined) {
+		return ['R', item.x, item.y, item.width, item.height, item.rotation || 0, item.cornerRadius || 0];
+	}
+	return null;
 }
 
 /** 类型 → 处理函数（新增图元类型只需在这里加一行） */

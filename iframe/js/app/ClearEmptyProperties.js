@@ -217,18 +217,20 @@
     }, timeoutMs);
     return true;
   }
+  function showOnHost(host, text, type) {
+    try {
+      if (!host || !host.sys_Message || typeof host.sys_Message.showToastMessage !== "function") return false;
+      host.sys_Message.showToastMessage(text, type);
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
   function toast(message, level = TOAST_LEVEL.info, opts = {}) {
     const doc = opts.doc || globalThis.document;
     const host = opts.host === void 0 ? getEda() : opts.host;
     const text = message === null || message === void 0 ? "" : String(message);
-    const type = normalizeLevel(level);
-    try {
-      if (host && host.sys_Message && typeof host.sys_Message.showToastMessage === "function") {
-        host.sys_Message.showToastMessage(text, type);
-        return "host";
-      }
-    } catch (e) {
-    }
+    if (showOnHost(host, text, normalizeLevel(level))) return "host";
     return banner(doc, text, opts.timeoutMs === void 0 ? 3e3 : opts.timeoutMs) ? "dom" : "none";
   }
 
@@ -260,45 +262,62 @@
     for (const key in container) {
       const comp = container[key];
       if (!comp || !comp.props || !comp.props.Designator) continue;
-      const supplier = comp.props.Supplier || "";
-      const isEmptySupplier = supplier.trim() === "";
-      rows2.push({
-        id: key,
-        designator: comp.props.Designator || "",
-        name: comp.props.Name || "",
-        // 优先读取 FootprintName，没有则降级读取 Footprint
-        footprint: comp.props.FootprintName || comp.props.Footprint || "",
-        supplier,
-        // UI 勾选状态：Supplier 为空时勾选行与「更多属性」，否则全不选
-        selected: isEmptySupplier,
-        clearBase: false,
-        clearKey: false,
-        clearMore: isEmptySupplier,
-        refProps: comp.props
-      });
+      rows2.push(toRow(key, comp.props));
     }
     return rows2;
+  }
+  function toRow(key, props) {
+    const supplier = props.Supplier || "";
+    const isEmptySupplier = supplier.trim() === "";
+    return {
+      id: key,
+      designator: props.Designator || "",
+      name: props.Name || "",
+      // 优先读取 FootprintName，没有则降级读取 Footprint
+      footprint: props.FootprintName || props.Footprint || "",
+      supplier,
+      // UI 勾选状态：Supplier 为空时勾选行与「更多属性」，否则全不选
+      selected: isEmptySupplier,
+      clearBase: false,
+      clearKey: false,
+      clearMore: isEmptySupplier,
+      refProps: props
+    };
   }
   function clearBySelection(rows2) {
     const list = Array.isArray(rows2) ? rows2 : [];
     let components = 0;
     let props = 0;
     for (const row of list) {
-      if (!row.selected || !(row.clearBase || row.clearKey || row.clearMore)) continue;
-      let modified = false;
-      const target = row.refProps || {};
-      for (const key in target) {
-        const category = categoryOf(key);
-        if (category === "preserve") continue;
-        const shouldClear = category === "base" && row.clearBase || category === "key" && row.clearKey || category === "more" && row.clearMore;
-        if (!shouldClear || target[key] === "") continue;
-        target[key] = "";
-        modified = true;
-        props++;
-      }
-      if (modified) components++;
+      if (!isRowActive(row)) continue;
+      const cleared = clearRow(row);
+      if (cleared > 0) components++;
+      props += cleared;
     }
     return { components, props };
+  }
+  function isRowActive(row) {
+    if (!row.selected) return false;
+    return Boolean(row.clearBase || row.clearKey || row.clearMore);
+  }
+  function shouldClearKey(category, row) {
+    if (category === "base") return Boolean(row.clearBase);
+    if (category === "key") return Boolean(row.clearKey);
+    if (category === "more") return Boolean(row.clearMore);
+    return false;
+  }
+  function clearRow(row) {
+    let cleared = 0;
+    const target = row.refProps || {};
+    for (const key in target) {
+      const category = categoryOf(key);
+      if (category === "preserve") continue;
+      if (!shouldClearKey(category, row)) continue;
+      if (target[key] === "") continue;
+      target[key] = "";
+      cleared++;
+    }
+    return cleared;
   }
   function toggleColumn(rows2, field) {
     const active = (Array.isArray(rows2) ? rows2 : []).filter((row) => row.selected);

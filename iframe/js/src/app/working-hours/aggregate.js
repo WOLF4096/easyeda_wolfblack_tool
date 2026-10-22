@@ -89,6 +89,164 @@ function buildTimeline(minTs, maxTs) {
 }
 
 /**
+ * 合并所有天里的工程元数据（后出现的覆盖先出现的）
+ *
+ * @param {Array<{dayData: object}>} days 已解析的天配置
+ * @returns {Record<string, string>} `{ 工程 uuid: 工程名 }`
+ * @sideEffects 无（纯函数）
+ */
+function collectProjectMeta(days) {
+	const projectMeta = {};
+	for (const day of days) {
+		if (day.dayData.meta) Object.assign(projectMeta, day.dayData.meta);
+	}
+	return projectMeta;
+}
+
+/**
+ * 算出时间轴覆盖的天区间，并保证「今天」一定在范围内
+ *
+ * @param {Array<{ts: number}>} days 已解析的天配置
+ * @param {number} todayTs 今日零点
+ * @returns {{minTs: number, maxTs: number}} 最早 / 最晚一天 0 点
+ * @sideEffects 无（纯函数）
+ */
+function dayRange(days, todayTs) {
+	let minTs = Infinity;
+	let maxTs = -Infinity;
+
+	for (const day of days) {
+		if (day.ts < minTs) minTs = day.ts;
+		if (day.ts > maxTs) maxTs = day.ts;
+	}
+
+	if (minTs === Infinity) {
+		minTs = todayTs;
+		maxTs = todayTs;
+	}
+	// 今天一定在时间轴范围内（否则「今日工时」取不到下标）
+	if (todayTs < minTs) minTs = todayTs;
+	if (todayTs > maxTs) maxTs = todayTs;
+	return { minTs: minTs, maxTs: maxTs };
+}
+
+/**
+ * 造一条空的工程统计
+ *
+ * @param {string} name 工程名
+ * @param {string} uuid 工程 uuid
+ * @returns {object} 统计对象
+ * @sideEffects 无（纯函数）
+ */
+function emptyStat(name, uuid) {
+	return { name: name, uuid: uuid, totalWork: 0, totalRest: 0, startTs: Infinity, endTs: -Infinity };
+}
+
+/**
+ * 初始化每个工程的统计（当前工程即使没有历史数据也建一行）
+ *
+ * @param {Record<string, string>} projectMeta 工程元数据（会被补上当前工程）
+ * @param {string|null} currentUuid 当前工程 uuid
+ * @param {string} currentName 当前工程名
+ * @returns {object} `{ 工程 uuid: 统计对象 }`
+ * @sideEffects **就地修改** projectMeta
+ */
+function initProjectStats(projectMeta, currentUuid, currentName) {
+	const projectStats = {};
+	for (const pId of Object.keys(projectMeta)) projectStats[pId] = emptyStat(projectMeta[pId], pId);
+
+	if (currentUuid && !projectStats[currentUuid]) {
+		projectMeta[currentUuid] = currentName;
+		projectStats[currentUuid] = emptyStat(currentName, currentUuid);
+	}
+	return projectStats;
+}
+
+/**
+ * 把一格的数据累加到工程统计上
+ *
+ * @param {object|undefined} stat 工程统计
+ * @param {number} slotTs 该格时间戳
+ * @param {number} wTime 该格工作时长（秒）
+ * @param {number} rTime 该格休息时长（秒）
+ * @returns {void}
+ * @sideEffects **就地修改** stat
+ */
+function tallyProject(stat, slotTs, wTime, rTime) {
+	if (!stat) return;
+	stat.totalWork += wTime;
+	stat.totalRest += rTime;
+	if (wTime > 0 || rTime > 0) {
+		if (slotTs < stat.startTs) stat.startTs = slotTs;
+		if (slotTs > stat.endTs) stat.endTs = slotTs;
+	}
+}
+
+/**
+ * 把一天的某一格写进时间轴，并累加各工程统计
+ *
+ * @param {object} slot 该格的 `{ 工程 uuid: [工作秒, 休息秒] }`
+ * @param {number} slotTs 该格时间戳
+ * @param {Array<object>} timeline 时间轴
+ * @param {Map<number, number>} tsMap 时间戳 → 下标
+ * @param {object} projectStats 工程统计表
+ * @returns {void}
+ * @sideEffects **就地修改** timeline 与 projectStats
+ */
+function applySlot(slot, slotTs, timeline, tsMap, projectStats) {
+	const tlIndex = tsMap.get(slotTs);
+	if (tlIndex === undefined) return;
+	const cell = timeline[tlIndex];
+
+	for (const projEntry of Object.entries(slot)) {
+		const pId = projEntry[0];
+		const wTime = projEntry[1][0] || 0;
+		const rTime = projEntry[1][1] || 0;
+
+		cell.work[pId] = wTime;
+		cell.rest[pId] = rTime;
+		tallyProject(projectStats[pId], slotTs, wTime, rTime);
+	}
+}
+
+/**
+ * 把每一天的每一格填进时间轴
+ *
+ * @param {Array<{ts: number, dayData: object}>} days 已解析的天配置
+ * @param {Array<object>} timeline 时间轴
+ * @param {Map<number, number>} tsMap 时间戳 → 下标
+ * @param {object} projectStats 工程统计表
+ * @returns {void}
+ * @sideEffects **就地修改** timeline 与 projectStats
+ */
+function fillTimeline(days, timeline, tsMap, projectStats) {
+	for (const day of days) {
+		const slots = day.dayData.slots;
+		if (!slots) continue;
+
+		for (const slotEntry of Object.entries(slots)) {
+			const slotTs = day.ts + parseInt(slotEntry[0], 10) * SLOT_MS;
+			applySlot(slotEntry[1], slotTs, timeline, tsMap, projectStats);
+		}
+	}
+}
+
+/**
+ * 按总工时排序结果分配颜色
+ *
+ * @param {string[]} sortedProjectIds 按总工时降序的工程 uuid
+ * @returns {Record<string, string>} `{ 工程 uuid: 颜色 }`
+ * @sideEffects 无（纯函数）
+ */
+function buildColorMap(sortedProjectIds) {
+	const pidColorMap = {};
+	sortedProjectIds.forEach((pId, idx) => {
+		pidColorMap[pId] = COLOR_PALETTE[idx % COLOR_PALETTE.length];
+	});
+	return pidColorMap;
+}
+
+/**
  * 聚合扩展配置为数据集
  *
  * @param {Record<string, string|object>} configs 扩展全部用户配置（`sys_Storage.getExtensionAllUserConfigs()`）
@@ -105,77 +263,17 @@ export function buildDataset(configs, options = {}) {
 	const now = options.now || new Date();
 
 	const days = collectDayConfigs(configs);
-	const projectMeta = {};
-	let minTs = Infinity;
-	let maxTs = -Infinity;
-
-	for (const day of days) {
-		if (day.dayData.meta) Object.assign(projectMeta, day.dayData.meta);
-		if (day.ts < minTs) minTs = day.ts;
-		if (day.ts > maxTs) maxTs = day.ts;
-	}
-
+	const projectMeta = collectProjectMeta(days);
 	const todayTs = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0).getTime();
-	if (minTs === Infinity) {
-		minTs = todayTs;
-		maxTs = todayTs;
-	}
-	// 今天一定在时间轴范围内（否则「今日工时」取不到下标）
-	if (todayTs < minTs) minTs = todayTs;
-	if (todayTs > maxTs) maxTs = todayTs;
 
+	const { minTs, maxTs } = dayRange(days, todayTs);
 	const { timeline, tsMap } = buildTimeline(minTs, maxTs);
 
-	const projectStats = {};
-	for (const pId of Object.keys(projectMeta)) {
-		projectStats[pId] = { name: projectMeta[pId], uuid: pId, totalWork: 0, totalRest: 0, startTs: Infinity, endTs: -Infinity };
-	}
-	if (currentUuid && !projectStats[currentUuid]) {
-		projectMeta[currentUuid] = currentName;
-		projectStats[currentUuid] = {
-			name: currentName,
-			uuid: currentUuid,
-			totalWork: 0,
-			totalRest: 0,
-			startTs: Infinity,
-			endTs: -Infinity,
-		};
-	}
-
-	for (const day of days) {
-		const slots = day.dayData.slots;
-		if (!slots) continue;
-
-		for (const slotEntry of Object.entries(slots)) {
-			const slotTs = day.ts + parseInt(slotEntry[0], 10) * SLOT_MS;
-			const tlIndex = tsMap.get(slotTs);
-			if (tlIndex === undefined) continue;
-
-			for (const projEntry of Object.entries(slotEntry[1])) {
-				const pId = projEntry[0];
-				const wTime = projEntry[1][0] || 0;
-				const rTime = projEntry[1][1] || 0;
-
-				timeline[tlIndex].work[pId] = wTime;
-				timeline[tlIndex].rest[pId] = rTime;
-
-				const stat = projectStats[pId];
-				if (!stat) continue;
-				stat.totalWork += wTime;
-				stat.totalRest += rTime;
-				if (wTime > 0 || rTime > 0) {
-					if (slotTs < stat.startTs) stat.startTs = slotTs;
-					if (slotTs > stat.endTs) stat.endTs = slotTs;
-				}
-			}
-		}
-	}
+	const projectStats = initProjectStats(projectMeta, currentUuid, currentName);
+	fillTimeline(days, timeline, tsMap, projectStats);
 
 	const sortedProjectIds = Object.keys(projectMeta).sort((a, b) => projectStats[b].totalWork - projectStats[a].totalWork);
-	const pidColorMap = {};
-	sortedProjectIds.forEach((pId, idx) => {
-		pidColorMap[pId] = COLOR_PALETTE[idx % COLOR_PALETTE.length];
-	});
+	const pidColorMap = buildColorMap(sortedProjectIds);
 
 	return {
 		timeline: timeline,
