@@ -15,8 +15,6 @@
  * EDA 调用确实失败时向上抛出（由调用方决定如何提示用户），其余均为静默降级。
  */
 (function (global) {
-	'use strict';
-
 	/** 网表类型标识，对齐嘉立创 EDA 专业版 API 约定 */
 	const NETLIST_KEY = 'JLCEDA';
 
@@ -225,12 +223,7 @@
 	 */
 	function escapeHtml(value) {
 		if (value === null || value === undefined) return '';
-		return String(value)
-			.replace(/&/g, '&amp;')
-			.replace(/</g, '&lt;')
-			.replace(/>/g, '&gt;')
-			.replace(/"/g, '&quot;')
-			.replace(/'/g, '&#039;');
+		return String(value).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
 	}
 
 	/* ------------------------------ 日志 ------------------------------ */

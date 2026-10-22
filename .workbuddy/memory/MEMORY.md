@@ -154,3 +154,27 @@
 - 不要对**旧文件整份**跑 `prettier --write`：工作区是 CRLF、旧文件用 4 空格缩进，
   而 `.prettierrc` 是 `useTabs + endOfLine: lf` → 会把 `GenerateNet.js` 等整体重排（3000+ 行假 diff）。
   改旧文件用手工最小编辑；新文件（如 `wireChain.js`、新测试）按 prettier 风格写。
+
+## 宿主加载机制（2026-10-22 实测，决定前端不能拆成多文件 ESM）
+
+EDA 扩展的 iframe 页面**不是文件 URL**，而是宿主拼出来的 `blob:` 文档：
+
+- `location.href` / `document.baseURI` = `blob:https://pro.lceda.cn/<uuid>`，没有 `<base>` 标签；
+- 页面里每个 `<script src>` 都被改写成**独立的、无 MIME 的 blob URL**（结尾连 `.js` 都没有）；
+- 宿主**不通过 https 提供**扩展文件：`GET https://pro.lceda.cn/iframe/js/common.js` → 404（返回 IDE 的 SPA 兜底页）。
+
+由此得到三条硬约束（都是实测，不是推测）：
+
+1. **不能用原生 ESM**：`<script type="module">` 与 `import './x.js'` 都会失败。两个独立死因——
+   脚本 blob 无 JS MIME（`Failed to fetch dynamically imported module`）、
+   `blob:` 基址不是分层 URL（`Invalid relative url or base scheme isn't hierarchical`）。
+   → 前端模块化只能「源码写 ESM + **esbuild 按页打包成单文件 IIFE**」。
+2. **不能 fetch 站内相对路径**：`fetch('/iframe/js/common.js')` 直接 `Failed to parse URL`。
+   → 任何"运行时读本地资源"的写法都是死的。
+3. **渲染器本身支持 ESM/TLA**（`import('data:text/javascript,...')`、blob 带正确 MIME 的 import 都成功），
+   所以这不是浏览器老，不要往 polyfill 方向试。
+
+**已知遗留 bug（本轮发现，未修）**：`WorkingHours.js` 的 `loadLibForInline()` 用
+`fetch('/iframe/js/echarts.min.js')` 想内联本地库实现「离线看报告」，按上面第 2 条**必然失败并静默回退 CDN**
+→ 离线打开导出报告图表仍是空的。正解是构建期把库源码作为字符串打进 bundle（`loader: { '.txt': 'text' }`）。
+
