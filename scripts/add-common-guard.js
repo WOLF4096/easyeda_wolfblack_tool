@@ -6,6 +6,10 @@
  * 改造后：先取 WC 并判空，缺失时在页面上显示可读提示，再抛错中止后续脚本。
  *
  * 运行：node scripts/add-common-guard.js  （幂等，已改造过的文件会跳过）
+ *
+ * 开发者：WOLF4096
+ * 辅助开发：DeepSeek-V4.1-Flash
+ * 本工具为非官方第三方开源扩展，与嘉立创 / EasyEDA 官方无隶属关系
  */
 const fs = require('node:fs');
 const path = require('node:path');

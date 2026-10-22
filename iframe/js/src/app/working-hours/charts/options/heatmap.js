@@ -7,6 +7,10 @@
  *
  * 热力图的数据是「按天聚合」而不是原始 15 分钟格，所以单独一条聚合路径；
  * 它与导出报告里的 heatmapData 用的是同一套口径（`collectDaily` 直接被导出复用）。
+ *
+ * 开发者：WOLF4096
+ * 辅助开发：DeepSeek-V4.1-Flash
+ * 本工具为非官方第三方开源扩展，与嘉立创 / EasyEDA 官方无隶属关系
  */
 
 import { formatDuration } from '../../time.js';

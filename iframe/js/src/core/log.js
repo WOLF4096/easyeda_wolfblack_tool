@@ -6,6 +6,10 @@
  * @//example/ const { logger } = await import('./core/log.js')
  *            logger.debug('分批处理', batch)   // 默认不输出
  *            logger.warn('删除失败', err)      // 输出
+ *
+ * 开发者：WOLF4096
+ * 辅助开发：DeepSeek-V4.1-Flash
+ * 本工具为非官方第三方开源扩展，与嘉立创 / EasyEDA 官方无隶属关系
  */
 
 /**

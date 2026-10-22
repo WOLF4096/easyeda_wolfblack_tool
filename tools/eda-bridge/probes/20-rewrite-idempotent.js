@@ -7,6 +7,10 @@
  *
  * 逻辑与 `app/generate-net/sourceRewrite.js` 一致，但这里**内联实现**：
  * 探针跑在 EDABridge 页面里，拿不到业务模块的 import。
+ *
+ * 开发者：WOLF4096
+ * 辅助开发：DeepSeek-V4.1-Flash
+ * 本工具为非官方第三方开源扩展，与嘉立创 / EasyEDA 官方无隶属关系
  */
 const src = await eda.sys_FileManager.getDocumentSource();
 const lines = src.split('\n');

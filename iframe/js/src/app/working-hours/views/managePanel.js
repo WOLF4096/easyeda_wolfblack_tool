@@ -8,6 +8,10 @@
  *
  * 这张图是全页唯一「会被反复销毁重建」的图表（每换一个工程就重建一次），
  * 所以 dataZoom 的联动句柄必须跟着一起 dispose，否则旧图表的定时器会去读已销毁的实例。
+ *
+ * 开发者：WOLF4096
+ * 辅助开发：DeepSeek-V4.1-Flash
+ * 本工具为非官方第三方开源扩展，与嘉立创 / EasyEDA 官方无隶属关系
  */
 
 import { getDayAlignedIndices } from '../dayRange.js';

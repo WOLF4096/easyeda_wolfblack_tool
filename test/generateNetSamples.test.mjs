@@ -9,6 +9,10 @@
  *   2. 源码改写必须**逐字节幂等** —— 把每行的网络名设成原值再写回，输出必须等于输入。
  *      这条是「整份写回不会重排用户文档」的唯一保证；
  *   3. 行尾 `|` 的有无必须按原样还原（V3/V4 里存在缺行尾的行）。
+ *
+ * 开发者：WOLF4096
+ * 辅助开发：DeepSeek-V4.1-Flash
+ * 本工具为非官方第三方开源扩展，与嘉立创 / EasyEDA 官方无隶属关系
  */
 import assert from 'node:assert/strict';
 import fs from 'node:fs';

@@ -12,6 +12,10 @@
  *   - 单文件 ≤ 400 行（模板型文件用 overrides 放宽，见下）
  *
  * 运行：npm run check:js
+ *
+ * 开发者：WOLF4096
+ * 辅助开发：DeepSeek-V4.1-Flash
+ * 本工具为非官方第三方开源扩展，与嘉立创 / EasyEDA 官方无隶属关系
  */
 module.exports = {
 	root: true,

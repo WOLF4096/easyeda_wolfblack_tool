@@ -7,6 +7,10 @@
  *
  * 为什么不用 echarts 自带的 moveOnMouseMove：那个是左键/中键；这块交互一直是右键，
  * 且必须夹住边界（窗口不能拖出时间轴），所以自己算 delta 再 dispatchAction。
+ *
+ * 开发者：WOLF4096
+ * 辅助开发：DeepSeek-V4.1-Flash
+ * 本工具为非官方第三方开源扩展，与嘉立创 / EasyEDA 官方无隶属关系
  */
 
 /**

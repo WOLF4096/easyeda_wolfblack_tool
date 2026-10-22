@@ -4,6 +4,10 @@
  * 关键点：这些函数不是测试里重写的副本，而是 iframe 页面实际运行的同一份代码
  * （`iframe/js/common.js` 用 new Function 注入假 window 后取 WolfCommon）。
  * 这样样本测试才真正**测到产品**，而不是测一个平行实现。
+ *
+ * 开发者：WOLF4096
+ * 辅助开发：DeepSeek-V4.1-Flash
+ * 本工具为非官方第三方开源扩展，与嘉立创 / EasyEDA 官方无隶属关系
  */
 import fs from 'node:fs';
 import path from 'node:path';

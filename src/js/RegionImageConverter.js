@@ -2,6 +2,10 @@
  * 图像 (Image) 与 填充 (Fill/Region) 互转工具
  * * 核心机制：通过解析底层源码（兼容 V2 & V3 格式），精准提取原生的二维 path 路径数组。
  * * 修复偏移与形变：自动计算 Image 移动/拉伸后的坐标增量与长宽缩放比例，生成 Fill 时对整个路径网络进行精准的仿射对齐。
+ *
+ * 开发者：WOLF4096
+ * 辅助开发：DeepSeek-V4.1-Flash
+ * 本工具为非官方第三方开源扩展，与嘉立创 / EasyEDA 官方无隶属关系
  */
 
 // const ImageFillConverter = {

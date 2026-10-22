@@ -9,6 +9,10 @@
  *
  * 页面里这组换算写了 3 遍（loadImageToCurrent / calculateDpi / calculateDimensionsFromDpi），
  * 且都用 `toFixed(2)` 写回输入框，读的时候再 parseFloat 回来。这里只保留数值，格式化交给页面。
+ *
+ * 开发者：WOLF4096
+ * 辅助开发：DeepSeek-V4.1-Flash
+ * 本工具为非官方第三方开源扩展，与嘉立创 / EasyEDA 官方无隶属关系
  */
 
 /** 1 mm = 39.37007874015748 mil */

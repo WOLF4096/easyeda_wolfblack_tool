@@ -9,6 +9,10 @@
  *
  * 复杂度要点：图元两两比对是 O(n²)，先用 150mil 的网格把候选对压到「同格或邻格」，
  * 再用 `processedPairs` 去重，否则 5000 个图元会有 1200 万次几何判定。
+ *
+ * 开发者：WOLF4096
+ * 辅助开发：DeepSeek-V4.1-Flash
+ * 本工具为非官方第三方开源扩展，与嘉立创 / EasyEDA 官方无隶属关系
  */
 
 import { isConductiveLayer } from '../../core/layer.js';

@@ -9,6 +9,10 @@
  *
  * 协议是与 `tools/eda-bridge/server.mjs` 的跨仓契约：`{id, cmd}` 进、`{id, ok, ...}` 出，
  * 指令名与字段名改动必须两边同步（见 docs 里桥的说明）。
+ *
+ * 开发者：WOLF4096
+ * 辅助开发：DeepSeek-V4.1-Flash
+ * 本工具为非官方第三方开源扩展，与嘉立创 / EasyEDA 官方无隶属关系
  */
 
 import { safeJson } from './protocol.js';

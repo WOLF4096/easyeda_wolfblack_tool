@@ -5,6 +5,10 @@
  * @//dependencies/ 无
  * @//example/ const { toApiLength } = await import('./core/length.js')
  *            pcb_PrimitiveObject.create(layer, x, y, src, toApiLength(w, 2), toApiLength(h, 2))
+ *
+ * 开发者：WOLF4096
+ * 辅助开发：DeepSeek-V4.1-Flash
+ * 本工具为非官方第三方开源扩展，与嘉立创 / EasyEDA 官方无隶属关系
  */
 
 /**

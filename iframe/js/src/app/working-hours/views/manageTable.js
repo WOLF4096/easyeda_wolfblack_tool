@@ -7,6 +7,10 @@
  *
  * 行内的「导出 / 删除」按钮用的是行内 onclick（`exportProjectChart('uuid')`），
  * 打包成 IIFE 后这些函数必须挂在 window 上，见页面入口的 Object.assign(window, ...)。
+ *
+ * 开发者：WOLF4096
+ * 辅助开发：DeepSeek-V4.1-Flash
+ * 本工具为非官方第三方开源扩展，与嘉立创 / EasyEDA 官方无隶属关系
  */
 
 import { escapeHtml } from '../../../core/util.js';

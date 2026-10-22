@@ -6,6 +6,10 @@
  * 属静默改值——需要确认边界，才能判断要不要在插件里提示用户。
  *
  * 做法：逐个内径创建 → 读回实际值 → 立即删除。
+ *
+ * 开发者：WOLF4096
+ * 辅助开发：DeepSeek-V4.1-Flash
+ * 本工具为非官方第三方开源扩展，与嘉立创 / EasyEDA 官方无隶属关系
  */
 
 const out = { version: eda.sys_Environment.getEditorCurrentVersion(), rows: [] };

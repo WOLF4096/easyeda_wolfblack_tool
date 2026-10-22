@@ -11,6 +11,10 @@
  *   - 网表模式：操作对象是「位号 + 引脚号」，写回网表的 pinInfoMap / pins；
  *   - 图元模式：操作对象是「图元 id」，写回源码或调图元 API。
  * 定名规则完全一致（见 netNamer），所以两块共用同一个 namer。
+ *
+ * 开发者：WOLF4096
+ * 辅助开发：DeepSeek-V4.1-Flash
+ * 本工具为非官方第三方开源扩展，与嘉立创 / EasyEDA 官方无隶属关系
  */
 
 import { getPinNet } from '../../core/pins.js';

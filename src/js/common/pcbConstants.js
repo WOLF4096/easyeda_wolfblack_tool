@@ -14,6 +14,10 @@
  * （浏览器 IIFE 与后端 ESM 是两套 bundle，无法共享模块），两边同名项必须一致；
  * `test/samples` 的 `plugin.layer-consts` 用例会做交叉校验，
  * `atom.layer` 用例会用本表全部取值校验真实工程文件。
+ *
+ * 开发者：WOLF4096
+ * 辅助开发：DeepSeek-V4.1-Flash
+ * 本工具为非官方第三方开源扩展，与嘉立创 / EasyEDA 官方无隶属关系
  */
 
 /** 官方图层表 */

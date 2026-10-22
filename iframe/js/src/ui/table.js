@@ -10,6 +10,10 @@
  *
  * 只做「状态与算法」，不碰 DOM：各页面的表格 markup 差异很大（6 个页面 3 种结构），
  * 把渲染留给页面，才能真正复用。行复选框的事件委托在页面侧实现。
+ *
+ * 开发者：WOLF4096
+ * 辅助开发：DeepSeek-V4.1-Flash
+ * 本工具为非官方第三方开源扩展，与嘉立创 / EasyEDA 官方无隶属关系
  */
 
 import { naturalCompare } from '../core/util.js';

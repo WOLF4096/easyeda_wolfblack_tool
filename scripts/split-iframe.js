@@ -11,6 +11,10 @@
  *
  * 注意：不适用于 WorkingHours.html（其主脚本内含生成导出 HTML 的模板字符串，
  * 需手动拆分）。用法：node scripts/split-iframe.js <html文件名> [...]
+ *
+ * 开发者：WOLF4096
+ * 辅助开发：DeepSeek-V4.1-Flash
+ * 本工具为非官方第三方开源扩展，与嘉立创 / EasyEDA 官方无隶属关系
  */
 const fs = require('fs');
 const path = require('path');

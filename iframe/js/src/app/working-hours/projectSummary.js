@@ -7,6 +7,10 @@
  *
  * 同一句话出现在三处（顶部标题、工程管理图标题、导出报告的 pageTitle），
  * 以前是三份拷贝，改一处忘一处就会出现「标题里的时间范围和图不一致」。
+ *
+ * 开发者：WOLF4096
+ * 辅助开发：DeepSeek-V4.1-Flash
+ * 本工具为非官方第三方开源扩展，与嘉立创 / EasyEDA 官方无隶属关系
  */
 
 import { escapeHtml } from '../../core/util.js';

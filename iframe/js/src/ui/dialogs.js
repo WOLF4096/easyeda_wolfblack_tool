@@ -5,6 +5,10 @@
  * @//dependencies/ core/eda
  * @//example/ const { confirm } = await import('./ui/dialogs.js')
  *            if (await confirm('确认删除全部记录？', { title: '危险操作', okText: '删除' })) { … }
+ *
+ * 开发者：WOLF4096
+ * 辅助开发：DeepSeek-V4.1-Flash
+ * 本工具为非官方第三方开源扩展，与嘉立创 / EasyEDA 官方无隶属关系
  */
 
 import { getEda } from '../core/eda.js';

@@ -7,6 +7,10 @@
  *
  * 为什么自己拼画布而不是 html2canvas：扩展页面是 blob 文档，html2canvas 拿不到
  * 跨源的样式表；而 echarts 自带 getDataURL，两张图 + 几块色条足够用。
+ *
+ * 开发者：WOLF4096
+ * 辅助开发：DeepSeek-V4.1-Flash
+ * 本工具为非官方第三方开源扩展，与嘉立创 / EasyEDA 官方无隶属关系
  */
 
 /** 合成画布尺寸 */

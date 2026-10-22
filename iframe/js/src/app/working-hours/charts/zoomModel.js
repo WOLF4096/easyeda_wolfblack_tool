@@ -10,6 +10,10 @@
  * 这三个数（聚簇大小 clusterSize、画布上限 dataYMax、动态 Y 上限 dynamicYMax）原本混在
  * 一个 70 行的 handleZoomOrPanCore 里，跟 DOM 图例刷新、setOption 缓存判断拧在一起，
  * 导致「缩放后柱子高度不对」这类问题只能靠肉眼复现。抽成纯函数后可以逐条断言。
+ *
+ * 开发者：WOLF4096
+ * 辅助开发：DeepSeek-V4.1-Flash
+ * 本工具为非官方第三方开源扩展，与嘉立创 / EasyEDA 官方无隶属关系
  */
 
 /** 单格基础容量（秒）：一格 15 分钟 = 900 秒 */

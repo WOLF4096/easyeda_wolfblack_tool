@@ -7,6 +7,10 @@
  * - 关闭已断开的连接（幂等）→ 记一条 log 或注释说明「可忽略」。
  *
  * 运行：node scripts/fill-empty-catch.js（幂等）
+ *
+ * 开发者：WOLF4096
+ * 辅助开发：DeepSeek-V4.1-Flash
+ * 本工具为非官方第三方开源扩展，与嘉立创 / EasyEDA 官方无隶属关系
  */
 const fs = require('node:fs');
 const path = require('node:path');

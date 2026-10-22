@@ -9,6 +9,10 @@
  * 拆之前 6 个实例各自写一遍 `if (!x) x = echarts.init(dom,'dark')` + 全局 resize 里 6 个 if，
  * 且 dispose 之后忘了把变量置空会留下一半失效的引用（`manageChart.dispose()` 后仍被 resize 调用）。
  * 这里把「有没有 init」「resize 前判空」收敛成一处，页面侧只持有 view 对象。
+ *
+ * 开发者：WOLF4096
+ * 辅助开发：DeepSeek-V4.1-Flash
+ * 本工具为非官方第三方开源扩展，与嘉立创 / EasyEDA 官方无隶属关系
  */
 
 /**

@@ -4,6 +4,10 @@
  * @//exports/ 无
  * @//dependencies/ core/eda, core/netlist, core/version, ui/statusBar, app/modify-net/replacePlan
  * @//example/ 页面入口，由 iframe/ModifyNet.html 加载打包产物 app/ModifyNet.js
+ *
+ * 开发者：WOLF4096
+ * 辅助开发：DeepSeek-V4.1-Flash
+ * 本工具为非官方第三方开源扩展，与嘉立创 / EasyEDA 官方无隶属关系
  */
 
 import { hasEda } from '../../core/eda.js';

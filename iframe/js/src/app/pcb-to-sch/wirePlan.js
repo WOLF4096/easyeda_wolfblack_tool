@@ -9,6 +9,10 @@
  *
  * 引脚朝向（`angle`）决定导线往哪边拉：0 朝左、90 朝上、180 朝右、270 朝下。
  * V2 与 V3/V4 的引脚 Y 方向相反（V2 向上为正、V3+ 向下为正），所以 `y` 取 ±1 参与计算。
+ *
+ * 开发者：WOLF4096
+ * 辅助开发：DeepSeek-V4.1-Flash
+ * 本工具为非官方第三方开源扩展，与嘉立创 / EasyEDA 官方无隶属关系
  */
 
 import { createSchWireLines } from '../../sch/emitter.js';

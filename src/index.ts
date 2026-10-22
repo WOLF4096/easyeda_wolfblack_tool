@@ -13,6 +13,10 @@
  *     否则每次打开 EDA 都要先把所有功能加载进内存。
  *
  * 开发文档：https://prodocs.lceda.cn/cn/api/guide/
+ *
+ * 开发者：WOLF4096
+ * 辅助开发：DeepSeek-V4.1-Flash
+ * 本工具为非官方第三方开源扩展，与嘉立创 / EasyEDA 官方无隶属关系
  */
 import * as extensionConfig from '../extension.json';
 

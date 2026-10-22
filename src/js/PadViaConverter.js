@@ -5,6 +5,10 @@
  * 1. PadToVia: 选中的通孔焊盘 转 过孔
  * 2. ViaToPad: 选中的通孔过孔 转 焊盘
  * 3. Toggle: 根据选中类型自动互相转换
+ *
+ * 开发者：WOLF4096
+ * 辅助开发：DeepSeek-V4.1-Flash
+ * 本工具为非官方第三方开源扩展，与嘉立创 / EasyEDA 官方无隶属关系
  */
 
 import { LAYER, MASK_DEFAULT_EXPANSION, isThroughHoleLayer } from './common/pcbConstants.js';

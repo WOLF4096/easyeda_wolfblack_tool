@@ -6,6 +6,10 @@
  * @//example/ 页面入口，由 iframe/ImportQrcode.html 加载打包产物 app/ImportQrcode.js
  *
  * 依赖全局：`bwipjs`（HTML 里先加载 `/iframe/js/bwip-js-min.js`）、可选 `EPCB_LayerId`。
+ *
+ * 开发者：WOLF4096
+ * 辅助开发：DeepSeek-V4.1-Flash
+ * 本工具为非官方第三方开源扩展，与嘉立创 / EasyEDA 官方无隶属关系
  */
 
 import { getEda } from '../../core/eda.js';

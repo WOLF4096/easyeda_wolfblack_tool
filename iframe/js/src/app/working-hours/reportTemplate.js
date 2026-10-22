@@ -9,6 +9,10 @@
  * 模板里的脚本是**独立实现**（自带 escapeHtml / formatDuration / 自行校验 SHA-256），
  * 因为导出的 html 要能脱离扩展单独打开，不能依赖 WolfCommon。
  * 所以改格式函数时，这里的副本也要一起改。
+ *
+ * 开发者：WOLF4096
+ * 辅助开发：DeepSeek-V4.1-Flash
+ * 本工具为非官方第三方开源扩展，与嘉立创 / EasyEDA 官方无隶属关系
  */
 
 import { escapeHtml } from '../../core/util.js';

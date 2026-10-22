@@ -10,6 +10,10 @@
  * 一个符号文件可以有多个 PART（多部件器件），每个 PART 内的 PIN 行先记到 `pinById`，
  * 再用 ATTR 行补 `NUMBER` / `NAME`，最后按 NUMBER 归并成 `pins[引脚号]`。
  * 包围盒由引脚坐标外扩 `PIN_MARGIN` 得到，用于原理图的自动排布。
+ *
+ * 开发者：WOLF4096
+ * 辅助开发：DeepSeek-V4.1-Flash
+ * 本工具为非官方第三方开源扩展，与嘉立创 / EasyEDA 官方无隶属关系
  */
 
 /** 引脚包围盒相对引脚坐标的外扩量（mil） */

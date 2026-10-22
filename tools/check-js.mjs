@@ -12,6 +12,10 @@
  *
  * 基线键 = `相对路径|规则|消息`（不含行号，避免改一行就把基线全部作废）。
  * 消息里带函数名与数值（`complexity of 14`），所以复杂度继续升高也会被当成新违规。
+ *
+ * 开发者：WOLF4096
+ * 辅助开发：DeepSeek-V4.1-Flash
+ * 本工具为非官方第三方开源扩展，与嘉立创 / EasyEDA 官方无隶属关系
  */
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';

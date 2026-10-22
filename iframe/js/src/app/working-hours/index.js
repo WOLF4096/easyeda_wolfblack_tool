@@ -8,6 +8,10 @@
  * 职责边界：本文件只做「取数据 → 建视图 → 绑事件 → 刷文本」。
  * 所有 option 由 charts/options/* 的纯函数产出、所有缩放计算在 charts/zoomModel.js、
  * 各面板的重绘逻辑在 views/*Panel.js，所以图表的可视结果能脱离浏览器断言。
+ *
+ * 开发者：WOLF4096
+ * 辅助开发：DeepSeek-V4.1-Flash
+ * 本工具为非官方第三方开源扩展，与嘉立创 / EasyEDA 官方无隶属关系
  */
 
 import { logger } from '../../core/log.js';

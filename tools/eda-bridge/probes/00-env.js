@@ -7,6 +7,10 @@
  *   3. 插件依赖的关键 API 在当前版本是否都存在。
  *
  * 返回值会被 `safeJson` 序列化后回传，长字符串已截断。
+ *
+ * 开发者：WOLF4096
+ * 辅助开发：DeepSeek-V4.1-Flash
+ * 本工具为非官方第三方开源扩展，与嘉立创 / EasyEDA 官方无隶属关系
  */
 
 const ver = eda.sys_Environment.getEditorCurrentVersion();

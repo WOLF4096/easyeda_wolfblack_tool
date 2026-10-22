@@ -12,6 +12,10 @@
  *   - `__WOLF_LIB_ECHARTS_GZ__`：echarts 源码的 gzip+base64（519KB，解压后 1474KB）
  *   - `__WOLF_LIB_FFLATE__`：fflate 源码原文（32KB，它自己就是解压器，不能再压缩）
  * 未打包（node 直测）时 `typeof` 保护让两个常量取空串，模块仍可安全 import。
+ *
+ * 开发者：WOLF4096
+ * 辅助开发：DeepSeek-V4.1-Flash
+ * 本工具为非官方第三方开源扩展，与嘉立创 / EasyEDA 官方无隶属关系
  */
 /* global __WOLF_LIB_ECHARTS_GZ__, __WOLF_LIB_FFLATE__ */
 

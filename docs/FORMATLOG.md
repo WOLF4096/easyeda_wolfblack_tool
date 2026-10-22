@@ -75,3 +75,9 @@
 | 2026-09-22 | V3 → V4 | 初版：基于 V3（2025.10.21）规范与本仓库 V4 格式资料对比总结 / Initial entry: comparison of the V3 (2025.10.21) spec against the V4 format in this repository |
 | 2026-09-22 | V3 → V4（修订） | 依据刷新后的 SKILL.md：修正平票判优方向（client 大者胜）、补充 DOCHEAD 外层 ticket 与 16 位十六进制约束、细化删除语义易错点 / Revision per the refreshed SKILL.md: tie-break direction corrected (larger client wins), DOCHEAD outer ticket and 16-hex constraints added, deletion pitfalls refined |
 | 2026-10-21 | 新增 §11 | V4 `setDocumentSource` 丢 `POURED` 行的实测记录（待处理） / Recorded V4 `setDocumentSource` dropping `POURED` rows (pending) |
+
+---
+
+> 开发者：WOLF4096
+> 辅助开发：DeepSeek-V4.1-Flash
+> 本工具为非官方第三方开源扩展，与嘉立创 / EasyEDA 官方无隶属关系

@@ -24,7 +24,8 @@
 		"check:deps": "node tools/check-deps.mjs",
 		"check": "npm run check:deps && npm run check:js",
 		"bridge": "node tools/eda-bridge/server.mjs",
-		"bridge:run": "node tools/eda-bridge/run.mjs"
+		"bridge:run": "node tools/eda-bridge/run.mjs",
+		"sign": "node tools/apply-signature.mjs"
 	},
 	"devDependencies": {
 		"@jlceda/pro-api-types": "^0.1.175",

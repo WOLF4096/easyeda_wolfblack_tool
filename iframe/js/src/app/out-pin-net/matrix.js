@@ -10,6 +10,10 @@
  *
  * 渲染与导出共用同一份矩阵 —— 原实现里「过滤 + 排序 + 收集引脚 + 角标文案」整块 20 行
  * 在 renderTable 与 exportPinNetAsCSV 里各写了一遍，口径容易漂移。
+ *
+ * 开发者：WOLF4096
+ * 辅助开发：DeepSeek-V4.1-Flash
+ * 本工具为非官方第三方开源扩展，与嘉立创 / EasyEDA 官方无隶属关系
  */
 
 import { collectPinNumbers, getPins } from '../../core/pins.js';

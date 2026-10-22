@@ -3,6 +3,10 @@
  *
  * `GenerateNet` 的网表模式与 `ReplaceComponent` 都依赖 `getNetlist('PCB')`，
  * 而 V4 与 V2 的根对象形状不同。这里把原始返回与解析后的形状都打出来。
+ *
+ * 开发者：WOLF4096
+ * 辅助开发：DeepSeek-V4.1-Flash
+ * 本工具为非官方第三方开源扩展，与嘉立创 / EasyEDA 官方无隶属关系
  */
 const out = {};
 

@@ -11,6 +11,10 @@
  *
  * 缓存判断的两段是分开的：聚簇/刻度变了才重建 series 数据，只有 Y 上限变了就单独 setOption，
  * 否则每次缩放都要重算整条 custom series（大工程里这是肉眼可见的卡顿）。
+ *
+ * 开发者：WOLF4096
+ * 辅助开发：DeepSeek-V4.1-Flash
+ * 本工具为非官方第三方开源扩展，与嘉立创 / EasyEDA 官方无隶属关系
  */
 
 import { computeZoomWindow, computeVisibleMax, finalizeYMax } from './zoomModel.js';

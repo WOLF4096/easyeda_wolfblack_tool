@@ -9,6 +9,10 @@
  *
  * 原实现散落在 OutPinNet（3 份 Blob→a.click 模板）、PcbToSch（2 份 escapeCsv）、
  * ImportBom（剪贴板分隔符嗅探）里，此处收敛成一份。
+ *
+ * 开发者：WOLF4096
+ * 辅助开发：DeepSeek-V4.1-Flash
+ * 本工具为非官方第三方开源扩展，与嘉立创 / EasyEDA 官方无隶属关系
  */
 
 /**

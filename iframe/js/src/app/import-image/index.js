@@ -7,6 +7,10 @@
  *
  * 「落地」的判定沿用原实现：**窗口失焦视为用户点了画布**（PCB 面板被点就会失焦）。
  * 因此这里不用 `ui/toast` 的静默失败路径，而是保留 closeIFrame 收尾。
+ *
+ * 开发者：WOLF4096
+ * 辅助开发：DeepSeek-V4.1-Flash
+ * 本工具为非官方第三方开源扩展，与嘉立创 / EasyEDA 官方无隶属关系
  */
 
 import { getEda } from '../../core/eda.js';

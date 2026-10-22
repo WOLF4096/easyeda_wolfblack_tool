@@ -4,6 +4,10 @@
  * 上一支探针（20）发现这份文档里没有 `LINE`/`VIA`，而是 54 行 `PRIMITIVE`，
  * 且没有任何一行带 `netName` —— 说明 V4 的字段名与 `parseV3Primitives` 的假设不一致。
  * 先把真实字段打出来再决定怎么改。
+ *
+ * 开发者：WOLF4096
+ * 辅助开发：DeepSeek-V4.1-Flash
+ * 本工具为非官方第三方开源扩展，与嘉立创 / EasyEDA 官方无隶属关系
  */
 const src = await eda.sys_FileManager.getDocumentSource();
 const lines = src.split('\n');

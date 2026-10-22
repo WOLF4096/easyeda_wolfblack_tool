@@ -280,3 +280,9 @@ eda（宿主）
 3. `WorkingHours.js:1883` — sidebar 索引数组顺序（`weekly,manage`）与 HTML 实际顺序（`manage,weekly`）相反，点"工程管理"会高亮"周报"。
 4. `EDABridge.js:80,83,96` — 三处 `create` 未 `await`，异步失败不进 `errors`，`import` 会"报成功但什么都没建"。
 5. `ImportQrcode.js:311-320` — 判断 `eda.sys_ToastMessage`（该 API 不存在），提示恒走 DOM 兜底分支。
+
+---
+
+> 开发者：WOLF4096
+> 辅助开发：DeepSeek-V4.1-Flash
+> 本工具为非官方第三方开源扩展，与嘉立创 / EasyEDA 官方无隶属关系

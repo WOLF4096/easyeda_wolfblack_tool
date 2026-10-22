@@ -7,6 +7,10 @@
  *
  * 这是一条**调试/自动化测试通道**，不属于任何业务功能：不读网表、不写文档。
  * 与 `tools/eda-bridge/server.mjs` 通过 `/ws/eda` 通信，指令契约见 commands.js。
+ *
+ * 开发者：WOLF4096
+ * 辅助开发：DeepSeek-V4.1-Flash
+ * 本工具为非官方第三方开源扩展，与嘉立创 / EasyEDA 官方无隶属关系
  */
 
 import { getEda } from '../../core/eda.js';

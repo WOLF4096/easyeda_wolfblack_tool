@@ -1,3 +1,9 @@
+/*
+ * 开发者：WOLF4096
+ * 辅助开发：DeepSeek-V4.1-Flash
+ * 本工具为非官方第三方开源扩展，与嘉立创 / EasyEDA 官方无隶属关系
+ */
+
 /* B0 模块加载探针 · 第二轮
  *
  * 第一轮发现：页面文档是 `blob:https://pro.lceda.cn/<uuid>`，`/iframe/...` 这类

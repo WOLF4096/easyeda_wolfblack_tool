@@ -10,6 +10,10 @@
  * 重建工程管理图时旧定时器不会被清掉（闭包里的 zoomTimer 随旧实例一起丢弃，但 setTimeout 仍在跑，
  * 回调里去 getOption() 一个已 dispose 的实例）。这里把「一个视图一个防抖槽」收敛到一处，
  * 并在 dispose 时统一切断。
+ *
+ * 开发者：WOLF4096
+ * 辅助开发：DeepSeek-V4.1-Flash
+ * 本工具为非官方第三方开源扩展，与嘉立创 / EasyEDA 官方无隶属关系
  */
 
 /**

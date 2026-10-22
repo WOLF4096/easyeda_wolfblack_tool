@@ -17,6 +17,10 @@
  *   - `define` 把 echarts（gzip+base64）与 fflate（原文）的源码注入 bundle（见 libInline.js）；
  *   - `dropLabels: ['CDN_FALLBACK']` 丢掉 reportTemplate.js 里的 CDN 兜底分支，
  *     保证产物里 grep 不到 cdn.jsdelivr.net —— 离线路径必须是**唯一**路径。
+ *
+ * 开发者：WOLF4096
+ * 辅助开发：DeepSeek-V4.1-Flash
+ * 本工具为非官方第三方开源扩展，与嘉立创 / EasyEDA 官方无隶属关系
  */
 import esbuild from 'esbuild';
 import fs from 'node:fs';
@@ -54,8 +58,14 @@ const PAGES = {
 	WorkingHours: 'app/working-hours/index.js',
 };
 
-/** 产物首行横幅：提醒这是生成物 */
-const BANNER = '/*! 由 npm run build:iframe 从 iframe/js/src 生成，请勿直接修改本文件 */';
+/** 产物首行横幅：开发者署名 + 提醒这是生成物 */
+const BANNER = `/*!
+ * 开发者：WOLF4096
+ * 辅助开发：DeepSeek-V4.1-Flash
+ * 本工具为非官方第三方开源扩展，与嘉立创 / EasyEDA 官方无隶属关系
+ *
+ * 由 npm run build:iframe 从 iframe/js/src 生成，请勿直接修改本文件
+ */`;
 
 /** 参与内联注入的第三方库（键 = 注入的 define 名后缀，值 = iframe/js 下的文件名） */
 const LIB_FILES = {

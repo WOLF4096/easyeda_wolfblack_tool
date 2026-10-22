@@ -7,6 +7,10 @@
  *            PROJECTS.filter((p) => p.act === 'get').length // 5
  *
  * `RAW_SOURCE` 是各类图元的 V2 源码样本（用作默认初始值），下标含义见 calibration/probe 的字段表。
+ *
+ * 开发者：WOLF4096
+ * 辅助开发：DeepSeek-V4.1-Flash
+ * 本工具为非官方第三方开源扩展，与嘉立创 / EasyEDA 官方无隶属关系
  */
 export const RAW_SOURCE = {
         "Via": ["VIA","e1",0,"","",105,110,12,24,0,10,5,0,[]],

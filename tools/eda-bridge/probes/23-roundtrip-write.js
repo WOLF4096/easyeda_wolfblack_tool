@@ -9,6 +9,10 @@
  *   1. 只有文档里**没有任何 POUR 行**时才执行（V4 写回会丢 POURED，见 MEMORY）；
  *   2. 写之前把原文完整回传，调用方可落盘备份；
  *   3. 只写「语义完全等价」的内容（每行网络名设成原值）。
+ *
+ * 开发者：WOLF4096
+ * 辅助开发：DeepSeek-V4.1-Flash
+ * 本工具为非官方第三方开源扩展，与嘉立创 / EasyEDA 官方无隶属关系
  */
 const src = await eda.sys_FileManager.getDocumentSource();
 const lines = src.split('\n');

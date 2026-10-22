@@ -9,6 +9,10 @@
  * 两个操作都直接改扩展的用户配置（`STATS_YYYY_MM_DD`），删错无法恢复，
  * 所以流程固定为「二次确认 → 显示遮罩 → 逐日清洗 → 重新加载」。
  * 存储清洗拆成纯函数 `stripProjectFromDay`，可以脱离 EDA 单测。
+ *
+ * 开发者：WOLF4096
+ * 辅助开发：DeepSeek-V4.1-Flash
+ * 本工具为非官方第三方开源扩展，与嘉立创 / EasyEDA 官方无隶属关系
  */
 
 import { toast } from '../../../ui/toast.js';

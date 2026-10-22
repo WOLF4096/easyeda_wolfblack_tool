@@ -12,6 +12,10 @@
  *   node tools/eda-bridge/doc.mjs check   --port 4178 --in  temp/backup/v4-pcb.txt
  *
  * check：只读比对「当前源码」与备份是否一致（用于确认测试后文档是否已复原）。
+ *
+ * 开发者：WOLF4096
+ * 辅助开发：DeepSeek-V4.1-Flash
+ * 本工具为非官方第三方开源扩展，与嘉立创 / EasyEDA 官方无隶属关系
  */
 import fs from 'node:fs';
 import path from 'node:path';

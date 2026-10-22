@@ -12,6 +12,10 @@
  *   - `autoWire`：id 用 `maxId+1` 起、ticket 用 `maxTicket+1` 起，两个独立计数器。
  *
  * 格式（V2 数组 / V3-V4 日志）来自 测试样本/ 的真实工程文件，改动前请先跑 `npm run test:samples`。
+ *
+ * 开发者：WOLF4096
+ * 辅助开发：DeepSeek-V4.1-Flash
+ * 本工具为非官方第三方开源扩展，与嘉立创 / EasyEDA 官方无隶属关系
  */
 
 /**

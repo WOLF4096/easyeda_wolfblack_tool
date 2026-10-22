@@ -14,6 +14,10 @@
  *   2. ATTR 行**必须字段齐全**（x/y/rotation/color/.../zIndex 全写），只写 parentId/key/value
  *      会让整份源码写入直接返回 false。
  *   3. 每个器件**必须有一条 `Channel ID` 属性**（空串即可），否则同样整份拒写。
+ *
+ * 开发者：WOLF4096
+ * 辅助开发：DeepSeek-V4.1-Flash
+ * 本工具为非官方第三方开源扩展，与嘉立创 / EasyEDA 官方无隶属关系
  */
 
 import { GROUP_GAP, layoutGroup } from './layout.js';

@@ -9,6 +9,10 @@
  * 为什么不用原始字符串字面量：echarts.min.js 有 24.5 万个 tab 与 5 万个换行，
  * 转义后从 1474KB 膨胀到 1763KB；gzip+base64 只要 519KB，反而更小，也避开了转义风险。
  * 运行时用页面上已有的 fflate 解压（见 app/working-hours/libInline.js）。
+ *
+ * 开发者：WOLF4096
+ * 辅助开发：DeepSeek-V4.1-Flash
+ * 本工具为非官方第三方开源扩展，与嘉立创 / EasyEDA 官方无隶属关系
  */
 import zlib from 'node:zlib';
 

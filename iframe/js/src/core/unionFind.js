@@ -7,6 +7,10 @@
  *            const uf = new UnionFind(); uf.union('a', 'b'); uf.find('a') === uf.find('b')
  *
  * 键是字符串 id（图元 id 可能是 `e12` 也可能带后缀），所以内部用普通对象而不是数组。
+ *
+ * 开发者：WOLF4096
+ * 辅助开发：DeepSeek-V4.1-Flash
+ * 本工具为非官方第三方开源扩展，与嘉立创 / EasyEDA 官方无隶属关系
  */
 
 /** 并查集 */

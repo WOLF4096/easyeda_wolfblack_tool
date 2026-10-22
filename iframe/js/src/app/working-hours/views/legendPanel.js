@@ -7,6 +7,10 @@
  *
  * 三块图例（主图 / 工程管理 / 节律）用的是同一套 DOM 结构（`.legend-item[data-name]`），
  * 所以监听挂在 body 上做事件委托 —— 图例会被整体重绘，逐项绑定必然漏。
+ *
+ * 开发者：WOLF4096
+ * 辅助开发：DeepSeek-V4.1-Flash
+ * 本工具为非官方第三方开源扩展，与嘉立创 / EasyEDA 官方无隶属关系
  */
 
 import { escapeHtml } from '../../../core/util.js';

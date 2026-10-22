@@ -7,6 +7,10 @@
  *
  * 注意：表格里的输入框用**内联 onchange** 调 `updateParam(...)`，所以下面必须显式把它挂到
  * `window` 上 —— 打包成 IIFE 后，函数声明不再自动成为全局。这是本页唯一对外暴露的契约。
+ *
+ * 开发者：WOLF4096
+ * 辅助开发：DeepSeek-V4.1-Flash
+ * 本工具为非官方第三方开源扩展，与嘉立创 / EasyEDA 官方无隶属关系
  */
 
 import { getEda } from '../../core/eda.js';

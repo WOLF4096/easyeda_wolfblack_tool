@@ -7,6 +7,10 @@
  *   - 声明 17 个而代码传 15 个 → 后两个参数为 undefined，可能把阻焊/焊盘类型写错。
  *
  * 插件内部的调用契约（后端 src/js 与前端 iframe/js）见 `test/edaParams.test.mjs`。
+ *
+ * 开发者：WOLF4096
+ * 辅助开发：DeepSeek-V4.1-Flash
+ * 本工具为非官方第三方开源扩展，与嘉立创 / EasyEDA 官方无隶属关系
  */
 
 const TARGETS = [

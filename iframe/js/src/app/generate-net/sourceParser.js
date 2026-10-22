@@ -9,6 +9,10 @@
  *
  * 两个解析器的产出必须**完全同构**（同样的 primitives / innerLayerIds / padIdToPinInfo 形状），
  * 因为后面的连通分析与定名不区分版本。加新图元类型时两边都要加。
+ *
+ * 开发者：WOLF4096
+ * 辅助开发：DeepSeek-V4.1-Flash
+ * 本工具为非官方第三方开源扩展，与嘉立创 / EasyEDA 官方无隶属关系
  */
 
 import { isInnerLayer } from '../../core/layer.js';

@@ -10,6 +10,10 @@
  *      顺序反了会让源码里的 DeviceName 指向不存在的 uuid；
  *   2. V4 只改 ATTR `Device` 换不掉器件，必须同时改 COMPONENT 行 `attrs.DeviceName`；
  *   3. 写回失败也必须清理临时器件，否则 (-10000,-10000) 会堆垃圾。
+ *
+ * 开发者：WOLF4096
+ * 辅助开发：DeepSeek-V4.1-Flash
+ * 本工具为非官方第三方开源扩展，与嘉立创 / EasyEDA 官方无隶属关系
  */
 
 import { hasEda } from '../../core/eda.js';

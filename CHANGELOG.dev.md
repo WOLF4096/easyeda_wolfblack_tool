@@ -29,6 +29,15 @@
 - 新增 **发布材料**：`PRIVACY.md`（记录什么 / 存哪 / 唯一联网动作 / 导出与删除方式）、`docs/发布检查清单.md`（八段式，含回滚预案）、`docs/V4回归记录.md`、`docs/商店文案.md`
 - 同步 **旧表述**：删掉「V4 适配待验证项」（三条写盘流程已于 2026-10-22 人工验证通过，见 `docs/V4回归记录.md`）；`docs/代码评估报告-v1.20.0.md` 的发布就绪度按 P0 已消项重算
 - 工程数据：`npm test` **750 → 755 用例**（新增 docConsistency 5 条）；`check:layout` 18 页 0 溢出；CSS 仅动 about 段（新增 `.about-sub` / `.howto-list` / `.note-tag`，删除 `.purpose-tag`）
+- 署名 **全项目统一注入**：新增 `tools/apply-signature.mjs`（`npm run sign`，`-- --dry` 预演，幂等），
+  覆盖 **224 个文件**（文档末尾引用块、代码开头块注释、HTML 插在 `<!doctype>` 之后），内容为
+  「开发者：WOLF4096 / 辅助开发：DeepSeek-V4.1-Flash / 本工具为非官方第三方开源扩展，与嘉立创 / EasyEDA 官方无隶属关系」。
+  三条约束：`iframe/js/src/**` 必须仍以块注释开头（署名插进已有块注释内部，否则 `moduleHeader` 全红）；
+  shebang 脚本插在 shebang 之后；`<!doctype html>` 留在第一行。
+  产物侧由两处 banner 保证：`scripts/build-iframe.mjs` 的 `BANNER`（18 个页面产物）与
+  `config/esbuild.common.ts` 的 `banner.js`（`dist/index.js`，源码注释会被打包丢掉）。
+  第三方库（echarts / fflate / jszip / bwip-js）与构建产物不注入。
+- 顺带 **`.edaignore` 排除 `CHANGELOG.dev.md` / `README.dev.md`**：技术档案不进用户安装包（包内 md 只剩 README / CHANGELOG / PRIVACY）
 
 ## v1.20.0 `2026-10-22`
 > 修好「工时统计」从 v1.17.4 起就没生效过的离线报告；把该页 1729 行的图表层拆到 280 行；ESLint 存量基线清零
@@ -403,3 +412,9 @@
 
 - 发布图形化版本
 - 新增导入图片功能
+
+---
+
+> 开发者：WOLF4096
+> 辅助开发：DeepSeek-V4.1-Flash
+> 本工具为非官方第三方开源扩展，与嘉立创 / EasyEDA 官方无隶属关系

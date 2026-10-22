@@ -9,6 +9,10 @@
  * 项目里原先有 5 处各写一遍「有 pinInfoMap 用它、否则用 pins」的双分支
  * （ModifyNet / InADNetlist / OutPinNet / GenerateNet 读写两侧），且每处都略有差异。
  * 这里收成唯一实现：**只读**，返回新的扁平对象，不改网表。
+ *
+ * 开发者：WOLF4096
+ * 辅助开发：DeepSeek-V4.1-Flash
+ * 本工具为非官方第三方开源扩展，与嘉立创 / EasyEDA 官方无隶属关系
  */
 
 /**

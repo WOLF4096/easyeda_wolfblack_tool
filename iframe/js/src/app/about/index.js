@@ -4,6 +4,10 @@
  * @//exports/ 无
  * @//dependencies/ core/util, app/about/features
  * @//example/ 页面入口，由 iframe/About.html 加载打包产物 app/About.js
+ *
+ * 开发者：WOLF4096
+ * 辅助开发：DeepSeek-V4.1-Flash
+ * 本工具为非官方第三方开源扩展，与嘉立创 / EasyEDA 官方无隶属关系
  */
 /* global __APP_VERSION__ */
 

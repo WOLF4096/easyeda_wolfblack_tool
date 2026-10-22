@@ -11,6 +11,10 @@
  *
  * 为什么要这道门：拆完 82 个模块后，最容易发生的退化是「页面 A 顺手 import 了页面 B 的模型」，
  * 几个月后就又粘成一团，而 `npm test` 完全发现不了。
+ *
+ * 开发者：WOLF4096
+ * 辅助开发：DeepSeek-V4.1-Flash
+ * 本工具为非官方第三方开源扩展，与嘉立创 / EasyEDA 官方无隶属关系
  */
 import fs from 'node:fs';
 import path from 'node:path';

@@ -9,6 +9,10 @@
  *   - `netlist` 最快也最安全（只改网表，不动文档源码）；
  *   - `source`  最完整（连图元网络一起改），但会整份重写文档源码；
  *   - `api`     逐图元调 API，焊盘改不了，只作兜底。
+ *
+ * 开发者：WOLF4096
+ * 辅助开发：DeepSeek-V4.1-Flash
+ * 本工具为非官方第三方开源扩展，与嘉立创 / EasyEDA 官方无隶属关系
  */
 
 import { getEditorVersion, isModern, isV2 } from '../../core/version.js';

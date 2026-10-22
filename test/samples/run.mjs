@@ -12,6 +12,10 @@
  *   node test/samples/run.mjs --no-write         # 不落盘报告
  *
  * 退出码：0 = 全部通过；1 = 有失败（error）；2 = 环境/输入问题（如目录为空）
+ *
+ * 开发者：WOLF4096
+ * 辅助开发：DeepSeek-V4.1-Flash
+ * 本工具为非官方第三方开源扩展，与嘉立创 / EasyEDA 官方无隶属关系
  */
 import fs from 'node:fs';
 import path from 'node:path';

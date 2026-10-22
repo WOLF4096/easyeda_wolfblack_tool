@@ -8,6 +8,10 @@
  * 写入门禁（2026-10 实测）：`documentType !== 1`（非原理图页）时写入会被系统拦成「格式错误」，
  * 且 V4 的 `setDocumentSource` 可能**返回 true 但器件没生成**（COMPONENT 缺 attrs），
  * 所以写完后必须真的数一遍 `sch_PrimitiveComponent.getAll()`。
+ *
+ * 开发者：WOLF4096
+ * 辅助开发：DeepSeek-V4.1-Flash
+ * 本工具为非官方第三方开源扩展，与嘉立创 / EasyEDA 官方无隶属关系
  */
 
 import { getEditorVersion, isV2 } from '../../core/version.js';

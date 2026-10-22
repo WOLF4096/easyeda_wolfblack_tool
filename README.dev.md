@@ -46,6 +46,7 @@ docs/                    评估报告、格式记录、实施计划
 | `npm run check:layout` | headless Chrome 逐页实测溢出与裁切，截图到 `temp/layout-check/` |
 | `node test/pages/run.mjs` | 页面冒烟（mock eda，18 页）；`--only About` 只跑单页 |
 | `npm run build` | 全量构建：页面打包 → 编译后端 → 出 `.eext` |
+| `npm run sign` | 给新增的文档末尾、代码开头补开发者署名（幂等；`-- --dry` 可预演） |
 
 产物：`build/dist/wolfblack-tool_v<版本>.eext`。
 
@@ -95,3 +96,9 @@ npm run bridge:run -- --file tools/eda-bridge/probes/00-env.js
 ```
 
 页面里的「调试指令」默认关闭；只有勾选后才允许下发 `eval` / `probe`。产品包里不能默认开启远程执行入口。
+
+---
+
+> 开发者：WOLF4096
+> 辅助开发：DeepSeek-V4.1-Flash
+> 本工具为非官方第三方开源扩展，与嘉立创 / EasyEDA 官方无隶属关系
