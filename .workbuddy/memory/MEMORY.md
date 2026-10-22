@@ -55,19 +55,40 @@ iframe 页面是宿主拼的 **`blob:` 文档**（`location.href = blob:https://
 ## 工程约定与门禁
 
 - `npm test` 的 `pretest` 跑 `npm run check`：`check:deps`（分层 `core` < `format|pcb|sch|ui` < `app`，页面禁互依、查环）
-  + `check:js`（ESLint complexity ≤10 / max-depth ≤3 / 函数 ≤80 行 + 存量基线 `config/eslint-baseline.json`）。
-  **基线只允许收紧**：违规数下降后跑 `npm run check:js:update`。
+  + `check:js`（ESLint complexity ≤10 / max-depth ≤3 / 函数 ≤80 行 / 文件 ≤400 行）。
+  **2026-10-22 起 `config/eslint-baseline.json` 的 counts 为空 → 门禁是硬 0，没有存量豁免。**
 - 源码 `iframe/js/src/`（ESM），产物 `iframe/js/app/<Page>.js`（`npm run build:iframe`）；`common.js` 门面已删除。
 - ⚠️ IIFE 化后 HTML 行内 `onclick` 目标必须 `Object.assign(window, {...})`，`test/inlineHandlers.test.mjs` 双重扫描；
-  每个 `index.js` **只加一次**该 Object.assign（历史上重复过两次）。
-- 新增/修改模块必须有五标签模块头（@//module/ @//description/ @//exports/ @//dependencies/ @//example/），
-  `test/moduleHeader.test.mjs` 核对 `@//exports/` 与真实导出。
+  每个 `index.js` **只加一次**该 Object.assign。
+  ⚠️ 该测试用**非贪婪**正则截取那个 `{...}`：字面量里出现 `})`（如 `f: () => g({a})`）会提前截断 →
+  带参数的箭头函数要提到外层常量。
+- 新增/修改模块必须有五标签模块头，`test/moduleHeader.test.mjs` 核对 `@//exports/` 与真实导出。
+  ⚠️ `@//example/` 里不能写 `import ... from './x.js'`：check-deps 的正则扫全文件含注释，会判成自依赖。
 - 测试：`npm test`（只收 `test/*.test.mjs`；`test/pages/` 是需 Chrome 的冒烟脚本，**别**让默认收集）；
-  `npm run test:samples` 跑 `测试样本/` 真实 V2/V3/V4 工程；改完 `npm run build` 出 `build/dist/*.eext`。
-- 写盘类页面（GenerateNet / PcbToSch / ReplaceComponent）重构后必须做**逐字节对照**（原函数抽出 + `node:vm` 桩跑比多组配置）。
+  `npm run test:samples` 跑 `测试样本/` 真实 V2/V3/V4 工程（10 用例/3 样本）——**写盘类改动必跑**。
+  它 2026-10-22 前一直是坏的（还在 new Function 注入已删除的 `common.js`），现已改为 import `core/sourceLine.js` + `core/layer.js`。
+- `node test/pages/run.mjs` 17/18 PASS；`WorkingHours` 的 `drawImage ... 0` 告警是 **mock 容器无布局**的既有问题，别当回归。
+- 写盘类页面（GenerateNet / PcbToSch / ReplaceComponent）重构后必须做**逐字节对照**。
+  2026-10-22 验证有效的手法：`git worktree add temp/x HEAD` 取旧快照 → 新旧同名模块跑同一批输入 → 逐项 `deepEqual`
+  （含就地副作用与抛错文案）。注意别踩两个自坑：A/B 各调一次随机 `pick()` 会拿到不同输入；带偏移参数的函数两侧要传同一组偏移。
 - ⚠️ 别对旧文件整份跑 prettier（工作区 CRLF + 旧文件 4 空格，`.prettierrc` 是 useTabs + lf → 几千行假 diff）。
 - 样式只有 `iframe/css/common.css`（18 页共用）；`.hidden` 必须留文件最末且无 `!important`；`--vscode-*` 变量名不能改；
   被 JS 查询的类名改结构时要同步改 JS。版式自检 `npm run check:layout`。
+
+## 工时统计页的架构（v1.19.0 任务 2/3 之后）
+
+- `index.js` 只做编排（~280 行）。`charts/options/*` 是**纯函数** option 工厂 `(data, theme, opts) => option`，
+  `charts/zoomModel.js` 是缩放数值，`charts/zoomApply.js` 把窗口落到图表，`views/*Panel.js` 是各面板控制器。
+- option 工厂的入参用 `runtime.chartData()`：它是「data 字段 + `ui.hiddenSeries`」的浅包装。
+  工厂不 import runtime，但 tooltip 必须读到**当下**的显隐状态，所以传 Set 的引用而非副本。
+- ⚠️ 「今天」的窗口要用 `getDayAlignedIndices(todayTs, todayTs)`，**不能**用 `(Infinity, -Infinity)`：
+  只有存在「今天之后的数据」时两者才不同（前者止于明天零点，后者到时间轴末尾）。
+- 导出报告的库内联：**构建期** gzip+base64 注入（`tools/lib-embed.mjs` + `define`），运行时用页面已有的
+  fflate 解压（`libInline.js`）。`dropLabels:['CDN_FALLBACK']` 把 CDN 兜底裁掉，产物里 grep 不到 CDN 地址。
+  WorkingHours.js 因此 108KB → 659KB（字符串字面量直嵌是 1.90MB，echarts 有 24.5 万 tab 要转义）。
+- 图表视觉一致性验证：覆写 `window.Date` 固定时钟 + 固定 `STATS_` 种子数据，用
+  `echarts.getInstanceByDom(el).getOption()` 拍 JSON 快照再深度比对（实例在 IIFE 里取不到）。
+
 
 ## 业务约束：导线⇄线条
 
