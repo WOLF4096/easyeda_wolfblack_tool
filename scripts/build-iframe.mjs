@@ -2,7 +2,7 @@
  * @//module/ scripts/build-iframe
  * @//description/ 把 iframe/js/src 下的 ESM 源码按页面打包成 iframe/js/app/<Page>.js（单文件 IIFE）
  * @//exports/ 无（构建脚本）
- * @//dependencies/ esbuild, node:fs, node:path
+ * @//dependencies/ esbuild, node:fs, node:path, tools/lib-embed
  * @//example/ npm run build:iframe
  *            npm run watch:iframe
  *
@@ -12,10 +12,16 @@
  *
  * 产物文件名沿用页面名（`GenerateNet` → `iframe/js/app/GenerateNet.js`），
  * 因此 18 个 HTML 的 `<script src>` 一行都不用改。
+ *
+ * 另有两处构建期注入（都是为了让「工时统计」导出的报告能离线打开）：
+ *   - `define` 把 echarts（gzip+base64）与 fflate（原文）的源码注入 bundle（见 libInline.js）；
+ *   - `dropLabels: ['CDN_FALLBACK']` 丢掉 reportTemplate.js 里的 CDN 兜底分支，
+ *     保证产物里 grep 不到 cdn.jsdelivr.net —— 离线路径必须是**唯一**路径。
  */
 import esbuild from 'esbuild';
 import fs from 'node:fs';
 import path from 'node:path';
+import { encodeLibGzip } from '../tools/lib-embed.mjs';
 
 const ROOT = path.resolve(import.meta.dirname, '..');
 const SRC_DIR = path.join(ROOT, 'iframe', 'js', 'src');
@@ -51,6 +57,60 @@ const PAGES = {
 /** 产物首行横幅：提醒这是生成物 */
 const BANNER = '/*! 由 npm run build:iframe 从 iframe/js/src 生成，请勿直接修改本文件 */';
 
+/** 参与内联注入的第三方库（键 = 注入的 define 名后缀，值 = iframe/js 下的文件名） */
+const LIB_FILES = {
+	echarts: 'echarts.min.js',
+	fflate: 'fflate.js',
+};
+
+/**
+ * 生成内联注入的 define 表
+ *
+ * 缺文件直接抛错：静默跳过会让导出报告退回 CDN 分支（构建期已被裁掉），
+ * 结果就是「导出成功但图表全空」——这种失败必须在构建时报出来。
+ *
+ * @returns {Record<string, string>} esbuild 的 define 表
+ * @sideEffects 读 `iframe/js/<lib>` 并做 gzip
+ */
+function buildInlineDefines() {
+	const defines = {};
+	for (const [key, file] of Object.entries(LIB_FILES)) {
+		const abs = path.join(ROOT, 'iframe', 'js', file);
+		if (!fs.existsSync(abs)) throw new Error(`build:iframe — 内联库缺失：${abs}`);
+		const source = fs.readFileSync(abs, 'utf8');
+		const name = key === 'echarts' ? '__WOLF_LIB_ECHARTS_GZ__' : '__WOLF_LIB_FFLATE__';
+		defines[name] = JSON.stringify(key === 'echarts' ? encodeLibGzip(source) : source);
+	}
+	return defines;
+}
+
+/**
+ * 两种模式共用的 esbuild 配置
+ *
+ * @param {Record<string, string>} entryPoints 入口表
+ * @param {string} logLevel 日志级别
+ * @returns {import('esbuild').BuildOptions} 配置
+ * @sideEffects 读文件系统（内联库）
+ */
+function sharedOptions(entryPoints, logLevel) {
+	return {
+		entryPoints,
+		outdir: OUT_DIR,
+		entryNames: '[name]',
+		bundle: true,
+		format: 'iife',
+		platform: 'browser',
+		target: ['chrome100'],
+		minify: false,
+		sourcemap: false,
+		charset: 'utf8',
+		logLevel,
+		banner: { js: BANNER },
+		define: buildInlineDefines(),
+		dropLabels: ['CDN_FALLBACK'],
+	};
+}
+
 /**
  * 收集本次要构建的入口
  *
@@ -76,20 +136,7 @@ function collectEntries() {
  * @sideEffects 写 `iframe/js/app/*.js`
  */
 async function buildOnce(entryPoints) {
-	await esbuild.build({
-		entryPoints,
-		outdir: OUT_DIR,
-		entryNames: '[name]',
-		bundle: true,
-		format: 'iife',
-		platform: 'browser',
-		target: ['chrome100'],
-		minify: false,
-		sourcemap: false,
-		charset: 'utf8',
-		logLevel: 'warning',
-		banner: { js: BANNER },
-	});
+	await esbuild.build(sharedOptions(entryPoints, 'warning'));
 }
 
 async function main() {
@@ -103,20 +150,7 @@ async function main() {
 	}
 
 	if (watch) {
-		const ctx = await esbuild.context({
-			entryPoints,
-			outdir: OUT_DIR,
-			entryNames: '[name]',
-			bundle: true,
-			format: 'iife',
-			platform: 'browser',
-			target: ['chrome100'],
-			minify: false,
-			sourcemap: false,
-			charset: 'utf8',
-			logLevel: 'info',
-			banner: { js: BANNER },
-		});
+		const ctx = await esbuild.context(sharedOptions(entryPoints, 'info'));
 		await ctx.watch();
 		process.stdout.write(`build:iframe --watch 已启动（${names.join(', ')}）\n`);
 		return;

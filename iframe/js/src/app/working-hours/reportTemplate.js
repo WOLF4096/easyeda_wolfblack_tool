@@ -14,11 +14,15 @@
 import { escapeHtml } from '../../core/util.js';
 
 /**
- * 拼装内联库标签；任一库缺源码时整体回退 CDN（保持原有行为）
+ * 拼装内联库标签
+ *
+ * 正常构建（`npm run build:iframe`）会把两个库源码通过 esbuild define 内嵌进 bundle，
+ * 这里必然走内联分支；下面的 CDN 兜底只在「源码直接跑在 node / 未注入」的场景有意义，
+ * 构建脚本会用 `dropLabels: ['CDN_FALLBACK']` 把整块丢掉，保证产物里 grep 不到 CDN 地址。
  *
  * @param {string} echartsCode echarts 源码（可为空串）
  * @param {string} fflateCode fflate 源码（可为空串）
- * @returns {string} script 标签串
+ * @returns {string} script 标签串（两库都缺且兜底已被裁掉时返回空串）
  * @sideEffects 无（纯函数）
  */
 export function buildLibTags(echartsCode, fflateCode) {
@@ -26,7 +30,10 @@ export function buildLibTags(echartsCode, fflateCode) {
 		// 库源码里的 `</script` 已在调用方转义成 `</script`，避免提前闭合标签
 		return `<script>${echartsCode}<\/script>\n\t<script>${fflateCode}<\/script>`;
 	}
-	return '<script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"><\/script>\n\t<script src="https://cdn.jsdelivr.net/npm/fflate@0.8.2/umd/index.js"><\/script>';
+	CDN_FALLBACK: if (!echartsCode || !fflateCode) {
+		return '<script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"><\/script>\n\t<script src="https://cdn.jsdelivr.net/npm/fflate@0.8.2/umd/index.js"><\/script>';
+	}
+	return '';
 }
 
 /**

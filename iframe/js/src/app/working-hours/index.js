@@ -16,6 +16,7 @@ import { formatDuration, formatFullDateTime, formatTimeCN } from './time.js';
 import { buildDataset, getTodayWorkHours as todayWorkHours } from './aggregate.js';
 import { packPayload } from './payload.js';
 import { buildLibTags, buildSecureReportHtml } from './reportTemplate.js';
+import { getInlineLibs } from './libInline.js';
 import { formatMin, parseMin } from './reminder.js';
 
         // ==========================================
@@ -1082,23 +1083,11 @@ import { formatMin, parseMin } from './reminder.js';
         }
 
         /**
-         * 读取扩展内置的第三方库源码，用于内联进导出文件
+         * 库源码在构建期内嵌（见 libInline.js），这里只做还原 + 完整性检查
          *
-         * 导出报告必须能脱离网络打开（经常是发给别人看），原先从 jsdelivr 加载
-         * echarts/fflate，离线时图表全空。这里优先内联本地文件，取不到才回退 CDN。
+         * 导出报告必须能脱离网络打开（经常是发给别人看）。取不到库源码时**明确报错**，
+         * 不再静默回退 CDN —— 那样只会得到一份「导出成功但图表全空」的废文件。
          */
-        async function loadLibForInline(fileName) {
-            try {
-                const res = await fetch(`/iframe/js/${fileName}`);
-                if (!res.ok) return '';
-                const code = await res.text();
-                // 库源码里若出现 </script 会提前闭合标签，转义后再内联
-                return code.replace(/<\/script/gi, '<\\/script');
-            } catch (e) {
-                return '';
-            }
-        }
-
         async function triggerSecureExport(payloadObj, fileNameBase) {
             let securePack;
             try { securePack = await packPayload(payloadObj); } 
@@ -1106,9 +1095,13 @@ import { formatMin, parseMin } from './reminder.js';
                 toast('数据打包失败', 'error'); return;
             }
 
-            // 内联本地库；任一取不到就整体回退 CDN（保持原有行为）
-            const [echartsCode, fflateCode] = await Promise.all([loadLibForInline('echarts.min.js'), loadLibForInline('fflate.js')]);
-            const libTags = buildLibTags(echartsCode, fflateCode);
+            const libs = getInlineLibs();
+            if (!libs.echarts || !libs.fflate) {
+                logger.error('导出失败：内嵌图表库缺失（fflate 未加载或构建未注入）');
+                toast('导出失败：内置图表库缺失，请重装扩展', 'error');
+                return;
+            }
+            const libTags = buildLibTags(libs.echarts, libs.fflate);
             const htmlContent = buildSecureReportHtml({
                 fileName: fileNameBase,
                 libTags: libTags,
@@ -1709,30 +1702,6 @@ import { formatMin, parseMin } from './reminder.js';
 			}
 		})();
 
-		// ==========================================
-		// [12] 行内事件契约
-		// ==========================================
-		// 这些函数/对象被 WorkingHours.html 的行内 onclick 直接引用。
-		// 打包成 IIFE 后它们不再是全局的，必须显式挂到 window，否则按钮会静默失效。
-		// 只暴露 HTML 真正用到的那几个，其余仍留在模块作用域内。
-		Object.assign(window, {
-			// 下面两个只出现在「表格行」的 innerHTML 里（不是静态 HTML），漏了按钮就点不动
-			exportProjectChart,
-			confirmDeleteProject,
-			switchTab,
-			sortTable,
-			changeWeek,
-			clearAllDataConfirm,
-			exportAllDataJson,
-			exportTotalChart,
-			exportWeeklyReport,
-			onCustomDateChange,
-			onProjectSelectorChange,
-			onQuickTimeChange,
-			renderRhythmChart,
-			setRhythmMode,
-			ReminderApp,
-		});
 
 		// ==========================================
 		// [12] 行内事件契约
