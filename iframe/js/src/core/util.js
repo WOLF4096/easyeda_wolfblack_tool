@@ -1,10 +1,11 @@
 /**
  * @//module/ core/util
- * @//description/ 通用小工具（HTML 转义等零依赖纯函数）
- * @//exports/ escapeHtml
+ * @//description/ 通用小工具（HTML 转义、位号自然排序等零依赖纯函数）
+ * @//exports/ escapeHtml, naturalCompare
  * @//dependencies/ 无
- * @//example/ const { escapeHtml } = await import('./core/util.js')
+ * @//example/ const { escapeHtml, naturalCompare } = await import('./core/util.js')
  *            row.innerHTML = `<td>${escapeHtml(comp.designator)}</td>`
+ *            ['R10', 'R2'].sort(naturalCompare) // ['R2', 'R10']
  */
 
 /**
@@ -21,4 +22,24 @@
 export function escapeHtml(value) {
 	if (value === null || value === undefined) return '';
 	return String(value).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
+}
+
+/**
+ * 自然排序比较器（位号/引脚号专用）
+ *
+ * 位号是「字母前缀 + 数字」，字典序会把 `R10` 排在 `R2` 前面，必须按数字大小比。
+ * 项目里原有 4 份写法（`localeCompare numeric` / `parseInt` 差值 / `isNaN` 三元），
+ * 行为各不相同；这里收敛为一份：**按数字段比较、大小写不敏感**。
+ *
+ * 固定用 `en` locale：不同运行环境的默认 locale 不同，固定后结果可复现。
+ *
+ * @param {string|number} a 前一个值
+ * @param {string|number} b 后一个值
+ * @returns {number} 负数表示 a 在前，正数表示 b 在前，0 表示相等
+ * @sideEffects 无（纯函数）
+ */
+export function naturalCompare(a, b) {
+	const sa = a === null || a === undefined ? '' : String(a);
+	const sb = b === null || b === undefined ? '' : String(b);
+	return sa.localeCompare(sb, 'en', { numeric: true, sensitivity: 'base' });
 }
