@@ -1,748 +1,988 @@
-// ---------- 全局状态 ----------
-		const WC = window.WolfCommon;
-		if (!WC) {
-			(document.body || document.documentElement).innerHTML = '<div style="padding:24px;font:14px/1.6 sans-serif;color:#f28b82">公共模块 common.js 未加载，请重新安装扩展</div>';
-			throw new Error('[狼黑工具] 公共模块 common.js 未加载');
-		}
-		const { getEditorVersion, isV2, isModern, escapeHtml, createSchWireLines, logger } = WC;
-
-		let zip = null;                  // 解压后的工程文件
-		let projectJson = null;          // project.json 内容
-		let components = [];             // 原始元件列表（每个元件一条）
-		let mergedRows = [];             // 合并后的表格行数据（用于渲染）
-		let version = '';                // EDA 版本
-		let candidateSource = '';        // 构建出的源码
-		let currentPcbUuid = '';		 // 当前PCB的文件名
-		let symbolPinsDatabase = {}; 	 // 缓存符号引脚信息
-		let currentSchematicUuid = null; // 当前原理图文档的UUID
-
-		// ---------- DOM 元素 ----------
-		// const showDisclaimerBtn = document.getElementById('showDisclaimerBtn');
-		// const closeModalBtn = document.getElementById('closeModalBtn');
-		const progressFill = document.getElementById('progressFill');
-		const progressText = document.getElementById('progressText');
-		const versionSpan = document.getElementById('versionDisplay');
-		const yvalueCheck = document.getElementById('yvalue');
-		// const agreeCheck = document.getElementById('agreeCheck');
-		const refreshBtn = document.getElementById('refreshListBtn');
-		const tableRows = document.getElementById('tableRows');
-		const buildBtn = document.getElementById('buildBtn');
-		const writeBtn = document.getElementById('writeBtn');
-		// const modal = document.getElementById('disclaimerModal');
-		// 更多选项复选框
-		const genTitleCheck = document.getElementById('genTitle');
-		const genFrameCheck = document.getElementById('genTitle');
-		const genWireCheck = document.getElementById('genWire');
-		const exportCsvBtn = document.getElementById('exportCsvBtn');
-		const errorsCheck = document.getElementById('errors');
-		const outfile = document.getElementById('outfile');
-		const exportNetBtn = document.getElementById('exportNetBtn');
-
-		try {
-			version = getEditorVersion();
-			// 取不到版本号 = 不在 EDA 环境，抛错交由下方 catch 统一禁用按钮
-			if (!version) {
-				throw new Error('未检测到 EDA 环境');
-			}
-			if (isV2()) {
-				versionSpan.textContent = `当前EDA版本：${version} 功能可用`;
-				yvalueCheck.checked = false;
-			}else if(isModern()){
-				versionSpan.textContent = `当前EDA版本：${version} 功能可用`;
-				yvalueCheck.checked = true;
-			}
-			versionSpan.style.color = '#8f8';
-		} catch (e) {
-			versionSpan.textContent = '当前不在EDA环境，当前版本不支持转换';
-			versionSpan.style.color = '#f88';
-			refreshBtn.disabled = true;
-			// agreeCheck.disabled = true;
-			buildBtn.disabled = true;
-			writeBtn.disabled = true;
-			exportCsvBtn.disabled = true;
-			exportNetBtn.disabled = true;
-		}
-
-
-		// 关键词 → Symbol UUID 映射（后续可扩展）
-		const keywordToSymbolUuid = {
-			'无极电容': '801c26e6ac62427db41c6496435118b6',
-			'电阻': '9c1d6a5e19e649e888ff79bf9e87b823',
-			'电感': '3f193864f7264a439d7adc22fdbb5dbf'
-			// 后续可继续添加
-		};
-
-		// ---------- 辅助函数：更新进度条 ----------
-		function updateProgress(percent, text) {
-			progressFill.style.width = percent + '%';
-			progressText.innerText = text;
-		}
-
-		// ---------- 辅助函数：延时 ----------
-		function delay(ms) {
-			return new Promise(resolve => setTimeout(resolve, ms));
-		}
-
-		// ---------- 按钮启用状态管理 ----------
-		// agreeCheck.addEventListener('change', () => {
-		// 	refreshBtn.disabled = !agreeCheck.checked;
-		// });
-
-		// 免责声明弹窗
-		// showDisclaimerBtn.addEventListener('click', (e) => {
-		// 	e.preventDefault();
-		// 	modal.style.display = 'flex';
-		// });
-		// closeModalBtn.addEventListener('click', () => { modal.style.display = 'none'; });
-		// modal.addEventListener('click', (e) => { if (e.target === modal) modal.style.display = 'none'; });
-
-		// ---------- 获取数据 ----------
-		refreshBtn.addEventListener('click', async () => {
-			// if (!agreeCheck.checked) {
-			// 	updateProgress(0, '请先勾选《免责声明》');
-			// 	return;
-			// }
-
-			// 获取分类选项
-			const classifyRadio = document.querySelector('input[name="classify"]:checked');
-			const classify = classifyRadio ? classifyRadio.value : 'ref';
-			// 获取复选框状态
-			const genTitle = genTitleCheck.checked;
-			const genFrame = genFrameCheck.checked;
-			const ignoreMissing = errorsCheck.checked;
-
-			try {
-				// 初始化按钮状态
-				buildBtn.disabled = true;
-				writeBtn.disabled = true;
-				outfile.disabled = true;
-				// 清空表格
-				tableRows.innerHTML = '';
-				// 记录开始时间
-				const startTime = Date.now();
-
-				// 1. 版本检测
-				updateProgress(5, '版本检测');
-				logger.debug('当前EDA版本:', version);
-				await delay(100); // 稍微停顿，让进度条可见
-
-				// 2. 获取当前原理图页信息
-				updateProgress(7, '获取当前原理信息');
-				const curDoc = await eda.dmt_SelectControl.getCurrentDocumentInfo();
-				logger.debug('当前文档信息:', curDoc);
-				await delay(100);
-
-				// 3. 获取工程文件（最慢步骤，进度缓慢递增）
-				updateProgress(10, '获取工程文件');
-
-				let progressInterval = null;
-				let currentProgress = 10;
-				const maxWaitProgress = 40;
-				const progressStep = 1;
-				const stepInterval = 1000;
-
-				progressInterval = setInterval(() => {
-					if (currentProgress < maxWaitProgress) {
-						currentProgress += progressStep;
-						updateProgress(currentProgress, `获取工程文件 (${currentProgress}%)`);
-					}
-					// 达到40%后停止增加，但保持定时器运行（后续会清除）
-				}, stepInterval);
-
-				let epro;
-				try {
-					epro = await eda.sys_FileManager.getProjectFile('project', undefined, '.epro');
-				} catch (error) {
-					clearInterval(progressInterval);
-					throw error; // 错误由外层 catch 处理
-				}
-				clearInterval(progressInterval);
-
-				// 4. 加载压缩包并读取 project.json
-				updateProgress(45, '读取 project.json');
-				zip = await JSZip.loadAsync(epro);
-				const projectJsonContent = await zip.file('project.json').async('string');
-				projectJson = JSON.parse(projectJsonContent);
-				logger.debug('Project JSON:', projectJson);
-				await delay(100);
-
-				// 5. 查找对应的PCB UUID
-				updateProgress(50, '查找对应的PCB');
-				const uuids = findUuids(projectJson, curDoc.uuid);
-				currentPcbUuid = projectJson.pcbs[uuids.pcbUuid];
-
-				logger.debug(projectJson.pcbs[uuids.pcbUuid],uuids.pcbUuid);
-
-				logger.debug('找到的UUIDs:', uuids);
-				currentSchematicUuid = uuids.schematicUuid;   // 存储原理图UUID
-				await delay(100);
-
-				// 6. 读取PCB文件
-				updateProgress(55, '读取PCB文件');
-				const pcbFilePath = `PCB/${uuids.pcbUuid}.epcb`;
-				const pcbFile = zip.file(pcbFilePath);
-				if (!pcbFile) {
-					throw new Error(`在压缩包中未找到PCB文件: ${pcbFilePath}`);
-				}
-				const pcbContent = await pcbFile.async('string');
-				logger.debug('PCB文件内容长度:', pcbContent.length);
-				await delay(100);
-
-				// 7. 解析 PCB 内容
-				updateProgress(60, '解析PCB内容');
-				components = parsePcbContent(pcbContent);
-				logger.debug('解析的元件信息:', components);
-				await delay(100);
-
-				// 8. 补充 Symbol 信息（从project.json中获取Symbol UUID和名称）
-				updateProgress(80, '获取符号信息');
-				enrichWithSymbol(components, projectJson);
-				logger.debug('补充Symbol后的元件:', components);
-				await delay(100);
-
-				// 9. 存储数据表内容（components已包含所有信息）
-				// 合并相同封装+器件的行用于渲染
-				mergedRows = mergeComponentsForDisplay(components);
-				renderTable(mergedRows);
-
-				// 10. 计算耗时
-				const endTime = Date.now();
-				const elapsed = ((endTime - startTime) / 1000).toFixed(1);
-				updateProgress(100, `元件处理完成，耗时${elapsed}秒`);
-
-				// 启用构建源码按钮
-				buildBtn.disabled = false;
-				exportCsvBtn.disabled = false;
-
-			} catch (error) {
-				logger.error('刷新列表失败:', error);
-				updateProgress(0, `错误: ${error.message}`);
-			}
-		});
-
-		// ---------- 导出表格 ----------
-		exportCsvBtn.addEventListener('click', () => {
-			if (!projectJson || !currentPcbUuid) {
-				updateProgress(0, '请先加载数据');
-				return;
-			}
-			if (!projectJson || !currentPcbUuid) {
-				eda.sys_Message.showToastMessage('请先刷新列表', 'warning');
-				return;
-			}
-			// 获取表头
-			const headers = Array.from(document.querySelectorAll('.table-header .header-cell')).map(cell => cell.innerText.trim());
-			// 获取数据行
-			const rows = [];
-			document.querySelectorAll('.grid-row').forEach(row => {
-				const cells = row.querySelectorAll('.row-cell');
-				const rowData = [];
-				cells.forEach((cell, index) => {
-					if (index === cells.length - 1) {
-						// 最后一列是输入框
-						const input = cell.querySelector('input');
-						rowData.push(input ? input.value : '');
-					} else {
-						rowData.push(cell.innerText.trim());
-					}
-				});
-				rows.push(rowData);
-			});
-
-			// 生成CSV内容
-			let csvContent = headers.join(',') + '\n';
-			rows.forEach(row => {
-				csvContent += row.map(cell => {
-					// 处理包含逗号或双引号的单元格
-					if (typeof cell === 'string' && (cell.includes(',') || cell.includes('"'))) {
-						return `"${cell.replace(/"/g, '""')}"`;
-					}
-					return cell;
-				}).join(',') + '\n';
-			});
-
-			// 生成文件名：PCB UUID_日期_时间.csv
-			const now = new Date();
-			const dateStr = now.getFullYear() + 
-							('0' + (now.getMonth()+1)).slice(-2) + 
-							('0' + now.getDate()).slice(-2);
-			const timeStr = ('0' + now.getHours()).slice(-2) + 
-							('0' + now.getMinutes()).slice(-2) + 
-							('0' + now.getSeconds()).slice(-2);
-			const filename = `${currentPcbUuid}_${dateStr}_${timeStr}.csv`;
-
-			// 下载
-			updateProgress(100, `导出成功：${filename}`);
-			const blob = new Blob(['\uFEFF' + csvContent], { type: 'text/csv;charset=utf-8;' });
-			const link = document.createElement('a');
-			link.href = URL.createObjectURL(blob);
-			link.download = filename;
-			link.click();
-			URL.revokeObjectURL(link.href);
-		});
-
-		// ---------- 导出网络 ----------
-		exportNetBtn.addEventListener('click', () => {
-			if (!components || components.length === 0) {
-				updateProgress(0, '请先加载数据并构建源码');
-				return;
-			}
-			if (Object.keys(symbolPinsDatabase).length === 0) {
-				updateProgress(0, '请先构建源码以获取引脚信息');
-				return;
-			}
-
-			const csvHeader = '唯一ID,位号,引脚编号,引脚名称,引脚网络';
-			const csvRows = [csvHeader];
-
-			components.forEach(comp => {
-				const designator = comp.designator || '';
-				const uniqueId = comp.uniqueId || '';
-				const pins = comp.pins || {};
-				const symbolParts = symbolPinsDatabase[comp.symbolUuid] || [];
-
-				Object.entries(pins).forEach(([pinNumber, netName]) => {
-					if (!pinNumber) return; // 跳过无效引脚编号
-					let pinName = '';
-					for (let partIdx = 0; partIdx < symbolParts.length; partIdx++) {
-						const partPins = symbolParts[partIdx].pins || {};
-						if (partPins[pinNumber] && partPins[pinNumber].name) {
-							pinName = partPins[pinNumber].name;
-							break;
-						}
-					}
-
-					const escapeCsv = (val) => {
-						if (typeof val === 'string' && (val.includes(',') || val.includes('"'))) {
-							return '"' + val.replace(/"/g, '""') + '"';
-						}
-						return val;
-					};
-
-					csvRows.push([
-						escapeCsv(uniqueId),
-						escapeCsv(designator),
-						escapeCsv(pinNumber),
-						escapeCsv(pinName),
-						escapeCsv(netName || '')
-					].join(','));
-				});
-			});
-
-			const now = new Date();
-			const dateStr = now.getFullYear() +
-				('0' + (now.getMonth() + 1)).slice(-2) +
-				('0' + now.getDate()).slice(-2);
-			const timeStr = ('0' + now.getHours()).slice(-2) +
-				('0' + now.getMinutes()).slice(-2) +
-				('0' + now.getSeconds()).slice(-2);
-			const filename = `${currentPcbUuid || 'netlist'}_${dateStr}_${timeStr}_netlist.csv`;
-
-			updateProgress(100, `导出网络成功：${filename}`);
-			const blob = new Blob(['\uFEFF' + csvRows.join('\n')], { type: 'text/csv;charset=utf-8;' });
-			const link = document.createElement('a');
-			link.href = URL.createObjectURL(blob);
-			link.download = filename;
-			link.click();
-			URL.revokeObjectURL(link.href);
-		});
-
-		// ---------- 构建源码 ----------
-		buildBtn.addEventListener('click', async () => {
-			// if (!agreeCheck.checked) {
-			// 	updateProgress(0, '请先勾选《免责声明》');
-			// 	return;
-			// }
-
-			const yvalue = document.getElementById('yvalue').checked; // 获取翻转状态
-			// 获取分类选项
-			const classifyRadio = document.querySelector('input[name="classify"]:checked');
-			const classify = classifyRadio ? classifyRadio.value : 'ref';
-			// 获取复选框状态
-			const genTitle = genTitleCheck.checked;
-			const genFrame = genFrameCheck.checked;
-			const ignoreMissing = errorsCheck.checked;
-
-			try {
-				// 清空之前的标红
-				document.querySelectorAll('.grid-row').forEach(row => row.classList.remove('row-error'));
-
-				const startTime = Date.now();
-				if (components && projectJson) {
-					enrichWithSymbol(components, projectJson);
-				}
-				// 1. 获取手动指定符号映射（基于当前表格输入）
-				updateProgress(5, '获取指定符号');
-				const manualInputs = collectManualInputs(); // 返回 Map: 分组键 -> 输入值
-				applyManualSymbols(manualInputs);           // 修改 components 中的 symbolUuid
-				await delay(100);
-
-				// 2. 检测符号是否存在
-				updateProgress(10, '检测符号是否存在');
-				const missingSymbols = checkMissingSymbols();
-
-				// 决定是否忽略
-				const ignoreMissing = errorsCheck.checked; // 获取“忽略符号错误”复选框状态
-
-				if (missingSymbols.length > 0) {
-					// 标红对应行
-					missingSymbols.forEach(groupKey => {
-						const rowElement = document.querySelector(`[data-group-key="${groupKey}"]`);
-						if (rowElement) rowElement.classList.add('row-error');
-					});
-
-					if (!ignoreMissing) {
-						throw new Error(`未生成源码，部分元件格式错误，已标红，需要做完 器件标准化 才能转换！！！`);
-					} else {
-						logger.debug(`忽略 ${missingSymbols.length} 组缺失符号的元件，它们将不会出现在生成的源码中`);
-						updateProgress(10, `忽略 ${missingSymbols.length} 组缺失符号元件`);
-					}
-				}
-				await delay(100);
-
-				// 3. 构建用于源码的元件列表（如果忽略缺失，则过滤无符号元件）
-				// 在 buildBtn 监听器中，替换过滤部分
-				let componentsToBuild = components;
-				if (ignoreMissing) {
-					// 过滤掉 symbolUuid 为空或仅空白字符的元件
-					componentsToBuild = components.filter(comp => comp.symbolUuid && comp.symbolUuid.trim() !== '');
-					logger.debug(`过滤后剩余 ${componentsToBuild.length} 个有符号的元件`);
-				}
-
-				// 4. 检测多部件符号（只对有符号的元件进行）
-				updateProgress(20, '检测多部件符号中');
-				await enrichPartCounts(componentsToBuild);  // 传入过滤后的列表
-				logger.debug('符号引脚信息数据库:',symbolPinsDatabase);
-				await delay(100);
-
-				// 4. 构建源码
-				updateProgress(40, '构建源码');
-				candidateSource = buildSchSource(componentsToBuild, version, {
-					classify,
-					genTitle,
-					genFrame,
-					genWire: genWireCheck.checked,  // 添加这行
-					yvalue,
-					startX: 200,
-					startY: -200,   
-					colSpacing: 150,
-					rowSpacing: 150,
-					perRow: 20,
-					wireLength: 40  // 可以添加，如果需要可配置的话
-				});
-
-
-				// logger.debug('构建的SCH源码:\n', candidateSource);
-				await delay(100);
-
-				// 5. 完成
-				const endTime = Date.now();
-				const elapsed = ((endTime - startTime) / 1000).toFixed(1);
-				const lineCount = candidateSource ? candidateSource.split('\n').length : 0;
-				updateProgress(100, `构建源码完成，耗时${elapsed}秒，生成了 ${lineCount} 行源码`);
-				// updateProgress(100, `构建源码完成，耗时${elapsed}秒，生成了 *** 行源码`);
-
-				// 启用写入按钮
-				writeBtn.disabled = false;
-				document.getElementById('outfile').disabled = false;
-				exportNetBtn.disabled = false;
-			} catch (error) {
-				logger.error('构建源码失败:', error);
-				updateProgress(0, `错误: ${error.message}`);
-			}
-		});
-
-		// ---------- 写入文档 ----------
-		writeBtn.addEventListener('click', async () => {
-			// if (!agreeCheck.checked) {
-			// 	updateProgress(0, '请先勾选《免责声明》');
-			// 	return;
-			// }
-			try {
-				if (!candidateSource) {
-					throw new Error('没有可写入的源码，请先构建');
-				}
-
-				const startTime = Date.now();
-				// 进度条固定在90%
-				updateProgress(90, '正在写入文档...');
-
-				// 写入门禁：PCB 与原理图的源码格式不同，写进错误文档会被系统拦截（「格式错误」）。
-				// documentType：1 = 原理图页。这个 iframe 是浮窗，用户可能在生成期间切到别的文档。
-				const curDoc = await eda.dmt_SelectControl.getCurrentDocumentInfo();
-				if (!curDoc || curDoc.documentType !== 1) {
-					updateProgress(0, '请先切换到原理图页再写入');
-					eda.sys_Message.showToastMessage('请先切换到原理图页再写入', 2);
-					return;
-				}
-
-				const isSuccess = await eda.sys_FileManager.setDocumentSource(candidateSource);
-
-				const endTime = Date.now();
-				const elapsed = ((endTime - startTime) / 1000).toFixed(1);
-
-				// 写入自检：V4 的 setDocumentSource 有可能"返回 true 但器件没生成"
-				// （COMPONENT 行缺 attrs 时就是这样：导线在、符号全丢），必须真的数一遍
-				let placedCount = 0;
-				try {
-					const comps = await eda.sch_PrimitiveComponent.getAll();
-					placedCount = Array.isArray(comps) ? comps.length : 0;
-				} catch (e) {
-					logger.warn('写入后清点器件失败（可忽略）', e);
-				}
-				logger.debug(`[Debug] 写入返回 ${isSuccess}，当前原理图器件数 ${placedCount}`);
-
-				if (isSuccess && placedCount > 0) {
-					updateProgress(100, `写入成功！耗时${elapsed}秒，器件 ${placedCount} 个`);
-					eda.sys_Message.showToastMessage('写入成功', 'success');
-					// await eda.sch_Document.importChanges();//完成后从PCB导入变更
-				} else if (isSuccess && placedCount === 0) {
-					updateProgress(100, `源码已写入，但没有生成任何器件（耗时${elapsed}秒）`);
-					eda.sys_Message.showToastMessage('源码已写入，但器件没有生成：原理图页可能有旧内容，建议新建一个空白原理图页后重新写入', 'error');
-				} else {
-					updateProgress(100, `写入失败！耗时${elapsed}秒`);
-					eda.sys_Message.showToastMessage('写入失败', 'error');
-				}
-			} catch (error) {
-				logger.error('写入失败:', error);
-				updateProgress(0, `错误: ${error.message}`);
-			}
-		});
-
-		// 新增导出文件按钮监听器（放在 writeBtn 监听器之后）
-		document.getElementById('outfile').addEventListener('click', async () => {
-			// if (!agreeCheck.checked) {
-			// 	updateProgress(0, '请先勾选《免责声明》');
-			// 	return;
-			// }
-			if (!zip || !currentSchematicUuid) {
-				updateProgress(0, '请先刷新加载数据');
-				return;
-			}
-			if (!candidateSource) {
-				updateProgress(0, '没有可导出的源码，请先构建');
-				return;
-			}
-
-			try {
-				updateProgress(30, '准备导出文件...');
-
-				// 构造目标路径：SHEET/当前原理图UUID/1.sch
-				const filePath = `SHEET/${currentSchematicUuid}/1.esch`;
-				// 将源码添加到 zip 中（若已存在则覆盖）
-				zip.file(filePath, candidateSource);
-
-				updateProgress(60, '正在生成工程文件...');
-
-				// 生成 zip 文件（Blob）
-				const blob = await zip.generateAsync({
-					type: 'blob',
-					compression: 'DEFLATE',
-					compressionOptions: { level: 6 }
-				});
-
-				// 确定导出文件名
-				let baseName = 'project_PCB_TO_SCH';
-				if (projectJson && projectJson.title) {
-					baseName = projectJson.title;
-				} else if (projectJson && projectJson.name) {
-					baseName = projectJson.name;
-				}
-				// 去除可能存在的 .epro 后缀，避免重复
-				baseName = baseName.replace(/\.epro$/i, '');
-				const fileName = `${baseName}.epro`;
-
-				// 创建下载链接
-				const link = document.createElement('a');
-				link.href = URL.createObjectURL(blob);
-				link.download = fileName;
-				link.click();
-				URL.revokeObjectURL(link.href);
-
-				updateProgress(100, `导出成功：${fileName}`);
-				// 可选提示
-				eda.sys_Message.showToastMessage('文件已导出', 'success');
-			} catch (error) {
-				logger.error('导出失败:', error);
-				updateProgress(0, `导出错误: ${error.message}`);
-			}
-		});
-
-		// ---------- 工具函数 ----------
-		function findUuids(projectJson, currentSheetUuid) {
-			let schematicUuid = null;
-			for (const [uuid, schematic] of Object.entries(projectJson.schematics)) {
-				const sheet = schematic.sheets.find(s => s.uuid === currentSheetUuid);
-				if (sheet) {
-					schematicUuid = uuid;
-					break;
-				}
-			}
-			if (!schematicUuid) throw new Error('未找到对应原理图UUID');
-
-			let pcbUuid = null;
-			for (const [boardName, board] of Object.entries(projectJson.boards)) {
-				if (board.schematic === schematicUuid) {
-					pcbUuid = board.pcb;
-					break;
-				}
-			}
-			if (!pcbUuid) throw new Error('未找到对应PCB UUID');
-
-			return { schematicUuid, pcbUuid };
-		}
-
-		function parsePcbContent(pcbContent) {
-			const components = new Map();
-			const lines = pcbContent.split('\n');
-
-			for (const line of lines) {
-				if (!line.trim()) continue;
-				try {
-					const data = JSON.parse(line);
-					const type = data[0];
-
-					if (type === 'COMPONENT') {
-						const compId = data[1];
-						const props = data[7] || {};
-						const uniqueId = props['Unique ID'] || '';
-						const supplierPart = props['Supplier Part'] || ''; 
-						const layer = data[3];
-						const x = data[4];
-						const y = data[5];
-						const rotation = data[6];
-
-						components.set(compId, {
-							uniqueId,
-							supplierPart,
-							designator: '',
-							name: '',
-							deviceUuid: '',
-							footprintUuid: '',
-							layer,
-							x,
-							y,
-							rotation,
-							deviceName: '',
-							symbolUuid: '',
-							symbolName: '',
-							footprintName: '',
-							pins: {} // 新增：引脚网络映射
-						});
-					} else if (type === 'ATTR') {
-						const compId = data[3];
-						const attrName = data[7];
-						const attrValue = data[8];
-						const comp = components.get(compId);
-						if (comp) {
-							switch (attrName) {
-								case 'Designator':
-									comp.designator = attrValue;
-									break;
-								case 'Name':
-									comp.name = attrValue;
-									break;
-								case 'Device':
-									comp.deviceUuid = attrValue;
-									break;
-								case 'Footprint':
-									comp.footprintUuid = attrValue;
-									break;
-							}
-						}
-					} else if (type === 'PAD_NET') { // 新增：解析引脚网络
-						const compId = data[1];
-						const pinNumber = data[2];
-						const netName = data[3]; // 可能为空字符串
-						const comp = components.get(compId);
-						if (comp) {
-							comp.pins[pinNumber] = netName; // 存储网络名（可能为空）
-						}
-					}
-				} catch (e) {
-					// 忽略解析错误的行
-				}
-			}
-			return Array.from(components.values());
-		}
-
-		function enrichWithSymbol(components, projectJson) {
-			for (const comp of components) {
-				// 通过 deviceUuid 查找 device 信息，进而获取 Symbol UUID
-				if (comp.deviceUuid && projectJson.devices[comp.deviceUuid]) {
-					const device = projectJson.devices[comp.deviceUuid];
-					comp.deviceName = device.title || '';
-					comp.symbolUuid = device.attributes?.Symbol || '';
-					// 获取 Symbol 名称
-					if (comp.symbolUuid && projectJson.symbols[comp.symbolUuid]) {
-						comp.symbolName = projectJson.symbols[comp.symbolUuid].title || '';
-					} else {
-						comp.symbolName = '';
-					}
-				} else {
-					comp.deviceName = '';
-					comp.symbolUuid = '';
-					comp.symbolName = '';
-				}
-
-				// 通过 footprintUuid 查找 footprint 名称
-				if (comp.footprintUuid && projectJson.footprints[comp.footprintUuid]) {
-					comp.footprintName = projectJson.footprints[comp.footprintUuid].title || '';
-				} else {
-					comp.footprintName = '';
-				}
-			}
-		}
-
-		// 合并相同 (footprintUuid, deviceUuid) 的行，用于表格显示
-		function mergeComponentsForDisplay(components) {
-			const groups = new Map();
-			components.forEach((comp, index) => {
-				const key = `${comp.footprintUuid}|${comp.deviceUuid}`;
-				if (!groups.has(key)) {
-					groups.set(key, {
-						key,
-						footprintName: comp.footprintName,
-						deviceName: comp.deviceName,
-						symbolName: comp.symbolName,
-						designators: [],
-						names: [],
-						supplierParts: [],      // 新增：记录组内所有供应商编号
-						componentIndices: []
-					});
-				}
-				const group = groups.get(key);
-				group.designators.push(comp.designator);
-				group.names.push(comp.name);
-				group.supplierParts.push(comp.supplierPart);  // 新增
-				group.componentIndices.push(index);
-			});
-
-			return Array.from(groups.values()).map(group => ({
-				...group,
-				designatorDisplay: group.designators.join(','),
-				nameDisplay: [...new Set(group.names)].join(','), // 去重
-			})).sort((a, b) => {
-				const nameA = (a.footprintName || '').toLowerCase();
-				const nameB = (b.footprintName || '').toLowerCase();
-				return nameA.localeCompare(nameB);
-			});
-		}
-
-		// 渲染表格
-		function renderTable(mergedRows) {
-			tableRows.innerHTML = '';
-			mergedRows.forEach(group => {
-				// 判断该组是否有符号：检查组内所有元件的 symbolUuid 是否都不为空
-				const hasSymbol = group.componentIndices.some(idx => components[idx] && components[idx].symbolUuid);
-
-				// 转义统一走 WolfCommon.escapeHtml（& < > " ' 全转义，属性值与正文都可用）
-				const row = document.createElement('div');
-				row.className = 'grid-row';
-				row.setAttribute('data-group-key', group.key);
-                
-				// 修改后：前 5 个单元格均加上了 title 属性
-				row.innerHTML = `
+/*! 由 npm run build:iframe 从 iframe/js/src 生成，请勿直接修改本文件 */
+"use strict";
+(() => {
+  // iframe/js/src/core/eda.js
+  function getEda() {
+    try {
+      if (typeof eda !== "undefined" && eda) return eda;
+    } catch (e) {
+    }
+    try {
+      if (globalThis.parent && globalThis.parent !== globalThis && globalThis.parent.eda) return globalThis.parent.eda;
+    } catch (e) {
+    }
+    return globalThis.eda || null;
+  }
+
+  // iframe/js/src/core/version.js
+  var cachedVersion = null;
+  function getEditorVersion() {
+    if (cachedVersion !== null) return cachedVersion;
+    try {
+      const edaObj = getEda();
+      if (!edaObj || !edaObj.sys_Environment || typeof edaObj.sys_Environment.getEditorCurrentVersion !== "function") {
+        return "";
+      }
+      const version2 = edaObj.sys_Environment.getEditorCurrentVersion();
+      const text = version2 === null || version2 === void 0 ? "" : String(version2).trim();
+      if (text) cachedVersion = text;
+      return text;
+    } catch (e) {
+      return "";
+    }
+  }
+  function getVersionFamily() {
+    const version2 = getEditorVersion();
+    if (!version2) return "";
+    if (version2.startsWith("4")) return "V4";
+    if (version2.startsWith("3")) return "V3";
+    if (version2.startsWith("2.2")) return "V2.2";
+    if (version2.startsWith("2")) return "V2";
+    return "";
+  }
+  function isV2() {
+    const family = getVersionFamily();
+    return family === "V2" || family === "V2.2";
+  }
+
+  // iframe/js/src/core/log.js
+  var LOG_LEVELS = { debug: 10, info: 20, warn: 30, error: 40 };
+  var currentLogLevel = LOG_LEVELS.info;
+  function logAt(level, ...args) {
+    if ((LOG_LEVELS[level] || 0) < currentLogLevel) return;
+    const method = level === "debug" ? "log" : level;
+    const fn = console[method] || console.log;
+    try {
+      fn.apply(console, ["[狼黑工具]", ...args]);
+    } catch (e) {
+    }
+  }
+  var logger = {
+    /**
+     * 调试日志（默认不输出）
+     *
+     * @param {...*} args 日志参数
+     * @returns {void}
+     * @sideEffects console
+     */
+    debug: (...args) => logAt("debug", ...args),
+    /**
+     * 普通信息
+     *
+     * @param {...*} args 日志参数
+     * @returns {void}
+     * @sideEffects console
+     */
+    info: (...args) => logAt("info", ...args),
+    /**
+     * 警告
+     *
+     * @param {...*} args 日志参数
+     * @returns {void}
+     * @sideEffects console
+     */
+    warn: (...args) => logAt("warn", ...args),
+    /**
+     * 错误
+     *
+     * @param {...*} args 日志参数
+     * @returns {void}
+     * @sideEffects console
+     */
+    error: (...args) => logAt("error", ...args),
+    /**
+     * 调整日志级别
+     *
+     * @param {'debug'|'info'|'warn'|'error'|'off'} level 级别名，`off` 表示全部静默
+     * @returns {void}
+     * @sideEffects 修改模块内的当前级别
+     */
+    setLevel: (level) => {
+      if (level === "off") {
+        currentLogLevel = Number.POSITIVE_INFINITY;
+        return;
+      }
+      if (LOG_LEVELS[level]) currentLogLevel = LOG_LEVELS[level];
+    }
+  };
+
+  // iframe/js/src/core/util.js
+  function escapeHtml(value) {
+    if (value === null || value === void 0) return "";
+    return String(value).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+  }
+
+  // iframe/js/src/ui/statusBar.js
+  var LEVEL_CLASS = Object.freeze({
+    "": "",
+    info: "info",
+    ok: "success",
+    success: "success",
+    warn: "warning",
+    warning: "warning",
+    err: "error",
+    error: "error"
+  });
+  var ACCENT = "accent";
+  function percentOf(done, total) {
+    const d = Number(done);
+    const t = Number(total);
+    if (!Number.isFinite(d) || !Number.isFinite(t) || t <= 0) return 0;
+    return Math.max(0, Math.min(100, Math.floor(d / t * 100)));
+  }
+  function classOf(base, level) {
+    const suffix = LEVEL_CLASS[level === void 0 ? "" : level];
+    if (suffix === void 0) return base;
+    return suffix ? base + " " + suffix : base;
+  }
+  function createStatusBar(options = {}) {
+    const textEl = options.textEl || null;
+    const barEl = options.barEl || null;
+    const baseClass = options.baseClass || "status";
+    const barBaseClass = options.barBaseClass || "status-bar";
+    const widthProp = options.widthProp || "width";
+    function text(message, level) {
+      if (!textEl) return;
+      textEl.textContent = message === null || message === void 0 ? "" : String(message);
+      textEl.className = classOf(baseClass, level);
+    }
+    function width(percent, level) {
+      if (!barEl) return;
+      const p = Math.max(0, Math.min(100, Number(percent) || 0));
+      barEl.style[widthProp] = p + "%";
+      const suffix = level === void 0 ? ACCENT : LEVEL_CLASS[level];
+      barEl.className = suffix ? barBaseClass + " " + suffix : barBaseClass;
+    }
+    function progress(done, total, suffix, level) {
+      const p = percentOf(done, total);
+      text(`${done} / ${total} ${p}%${suffix ? "　" + suffix : ""}`, level);
+      width(p, level);
+      return p;
+    }
+    function reset() {
+      text("", "");
+      width(0, "");
+    }
+    return { text, progress, width, reset };
+  }
+
+  // iframe/js/src/ui/progressTicker.js
+  function advanceProgress(value, opts) {
+    const to = Number(opts && opts.to);
+    const step = Number(opts && opts.step);
+    const next = Number(value) + (Number.isFinite(step) && step > 0 ? step : 1);
+    if (!Number.isFinite(to)) return next;
+    return Math.min(to, next);
+  }
+  function createProgressTicker(options = {}) {
+    const timers = options.timers || {
+      setInterval: (fn, ms) => globalThis.setInterval(fn, ms),
+      clearInterval: (handle2) => globalThis.clearInterval(handle2)
+    };
+    const to = Number.isFinite(Number(options.to)) ? Number(options.to) : 99;
+    const step = Number.isFinite(Number(options.step)) ? Number(options.step) : 1;
+    const intervalMs = Number.isFinite(Number(options.intervalMs)) ? Number(options.intervalMs) : 1e3;
+    const onTick = typeof options.onTick === "function" ? options.onTick : null;
+    let current = Number.isFinite(Number(options.from)) ? Number(options.from) : 0;
+    let handle = null;
+    function start() {
+      if (handle !== null) return;
+      handle = timers.setInterval(() => {
+        const next = advanceProgress(current, { to, step });
+        if (next === current) return;
+        current = next;
+        if (onTick) onTick(current);
+      }, intervalMs);
+    }
+    function stop() {
+      if (handle === null) return;
+      timers.clearInterval(handle);
+      handle = null;
+    }
+    function value() {
+      return current;
+    }
+    function running() {
+      return handle !== null;
+    }
+    return { start, stop, value, running };
+  }
+
+  // iframe/js/src/ui/download.js
+  function downloadBlob(fileName, blob, options = {}) {
+    const doc = options.doc || globalThis.document;
+    const urlApi = options.urlApi || globalThis.URL;
+    if (!doc || typeof doc.createElement !== "function" || !urlApi || typeof urlApi.createObjectURL !== "function") return false;
+    const href = urlApi.createObjectURL(blob);
+    const a = doc.createElement("a");
+    a.href = href;
+    a.download = fileName;
+    if (doc.body && typeof doc.body.appendChild === "function") doc.body.appendChild(a);
+    if (typeof a.click === "function") a.click();
+    if (typeof a.remove === "function") a.remove();
+    if (typeof urlApi.revokeObjectURL === "function") urlApi.revokeObjectURL(href);
+    return true;
+  }
+  function downloadText(fileName, text, options = {}) {
+    const mime = options.mime || "text/plain";
+    const body = options.bom ? "\uFEFF" + String(text) : String(text);
+    const blob = new Blob([body], { type: mime + ";charset=utf-8" });
+    return downloadBlob(fileName, blob, options);
+  }
+
+  // iframe/js/src/ui/toast.js
+  var TOAST_LEVEL = Object.freeze({
+    info: "info",
+    success: "success",
+    warn: "warning",
+    error: "error",
+    warning: "warning",
+    legacy: 2
+  });
+  var BANNER_ID = "__wolf_notice";
+  function normalizeLevel(level) {
+    if (typeof level === "number") return Number.isFinite(level) ? level : TOAST_LEVEL.info;
+    if (typeof level !== "string") return TOAST_LEVEL.info;
+    const key = level.trim().toLowerCase();
+    return Object.prototype.hasOwnProperty.call(TOAST_LEVEL, key) ? TOAST_LEVEL[key] : level;
+  }
+  function banner(doc, text, timeoutMs) {
+    if (!doc || !doc.body || typeof doc.createElement !== "function") return false;
+    let bar = doc.getElementById(BANNER_ID);
+    if (!bar) {
+      bar = doc.createElement("div");
+      bar.id = BANNER_ID;
+      bar.style.cssText = "position:fixed;left:0;right:0;top:0;padding:8px 12px;background:#5a1d1d;color:#fff;font:13px/1.5 sans-serif;z-index:9999";
+      doc.body.appendChild(bar);
+    }
+    bar.textContent = text;
+    setTimeout(() => {
+      if (typeof bar.remove === "function") bar.remove();
+    }, timeoutMs);
+    return true;
+  }
+  function toast(message, level = TOAST_LEVEL.info, opts = {}) {
+    const doc = opts.doc || globalThis.document;
+    const host = opts.host === void 0 ? getEda() : opts.host;
+    const text = message === null || message === void 0 ? "" : String(message);
+    const type = normalizeLevel(level);
+    try {
+      if (host && host.sys_Message && typeof host.sys_Message.showToastMessage === "function") {
+        host.sys_Message.showToastMessage(text, type);
+        return "host";
+      }
+    } catch (e) {
+    }
+    return banner(doc, text, opts.timeoutMs === void 0 ? 3e3 : opts.timeoutMs) ? "dom" : "none";
+  }
+
+  // iframe/js/src/app/pcb-to-sch/model.js
+  function findUuids(projectJson2, sheetUuid) {
+    let schematicUuid = null;
+    for (const entry of Object.entries(projectJson2.schematics || {})) {
+      const uuid = entry[0];
+      const sheets = entry[1].sheets || [];
+      if (sheets.some((sheet) => sheet.uuid === sheetUuid)) {
+        schematicUuid = uuid;
+        break;
+      }
+    }
+    if (!schematicUuid) throw new Error("未找到对应原理图UUID");
+    let pcbUuid = null;
+    for (const entry of Object.entries(projectJson2.boards || {})) {
+      const board = entry[1];
+      if (board.schematic === schematicUuid) {
+        pcbUuid = board.pcb;
+        break;
+      }
+    }
+    if (!pcbUuid) throw new Error("未找到对应PCB UUID");
+    return { schematicUuid, pcbUuid };
+  }
+  function pcbFilePath(pcbUuid) {
+    return `PCB/${pcbUuid}.epcb`;
+  }
+  function symbolFilePath(symbolUuid) {
+    return `SYMBOL/${symbolUuid}.esym`;
+  }
+  var ATTR_FIELD = {
+    Designator: "designator",
+    Name: "name",
+    Device: "deviceUuid",
+    Footprint: "footprintUuid"
+  };
+  function parsePcbContent(pcbContent) {
+    const map = /* @__PURE__ */ new Map();
+    const lines = String(pcbContent || "").split("\n");
+    for (const line of lines) {
+      if (!line.trim()) continue;
+      let data;
+      try {
+        data = JSON.parse(line);
+      } catch {
+        continue;
+      }
+      if (!Array.isArray(data)) continue;
+      applyPcbLine(map, data);
+    }
+    return Array.from(map.values());
+  }
+  function applyPcbLine(map, data) {
+    const type = data[0];
+    if (type === "COMPONENT") {
+      const props = data[7] || {};
+      map.set(data[1], {
+        uniqueId: props["Unique ID"] || "",
+        supplierPart: props["Supplier Part"] || "",
+        designator: "",
+        name: "",
+        deviceUuid: "",
+        footprintUuid: "",
+        layer: data[3],
+        x: data[4],
+        y: data[5],
+        rotation: data[6],
+        deviceName: "",
+        symbolUuid: "",
+        symbolName: "",
+        footprintName: "",
+        pins: {}
+      });
+      return;
+    }
+    if (type === "ATTR") {
+      const comp = map.get(data[3]);
+      const field = ATTR_FIELD[data[7]];
+      if (comp && field) comp[field] = data[8];
+      return;
+    }
+    if (type === "PAD_NET") {
+      const comp = map.get(data[1]);
+      if (comp) comp.pins[data[2]] = data[3];
+    }
+  }
+  function enrichWithSymbol(components2, projectJson2) {
+    const devices = projectJson2.devices || {};
+    const symbols = projectJson2.symbols || {};
+    const footprints = projectJson2.footprints || {};
+    for (const comp of components2) {
+      const device = comp.deviceUuid ? devices[comp.deviceUuid] : null;
+      if (device) {
+        comp.deviceName = device.title || "";
+        comp.symbolUuid = device.attributes && device.attributes.Symbol || "";
+        comp.symbolName = comp.symbolUuid && symbols[comp.symbolUuid] ? symbols[comp.symbolUuid].title || "" : "";
+      } else {
+        comp.deviceName = "";
+        comp.symbolUuid = "";
+        comp.symbolName = "";
+      }
+      comp.footprintName = comp.footprintUuid && footprints[comp.footprintUuid] ? footprints[comp.footprintUuid].title || "" : "";
+    }
+  }
+  function mergeComponentsForDisplay(components2) {
+    const groups = /* @__PURE__ */ new Map();
+    components2.forEach((comp, index) => {
+      const key = `${comp.footprintUuid}|${comp.deviceUuid}`;
+      if (!groups.has(key)) {
+        groups.set(key, {
+          key,
+          footprintName: comp.footprintName,
+          deviceName: comp.deviceName,
+          symbolName: comp.symbolName,
+          designators: [],
+          names: [],
+          supplierParts: [],
+          componentIndices: []
+        });
+      }
+      const group = groups.get(key);
+      group.designators.push(comp.designator);
+      group.names.push(comp.name);
+      group.supplierParts.push(comp.supplierPart);
+      group.componentIndices.push(index);
+    });
+    return Array.from(groups.values()).map((group) => ({
+      ...group,
+      designatorDisplay: group.designators.join(","),
+      nameDisplay: [...new Set(group.names)].join(",")
+    })).sort((a, b) => (a.footprintName || "").toLowerCase().localeCompare((b.footprintName || "").toLowerCase()));
+  }
+  function projectTitleOf(projectJson2) {
+    let baseName = "project_PCB_TO_SCH";
+    if (projectJson2 && projectJson2.title) baseName = projectJson2.title;
+    else if (projectJson2 && projectJson2.name) baseName = projectJson2.name;
+    return `${String(baseName).replace(/\.epro$/i, "")}.epro`;
+  }
+
+  // iframe/js/src/app/pcb-to-sch/symbolParser.js
+  var PIN_MARGIN = 40;
+  var DEFAULT_BBOX = Object.freeze([-20, -20, 20, 20]);
+  function finishPart(part, pinById) {
+    const pinsByNumber = {};
+    let minX = Infinity;
+    let maxX = -Infinity;
+    let minY = Infinity;
+    let maxY = -Infinity;
+    let hasPin = false;
+    for (const pinId in pinById) {
+      const pin = pinById[pinId];
+      if (!pin.number) continue;
+      pinsByNumber[pin.number] = { x: pin.x, y: pin.y, angle: pin.angle, name: pin.name };
+      minX = Math.min(minX, pin.x);
+      maxX = Math.max(maxX, pin.x);
+      minY = Math.min(minY, pin.y);
+      maxY = Math.max(maxY, pin.y);
+      hasPin = true;
+    }
+    part.pins = pinsByNumber;
+    part.pinBbox = hasPin ? [minX - PIN_MARGIN, minY - PIN_MARGIN, maxX + PIN_MARGIN, maxY + PIN_MARGIN] : DEFAULT_BBOX.slice();
+    return part;
+  }
+  function parseSymbolSource(content) {
+    const parts = [];
+    let currentPart = null;
+    let pinById = {};
+    for (const line of String(content || "").split("\n")) {
+      if (!line.trim()) continue;
+      let data;
+      try {
+        data = JSON.parse(line);
+      } catch {
+        continue;
+      }
+      if (!Array.isArray(data)) continue;
+      const type = data[0];
+      if (type === "PART") {
+        if (currentPart) parts.push(finishPart(currentPart, pinById));
+        currentPart = { name: data[1], pins: {} };
+        pinById = {};
+        continue;
+      }
+      if (!currentPart) continue;
+      if (type === "PIN") {
+        pinById[data[1]] = {
+          id: data[1],
+          type: data[2],
+          x: data[4],
+          y: data[5],
+          length: data[6],
+          angle: data[7],
+          number: null,
+          name: null
+        };
+      } else if (type === "ATTR") {
+        const parent = pinById[data[2]];
+        if (!parent) continue;
+        if (data[3] === "NUMBER") parent.number = data[4];
+        else if (data[3] === "NAME") parent.name = data[4];
+      }
+    }
+    if (currentPart) parts.push(finishPart(currentPart, pinById));
+    return parts;
+  }
+
+  // iframe/js/src/app/pcb-to-sch/layout.js
+  var RIGHT_LIMIT = 2560;
+  var PART_GAP = 40;
+  var ROW_GAP = 40;
+  var GROUP_GAP = 200;
+  var PART_COORD_STEP = 10;
+  function splitParts(items) {
+    const list = [];
+    for (const comp of items) {
+      const partCount = comp.partCount || 1;
+      for (let partIdx = 0; partIdx < partCount; partIdx++) list.push({ comp, partIdx });
+    }
+    return list;
+  }
+  function bboxOfPart(comp, partIdx, symbolDb) {
+    const parts = comp.symbolUuid ? symbolDb[comp.symbolUuid] : null;
+    const part = parts && parts[partIdx];
+    return part && part.pinBbox || DEFAULT_BBOX.slice();
+  }
+  function emptyBounds() {
+    return { minX: Infinity, maxX: -Infinity, minY: Infinity, maxY: -Infinity };
+  }
+  function planCoordLayout(items, options = {}) {
+    const step = options.step === void 0 ? PART_COORD_STEP : options.step;
+    const parts = [];
+    const bounds = emptyBounds();
+    for (const item of splitParts(items)) {
+      const comp = item.comp;
+      const y = comp.y + step * item.partIdx;
+      parts.push({ comp, partIdx: item.partIdx, x: comp.x, y });
+      bounds.minX = Math.min(bounds.minX, comp.x);
+      bounds.maxX = Math.max(bounds.maxX, comp.x);
+      bounds.minY = Math.min(bounds.minY, comp.y);
+      bounds.maxY = Math.max(bounds.maxY, comp.y);
+    }
+    return { parts, bounds, nextTopY: bounds.minY - GROUP_GAP };
+  }
+  function planFlowLayout(items, options) {
+    const startX = Number(options.startX);
+    const rightLimit = options.rightLimit === void 0 ? RIGHT_LIMIT : options.rightLimit;
+    const partGap = options.partGap === void 0 ? PART_GAP : options.partGap;
+    const rowGap = options.rowGap === void 0 ? ROW_GAP : options.rowGap;
+    const parts = [];
+    const bounds = emptyBounds();
+    let currentTopY = Number(options.startTopY);
+    let lastRight = null;
+    let minYThisRow = currentTopY;
+    for (const item of splitParts(items)) {
+      const bbox = bboxOfPart(item.comp, item.partIdx, options.symbolDb);
+      const xmin = bbox[0];
+      const ymin = bbox[1];
+      const xmax = bbox[2];
+      const ymax = bbox[3];
+      let compX = lastRight === null ? startX - xmin : lastRight + partGap - xmin;
+      const right = compX + xmax;
+      if (right > rightLimit) {
+        currentTopY = minYThisRow - rowGap;
+        compX = startX - xmin;
+        lastRight = compX + xmax;
+        minYThisRow = currentTopY;
+      } else {
+        lastRight = right;
+      }
+      const compY = currentTopY - ymax;
+      minYThisRow = Math.min(minYThisRow, compY + ymin);
+      parts.push({ comp: item.comp, partIdx: item.partIdx, x: compX, y: compY });
+      bounds.minX = Math.min(bounds.minX, compX + xmin);
+      bounds.maxX = Math.max(bounds.maxX, compX + xmax);
+      bounds.minY = Math.min(bounds.minY, compY + ymin);
+      bounds.maxY = Math.max(bounds.maxY, compY + ymax);
+    }
+    return { parts, bounds, nextTopY: bounds.minY - GROUP_GAP };
+  }
+  function layoutGroup(items, options) {
+    if (options.classify === "coord") return planCoordLayout(items);
+    return planFlowLayout(items, options);
+  }
+
+  // iframe/js/src/sch/emitter.js
+  function createSchWireLines(o) {
+    const net = o.net;
+    const startX = o.startX;
+    const startY = o.startY;
+    const endX = o.endX;
+    const endY = o.endY;
+    const isModern = !!o.isModern;
+    const rotation = Number.isFinite(o.rotation) ? o.rotation : 0;
+    const wireStyle = o.wireStyle || "st1";
+    const attrStyle = o.attrStyle || "st1";
+    const centerX = (startX + endX) / 2;
+    const centerY = (startY + endY) / 2;
+    if (isModern) {
+      const wire2 = o.nextRow();
+      const line = o.nextRow();
+      const attr2 = o.nextRow();
+      const wireId2 = `e${wire2.id}`;
+      return [
+        `{"type":"WIRE","ticket":${wire2.ticket},"id":"${wireId2}"}||{"zIndex":1}|`,
+        `{"type":"LINE","ticket":${line.ticket},"id":"e${line.id}"}||{"lineGroup":"${wireId2}","startX":${startX},"startY":${startY},"endX":${endX},"endY":${endY}}|`,
+        `{"type":"ATTR","ticket":${attr2.ticket},"id":"e${attr2.id}"}||{"parentId":"${wireId2}","key":"NET","value":"${net}","x":${centerX},"y":${centerY},"rotation":${rotation},"keyVisible":false,"valueVisible":true}|`
+      ];
+    }
+    const wire = o.nextRow();
+    const attr = o.nextRow();
+    const wireId = `e${wire.id}`;
+    return [
+      `["WIRE","${wireId}",[[${startX},${startY},${endX},${endY}]],"${wireStyle}",0]`,
+      `["ATTR","e${attr.id}","${wireId}","NET","${net}",0,1,${centerX},${centerY},${rotation},"${attrStyle}",0]`
+    ];
+  }
+
+  // iframe/js/src/app/pcb-to-sch/wirePlan.js
+  var WIRE_END = Object.freeze({
+    0: (pinX, pinY, len) => ({ endX: pinX - len, endY: pinY, netT: 0 }),
+    90: (pinX, pinY, len, y) => ({ endX: pinX, endY: pinY - len * y, netT: 90 }),
+    180: (pinX, pinY, len) => ({ endX: pinX + len, endY: pinY, netT: 0 }),
+    270: (pinX, pinY, len, y) => ({ endX: pinX, endY: pinY + len * y, netT: 90 })
+  });
+  function planWires(input) {
+    const parts = input.symbolDb[input.comp.symbolUuid] || [];
+    const part = parts[input.partIdx] || parts[0] || { pins: {} };
+    const symbolPins = part.pins || {};
+    const yDir = input.isV2 ? 1 : -1;
+    const lines = [];
+    const nextRow = () => {
+      const n = input.nextId();
+      return { id: n, ticket: n };
+    };
+    for (const entry of Object.entries(input.comp.pins || {})) {
+      const pinNumber = entry[0];
+      const netName = entry[1];
+      if (!netName) continue;
+      const pinInfo = symbolPins[pinNumber];
+      if (!pinInfo) continue;
+      const pinX = input.compX + pinInfo.x;
+      const pinY = input.isV2 ? input.compY + pinInfo.y : input.compY - pinInfo.y;
+      const spread = WIRE_END[pinInfo.angle] || WIRE_END[0];
+      const end = spread(pinX, pinY, input.wireLength, yDir);
+      lines.push(
+        ...createSchWireLines({
+          net: netName,
+          startX: pinX,
+          startY: pinY,
+          endX: end.endX,
+          endY: end.endY,
+          rotation: end.netT,
+          isModern: !input.isV2,
+          nextRow
+        })
+      );
+    }
+    return lines;
+  }
+
+  // iframe/js/src/app/pcb-to-sch/sourceBuilder.js
+  var PADDING = 120;
+  function normalizeOptions(raw) {
+    const o = raw || {};
+    return {
+      classify: o.classify || "ref",
+      genTitle: !!o.genTitle,
+      genFrame: !!o.genFrame,
+      genWire: !!o.genWire,
+      yvalue: !!o.yvalue,
+      startX: o.startX === void 0 ? 100 : o.startX,
+      startY: o.startY === void 0 ? -200 : o.startY,
+      wireLength: o.wireLength === void 0 ? 40 : o.wireLength,
+      colSpacing: o.colSpacing === void 0 ? 150 : o.colSpacing,
+      rowSpacing: o.rowSpacing === void 0 ? 150 : o.rowSpacing,
+      perRow: o.perRow === void 0 ? 20 : o.perRow
+    };
+  }
+  function partNameOf(symbolDb, comp, partIdx) {
+    const parts = symbolDb[comp.symbolUuid];
+    const part = parts && parts[partIdx];
+    return part && part.name || comp.symbolName || "Unknown";
+  }
+  function q(value) {
+    return JSON.stringify(value === null || value === void 0 ? "" : String(value));
+  }
+  function classifyGroups(components2, classify) {
+    const list = Array.isArray(components2) ? components2 : [];
+    if (classify === "coord") return [{ name: "坐标布局", items: list }];
+    const keyOf = classify === "device" ? deviceKey : classify === "pkg" ? packageKey : refKey;
+    const buckets = /* @__PURE__ */ new Map();
+    for (const comp of list) {
+      const key = keyOf(comp);
+      if (!buckets.has(key)) buckets.set(key, []);
+      buckets.get(key).push(comp);
+    }
+    return [...buckets.keys()].sort().map((name) => {
+      const items = buckets.get(name);
+      if (classify === "ref") items.sort(byDesignatorNumber);
+      return { name, items };
+    });
+  }
+  function refKey(comp) {
+    const match = String(comp.designator || "").match(/^([A-Za-z]+)/);
+    return match ? match[1] : "其他";
+  }
+  function deviceKey(comp) {
+    return comp.deviceName || "未知器件";
+  }
+  function packageKey(comp) {
+    return comp.footprintName || "未知封装";
+  }
+  function byDesignatorNumber(a, b) {
+    const numOf = (comp) => parseInt((String(comp.designator || "").match(/\d+/) || ["0"])[0], 10) || 0;
+    return numOf(a) - numOf(b);
+  }
+  function emitHeaderV2(ctx) {
+    ctx.lines.push('["DOCTYPE","SCH","1.1"]');
+    ctx.lines.push('["HEAD",{"originX":0,"originY":0,"version":"2","maxId":11517}]');
+    ctx.lines.push('["FONTSTYLE","st1",null,null,null,null,null,null,null,null,null,null]');
+    ctx.lines.push('["FONTSTYLE","st2",null,null,null,60,null,null,null,null,1,0]');
+    ctx.lines.push('["LINESTYLE","st3",null,null,null,2,null]');
+    ctx.lines.push('["LINESTYLE","st4",null,null,null,null,null]');
+  }
+  function emitHeaderModern(ctx) {
+    const stamp2 = ctx.options.now();
+    const rand = () => Math.random().toString(36).substr(2, 8);
+    const client = "client_" + stamp2 + "_" + rand();
+    const uuid = "uuid_" + stamp2 + "_" + rand();
+    ctx.lines.push(
+      `{"type":"DOCHEAD"}||{"docType":"SCH_PAGE","client":"${client}","uuid":"${uuid}","updateTime":${stamp2},"version":${stamp2}}|`
+    );
+    ctx.lines.push(`{"type":"CANVAS","ticket":${ctx.nextId()},"id":"CANVAS"}||{"originX":0,"originY":0}|`);
+  }
+  function v2AttrLine(ctx, compId, key, value, topZero) {
+    return `["ATTR","e${ctx.nextId()}","${compId}","${key}",${q(value)},${topZero ? 0 : "null"},0,null,null,null,"st1",0]`;
+  }
+  function emitV2Component(ctx, part) {
+    const comp = part.comp;
+    const compId = "e" + ctx.nextId();
+    const outY = ctx.options.yvalue ? -part.y : part.y;
+    ctx.lines.push(
+      `["COMPONENT","${compId}",${q(partNameOf(ctx.symbolDb, comp, part.partIdx))},${part.x},${outY},0,0,{},0]`
+    );
+    ctx.lines.push(v2AttrLine(ctx, compId, "Device", comp.deviceUuid || "", true));
+    ctx.lines.push(v2AttrLine(ctx, compId, "Symbol", comp.symbolUuid || "", true));
+    ctx.lines.push(v2AttrLine(ctx, compId, "Designator", comp.designator || "", false));
+    ctx.lines.push(v2AttrLine(ctx, compId, "Name", comp.name || "", false));
+    ctx.lines.push(v2AttrLine(ctx, compId, "Unique ID", comp.uniqueId || "", true));
+    if (ctx.options.genWire) ctx.lines.push(...planWires(wireInput(ctx, part, part.x, outY)));
+  }
+  function modernComponentLine(ctx, partId, x, y) {
+    const ticket = ctx.nextId();
+    const body = {
+      partId,
+      x,
+      y,
+      rotation: 0,
+      isMirror: false,
+      attrs: {
+        Footprints: "[]",
+        Devices: "[]",
+        DeviceName: null,
+        FootprintName: null,
+        pinClass: {},
+        differentialPairClass: {},
+        Symbols: "[]"
+      },
+      zIndex: ticket
+    };
+    return { id: "e" + ticket, line: `{"type":"COMPONENT","ticket":${ticket},"id":"e${ticket}"}||${JSON.stringify(body)}|` };
+  }
+  function modernAttrLine(ctx, parentId, key, value, extra) {
+    const e = extra || {};
+    const ticket = ctx.nextId();
+    const body = {
+      x: e.x === void 0 ? null : e.x,
+      y: e.y === void 0 ? null : e.y,
+      rotation: e.rotation === void 0 ? null : e.rotation,
+      color: null,
+      fontFamily: null,
+      fontSize: null,
+      fontWeight: null,
+      italic: null,
+      underline: null,
+      align: null,
+      value: value === void 0 ? null : value,
+      keyVisible: e.keyVisible === void 0 ? null : e.keyVisible,
+      valueVisible: e.valueVisible === void 0 ? null : e.valueVisible,
+      key,
+      fillColor: null,
+      parentId,
+      zIndex: ticket
+    };
+    return `{"type":"ATTR","ticket":${ticket},"id":"e${ticket}"}||${JSON.stringify(body)}|`;
+  }
+  function emitModernComponent(ctx, part) {
+    const comp = part.comp;
+    const outY = ctx.options.yvalue ? -part.y : part.y;
+    const compLine = modernComponentLine(ctx, partNameOf(ctx.symbolDb, comp, part.partIdx), part.x, outY);
+    const compId = compLine.id;
+    const lines = ctx.lines;
+    lines.push(compLine.line);
+    lines.push(modernAttrLine(ctx, compId, "Device", comp.deviceUuid || ""));
+    lines.push(modernAttrLine(ctx, compId, "Symbol", comp.symbolUuid || ""));
+    lines.push(modernAttrLine(ctx, compId, "Unique ID", comp.uniqueId || ""));
+    lines.push(modernAttrLine(ctx, compId, "Designator", comp.designator || "", { rotation: 0, keyVisible: false, valueVisible: true }));
+    lines.push(modernAttrLine(ctx, compId, "Name", comp.name || "", { rotation: 0, keyVisible: false, valueVisible: true }));
+    lines.push(modernAttrLine(ctx, compId, "Channel ID", ""));
+    lines.push(modernAttrLine(ctx, compId, "Group ID", ""));
+    lines.push(modernAttrLine(ctx, compId, "Reuse Block", ""));
+    if (ctx.options.genWire) lines.push(...planWires(wireInput(ctx, part, part.x, outY)));
+  }
+  function wireInput(ctx, part, compX, compY) {
+    return {
+      comp: part.comp,
+      partIdx: part.partIdx,
+      compX,
+      compY,
+      wireLength: ctx.options.wireLength,
+      symbolDb: ctx.symbolDb,
+      isV2: ctx.isV2,
+      nextId: ctx.nextId
+    };
+  }
+  function emitFrame(ctx, group, bounds) {
+    if (!ctx.options.genFrame || bounds.minX === Infinity) return;
+    const flip = ctx.options.yvalue;
+    const x = bounds.minX - PADDING + 10;
+    if (ctx.isV2) {
+      const y2 = flip ? -bounds.maxY - PADDING + 30 : bounds.maxY + PADDING - 30;
+      ctx.lines.push(`["TEXT","e${ctx.nextId()}",${x},${y2},0,${q(group.name)},"st2",0]`);
+      return;
+    }
+    const ticket = ctx.nextId();
+    const y = flip ? -bounds.maxY - PADDING + 30 : bounds.maxY + PADDING - 30;
+    const body = { x, y, value: group.name, fontSize: 60, align: "LEFT_MIDDLE", rotation: 0 };
+    ctx.lines.push(`{"type":"TEXT","ticket":${ticket},"id":"e${ticket}"}||${JSON.stringify(body)}|`);
+  }
+  function emitGroups(ctx) {
+    let currentTopY = ctx.options.startY;
+    for (const group of ctx.groups) {
+      if (!group.items || group.items.length === 0) continue;
+      const layout = layoutGroup(group.items, {
+        classify: ctx.options.classify,
+        startX: ctx.options.startX,
+        startTopY: currentTopY,
+        symbolDb: ctx.symbolDb
+      });
+      for (const part of layout.parts) ctx.emitPart(ctx, part);
+      emitFrame(ctx, group, layout.bounds);
+      if (ctx.options.classify !== "coord") currentTopY = layout.bounds.minY - GROUP_GAP;
+    }
+  }
+  function stripTrailingPipe(lines) {
+    const last = lines.length - 1;
+    if (last >= 0 && lines[last].endsWith("|")) lines[last] = lines[last].slice(0, -1);
+  }
+  function buildSchSource(payload) {
+    const input = payload || {};
+    const options = normalizeOptions(input.options);
+    options.now = input.options && input.options.now || (() => Date.now());
+    let counter = Number(input.startId) || 1;
+    const ctx = {
+      lines: [],
+      symbolDb: input.symbolDb || {},
+      options,
+      isV2: input.format === "v2",
+      nextId: () => counter++,
+      groups: classifyGroups(input.components || [], options.classify),
+      emitPart: null
+    };
+    ctx.emitPart = ctx.isV2 ? emitV2Component : emitModernComponent;
+    if (ctx.isV2) emitHeaderV2(ctx);
+    else emitHeaderModern(ctx);
+    emitGroups(ctx);
+    if (!ctx.isV2) stripTrailingPipe(ctx.lines);
+    return ctx.lines.join("\n");
+  }
+
+  // iframe/js/src/app/pcb-to-sch/index.js
+  var zip = null;
+  var projectJson = null;
+  var components = [];
+  var mergedRows = [];
+  var version = "";
+  var candidateSource = "";
+  var currentPcbUuid = "";
+  var symbolPinsDatabase = {};
+  var currentSchematicUuid = null;
+  var progressFill = document.getElementById("progressFill");
+  var progressText = document.getElementById("progressText");
+  var versionSpan = document.getElementById("versionDisplay");
+  var yvalueCheck = document.getElementById("yvalue");
+  var refreshBtn = document.getElementById("refreshListBtn");
+  var tableRows = document.getElementById("tableRows");
+  var buildBtn = document.getElementById("buildBtn");
+  var writeBtn = document.getElementById("writeBtn");
+  var genTitleCheck = document.getElementById("genTitle");
+  var genWireCheck = document.getElementById("genWire");
+  var exportCsvBtn = document.getElementById("exportCsvBtn");
+  var errorsCheck = document.getElementById("errors");
+  var outfile = document.getElementById("outfile");
+  var exportNetBtn = document.getElementById("exportNetBtn");
+  var statusBar = createStatusBar({
+    textEl: progressText,
+    barEl: progressFill,
+    baseClass: "status-text",
+    barBaseClass: "progress-bg"
+  });
+  function updateProgress(percent, text) {
+    statusBar.width(percent, "");
+    statusBar.text(text);
+  }
+  function delay(ms) {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+  }
+  function initVersion() {
+    try {
+      version = getEditorVersion();
+      if (!version) throw new Error("未检测到 EDA 环境");
+      versionSpan.textContent = `当前EDA版本：${version} 功能可用`;
+      versionSpan.style.color = "#8f8";
+      yvalueCheck.checked = !isV2();
+    } catch (e) {
+      versionSpan.textContent = "当前不在EDA环境，当前版本不支持转换";
+      versionSpan.style.color = "#f88";
+      refreshBtn.disabled = true;
+      buildBtn.disabled = true;
+      writeBtn.disabled = true;
+      exportCsvBtn.disabled = true;
+      exportNetBtn.disabled = true;
+    }
+  }
+  function stamp() {
+    const now = /* @__PURE__ */ new Date();
+    const date = `${now.getFullYear()}${("0" + (now.getMonth() + 1)).slice(-2)}${("0" + now.getDate()).slice(-2)}`;
+    const time = `${("0" + now.getHours()).slice(-2)}${("0" + now.getMinutes()).slice(-2)}${("0" + now.getSeconds()).slice(-2)}`;
+    return `${date}_${time}`;
+  }
+  function currentClassify() {
+    const radio = document.querySelector('input[name="classify"]:checked');
+    return radio ? radio.value : "ref";
+  }
+  async function onRefresh() {
+    try {
+      buildBtn.disabled = true;
+      writeBtn.disabled = true;
+      outfile.disabled = true;
+      tableRows.innerHTML = "";
+      const startTime = Date.now();
+      updateProgress(5, "版本检测");
+      await delay(100);
+      updateProgress(7, "获取当前原理信息");
+      const curDoc = await eda.dmt_SelectControl.getCurrentDocumentInfo();
+      await delay(100);
+      updateProgress(10, "获取工程文件");
+      const ticker = createProgressTicker({
+        from: 10,
+        to: 40,
+        step: 1,
+        intervalMs: 1e3,
+        onTick: (p) => updateProgress(p, `获取工程文件 (${p}%)`)
+      });
+      ticker.start();
+      let epro;
+      try {
+        epro = await eda.sys_FileManager.getProjectFile("project", void 0, ".epro");
+      } finally {
+        ticker.stop();
+      }
+      updateProgress(45, "读取 project.json");
+      zip = await JSZip.loadAsync(epro);
+      projectJson = JSON.parse(await zip.file("project.json").async("string"));
+      await delay(100);
+      updateProgress(50, "查找对应的PCB");
+      const uuids = findUuids(projectJson, curDoc.uuid);
+      currentPcbUuid = projectJson.pcbs[uuids.pcbUuid];
+      currentSchematicUuid = uuids.schematicUuid;
+      await delay(100);
+      updateProgress(55, "读取PCB文件");
+      const pcbFile = zip.file(pcbFilePath(uuids.pcbUuid));
+      if (!pcbFile) throw new Error(`在压缩包中未找到PCB文件: ${pcbFilePath(uuids.pcbUuid)}`);
+      const pcbContent = await pcbFile.async("string");
+      await delay(100);
+      updateProgress(60, "解析PCB内容");
+      components = parsePcbContent(pcbContent);
+      await delay(100);
+      updateProgress(80, "获取符号信息");
+      enrichWithSymbol(components, projectJson);
+      mergedRows = mergeComponentsForDisplay(components);
+      renderTable(mergedRows);
+      const elapsed = ((Date.now() - startTime) / 1e3).toFixed(1);
+      updateProgress(100, `元件处理完成，耗时${elapsed}秒`);
+      buildBtn.disabled = false;
+      exportCsvBtn.disabled = false;
+    } catch (error) {
+      logger.error("刷新列表失败:", error);
+      updateProgress(0, `错误: ${error.message}`);
+    }
+  }
+  function renderTable(rows) {
+    tableRows.innerHTML = "";
+    rows.forEach((group) => {
+      const row = document.createElement("div");
+      row.className = "grid-row";
+      row.setAttribute("data-group-key", group.key);
+      row.innerHTML = `
 					<div class="row-cell" title="${escapeHtml(group.designatorDisplay)}">${escapeHtml(group.designatorDisplay)}</div>
 					<div class="row-cell" title="${escapeHtml(group.nameDisplay)}">${escapeHtml(group.nameDisplay)}</div>
 					<div class="row-cell" title="${escapeHtml(group.footprintName)}">${escapeHtml(group.footprintName)}</div>
@@ -750,792 +990,266 @@
 					<div class="row-cell" title="${escapeHtml(group.symbolName)}">${escapeHtml(group.symbolName)}</div>
 					<div class="row-cell"><input class="manual-input" type="text" placeholder="指定..." data-group-key="${group.key}" value=""></div>
 				`;
-				tableRows.appendChild(row);
-			});
-		}
-
-		// 收集手动输入框的值，返回 Map[groupKey] = inputValue
-		function collectManualInputs() {
-			const inputs = document.querySelectorAll('.manual-input');
-			const map = new Map();
-			inputs.forEach(input => {
-				const groupKey = input.getAttribute('data-group-key');
-				if (groupKey) {
-					map.set(groupKey, input.value.trim());
-				}
-			});
-			return map;
-		}
-		
-		// 应用手动指定符号：根据输入的关键词替换对应组内所有元件的 symbolUuid
-		function applyManualSymbols(manualMap) {
-			for (let [groupKey, inputValue] of manualMap.entries()) {
-				if (!inputValue) continue;
-				let targetUuid = null;
-				// 1. 检查关键词映射
-				targetUuid = keywordToSymbolUuid[inputValue];
-				// 2. 如果没找到，在符号库中按名称查找
-				if (!targetUuid && projectJson && projectJson.symbols) {
-					for (const [uuid, sym] of Object.entries(projectJson.symbols)) {
-						if (sym.title === inputValue) {
-							targetUuid = uuid;
-							break;
-						}
-					}
-				}
-				if (!targetUuid) continue; // 未找到，忽略
-
-				const group = mergedRows.find(g => g.key === groupKey);
-				if (group) {
-					group.componentIndices.forEach(idx => {
-						if (components[idx]) {
-							components[idx].symbolUuid = targetUuid;
-							components[idx].symbolName = inputValue; // 更新显示名称
-						}
-					});
-				}
-			}
-		}
-
-		// 检查哪些元件缺少 symbolUuid，返回缺少的 groupKey 数组
-		function checkMissingSymbols() {
-			const missingGroups = new Set();
-			components.forEach((comp, idx) => {
-				if (!comp.symbolUuid) {
-					// 找到该元件属于哪个组
-					const group = mergedRows.find(g => g.componentIndices.includes(idx));
-					if (group) missingGroups.add(group.key);
-				}
-			});
-			return Array.from(missingGroups);
-		}
-
-		// 解析符号文件，填充 symbolPinsDatabase，并为每个元件设置 partCount
-		async function enrichPartCounts(compList = components) {
-			// 清空缓存（每次构建时重新解析）
-			symbolPinsDatabase = {};
-
-			for (let comp of compList) {
-				if (!comp.symbolUuid) {
-					comp.partCount = 1; // 无符号元件默认1，但过滤后不会用到
-					continue;
-				}
-
-				// 如果缓存中已有该符号信息，直接使用
-				if (symbolPinsDatabase[comp.symbolUuid]) {
-					comp.partCount = symbolPinsDatabase[comp.symbolUuid].length;
-					continue;
-				}
-
-				// 从 zip 中读取符号文件
-				const symbolPath = `SYMBOL/${comp.symbolUuid}.esym`;
-				const symbolFile = zip.file(symbolPath);
-				if (!symbolFile) {
-					logger.warn(`符号文件不存在: ${symbolPath}`);
-					comp.partCount = 1;
-					symbolPinsDatabase[comp.symbolUuid] = [{ pinBbox: null, pins: {} }]; // 占位
-					continue;
-				}
-
-				const content = await symbolFile.async('string');
-				const lines = content.split('\n');
-
-				// 解析符号文件，提取部件信息
-				const parts = [];
-				let currentPart = null;
-				let pinById = {}; // 临时存储当前部件的引脚信息，键为引脚ID
-
-				for (let line of lines) {
-					if (!line.trim()) continue;
-					try {
-						const data = JSON.parse(line);
-						const type = data[0];
-
-						if (type === 'PART') {
-							// 遇到新部件，先保存上一个部件（如果有）
-							if (currentPart) {
-								// 将引脚ID转换为引脚编号映射，并计算引脚包围盒
-								const pinsByNumber = {};
-								let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
-								let hasPin = false;
-								for (let pinId in pinById) {
-									const pin = pinById[pinId];
-									if (pin.number) {
-										pinsByNumber[pin.number] = { x: pin.x, y: pin.y, angle: pin.angle, name: pin.name };
-										// 更新包围盒
-										if (pin.x < minX) minX = pin.x;
-										if (pin.x > maxX) maxX = pin.x;
-										if (pin.y < minY) minY = pin.y;
-										if (pin.y > maxY) maxY = pin.y;
-										hasPin = true;
-									}
-								}
-								currentPart.pins = pinsByNumber;
-								// 根据引脚坐标计算包围盒
-								if (hasPin) {
-									currentPart.pinBbox = [minX-40, minY-40, maxX+40, maxY+40];
-								} else {
-									currentPart.pinBbox = [-20,-20,20,20];
-								}
-								parts.push(currentPart);
-							}
-							// 开始新部件
-							const partName = data[1];
-							currentPart = { name: partName, pins: {} }; // 不再存储原始BBOX
-							pinById = {};
-						} else if (type === 'PIN' && currentPart) {
-							// 解析 PIN 行
-							const pinId = data[1];
-							const pinType = data[2]; // 默认为1
-							const x = data[4];
-							const y = data[5];
-							const length = data[6];
-							const angle = data[7];
-							pinById[pinId] = {
-								id: pinId,
-								type: pinType,
-								x: x,
-								y: y,
-								length: length,
-								angle: angle,
-								number: null,
-								name: null
-							};
-						} else if (type === 'ATTR' && currentPart) {
-							// 解析 ATTR 行，寻找 NUMBER 属性
-							const attrId = data[1];
-							const parentId = data[2]; // 引脚ID
-							const attrName = data[3];
-							const attrValue = data[4];
-							if (attrName === 'NUMBER' && pinById[parentId]) {
-								pinById[parentId].number = attrValue;
-							}
-							if (attrName === 'NAME' && pinById[parentId]) {
-								pinById[parentId].name = attrValue;
-							}
-						}
-					} catch (e) {
-						// 忽略解析错误的行
-					}
-				}
-
-				// 处理最后一个部件
-				if (currentPart) {
-					const pinsByNumber = {};
-					let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
-					let hasPin = false;
-					for (let pinId in pinById) {
-						const pin = pinById[pinId];
-						if (pin.number) {
-							pinsByNumber[pin.number] = { x: pin.x, y: pin.y, angle: pin.angle, name: pin.name };
-							if (pin.x < minX) minX = pin.x;
-							if (pin.x > maxX) maxX = pin.x;
-							if (pin.y < minY) minY = pin.y;
-							if (pin.y > maxY) maxY = pin.y;
-							hasPin = true;
-						}
-					}
-					currentPart.pins = pinsByNumber;
-					if (hasPin) {
-						currentPart.pinBbox = [minX-40, minY-40, maxX+40, maxY+40];
-					} else {
-						currentPart.pinBbox = [-20,-20,20,20];
-					}
-					parts.push(currentPart);
-				}
-
-				// 存入缓存
-				symbolPinsDatabase[comp.symbolUuid] = parts;
-				comp.partCount = parts.length; // 设置部件数
-			}
-		}
-
-		// 构建源码
-		function buildSchSource(components, version, options = {}) {
-
-			const {
-				classify = 'ref',
-				genTitle = false,
-				genFrame = false,
-				genWire = false, 
-				yvalue = false,
-				startX = 100,
-				startY = -200,
-				colSpacing = 150,
-				rowSpacing = 150,
-				perRow = 20,
-				wireLength = 40   // 导线长度，默认40
-			} = options;
-
-			const lines = [];
-			let idCounter = 1;
-
-			// 根据分类方式对元件进行分组和排序
-			let groups = [];
-			if (classify === 'ref') {
-				// 按照位号分类
-				const refGroups = {};
-				components.forEach(comp => {
-					// 提取开头的字母部分作为前缀（支持 C?、R? 等形式）
-					const match = comp.designator.match(/^([A-Za-z]+)/);
-					if (match) {
-						const prefix = match[1];
-						if (!refGroups[prefix]) refGroups[prefix] = [];
-						refGroups[prefix].push(comp);
-					} else {
-						// 无法提取字母（例如纯数字），放入其他组
-						if (!refGroups['其他']) refGroups['其他'] = [];
-						refGroups['其他'].push(comp);
-					}
-				});
-				// 对每个组内按数字排序（无数字的元件视为数字0，排在前面）
-				Object.keys(refGroups).sort().forEach(prefix => {
-					refGroups[prefix].sort((a, b) => {
-						const numA = parseInt((a.designator.match(/\d+/) || ['0'])[0]) || 0;
-						const numB = parseInt((b.designator.match(/\d+/) || ['0'])[0]) || 0;
-						return numA - numB;
-					});
-					groups.push({
-						name: `${prefix}`,
-						items: refGroups[prefix]
-					});
-				});
-			} else if (classify === 'device') {
-				// 按照器件名称分类
-				const deviceGroups = {};
-				components.forEach(comp => {
-					const deviceName = comp.deviceName || '未知器件';
-					if (!deviceGroups[deviceName]) deviceGroups[deviceName] = [];
-					deviceGroups[deviceName].push(comp);
-				});
-				Object.keys(deviceGroups).sort().forEach(name => {
-					groups.push({
-						name: `${name}`,
-						items: deviceGroups[name]
-					});
-				});
-			} else if (classify === 'pkg') {
-				// 按照封装名称分类
-				const pkgGroups = {};
-				components.forEach(comp => {
-					const pkgName = comp.footprintName || '未知封装';
-					if (!pkgGroups[pkgName]) pkgGroups[pkgName] = [];
-					pkgGroups[pkgName].push(comp);
-				});
-				Object.keys(pkgGroups).sort().forEach(name => {
-					groups.push({
-						name: `${name}`,
-						items: pkgGroups[name]
-					});
-				});
-			} else if (classify === 'coord') {
-				// 按照元件坐标布局（直接使用PCB坐标）
-				groups = [{
-					name: '坐标布局',
-					items: components
-				}];
-				// 注意：坐标布局时，每个元件使用PCB上的原始坐标，不进行网格重排
-				// 但为了支持标题和框线，我们仍将元件放入一个组
-			}
-
-			// 当前绘制位置
-			// let currentY = startY;
-			let currentTopY = startY;
-
-			// 生成导线的辅助函数
-			function generateWires(comp, compId, compX, compY, version, wireLength, partIdx = 0, yvalue = false) {
-				const wireLines = [];
-				const symbolParts = symbolPinsDatabase[comp.symbolUuid] || [];
-				const symbolPart = symbolParts[partIdx] || symbolParts[0] || { pins: {} };
-				const symbolPins = symbolPart.pins || {};
-
-				Object.entries(comp.pins || {}).forEach(([pinNumber, netName]) => {
-					if (!netName || netName === '') return;
-					const pinInfo = symbolPins[pinNumber];
-					if (!pinInfo) return;
-
-					// 计算引脚绝对坐标（原始，未翻转）
-					const pinX = compX + pinInfo.x;
-					let rawPinY;
-					let y;
-					if (isV2()) {
-						rawPinY = compY + pinInfo.y; // V2版本 Y 坐标（向上为正）
-						y = 1;
-					} else if (isModern()) {
-						rawPinY = compY - pinInfo.y; // V3版本 Y 坐标（向下为正）
-						y = -1;
-					}
-					// 根据引脚角度计算导线终点（基于原始坐标）
-					let endX = pinX;
-					let rawEndY = rawPinY;
-					let netT = 0;
-					switch (pinInfo.angle) {
-						case 0:   // 朝左
-							endX = pinX - wireLength;
-							rawEndY = rawPinY;
-							netT = 0;
-							break;
-						case 90:  // 朝上
-							endX = pinX;
-							rawEndY = rawPinY - wireLength * y;
-							netT = 90;
-							break;
-						case 180: // 朝右
-							endX = pinX + wireLength;
-							rawEndY = rawPinY;
-							netT = 0;
-							break;
-						case 270: // 朝下
-							endX = pinX;
-							rawEndY = rawPinY + wireLength * y;
-							netT = 90;
-							break;
-						default:
-							endX = pinX - wireLength;
-							rawEndY = rawPinY;
-							netT = 0;
-					}
-
-					// 源码行统一由 WolfCommon.createSchWireLines 发射（与后端 autoWire 同一份规格）
-					if (isV2() || isModern()) {
-						wireLines.push(
-							...createSchWireLines({
-								net: netName,
-								startX: pinX,
-								startY: rawPinY,
-								endX: endX,
-								endY: rawEndY,
-								rotation: netT,
-								isModern: !isV2(),
-								// 该页面的 id 与 ticket 共用一个计数器（历史行为，保持不变）
-								nextRow: () => {
-									const n = idCounter++;
-									return { id: n, ticket: n };
-								},
-							}),
-						);
-					}
-				});
-				return wireLines;
-			}
-
-
-
-			if (isV2()) {
-
-				// 头部
-				lines.push('["DOCTYPE","SCH","1.1"]');
-				lines.push('["HEAD",{"originX":0,"originY":0,"version":"2","maxId":11517}]');
-				lines.push('["FONTSTYLE","st1",null,null,null,null,null,null,null,null,null,null]');
-				lines.push('["FONTSTYLE","st2",null,null,null,60,null,null,null,null,1,0]');
-				lines.push('["LINESTYLE","st3",null,null,null,2,null]');
-				lines.push('["LINESTYLE","st4",null,null,null,null,null]');
-
-				groups.forEach(group => {
-					const items = group.items;
-					if (items.length === 0) return;
-
-					// 记录该组元件的坐标范围（用于框线）
-					let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
-
-					if (classify === 'coord') {
-						// 坐标布局：直接使用PCB坐标，但需要处理层和旋转
-						items.forEach(comp => {
-							const partCount = comp.partCount || 1;
-							for (let partIdx = 0; partIdx < partCount; partIdx++) {
-								const compId = 'e' + (idCounter++);
-								const symbolName = comp.symbolName || 'Unknown';
-								const compName = symbolPinsDatabase[comp.symbolUuid][partIdx].name;;
-								// 使用PCB上的坐标、层、旋转
-								// comp.y = comp.y + 10;
-								const adjustedY = comp.y + 10 * partIdx;
-								const outY = yvalue ? -adjustedY : adjustedY;
-								lines.push(`["COMPONENT","${compId}","${compName}",${comp.x},${outY},0,0,{},0]`);
-								// lines.push(`["COMPONENT","${compId}","${compName}",${comp.x},${comp.y},0,0,{},0]`);
-
-								// Device
-								lines.push(`["ATTR","e${idCounter}","${compId}","Device","${comp.deviceUuid || ''}",0,0,null,null,null,"st1",0]`);
-								idCounter++;
-								// Symbol
-								lines.push(`["ATTR","e${idCounter}","${compId}","Symbol","${comp.symbolUuid || ''}",0,0,null,null,null,"st1",0]`);
-								idCounter++;
-								// Designator
-								lines.push(`["ATTR","e${idCounter}","${compId}","Designator","${comp.designator || ''}",null,0,null,null,null,"st1",0]`);
-								idCounter++;
-								// Name
-								lines.push(`["ATTR","e${idCounter}","${compId}","Name","${comp.name || ''}",null,0,null,null,null,"st1",0]`);
-								idCounter++;
-								// Unique ID
-								lines.push(`["ATTR","e${idCounter}","${compId}","Unique ID","${comp.uniqueId || ''}",0,0,null,null,null,"st1",0]`);
-								idCounter++;
-
-								// 在生成完所有属性后，如果启用了导线生成，添加导线
-								if (genWire) {
-									const wireLines = generateWires(comp, compId, comp.x, outY, version, wireLength, partIdx);
-									lines.push(...wireLines);
-								}
-								// 更新范围
-								minX = Math.min(minX, comp.x);
-								maxX = Math.max(maxX, comp.x);
-								minY = Math.min(minY, comp.y);
-								maxY = Math.max(maxY, comp.y);
-
-							}
-						});
-					} else {
-						// 动态布局基于 BBOX（替换原网格布局）
-						let currentX = startX;                 // 当前行起始 X
-						let lastRight = null;                  // 上一个部件的右边界
-						let minYThisRow = currentTopY;         // 当前行最下边缘的绝对Y坐标
-
-						// 将组内所有部件展开为列表（每个部件独立放置）
-						const partsList = [];
-						items.forEach(comp => {
-							const partCount = comp.partCount || 1;
-							for (let partIdx = 0; partIdx < partCount; partIdx++) {
-								partsList.push({ comp: comp, partIdx: partIdx });
-							}
-						});
-
-						for (let i = 0; i < partsList.length; i++) {
-							const item = partsList[i];
-							const comp = item.comp;
-							const partIdx = item.partIdx;
-
-							// 获取该部件的 pinBbox（从全局缓存 symbolPinsDatabase 中读取）
-							let bbox;
-							if (comp.symbolUuid && symbolPinsDatabase[comp.symbolUuid] && symbolPinsDatabase[comp.symbolUuid][partIdx]) {
-								bbox = symbolPinsDatabase[comp.symbolUuid][partIdx].pinBbox;
-							} else {
-								bbox = [-20, -20, 20, 20]; // 默认包围盒
-							}
-							const xmin = bbox[0];
-							const ymin = bbox[1];
-							const xmax = bbox[2];
-							const ymax = bbox[3];
-
-							// 计算放置 X 坐标
-							let compX;
-							if (lastRight === null) {
-								compX = startX - xmin;                       // 第一个元件左边界对齐 startX
-							} else {
-								compX = lastRight + 40 - xmin;               // 与前一个元件间隔 40
-							}
-							const right = compX + xmax;
-
-							// 检查是否需要换行（超出右边界 2560）
-							if (right > 2560) {
-								// 换行：上边缘下移至上一行最下边缘 - 40
-								currentTopY = minYThisRow - 40;
-								currentX = startX;
-								compX = startX - xmin;
-								lastRight = compX + xmax;
-								minYThisRow = currentTopY; // 新行重置
-							} else {
-								lastRight = right;
-							}
-
-							// 元件顶部对齐到 currentTopY
-							const compY = currentTopY - ymax;
-							
-							// 更新当前行的最下边缘（Y值越小越在下面）
-							const absoluteBottomY = compY + ymin;
-							if (absoluteBottomY < minYThisRow) {
-								minYThisRow = absoluteBottomY;
-							}
-
-							// 生成元件及属性（原代码保持不变）
-							const compId = 'e' + (idCounter++);
-							const symbolName = comp.symbolName || 'Unknown';
-							const compName = symbolPinsDatabase[comp.symbolUuid][partIdx].name;;
-							const outY = yvalue ? -compY : compY;
-
-							lines.push(`["COMPONENT","${compId}","${compName}",${compX},${outY},0,0,{},0]`);
-
-							lines.push('["ATTR","e' + idCounter + '","' + compId + '","Device","' + (comp.deviceUuid || '') + '",0,0,null,null,null,"st1",0]');
-							idCounter++;
-							lines.push('["ATTR","e' + idCounter + '","' + compId + '","Symbol","' + (comp.symbolUuid || '') + '",0,0,null,null,null,"st1",0]');
-							idCounter++;
-							lines.push('["ATTR","e' + idCounter + '","' + compId + '","Designator","' + (comp.designator || '') + '",null,0,null,null,null,"st1",0]');
-							idCounter++;
-							lines.push('["ATTR","e' + idCounter + '","' + compId + '","Name","' + (comp.name || '') + '",null,0,null,null,null,"st1",0]');
-							idCounter++;
-							lines.push('["ATTR","e' + idCounter + '","' + compId + '","Unique ID","' + (comp.uniqueId || '') + '",0,0,null,null,null,"st1",0]');
-							idCounter++;
-
-							// 在生成完所有属性后，如果启用了导线生成，添加导线
-							if (genWire) {
-								const wireLines = generateWires(comp, compId, compX, outY, version, wireLength, partIdx);
-								lines.push(...wireLines);
-							}
-
-							// 更新整个组的包围盒（用于框线，minY 最终将为该组最大深度的Y值）
-							minX = Math.min(minX, compX + xmin);
-							maxX = Math.max(maxX, compX + xmax);
-							minY = Math.min(minY, compY + ymin);
-							maxY = Math.max(maxY, compY + ymax);
-
-						}
-					}
-						
-					// 显示标题与框线
-					let padding = 120;
-					if (genFrame && minX !== Infinity && yvalue) {
-						// lines.push(`["RECT","e${idCounter++}",${minX - padding},${-minY + padding},${maxX + padding},${-maxY - padding},0,0,0,"st3",0]`);
-						lines.push(`["TEXT","e${idCounter++}",${minX - padding +10},${-maxY - padding + 30},0,"${group.name}","st2",0]`);
-					}else if(genFrame && minX !== Infinity){
-						// lines.push(`["RECT","e${idCounter++}",${minX - padding},${minY - padding},${maxX + padding},${maxY + padding},0,0,0,"st3",0]`);
-						lines.push(`["TEXT","e${idCounter++}",${minX - padding +10},${maxY + padding - 30},0,"${group.name}","st2",0]`);
-					}
-
-					// 当前组结束后，Y坐标移动到下一组的起始位置（如果还有下一组）
-					if (classify !== 'coord') {
-						// minY 存留了整个组的最下边缘，下一组的上边缘定为上一组下边缘再往下 200
-						currentTopY = minY - 200;
-					}
-
-					
-				});
-
-
-				return lines.join('\n');
-
-			} else if (isModern()) {
-				// V3 版本源码生成
-				// 生成唯一 client 和 uuid（保证文件内唯一）
-				const uniqueClient = 'client_' + Date.now() + '_' + Math.random().toString(36).substr(2, 8);
-				const uniqueUuid = 'uuid_' + Date.now() + '_' + Math.random().toString(36).substr(2, 8);
-				const timestamp = Date.now();
-
-				// 头部：DOCHEAD
-				lines.push(`{"type":"DOCHEAD"}||{"docType":"SCH_PAGE","client":"${uniqueClient}","uuid":"${uniqueUuid}","updateTime":${timestamp},"version":${timestamp}}|`);
-				// CANVAS
-				lines.push(`{"type":"CANVAS","ticket":${idCounter++},"id":"CANVAS"}||{"originX":0,"originY":0}|`);
-
-				// ---------- V4 实测得到的三条硬约束（写错任何一条，符号都会"凭空消失"） ----------
-				// 1. COMPONENT 行**必须带 attrs**（Symbols/Devices/Footprints/... 这 7 个键）。
-				//    缺了 attrs，setDocumentSource 仍返回 true，但器件会被静默丢弃 →
-				//    表现就是「导线都在、符号一个都没有」。
-				// 2. ATTR 行**必须字段齐全**（x/y/rotation/color/.../zIndex 都写上），
-				//    只写 parentId/key/value 会让整份源码写入直接返回 false。
-				// 3. 每个器件**必须有一条 `Channel ID` 属性**（空串即可），否则同样整份拒写。
-				// 下面两个小工具就是按 EDA 自己写盘的形状生成行，别再简化。
-				const schCompAttrs = () => ({
-					Footprints: '[]',
-					Devices: '[]',
-					DeviceName: null,
-					FootprintName: null,
-					pinClass: {},
-					differentialPairClass: {},
-					Symbols: '[]',
-				});
-				const schComponentLine = (partId, x, y, rotation) => {
-					const ticket = idCounter++;
-					const body = {
-						partId: partId,
-						x: x,
-						y: y,
-						rotation: rotation || 0,
-						isMirror: false,
-						attrs: schCompAttrs(),
-						zIndex: ticket,
-					};
-					return { id: 'e' + ticket, line: '{"type":"COMPONENT","ticket":' + ticket + ',"id":"e' + ticket + '"}||' + JSON.stringify(body) + '|' };
-				};
-				const schAttrLine = (parentId, key, value, extra) => {
-					const e = extra || {};
-					const ticket = idCounter++;
-					const body = {
-						x: e.x === undefined ? null : e.x,
-						y: e.y === undefined ? null : e.y,
-						rotation: e.rotation === undefined ? null : e.rotation,
-						color: null,
-						fontFamily: null,
-						fontSize: null,
-						fontWeight: null,
-						italic: null,
-						underline: null,
-						align: null,
-						value: value === undefined ? null : value,
-						keyVisible: e.keyVisible === undefined ? null : e.keyVisible,
-						valueVisible: e.valueVisible === undefined ? null : e.valueVisible,
-						key: key,
-						fillColor: null,
-						parentId: parentId,
-						zIndex: ticket,
-					};
-					return '{"type":"ATTR","ticket":' + ticket + ',"id":"e' + ticket + '"}||' + JSON.stringify(body) + '|';
-				};
-
-				// 当前绘制位置
-				// let currentY = startY;
-				let currentTopY = startY;
-
-				groups.forEach(group => {
-					const items = group.items;
-					if (items.length === 0) return;
-
-					// 记录该组元件的坐标范围（用于框线）
-					let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
-
-					if (classify === 'coord') {
-						// 坐标布局：直接使用PCB坐标
-						items.forEach(comp => {
-							const partCount = comp.partCount || 1;
-							for (let partIdx = 0; partIdx < partCount; partIdx++) {
-								const symbolName = comp.symbolName || 'Unknown';
-								const compName = symbolPinsDatabase[comp.symbolUuid][partIdx].name;;
-								// COMPONENT 行
-								comp.y = comp.y + 10;
-								const outY = yvalue ? -comp.y : comp.y;
-								const compLine = schComponentLine(compName, comp.x, outY, 0);
-								const compId = compLine.id;
-								lines.push(compLine.line);
-
-								// Device 属性
-								lines.push(schAttrLine(compId, 'Device', comp.deviceUuid || ''));
-								// Symbol 属性
-								lines.push(schAttrLine(compId, 'Symbol', comp.symbolUuid || ''));
-								// Unique ID 属性
-								lines.push(schAttrLine(compId, 'Unique ID', comp.uniqueId || ''));
-								// Designator 属性（带坐标偏移）
-								lines.push(schAttrLine(compId, 'Designator', comp.designator || '', { rotation: 0, keyVisible: false, valueVisible: true }));
-								// Name 属性（带坐标偏移）
-								lines.push(schAttrLine(compId, 'Name', comp.name || '', { rotation: 0, keyVisible: false, valueVisible: true }));
-								// Channel ID / Group ID / Reuse Block：EDA 自己写盘时每个器件都有，
-								// 其中 Channel ID 缺失会导致整份源码被拒写（V4 实测）
-								lines.push(schAttrLine(compId, 'Channel ID', ''));
-								lines.push(schAttrLine(compId, 'Group ID', ''));
-								lines.push(schAttrLine(compId, 'Reuse Block', ''));
-								// 新增：生成导线
-								if (genWire) {
-									const wireLines = generateWires(comp, compId, comp.x, outY, version, wireLength, partIdx);
-									lines.push(...wireLines);
-								}
-								
-								// 更新范围
-								minX = Math.min(minX, comp.x);
-								maxX = Math.max(maxX, comp.x);
-								minY = Math.min(minY, comp.y);
-								maxY = Math.max(maxY, comp.y);
-							}
-						});
-					} else {
-						// 动态布局基于 BBOX（V3 版本）
-						let currentX = startX;
-						let lastRight = null;
-						let minYThisRow = currentTopY; // 当前行最下边缘
-
-						const partsList = [];
-						items.forEach(comp => {
-							const partCount = comp.partCount || 1;
-							for (let partIdx = 0; partIdx < partCount; partIdx++) {
-								partsList.push({ comp: comp, partIdx: partIdx });
-							}
-						});
-
-						for (let i = 0; i < partsList.length; i++) {
-							const item = partsList[i];
-							const comp = item.comp;
-							const partIdx = item.partIdx;
-
-							let bbox;
-							if (comp.symbolUuid && symbolPinsDatabase[comp.symbolUuid] && symbolPinsDatabase[comp.symbolUuid][partIdx]) {
-								bbox = symbolPinsDatabase[comp.symbolUuid][partIdx].pinBbox;
-							} else {
-								bbox = [-20, -20, 20, 20];
-							}
-							const xmin = bbox[0];
-							const ymin = bbox[1];
-							const xmax = bbox[2];
-							const ymax = bbox[3];
-
-							let compX;
-							if (lastRight === null) {
-								compX = startX - xmin;
-							} else {
-								compX = lastRight + 40 - xmin;
-							}
-							const right = compX + xmax;
-
-							if (right > 2560) {
-								currentTopY = minYThisRow - 40;
-								currentX = startX;
-								compX = startX - xmin;
-								lastRight = compX + xmax;
-								minYThisRow = currentTopY;
-							} else {
-								lastRight = right;
-							}
-
-							// 顶部对齐
-							const compY = currentTopY - ymax;
-							
-							const absoluteBottomY = compY + ymin;
-							if (absoluteBottomY < minYThisRow) {
-								minYThisRow = absoluteBottomY;
-							}
-
-							// 生成元件（V3/V4 格式）
-							const symbolName = comp.symbolName || 'Unknown';
-							const compName = symbolPinsDatabase[comp.symbolUuid][partIdx].name;;
-							const outY = yvalue ? -compY : compY;
-							const compLine = schComponentLine(compName, compX, outY, 0);
-							const compId = compLine.id;
-							lines.push(compLine.line);
-
-							// 属性
-							lines.push(schAttrLine(compId, 'Device', comp.deviceUuid || ''));
-							lines.push(schAttrLine(compId, 'Symbol', comp.symbolUuid || ''));
-							lines.push(schAttrLine(compId, 'Unique ID', comp.uniqueId || ''));
-							lines.push(schAttrLine(compId, 'Designator', comp.designator || '', { rotation: 0, keyVisible: false, valueVisible: true }));
-							lines.push(schAttrLine(compId, 'Name', comp.name || '', { rotation: 0, keyVisible: false, valueVisible: true }));
-							// Channel ID 缺失会让整份源码被拒写；Group ID / Reuse Block 与 EDA 自身写盘保持一致
-							lines.push(schAttrLine(compId, 'Channel ID', ''));
-							lines.push(schAttrLine(compId, 'Group ID', ''));
-							lines.push(schAttrLine(compId, 'Reuse Block', ''));
-							
-							// 新增：生成导线
-							if (genWire) {
-								const wireLines = generateWires(comp, compId, compX, outY, version, wireLength, partIdx);
-								lines.push(...wireLines);
-							}
-							// 更新组的包围盒（使用实际坐标）
-							minX = Math.min(minX, compX + xmin);
-							maxX = Math.max(maxX, compX + xmax);
-							minY = Math.min(minY, compY + ymin);
-							maxY = Math.max(maxY, compY + ymax);
-						}
-					}
-
-					// 显示标题与框线
-					const padding = 120;
-					if (genFrame && minX !== Infinity && yvalue) {
-						// const rectTicket = idCounter++;
-						// const rectId = 'e' + rectTicket;
-						// lines.push(`{"type":"RECT","ticket":${rectTicket},"id":"${rectId}"}||{"dotX1":${minX-padding},"dotY1":${-minY+padding},"dotX2":${maxX+padding},"dotY2":${-maxY-padding},"strokeWidth":2,"radiusX":0,"radiusY":0,"rotation":0}|`);
-						const titleTicket = idCounter++;
-						const titleId = 'e' + titleTicket;
-						lines.push(`{"type":"TEXT","ticket":${titleTicket},"id":"${titleId}"}||{"x":${minX-padding+10},"y":${-maxY- padding+30},"value":"${group.name}","fontSize":60,"align":"LEFT_MIDDLE","rotation":0}|`);
-					}else if(genFrame && minX !== Infinity){
-						// const rectTicket = idCounter++;
-						// const rectId = 'e' + rectTicket;
-						// lines.push(`{"type":"RECT","ticket":${rectTicket},"id":"${rectId}"}||{"dotX1":${minX-padding},"dotY1":${minY-padding},"dotX2":${maxX+padding},"dotY2":${maxY+padding},"strokeWidth":2,"radiusX":0,"radiusY":0,"rotation":0}|`);
-						const titleTicket = idCounter++;
-						const titleId = 'e' + titleTicket;
-						lines.push(`{"type":"TEXT","ticket":${titleTicket},"id":"${titleId}"}||{"x":${minX-padding+10},"y":${maxY + padding - 30},"value":"${group.name}","fontSize":60,"align":"LEFT_MIDDLE","rotation":0}|`);
-					}
-
-					// 组间空行
-					if (classify !== 'coord') {
-						// 下一组起点为上一组的最低点往下方 200 个单位
-						currentTopY = minY - 200;
-					}
-				});
-				if (lines.length > 0 && lines[lines.length-1].endsWith('|')) {
-					lines[lines.length-1] = lines[lines.length-1].slice(0, -1);
-				}
-
-				return lines.join('\n');
-			}
-		}
+      tableRows.appendChild(row);
+    });
+  }
+  function collectManualInputs() {
+    const map = /* @__PURE__ */ new Map();
+    document.querySelectorAll(".manual-input").forEach((input) => {
+      const groupKey = input.getAttribute("data-group-key");
+      if (groupKey) map.set(groupKey, input.value.trim());
+    });
+    return map;
+  }
+  var KEYWORD_TO_SYMBOL = {
+    无极电容: "801c26e6ac62427db41c6496435118b6",
+    电阻: "9c1d6a5e19e649e888ff79bf9e87b823",
+    电感: "3f193864f7264a439d7adc22fdbb5dbf"
+  };
+  function findSymbolUuidByTitle(title) {
+    const symbols = projectJson && projectJson.symbols || {};
+    for (const entry of Object.entries(symbols)) {
+      if (entry[1].title === title) return entry[0];
+    }
+    return null;
+  }
+  function applyManualSymbols(manualMap) {
+    for (const [groupKey, inputValue] of manualMap.entries()) {
+      if (!inputValue) continue;
+      const targetUuid = KEYWORD_TO_SYMBOL[inputValue] || findSymbolUuidByTitle(inputValue);
+      if (!targetUuid) continue;
+      const group = mergedRows.find((row) => row.key === groupKey);
+      if (!group) continue;
+      group.componentIndices.forEach((idx) => {
+        if (!components[idx]) return;
+        components[idx].symbolUuid = targetUuid;
+        components[idx].symbolName = inputValue;
+      });
+    }
+  }
+  function checkMissingSymbols() {
+    const missing = /* @__PURE__ */ new Set();
+    components.forEach((comp, idx) => {
+      if (comp.symbolUuid) return;
+      const group = mergedRows.find((row) => row.componentIndices.includes(idx));
+      if (group) missing.add(group.key);
+    });
+    return Array.from(missing);
+  }
+  async function enrichPartCounts(compList) {
+    symbolPinsDatabase = {};
+    for (const comp of compList) {
+      if (!comp.symbolUuid) {
+        comp.partCount = 1;
+        continue;
+      }
+      if (symbolPinsDatabase[comp.symbolUuid]) {
+        comp.partCount = symbolPinsDatabase[comp.symbolUuid].length;
+        continue;
+      }
+      const file = zip.file(symbolFilePath(comp.symbolUuid));
+      if (!file) {
+        logger.warn(`符号文件不存在: ${symbolFilePath(comp.symbolUuid)}`);
+        symbolPinsDatabase[comp.symbolUuid] = [{ pinBbox: null, pins: {} }];
+        comp.partCount = 1;
+        continue;
+      }
+      const parts = parseSymbolSource(await file.async("string"));
+      symbolPinsDatabase[comp.symbolUuid] = parts;
+      comp.partCount = parts.length;
+    }
+  }
+  async function onBuild() {
+    const yvalue = yvalueCheck.checked;
+    const classify = currentClassify();
+    const ignoreMissing = errorsCheck.checked;
+    try {
+      document.querySelectorAll(".grid-row").forEach((row) => row.classList.remove("row-error"));
+      const startTime = Date.now();
+      if (components && projectJson) enrichWithSymbol(components, projectJson);
+      updateProgress(5, "获取指定符号");
+      applyManualSymbols(collectManualInputs());
+      await delay(100);
+      updateProgress(10, "检测符号是否存在");
+      const missingSymbols = checkMissingSymbols();
+      if (missingSymbols.length > 0) {
+        missingSymbols.forEach((groupKey) => {
+          const rowElement = document.querySelector(`[data-group-key="${groupKey}"]`);
+          if (rowElement) rowElement.classList.add("row-error");
+        });
+        if (!ignoreMissing) {
+          throw new Error("未生成源码，部分元件格式错误，已标红，需要做完 器件标准化 才能转换！！！");
+        }
+        logger.debug(`忽略 ${missingSymbols.length} 组缺失符号的元件，它们将不会出现在生成的源码中`);
+        updateProgress(10, `忽略 ${missingSymbols.length} 组缺失符号元件`);
+      }
+      await delay(100);
+      const componentsToBuild = ignoreMissing ? components.filter((comp) => comp.symbolUuid && comp.symbolUuid.trim() !== "") : components;
+      updateProgress(20, "检测多部件符号中");
+      await enrichPartCounts(componentsToBuild);
+      await delay(100);
+      updateProgress(40, "构建源码");
+      candidateSource = buildSchSource({
+        components: componentsToBuild,
+        symbolDb: symbolPinsDatabase,
+        format: isV2() ? "v2" : "modern",
+        options: {
+          classify,
+          // 只有一个「生成标题」复选框：既决定组标题，也决定是否画框线（原实现两个变量指向同一元素）
+          genFrame: genTitleCheck.checked,
+          genWire: genWireCheck.checked,
+          yvalue,
+          startX: 200,
+          startY: -200,
+          colSpacing: 150,
+          rowSpacing: 150,
+          perRow: 20,
+          wireLength: 40
+        }
+      });
+      await delay(100);
+      const elapsed = ((Date.now() - startTime) / 1e3).toFixed(1);
+      const lineCount = candidateSource ? candidateSource.split("\n").length : 0;
+      updateProgress(100, `构建源码完成，耗时${elapsed}秒，生成了 ${lineCount} 行源码`);
+      writeBtn.disabled = false;
+      outfile.disabled = false;
+      exportNetBtn.disabled = false;
+    } catch (error) {
+      logger.error("构建源码失败:", error);
+      updateProgress(0, `错误: ${error.message}`);
+    }
+  }
+  async function onWrite() {
+    try {
+      if (!candidateSource) throw new Error("没有可写入的源码，请先构建");
+      const startTime = Date.now();
+      updateProgress(90, "正在写入文档...");
+      const curDoc = await eda.dmt_SelectControl.getCurrentDocumentInfo();
+      if (!curDoc || curDoc.documentType !== 1) {
+        updateProgress(0, "请先切换到原理图页再写入");
+        toast("请先切换到原理图页再写入", "warning");
+        return;
+      }
+      const isSuccess = await eda.sys_FileManager.setDocumentSource(candidateSource);
+      const elapsed = ((Date.now() - startTime) / 1e3).toFixed(1);
+      let placedCount = 0;
+      try {
+        const comps = await eda.sch_PrimitiveComponent.getAll();
+        placedCount = Array.isArray(comps) ? comps.length : 0;
+      } catch (e) {
+        logger.warn("写入后清点器件失败（可忽略）", e);
+      }
+      logger.debug(`[Debug] 写入返回 ${isSuccess}，当前原理图器件数 ${placedCount}`);
+      if (isSuccess && placedCount > 0) {
+        updateProgress(100, `写入成功！耗时${elapsed}秒，器件 ${placedCount} 个`);
+        toast("写入成功", "success");
+      } else if (isSuccess) {
+        updateProgress(100, `源码已写入，但没有生成任何器件（耗时${elapsed}秒）`);
+        toast("源码已写入，但器件没有生成：原理图页可能有旧内容，建议新建一个空白原理图页后重新写入", "error");
+      } else {
+        updateProgress(100, `写入失败！耗时${elapsed}秒`);
+        toast("写入失败", "error");
+      }
+    } catch (error) {
+      logger.error("写入失败:", error);
+      updateProgress(0, `错误: ${error.message}`);
+    }
+  }
+  function onExportCsv() {
+    if (!projectJson || !currentPcbUuid) {
+      toast("请先刷新列表", "warning");
+      updateProgress(0, "请先加载数据");
+      return;
+    }
+    const headers = Array.from(document.querySelectorAll(".table-header .header-cell")).map(
+      (cell) => cell.innerText.trim()
+    );
+    const rows = [];
+    document.querySelectorAll(".grid-row").forEach((row) => {
+      const cells = row.querySelectorAll(".row-cell");
+      const rowData = [];
+      cells.forEach((cell, index) => {
+        if (index === cells.length - 1) {
+          const input = cell.querySelector("input");
+          rowData.push(input ? input.value : "");
+        } else {
+          rowData.push(cell.innerText.trim());
+        }
+      });
+      rows.push(rowData);
+    });
+    const csv = [headers, ...rows].map((line) => line.map(csvCell).join(",")).join("\n") + "\n";
+    const filename = `${currentPcbUuid}_${stamp()}.csv`;
+    updateProgress(100, `导出成功：${filename}`);
+    downloadText(filename, csv, { mime: "text/csv", bom: true });
+  }
+  function csvCell(cell) {
+    const text = String(cell === null || cell === void 0 ? "" : cell);
+    if (text.includes(",") || text.includes('"') || text.includes("\n")) return `"${text.replace(/"/g, '""')}"`;
+    return text;
+  }
+  function onExportNet() {
+    if (!components || components.length === 0) {
+      updateProgress(0, "请先加载数据并构建源码");
+      return;
+    }
+    if (Object.keys(symbolPinsDatabase).length === 0) {
+      updateProgress(0, "请先构建源码以获取引脚信息");
+      return;
+    }
+    const lines = ["唯一ID,位号,引脚编号,引脚名称,引脚网络"];
+    for (const comp of components) {
+      const symbolParts = symbolPinsDatabase[comp.symbolUuid] || [];
+      for (const entry of Object.entries(comp.pins || {})) {
+        const pinNumber = entry[0];
+        if (!pinNumber) continue;
+        const pinName = pinNameOf(symbolParts, pinNumber);
+        lines.push([comp.uniqueId || "", comp.designator || "", pinNumber, pinName, entry[1] || ""].map(csvCell).join(","));
+      }
+    }
+    const filename = `${currentPcbUuid || "netlist"}_${stamp()}_netlist.csv`;
+    updateProgress(100, `导出网络成功：${filename}`);
+    downloadText(filename, lines.join("\n"), { mime: "text/csv", bom: true });
+  }
+  function pinNameOf(symbolParts, pinNumber) {
+    for (const part of symbolParts) {
+      const pin = (part.pins || {})[pinNumber];
+      if (pin && pin.name) return pin.name;
+    }
+    return "";
+  }
+  async function onExportProject() {
+    if (!zip || !currentSchematicUuid) {
+      updateProgress(0, "请先刷新加载数据");
+      return;
+    }
+    if (!candidateSource) {
+      updateProgress(0, "没有可导出的源码，请先构建");
+      return;
+    }
+    try {
+      updateProgress(30, "准备导出文件...");
+      zip.file(`SHEET/${currentSchematicUuid}/1.esch`, candidateSource);
+      updateProgress(60, "正在生成工程文件...");
+      const blob = await zip.generateAsync({ type: "blob", compression: "DEFLATE", compressionOptions: { level: 6 } });
+      const fileName = projectTitleOf(projectJson);
+      const link = document.createElement("a");
+      link.href = URL.createObjectURL(blob);
+      link.download = fileName;
+      link.click();
+      URL.revokeObjectURL(link.href);
+      updateProgress(100, `导出成功：${fileName}`);
+      toast("文件已导出", "success");
+    } catch (error) {
+      logger.error("导出失败:", error);
+      updateProgress(0, `导出错误: ${error.message}`);
+    }
+  }
+  initVersion();
+  refreshBtn.addEventListener("click", onRefresh);
+  exportCsvBtn.addEventListener("click", onExportCsv);
+  exportNetBtn.addEventListener("click", onExportNet);
+  buildBtn.addEventListener("click", onBuild);
+  writeBtn.addEventListener("click", onWrite);
+  outfile.addEventListener("click", onExportProject);
+})();

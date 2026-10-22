@@ -763,3 +763,917 @@ describe('app/{import-qrcode/create-footprint}', () => {
 		assert.ok(source.includes('"title":"TEST"'));
 	});
 });
+
+describe('app/replace-component/pastePlan', () => {
+	it('解析剪贴板：Tab / 空格 / 逗号位号 / 空行', async () => {
+		const { parseClipboard } = await import('../iframe/js/src/app/replace-component/pastePlan.js');
+		const text = ['C106\tC100042', '', 'R5   R6    C200001', 'D1,D2\tC300001', '单列无编号'].join('\n');
+		const map = parseClipboard(text);
+		assert.equal(map.get('C106'), 'C100042');
+		assert.equal(map.get('R5'), 'C200001');
+		assert.equal(map.get('R6'), 'C200001', '多个空格分隔的位号共享同一编号');
+		assert.equal(map.get('D1'), 'C300001');
+		assert.equal(map.get('D2'), 'C300001');
+		assert.equal(map.size, 5, '只有一行的记录必须被忽略');
+	});
+
+	it('编号变化时自动勾选并清空旧缓存；编号未变则不动', async () => {
+		const { applyTargetSupplierIds } = await import('../iframe/js/src/app/replace-component/pastePlan.js');
+		const items = [
+			{ designator: 'C1', target: { supplierId: 'C100', name: '旧名', footprint: '0805', uuid: 'u1' }, selected: false },
+			{ designator: 'C2', target: { supplierId: 'C200' }, selected: false },
+		];
+		const count = applyTargetSupplierIds(items, new Map([['C1', 'C999'], ['C2', 'C200']]));
+		assert.equal(count, 1, '只有 C1 真的变了');
+		assert.equal(items[0].selected, true);
+		assert.equal(items[0].target.name, null, '缓存名称必须清空，否则会拿旧属性替换');
+		assert.equal(items[0].target.uuid, null);
+		assert.equal(items[1].selected, false);
+	});
+
+	it('展平→打标→重分组：目标编号不同的必须拆行', async () => {
+		const { flattenGroups, applyTargetSupplierIds, regroupGroups } = await import(
+			'../iframe/js/src/app/replace-component/pastePlan.js'
+		);
+		const groups = [
+			{
+				designators: ['C1', 'C10', 'C2'],
+				primitiveId: ['p1', 'p2', 'p3'],
+				original: { name: '100nF', footprint: '0603', supplierId: 'C100' },
+				target: { name: null, footprint: null, supplierId: null },
+				options: { preserveName: true, preserveFootprint: true, preserve3D: true },
+				selected: false,
+				ComponentsSource: ['s1', 's2', 's3'],
+			},
+		];
+		const items = flattenGroups(groups);
+		assert.equal(items.length, 3);
+		applyTargetSupplierIds(items, new Map([['C1', 'C900'], ['C2', 'C900'], ['C10', 'C800']]));
+		const regrouped = regroupGroups(items);
+		assert.equal(regrouped.length, 2, 'C10 目标不同 → 必须拆成独立一行');
+		const byTarget = regrouped.map((g) => g.target.supplierId).sort();
+		assert.deepEqual(byTarget, ['C800', 'C900']);
+		const c900 = regrouped.find((g) => g.target.supplierId === 'C900');
+		assert.deepEqual(c900.designators, ['C1', 'C2'], '位号要按自然序排好');
+		assert.deepEqual(c900.primitiveId, ['p1', 'p3']);
+	});
+});
+
+describe('app/replace-component/sourceRewrite', () => {
+	const action = () => ({
+		preserveName: false,
+		preserveFootprint: false,
+		preserve3D: true,
+		targetDeviceUuid: 'dev-new',
+		targetDeviceNameJson: '{"name":"R","source":"sys","uuid":"dev-new"}',
+		targetName: 'NEW-NAME',
+		targetFootprintUuid: 'fp-new',
+	});
+
+	it('V2 数组格式：Device 必改，Name/Footprint 按「保留」开关', async () => {
+		const { rewriteLine } = await import('../iframe/js/src/app/replace-component/sourceRewrite.js');
+		const map = new Map([['e5', action()]]);
+
+		const dev = JSON.stringify(['ATTR', 'a1', 0, 'e5', '', '', '', 'Device', 'dev-old', 0]);
+		assert.equal(JSON.parse(rewriteLine(dev, map))[8], 'dev-new');
+
+		const name = JSON.stringify(['ATTR', 'a2', 0, 'e5', '', '', '', 'Name', 'OLD', 0]);
+		assert.equal(JSON.parse(rewriteLine(name, map))[8], 'NEW-NAME');
+
+		const keep = new Map([['e5', { ...action(), preserveName: true, preserveFootprint: true }]]);
+		assert.equal(rewriteLine(name, keep), name, '勾了保留就必须原样返回');
+		assert.equal(rewriteLine(JSON.stringify(['ATTR', 'a3', 0, 'e5', '', '', '', 'Value', '1k', 0]), map).includes('1k'), true);
+
+		const other = JSON.stringify(['ATTR', 'a4', 0, 'e9', '', '', '', 'Device', 'x', 0]);
+		assert.equal(rewriteLine(other, map), other, '非目标图元不动');
+	});
+
+	it('V3/V4 日志格式：COMPONENT 的 attrs.DeviceName 与 ATTR 的 value 都要改，行尾 | 保持原样', async () => {
+		const { rewriteLine } = await import('../iframe/js/src/app/replace-component/sourceRewrite.js');
+		const map = new Map([['e5', action()]]);
+
+		const comp = '{"type":"COMPONENT","id":"e5"}||{"attrs":{"DeviceName":"old"},"x":1}|';
+		const compOut = rewriteLine(comp, map);
+		assert.equal(compOut.endsWith('|'), true, '行尾 | 必须保留');
+		assert.equal(JSON.parse(compOut.slice(0, -1).split('||')[1]).attrs.DeviceName, action().targetDeviceNameJson);
+
+		// 有些行没有行尾 |（EDA 写盘残留），改写后也不能凭空加上
+		const noPipe = '{"type":"ATTR","id":"a1"}||{"parentId":"e5","key":"Device","value":"old"}';
+		const noPipeOut = rewriteLine(noPipe, map);
+		assert.equal(noPipeOut.endsWith('|'), false, '原本没有行尾 | 就不能加');
+		assert.equal(JSON.parse(noPipeOut.split('||')[1]).value, 'dev-new');
+
+		// V2/V3 器件：没有 DeviceNameJson 时 COMPONENT 行不动
+		const legacy = new Map([['e5', { ...action(), targetDeviceNameJson: null }]]);
+		assert.equal(rewriteLine(comp, legacy), comp);
+	});
+
+	it('整份改写：只动命中行，其余行逐字节不变', async () => {
+		const { rewriteSource } = await import('../iframe/js/src/app/replace-component/sourceRewrite.js');
+		const map = new Map([['e5', action()]]);
+		const src = [
+			'["DOCTYPE","PCB","1.0"]',
+			'',
+			'{"type":"ATTR","id":"a1"}||{"parentId":"e5","key":"Device","value":"old"}|',
+			'[]',
+			'{"type":"ATTR","id":"a2"}||{"parentId":"e9","key":"Device","value":"keep"}|',
+		].join('\n');
+		const out = rewriteSource(src, map).split('\n');
+		assert.equal(out.length, 5, '行数不变');
+		assert.equal(out[0], '["DOCTYPE","PCB","1.0"]');
+		assert.equal(out[1], '');
+		assert.equal(out[3], '[]');
+		assert.equal(out[4].includes('keep'), true);
+		assert.equal(out[2].includes('dev-new'), true);
+	});
+});
+
+describe('app/replace-component/{componentReader,netlistSync}', () => {
+	it('器件 uuid 三版本：V2 字符串 / V4 对象 / 为空', async () => {
+		const { getDeviceUuid, getDeviceNameJson } = await import('../iframe/js/src/app/replace-component/componentReader.js');
+		assert.equal(getDeviceUuid({ component: { uuid: 'u-1' } }), 'u-1');
+		assert.equal(getDeviceUuid({ component: { uuid: { name: 'R', source: 'sys', uuid: 'u-2' } } }), 'u-2');
+		assert.equal(getDeviceUuid({}), '');
+		assert.equal(getDeviceNameJson({ component: { uuid: 'u-1' } }), null, 'V2 不需要改 COMPONENT 行');
+		assert.equal(
+			getDeviceNameJson({ component: { uuid: { name: 'R', source: 'sys', uuid: 'u-2' } } }),
+			'{"name":"R","source":"sys","uuid":"u-2"}'
+		);
+	});
+
+	it('器件名读取：V4 无 Device 属性时从 component.uuid.name 取', async () => {
+		const { extractProps } = await import('../iframe/js/src/app/replace-component/componentReader.js');
+		const v4 = { name: '={Value}', otherProperty: { Value: '4.7K' }, component: { uuid: { name: 'RK73' } }, supplierId: 'C1' };
+		assert.equal(extractProps(v4).name, '4.7K');
+
+		const v2 = { name: 'CAP-10uF', otherProperty: { Footprint: '0805' }, supplierId: 'C2' };
+		assert.deepEqual(extractProps(v2), { name: 'CAP-10uF', footprint: '0805', supplierId: 'C2' });
+
+		const missing = { name: '={DoesNotExist}', otherProperty: {}, manufacturerId: 'M-1' };
+		assert.equal(extractProps(missing).name, 'M-1', '模板取不到值时回退器件名');
+	});
+
+	it('网表合并：受保护字段不覆盖，名称按保留开关', async () => {
+		const { applyTargetProps } = await import('../iframe/js/src/app/replace-component/netlistSync.js');
+		const container = {
+			a: {
+				props: {
+					Designator: 'C1',
+					Name: '旧',
+					FootprintName: '0603',
+					DeviceName: 'OLD',
+					'Unique ID': 'keep-me',
+					'3D Model': 'keep-3d',
+					Value: '1uF',
+				},
+			},
+			meta: { version: '2.0.0' },
+		};
+		const desigMap = new Map([
+			[
+				'C1',
+				{
+					preserveName: false,
+					preserveFootprint: false,
+					sourceName: '旧名',
+					targetName: '新名',
+					sourceFootprintName: '0603',
+					targetComp: {
+						otherProperty: { Value: '10uF', '3D Model': 'new', Designator: 'X' },
+						footprint: { name: '0805' },
+						supplier: 'LCSC',
+						supplierId: 'C999',
+						manufacturer: 'Yageo',
+						manufacturerId: 'RC0805',
+					},
+				},
+			],
+		]);
+		assert.equal(applyTargetProps(container, desigMap), 1, '没有 props 的元数据项要跳过');
+		const p = container.a.props;
+		assert.equal(p.Value, '10uF');
+		assert.equal(p['3D Model'], 'keep-3d', '3D 模型由专门步骤处理');
+		assert.equal(p['Unique ID'], 'keep-me');
+		assert.equal(p.Designator, 'C1', '位号绝不能被目标器件覆盖');
+		assert.equal(p.Name, '新名');
+		assert.equal(p.FootprintName, '0805');
+		assert.equal(p.DeviceName, 'RC0805');
+		assert.equal(p['Supplier Part'], 'C999');
+		assert.equal(p.Manufacturer, 'Yageo');
+	});
+});
+
+describe('core/concurrency', () => {
+	it('分片并发：结果保序、片内不超过并发上限', async () => {
+		const { mapInChunks } = await import('../iframe/js/src/core/concurrency.js');
+		let inFlight = 0;
+		let peak = 0;
+		const items = Array.from({ length: 23 }, (_, i) => i);
+		const out = await mapInChunks(
+			items,
+			5,
+			async (n) => {
+				inFlight += 1;
+				peak = Math.max(peak, inFlight);
+				await new Promise((r) => setTimeout(r, 1));
+				inFlight -= 1;
+				return n * 2;
+			},
+			{ yieldMs: 0 }
+		);
+		assert.deepEqual(out.slice(0, 3), [0, 2, 4]);
+		assert.equal(out[22], 44, '结果必须与入参同序');
+		assert.ok(peak <= 5, `并发上限被突破：${peak}`);
+	});
+
+	it('进度回调覆盖到每一项；mapper 抛错会中断整批', async () => {
+		const { mapInChunks } = await import('../iframe/js/src/core/concurrency.js');
+		const seen = [];
+		await mapInChunks([1, 2, 3], 2, async (n) => n, { yieldMs: 0, onProgress: (done, total) => seen.push(`${done}/${total}`) });
+		assert.deepEqual(seen, ['1/3', '2/3', '3/3']);
+
+		await assert.rejects(
+			mapInChunks([1, 2, 3], 2, async (n) => {
+				if (n === 2) throw new Error('boom');
+				return n;
+			}, { yieldMs: 0 })
+		);
+	});
+});
+
+describe('app/pcb-to-sch/model', () => {
+	it('findUuids：从当前页 uuid 找到原理图与 PCB', async () => {
+		const { findUuids } = await import('../iframe/js/src/app/pcb-to-sch/model.js');
+		const project = {
+			schematics: { s1: { sheets: [{ uuid: 'sheet-a' }] }, s2: { sheets: [{ uuid: 'sheet-b' }] } },
+			boards: { board1: { schematic: 's2', pcb: 'pcb-2' } },
+		};
+		assert.deepEqual(findUuids(project, 'sheet-b'), { schematicUuid: 's2', pcbUuid: 'pcb-2' });
+		assert.throws(() => findUuids(project, 'nope'), /未找到对应原理图UUID/);
+		assert.throws(() => findUuids({ schematics: { s1: { sheets: [{ uuid: 'x' }] } }, boards: {} }, 'x'), /未找到对应PCB UUID/);
+	});
+
+	it('parsePcbContent：COMPONENT / ATTR / PAD_NET 三类行', async () => {
+		const { parsePcbContent } = await import('../iframe/js/src/app/pcb-to-sch/model.js');
+		const pcb = [
+			'["DOCTYPE","PCB","1.0"]',
+			'["COMPONENT","c1","R",1,100,200,90,{"Unique ID":"u1","Supplier Part":"C123"}]',
+			'["ATTR","a1",0,"c1","","","","Designator","R1",0]',
+			'["ATTR","a2",0,"c1","","","","Name","10K",0]',
+			'["ATTR","a3",0,"c1","","","","Device","dev1",0]',
+			'["ATTR","a4",0,"c1","","","","Footprint","fp1",0]',
+			'["PAD_NET","c1","1","VCC"]',
+			'["PAD_NET","c1","2",""]',
+			'不是 JSON 的行',
+		].join('\n');
+		const comps = parsePcbContent(pcb);
+		assert.equal(comps.length, 1);
+		assert.equal(comps[0].designator, 'R1');
+		assert.equal(comps[0].name, '10K');
+		assert.equal(comps[0].deviceUuid, 'dev1');
+		assert.equal(comps[0].footprintUuid, 'fp1');
+		assert.equal(comps[0].uniqueId, 'u1');
+		assert.equal(comps[0].supplierPart, 'C123');
+		assert.equal(comps[0].layer, 1);
+		assert.deepEqual(comps[0].pins, { 1: 'VCC', 2: '' }, '空网络名也要保留（表示未连接）');
+	});
+
+	it('enrichWithSymbol + mergeComponentsForDisplay', async () => {
+		const { enrichWithSymbol, mergeComponentsForDisplay } = await import('../iframe/js/src/app/pcb-to-sch/model.js');
+		const project = {
+			devices: { dev1: { title: '电阻', attributes: { Symbol: 'sym1' } } },
+			symbols: { sym1: { title: 'R' } },
+			footprints: { fp1: { title: '0603' } },
+		};
+		const comps = [
+			{ designator: 'R1', name: '10K', deviceUuid: 'dev1', footprintUuid: 'fp1', symbolUuid: '', symbolName: '', deviceName: '', footprintName: '', supplierPart: 'C1' },
+			{ designator: 'R2', name: '10K', deviceUuid: 'dev1', footprintUuid: 'fp1', symbolUuid: '', symbolName: '', deviceName: '', footprintName: '', supplierPart: '' },
+			{ designator: 'U1', name: '', deviceUuid: 'missing', footprintUuid: 'missing' },
+		];
+		enrichWithSymbol(comps, project);
+		assert.equal(comps[0].symbolUuid, 'sym1');
+		assert.equal(comps[0].symbolName, 'R');
+		assert.equal(comps[0].footprintName, '0603');
+		assert.equal(comps[2].symbolUuid, '', '找不到器件时三个字段都要清空');
+		assert.equal(comps[2].footprintName, '');
+
+		const rows = mergeComponentsForDisplay(comps);
+		assert.equal(rows.length, 2, '封装+器件相同的要合并');
+		assert.equal(rows[0].footprintName, '', '按封装名排序，空串在前');
+		assert.equal(rows[1].designatorDisplay, 'R1,R2');
+		assert.deepEqual(rows[1].componentIndices, [0, 1]);
+	});
+
+	it('projectTitleOf 去掉重复的 .epro 后缀', async () => {
+		const { projectTitleOf } = await import('../iframe/js/src/app/pcb-to-sch/model.js');
+		assert.equal(projectTitleOf({ title: '我的板子' }), '我的板子.epro');
+		assert.equal(projectTitleOf({ title: 'a.epro' }), 'a.epro');
+		assert.equal(projectTitleOf(null), 'project_PCB_TO_SCH.epro');
+	});
+});
+
+describe('app/pcb-to-sch/symbolParser', () => {
+	it('按 PART 切分，NUMBER/NAME 归并到引脚，包围盒外扩 40', async () => {
+		const { parseSymbolSource } = await import('../iframe/js/src/app/pcb-to-sch/symbolParser.js');
+		const esym = [
+			'["DOCTYPE","SYMBOL","1.1"]',
+			'["PART","R.1",{"BBOX":[-40,-40,40,40]}]',
+			'["PIN","p1",1,null,-40,0,20,0]',
+			'["ATTR","n1","p1","NAME","1"]',
+			'["ATTR","u1","p1","NUMBER","1"]',
+			'["PIN","p2",1,null,40,0,20,180]',
+			'["ATTR","n2","p2","NAME","2"]',
+			'["ATTR","u2","p2","NUMBER","2"]',
+			'["PART","R.2",{}]',
+			'["PIN","p3",1,null,0,100,20,90]',
+			'["ATTR","u3","p3","NUMBER","3"]',
+		].join('\n');
+		const parts = parseSymbolSource(esym);
+		assert.equal(parts.length, 2);
+		assert.equal(parts[0].name, 'R.1');
+		assert.deepEqual(parts[0].pins['1'], { x: -40, y: 0, angle: 0, name: '1' });
+		assert.deepEqual(parts[0].pinBbox, [-80, -40, 80, 40]);
+		assert.equal(parts[1].name, 'R.2');
+		assert.deepEqual(parts[1].pinBbox, [-40, 60, 40, 140]);
+	});
+
+	it('没有引脚号的行不计入：包围盒退化为默认值', async () => {
+		const { parseSymbolSource } = await import('../iframe/js/src/app/pcb-to-sch/symbolParser.js');
+		const parts = parseSymbolSource(['["PART","X.1",{}]', '["PIN","p1",1,null,0,0,20,0]'].join('\n'));
+		assert.deepEqual(parts[0].pins, {});
+		assert.deepEqual(parts[0].pinBbox, [-20, -20, 20, 20]);
+	});
+});
+
+describe('app/pcb-to-sch/layout', () => {
+	const symbolDb = {
+		sym: [{ name: 'R.1', pins: {}, pinBbox: [-20, -20, 20, 20] }],
+	};
+
+	it('流式布局：首个部件左边界对齐 startX，同行按 40 间隔，超出 2560 换行', async () => {
+		const { planFlowLayout } = await import('../iframe/js/src/app/pcb-to-sch/layout.js');
+		const items = [1, 2, 3].map((n) => ({ designator: 'R' + n, symbolUuid: 'sym' }));
+		const plan = planFlowLayout(items, { startX: 200, startTopY: -200, symbolDb });
+
+		// 第一个：compX = 200 - (-20) = 220，右边界 240
+		assert.equal(plan.parts[0].x, 220);
+		assert.equal(plan.parts[0].y, -220, 'compY = topY - ymax = -200 - 20');
+		// 第二个：compX = 240 + 40 - (-20) = 300
+		assert.equal(plan.parts[1].x, 300);
+		assert.equal(plan.bounds.minX, 200);
+		assert.equal(plan.parts[2].x, 380, 'compX = 320 + 40 + 20');
+		assert.equal(plan.bounds.maxX, 400);
+		assert.equal(plan.bounds.maxY, -200);
+		assert.equal(plan.bounds.minY, -240);
+		assert.equal(plan.nextTopY, -440, '下一组顶部 = 本组底部 - 200');
+	});
+
+	it('流式布局：换行后回到 startX，顶部下移 40', async () => {
+		const { planFlowLayout } = await import('../iframe/js/src/app/pcb-to-sch/layout.js');
+		const wide = { designator: 'W1', symbolUuid: 'wide' };
+		const db = { wide: [{ name: 'W.1', pins: {}, pinBbox: [-1200, -20, 1200, 20] }] };
+		const plan = planFlowLayout([wide, wide], { startX: 200, startTopY: -200, symbolDb: db });
+		assert.equal(plan.parts[0].x, 1400, 'compX = 200 - (-1200)');
+		// 第一个右边界 1400+1200=2600 > 2560 → 第二个必然换行
+		assert.equal(plan.parts[1].x, 1400);
+		// 第一个部件本身就超界（right=2600>2560）→ 先换行再放；第二个再换一次
+		assert.equal(plan.parts[0].y, -260);
+		assert.equal(plan.parts[1].y, -340);
+	});
+
+	it('坐标布局：用 PCB 原坐标，不改入参，多部件按 10 偏移', async () => {
+		const { planCoordLayout } = await import('../iframe/js/src/app/pcb-to-sch/layout.js');
+		const comp = { x: 100, y: 200, symbolUuid: 'sym', partCount: 2 };
+		const plan = planCoordLayout([comp]);
+		assert.equal(plan.parts.length, 2);
+		assert.deepEqual(
+			plan.parts.map((p) => ({ x: p.x, y: p.y })),
+			[
+				{ x: 100, y: 200 },
+				{ x: 100, y: 210 },
+			]
+		);
+		assert.equal(comp.y, 200, '绝不能改入参（原 V3 实现会累积漂移）');
+	});
+});
+
+describe('app/pcb-to-sch/sourceBuilder', () => {
+	const symbolDb = {
+		sym: [
+			{
+				name: 'R.1',
+				pins: { 1: { x: -40, y: 0, angle: 0, name: '1' }, 2: { x: 40, y: 0, angle: 180, name: '2' } },
+				pinBbox: [-80, -40, 80, 40],
+			},
+		],
+	};
+	const comps = [
+		{ designator: 'R10', name: '10K', deviceUuid: 'd1', symbolUuid: 'sym', uniqueId: 'u1', pins: { 1: 'VCC', 2: '' } },
+		{ designator: 'R2', name: '1K', deviceUuid: 'd1', symbolUuid: 'sym', uniqueId: 'u2', pins: {} },
+	];
+
+	it('分类：位号前缀分组 + 组内按数字升序（R2 在 R10 前）', async () => {
+		const { classifyGroups } = await import('../iframe/js/src/app/pcb-to-sch/sourceBuilder.js');
+		const groups = classifyGroups(comps, 'ref');
+		assert.equal(groups.length, 1);
+		assert.equal(groups[0].name, 'R');
+		assert.deepEqual(
+			groups[0].items.map((c) => c.designator),
+			['R2', 'R10']
+		);
+		assert.equal(classifyGroups(comps, 'coord')[0].name, '坐标布局');
+		assert.equal(classifyGroups([{ designator: '1', deviceName: '' }], 'device')[0].name, '未知器件');
+	});
+
+	it('现代格式：COMPONENT 必带 attrs、每器件必有 Channel ID、末行不带 |', async () => {
+		const { buildSchSource } = await import('../iframe/js/src/app/pcb-to-sch/sourceBuilder.js');
+		const src = buildSchSource({
+			components: comps,
+			symbolDb,
+			format: 'modern',
+			options: { classify: 'ref', startX: 200, startY: -200, now: () => 1700000000000 },
+		});
+		const lines = src.split('\n');
+		assert.equal(lines[0].startsWith('{"type":"DOCHEAD"}'), true);
+		assert.equal(lines[1].startsWith('{"type":"CANVAS"'), true);
+		assert.equal(lines[lines.length - 1].endsWith('|'), false, '末行不能有行尾 |');
+
+		const compLines = lines.filter((l) => l.includes('"type":"COMPONENT"'));
+		assert.equal(compLines.length, 2);
+		for (const line of compLines) {
+			const body = JSON.parse(line.replace(/\|$/, '').split('||')[1]);
+			assert.ok(body.attrs, 'V4 缺 attrs 会静默丢器件');
+			assert.deepEqual(Object.keys(body.attrs), [
+				'Footprints',
+				'Devices',
+				'DeviceName',
+				'FootprintName',
+				'pinClass',
+				'differentialPairClass',
+				'Symbols',
+			]);
+		}
+
+		const attrs = lines.filter((l) => l.includes('"type":"ATTR"')).map((l) => JSON.parse(l.replace(/\|$/, '').split('||')[1]));
+		const channelIds = attrs.filter((a) => a.key === 'Channel ID');
+		assert.equal(channelIds.length, 2, '每个器件都要有 Channel ID，否则整份拒写');
+		assert.ok(attrs.every((a) => 'zIndex' in a && 'parentId' in a && 'fillColor' in a), 'ATTR 字段必须齐全');
+	});
+
+	it('现代格式：开了 genWire 才生成导线，空网络不生成', async () => {
+		const { buildSchSource } = await import('../iframe/js/src/app/pcb-to-sch/sourceBuilder.js');
+		const withWire = buildSchSource({
+			components: [comps[0]],
+			symbolDb,
+			format: 'modern',
+			options: { classify: 'ref', genWire: true, now: () => 1 },
+		}).split('\n');
+		const wires = withWire.filter((l) => l.includes('"type":"WIRE"'));
+		assert.equal(wires.length, 1, '只有引脚 1 有网络，空心脚不连线');
+		const netAttr = withWire.filter((l) => l.includes('"key":"NET"'));
+		assert.equal(netAttr.length, 1);
+		assert.ok(netAttr.every((l) => l.includes('"value":"VCC"')));
+
+		const noWire = buildSchSource({
+			components: [comps[0]],
+			symbolDb,
+			format: 'modern',
+			options: { classify: 'ref', now: () => 1 },
+		}).split('\n');
+		assert.equal(noWire.filter((l) => l.includes('"type":"WIRE"')).length, 0);
+	});
+
+	it('V2 格式：头部 6 行、ATTR 的 y 位置分 0/null、Designator 在 Name 之前', async () => {
+		const { buildSchSource } = await import('../iframe/js/src/app/pcb-to-sch/sourceBuilder.js');
+		const lines = buildSchSource({ components: [comps[0]], symbolDb, format: 'v2', options: { classify: 'ref' } }).split(
+			'\n'
+		);
+		assert.deepEqual(lines.slice(0, 6).map((l) => JSON.parse(l)[0]), [
+			'DOCTYPE',
+			'HEAD',
+			'FONTSTYLE',
+			'FONTSTYLE',
+			'LINESTYLE',
+			'LINESTYLE',
+		]);
+		const comp = JSON.parse(lines[6]);
+		assert.equal(comp[0], 'COMPONENT');
+		assert.equal(comp[2], 'R.1');
+		// 原理图 V2 的 ATTR 是「短格式」：["ATTR", id, parentId, key, value, x, y, ...]
+		// 注意与 PCB 的 ATTR（parentId 在 3、key 在 7）不是同一套下标，别串用
+		const keys = lines.slice(7, 12).map((l) => JSON.parse(l)[3]);
+		assert.deepEqual(keys, ['Device', 'Symbol', 'Designator', 'Name', 'Unique ID']);
+		assert.deepEqual(
+			[JSON.parse(lines[8])[5], JSON.parse(lines[8])[6]],
+			[0, 0],
+			'Device 的 x/y 都写 0'
+		);
+		assert.deepEqual(
+			[JSON.parse(lines[9])[5], JSON.parse(lines[9])[6]],
+			[null, 0],
+			'Designator 的 x 写 null、y 写 0'
+		);
+	});
+
+	it('genFrame 生成组标题，y 位置随「Y 翻转」改变', async () => {
+		const { buildSchSource } = await import('../iframe/js/src/app/pcb-to-sch/sourceBuilder.js');
+		const plain = buildSchSource({
+			components: [comps[0]],
+			symbolDb,
+			format: 'modern',
+			options: { classify: 'ref', genFrame: true, now: () => 1 },
+		});
+		const textLine = plain.split('\n').find((l) => l.includes('"type":"TEXT"'));
+		assert.ok(textLine);
+		const body = JSON.parse(textLine.replace(/\|$/, '').split('||')[1]);
+		assert.equal(body.value, 'R');
+		assert.equal(body.align, 'LEFT_MIDDLE');
+
+		const flipped = buildSchSource({
+			components: [comps[0]],
+			symbolDb,
+			format: 'modern',
+			options: { classify: 'ref', genFrame: true, yvalue: true, now: () => 1 },
+		});
+		const flippedBody = JSON.parse(
+			flipped
+				.split('\n')
+				.find((l) => l.includes('"type":"TEXT"'))
+				.replace(/\|$/, '')
+				.split('||')[1]
+		);
+		assert.notEqual(flippedBody.y, body.y, 'Y 翻转后标题位置必须跟着变');
+	});
+});
+
+describe('app/generate-net/geometry', () => {
+	it('线段交叉：十字相交 true，平行/错开 false', async () => {
+		const { segmentsIntersect, isTwoLinesTouching, distToSegmentSquared } = await import(
+			'../iframe/js/src/app/generate-net/geometry.js'
+		);
+		assert.equal(segmentsIntersect(0, 0, 100, 0, 50, -50, 50, 50), true);
+		assert.equal(segmentsIntersect(0, 0, 100, 0, 0, 10, 100, 10), false);
+		assert.equal(distToSegmentSquared(50, 10, 0, 0, 100, 0), 100);
+
+		const a = { x1: 0, y1: 0, x2: 100, y2: 0, w: 10 };
+		assert.equal(isTwoLinesTouching(a, { x1: 100, y1: 3, x2: 200, y2: 3, w: 10 }), true, '端点半宽内算相接');
+		assert.equal(isTwoLinesTouching(a, { x1: 100, y1: 30, x2: 200, y2: 30, w: 10 }), false);
+	});
+
+	it('圆不能用包围盒四边近似：半径 0.955 与切线距离 1.27 不能判相接', async () => {
+		const { checkConnectivityHighPrecision } = await import('../iframe/js/src/app/generate-net/geometry.js');
+		const roundPad = { shape: 'ROUND', layer: 1, x: 0, y: 0, r: 0.955, w: 1.91, h: 1.91 };
+		const nearLine = { shape: 'line', layer: 1, x1: -50, y1: 1.27, x2: 50, y2: 1.27, w: 0.1 };
+		assert.equal(checkConnectivityHighPrecision(roundPad, nearLine), false, '圆心距 1.27 > r+w/2 时不能连通');
+
+		const touchLine = { shape: 'line', layer: 1, x1: -50, y1: 0.9, x2: 50, y2: 0.9, w: 0.1 };
+		assert.equal(checkConnectivityHighPrecision(roundPad, touchLine), true);
+	});
+
+	it('层不同不连通；MULTI 与任意层连通；盲埋孔按层栈翻译', async () => {
+		const { areLayersConnected, getRealLayerIdsFromRange, getStackIds } = await import(
+			'../iframe/js/src/app/generate-net/geometry.js'
+		);
+		assert.equal(areLayersConnected({ layer: 1 }, { layer: 2 }), false);
+		assert.equal(areLayersConnected({ layer: 1 }, { layer: 12 }), true);
+		assert.equal(areLayersConnected({ layer: 1, blindLayers: [1, 15] }, { layer: 15 }), true);
+		assert.equal(areLayersConnected({ layer: 1, blindLayers: [1, 15] }, { layer: 2 }), false);
+
+		const stack = getStackIds([15, 17, 15]);
+		assert.deepEqual(stack, [1, 15, 17, 2], '顶层 + 去重升序内层 + 底层');
+		assert.deepEqual(getRealLayerIdsFromRange('1-3', stack), [1, 15, 17]);
+		assert.deepEqual(getRealLayerIdsFromRange('', stack), null);
+		assert.deepEqual(getRealLayerIdsFromRange('x-y', stack), [], '解析不出数字时返回空表（原实现行为）');
+	});
+
+	it('圆弧拆折线：90° 弧的中间点在弧上（不是弦的中点）', async () => {
+		const { expandArcLines } = await import('../iframe/js/src/app/generate-net/geometry.js');
+		// 半圆：从 (100,0) 到 (0,0)，角度 180°（顺时针/逆时针由符号决定），半径 50
+		const segs = expandArcLines({ id: 'a1', type: 'ARC', net: 'N', layer: 1, x1: 100, y1: 0, x2: 0, y2: 0, angle: 180, w: 5 });
+		assert.ok(segs.length > 1, '必须拆成多段');
+		assert.equal(segs[0].x1, 100);
+		assert.equal(segs[segs.length - 1].x2, 0);
+		// 所有中间点都应在半径 50 的圆上
+		for (const s of segs) {
+			const d = Math.hypot(s.x1 - 50, s.y1);
+			assert.ok(Math.abs(d - 50) < 1e-6, `点不在弧上：${d}`);
+		}
+	});
+});
+
+describe('app/generate-net/sourceParser', () => {
+	it('V2：LINE / VIA / PAD_NET / LAYER', async () => {
+		const { parseV2Primitives } = await import('../iframe/js/src/app/generate-net/sourceParser.js');
+		const ctx = { allUsedNetNames: new Set(), padIdToPinInfo: {} };
+		const lines = [
+			'["LAYER",15,"INNER1","Inner1",3]',
+			'["LINE","e1",0,"VCC",1,0,0,100,0,10]',
+			'["VIA","e2",0,"GND","1-2",10,10,1,24]',
+			'["PAD_NET","c1","3","GND",".1"]',
+		];
+		const { primitives, innerLayerIds } = parseV2Primitives(lines, ctx);
+		assert.deepEqual(innerLayerIds, [15]);
+		assert.equal(primitives.length, 2);
+		assert.deepEqual(primitives[0], { id: 'e1', type: 'LINE', net: 'VCC', layer: 1, shape: 'line', x1: 0, y1: 0, x2: 100, y2: 0, w: 10 });
+		assert.equal(primitives[1].layer, 12, '过孔一律记在多层');
+		assert.equal(primitives[1].r, 12);
+		assert.deepEqual(ctx.padIdToPinInfo['c1.1'], { compId: 'c1', pin: '3' });
+		assert.equal(ctx.allUsedNetNames.has('VCC'), true);
+	});
+
+	it('V3：LINE / VIA / PAD_NET 的 id 拆解 / ATTR 位号回填', async () => {
+		const { parseV3Primitives } = await import('../iframe/js/src/app/generate-net/sourceParser.js');
+		const ctx = { allUsedNetNames: new Set(), padIdToPinInfo: {} };
+		const lines = [
+			'{"type":"LINE","ticket":3,"id":"e3"}||{"lineGroup":"e3","startX":0,"startY":0,"endX":10,"endY":0,"width":6,"netName":"N1","layerId":1}|',
+			'{"type":"VIA","ticket":4,"id":"e4"}||{"centerX":5,"centerY":5,"viaDiameter":24,"ruleName":"1-2","netName":"N2"}|',
+			'{"type":"PAD_NET","ticket":5,"id":"[\\"PAD_NET\\",\\"c9\\",\\"2\\",\\".3\\"]"}||{"padNet":"N3"}|',
+			'{"type":"ATTR","ticket":6,"id":"e6"}||{"key":"Designator","value":"R7","parentId":"c9"}|',
+		];
+		const { primitives, compIdToDesignator } = parseV3Primitives(lines, ctx);
+		assert.equal(primitives[0].x2, 10);
+		assert.equal(primitives[0].net, 'N1');
+		assert.equal(primitives[1].r, 12);
+		assert.equal(primitives[1]._rawRange, '1-2');
+		assert.equal(ctx.padIdToPinInfo['c9.3'].pin, '2');
+		assert.equal(ctx.padIdToPinInfo['.3'].compId, 'c9', '后缀键也要登记');
+		assert.equal(compIdToDesignator.c9, 'R7');
+		assert.equal(ctx.padIdToPinInfo['c9.3'].des, 'R7', '位号要回填到引脚信息');
+		assert.deepEqual([...ctx.allUsedNetNames].sort(), ['N1', 'N2', 'N3']);
+	});
+
+	it('FILL 多边形：矩形写法展开成 4 个顶点，多层填充被忽略', async () => {
+		const { parseV3Primitives } = await import('../iframe/js/src/app/generate-net/sourceParser.js');
+		const ctx = { allUsedNetNames: new Set(), padIdToPinInfo: {} };
+		const lines = [
+			'{"type":"FILL","id":"f1"}||{"path":["R",0,0,100,50,0,0],"netName":"GND","layerId":1}|',
+			'{"type":"FILL","id":"f2"}||{"path":["R",0,0,10,10,0,0],"netName":"X","layerId":12}|',
+		];
+		const { primitives } = parseV3Primitives(lines, ctx);
+		assert.equal(primitives.length, 1);
+		assert.equal(primitives[0].vertices.length, 4);
+		assert.equal(primitives[0].w, 100);
+		assert.equal(primitives[0].h, 50);
+		assert.equal(primitives[0].x, 50, '中心 = min + w/2');
+	});
+});
+
+describe('app/generate-net/{connectivity,netNamer,plan}', () => {
+	it('同层交叉的两条线并成一个分量；不同层不合并', async () => {
+		const { computeClusters } = await import('../iframe/js/src/app/generate-net/connectivity.js');
+		const prims = [
+			{ id: 'l1', type: 'LINE', net: 'A', layer: 1, shape: 'line', x1: 0, y1: 0, x2: 100, y2: 0, w: 6 },
+			{ id: 'l2', type: 'LINE', net: 'A', layer: 1, shape: 'line', x1: 50, y1: -50, x2: 50, y2: 50, w: 6 },
+			{ id: 'l3', type: 'LINE', net: 'B', layer: 2, shape: 'line', x1: 0, y1: 0, x2: 100, y2: 0, w: 6 },
+		];
+		const clusters = computeClusters(prims, [], [], {});
+		const sizes = Object.values(clusters).map((g) => g.length).sort((a, b) => b - a);
+		assert.deepEqual(sizes, [2, 1], 'l1 与 l2 合并，l3 因层不同独立');
+	});
+
+	it('定名：票数优先于名字长短（GND 覆铜不会被 1 个 DP 焊盘改名）', async () => {
+		const { voteNets, rankNetCandidates, createNetNamer, isGenericNet } = await import(
+			'../iframe/js/src/app/generate-net/netNamer.js'
+		);
+		const group = [
+			{ net: 'GND' },
+			{ net: 'GND' },
+			{ net: 'GND' },
+			{ net: 'DP' },
+			{ net: '' },
+			{ net: 'null' },
+		];
+		const votes = voteNets(group);
+		assert.equal(votes.get('GND'), 3);
+		assert.equal(votes.has(''), false, '空网络不计票');
+		assert.equal(votes.has('null'), false);
+		assert.equal(rankNetCandidates(votes)[0], 'GND');
+
+		assert.equal(isGenericNet('NET12'), true);
+		assert.equal(isGenericNet('net3'), true);
+		assert.equal(isGenericNet('NET_A'), false);
+		// 票数相同时：真实名 > NET*
+		const tie = voteNets([{ net: 'NET5' }, { net: 'VCC' }]);
+		assert.equal(rankNetCandidates(tie)[0], 'VCC');
+
+		const namer = createNetNamer(new Set(['NET1', 'NET2']));
+		assert.equal(namer.nameFor(new Map()), 'NET3', '必须跳过已占用的名字');
+		const namer2 = createNetNamer(new Set());
+		assert.equal(namer2.nameFor(new Map()), 'NET1');
+		assert.equal(namer2.nameFor(new Map()), 'NET2', '同一批内不重名');
+	});
+
+	it('图元模式：单元素分量跳过，只产出真正需要改的项', async () => {
+		const { planPrimitiveOperations } = await import('../iframe/js/src/app/generate-net/plan.js');
+		const clusters = {
+			r1: [
+				{ id: 'l1', type: 'LINE', net: 'VCC' },
+				{ id: 'l2', type: 'LINE', net: '' },
+			],
+			r2: [{ id: 'l3', type: 'LINE', net: '' }],
+			r3: [
+				{ id: 'l4', type: 'LINE', net: 'GND' },
+				{ id: 'l5', type: 'LINE', net: 'GND' },
+			],
+		};
+		const ops = planPrimitiveOperations(clusters, new Set());
+		assert.deepEqual(
+			ops.map((o) => `${o.id}:${o.oldNet}->${o.newNet}`),
+			['l2:—->VCC'],
+			'网络名未变的不产生操作；孤立图元跳过'
+		);
+	});
+
+	it('网表模式：按位号+引脚产出，旧网络从两种结构读', async () => {
+		const { planNetlistOperations } = await import('../iframe/js/src/app/generate-net/plan.js');
+		const clusters = {
+			r1: [
+				{ id: 'p1', type: 'PAD', net: 'GND', _pinInfo: { des: 'U1', pin: '1' } },
+				{ id: 'p2', type: 'PAD', net: 'GND', _pinInfo: { des: 'U1', pin: '2' } },
+			],
+		};
+		const container = {
+			c1: { props: { Designator: 'U1' }, pinInfoMap: { 1: { net: 'OLD' }, 2: { net: 'GND' } } },
+		};
+		const ops = planNetlistOperations(clusters, new Set(), container);
+		assert.deepEqual(ops, [{ des: 'U1', pin: '1', oldNet: 'OLD', newNet: 'GND', status: 'pending' }]);
+	});
+
+	it('写网表：两种引脚结构都能写，缺引脚按原结构补', async () => {
+		const { applyPinUpdates } = await import('../iframe/js/src/app/generate-net/plan.js');
+		const container = {
+			a: { props: { Designator: 'U1' }, pinInfoMap: { 1: { net: 'OLD' } } },
+			b: { props: { Designator: 'U2' }, pins: { 1: 'A' } },
+		};
+		const updates = new Map([
+			['U1', { 1: 'NEW', 2: 'GND' }],
+			['U2', { 1: 'B' }],
+		]);
+		const count = applyPinUpdates(container, updates);
+		assert.equal(count, 3, 'U1.1 改 + U1.2 新增 + U2.1 改');
+		assert.equal(container.a.pinInfoMap[1].net, 'NEW');
+		assert.deepEqual(container.a.pinInfoMap[2], { net: 'GND', number: '2' });
+		assert.equal(container.b.pins[1], 'B');
+	});
+});
+
+describe('app/generate-net/sourceRewrite', () => {
+	it('V2：普通图元改第 3 段，PAD_NET 用 compId+suffix 拼 id', async () => {
+		const { createLineRewriter } = await import('../iframe/js/src/app/generate-net/sourceRewrite.js');
+		const map = new Map([
+			['e1', 'GND'],
+			['c1.2', 'VCC'],
+		]);
+		const rewrite = createLineRewriter(map, true);
+
+		const line = '["LINE","e1",0,"OLD",1,0,0,10,0,6]';
+		const out = rewrite(line);
+		assert.equal(JSON.parse(out.line)[3], 'GND');
+		assert.equal(out.changedId, 'e1');
+
+		const padNet = '["PAD_NET","c1","2","OLD",".2"]';
+		const padOut = rewrite(padNet);
+		assert.equal(JSON.parse(padOut.line)[3], 'VCC');
+		assert.equal(padOut.changedId, 'c1.2');
+
+		const untouched = '["LINE","e9",0,"A",1,0,0,1,0,6]';
+		assert.equal(rewrite(untouched).line, untouched, '未命中的行必须逐字节不变');
+	});
+
+	it('V3：改 netName / padNet，行尾 | 保持原样', async () => {
+		const { createLineRewriter } = await import('../iframe/js/src/app/generate-net/sourceRewrite.js');
+		const map = new Map([
+			['e3', 'GND'],
+			['c9.7', 'VCC'],
+		]);
+		const rewrite = createLineRewriter(map, false);
+
+		const line = '{"type":"LINE","id":"e3"}||{"netName":"OLD","layerId":1}|';
+		const out = rewrite(line);
+		assert.equal(out.line.endsWith('|'), true);
+		assert.equal(JSON.parse(out.line.slice(0, -1).split('||')[1]).netName, 'GND');
+
+		const noPipe = '{"type":"LINE","id":"e3"}||{"netName":"OLD"}';
+		assert.equal(rewrite(noPipe).line.endsWith('|'), false, '原本没有行尾 | 就不能加');
+
+		const padNet = '{"type":"PAD_NET","id":"[\\"PAD_NET\\",\\"c9\\",\\"3\\",\\".7\\"]"}||{"padNet":"OLD"}|';
+		const padOut = rewrite(padNet);
+		assert.equal(JSON.parse(padOut.line.slice(0, -1).split('||')[1]).padNet, 'VCC');
+
+		const broken = '{"type":"LINE"';
+		assert.equal(rewrite(broken).line, broken, '解析不了的行原样返回');
+	});
+
+	it('整份改写的 changed 计数与实际改动行一致', async () => {
+		const { rewriteNetInSource } = await import('../iframe/js/src/app/generate-net/sourceRewrite.js');
+		const src = ['{"type":"LINE","id":"e1"}||{"netName":"A"}|', '{"type":"LINE","id":"e2"}||{"netName":"B"}|', ''];
+		const result = rewriteNetInSource(src, new Map([['e1', 'X']]), false);
+		assert.equal(result.changed, 1);
+		assert.equal(result.lines.length, 3);
+		assert.equal(result.lines[2], '');
+	});
+});
+
+describe('app/working-hours/{time,reminder}', () => {
+	it('时长格式：0 补成 00:00:00，超过 24 小时照常进位', async () => {
+		const { formatDuration, formatTimeCN, formatFullDateTime } = await import('../iframe/js/src/app/working-hours/time.js');
+		assert.equal(formatDuration(0), '00:00:00');
+		assert.equal(formatDuration(3725), '01:02:05');
+		assert.equal(formatDuration(90000), '25:00:00');
+		assert.equal(formatTimeCN(1.5), '1时30分');
+		assert.equal(formatTimeCN(NaN), '0时0分');
+		assert.equal(formatFullDateTime(Infinity), '无');
+		assert.equal(formatFullDateTime(new Date(2026, 9, 22, 15, 4).getTime()), '2026/10/22 15:04');
+	});
+
+	it('提醒分钟互转：纯数字按分钟，HH:MM:SS 按小时', async () => {
+		const { formatMin, parseMin } = await import('../iframe/js/src/app/working-hours/reminder.js');
+		assert.equal(formatMin(90), '1:30:00');
+		assert.equal(formatMin(45), '45:00');
+		assert.equal(parseMin('90'), 90);
+		assert.equal(parseMin('1:30:00'), 90);
+		assert.equal(parseMin('1:30'), 1, '两段只取第一段（当作小时）');
+		assert.equal(parseMin(''), 0);
+		assert.equal(parseMin('abc'), 0);
+		assert.equal(parseMin(15), 15);
+	});
+});
+
+describe('app/working-hours/aggregate', () => {
+	const day = (slots, meta) => JSON.stringify({ slots, meta });
+
+	it('聚合：时间轴补齐空白天、统计工时与首末时刻', async () => {
+		const { buildDataset } = await import('../iframe/js/src/app/working-hours/aggregate.js');
+		const now = new Date(2026, 9, 22, 12, 0, 0);
+		const configs = {
+			STATS_2026_10_20: day({ 0: { p1: [60, 0] }, 1: { p1: [0, 30] } }, { p1: '项目A' }),
+			STATS_2026_10_21: day({ 2: { p1: [120, 0] } }, { p1: '项目A' }),
+		};
+		const ds = buildDataset(configs, { now });
+
+		assert.equal(ds.timeline.length, 3 * 96, '20/21/22 三天 × 96 格');
+		assert.equal(ds.projectStats.p1.totalWork, 180);
+		assert.equal(ds.projectStats.p1.totalRest, 30);
+		assert.equal(ds.projectStats.p1.startTs, new Date(2026, 9, 20, 0, 0).getTime());
+		assert.equal(ds.projectStats.p1.endTs, new Date(2026, 9, 21, 0, 30).getTime());
+		assert.equal(ds.todayTs, new Date(2026, 9, 22, 0, 0).getTime());
+	});
+
+	it('没有任何历史数据时，时间轴只含今天，当前工程也建一行', async () => {
+		const { buildDataset } = await import('../iframe/js/src/app/working-hours/aggregate.js');
+		const now = new Date(2026, 9, 22, 12, 0, 0);
+		const ds = buildDataset({}, { currentUuid: 'cur', currentName: '当前工程', now });
+		assert.equal(ds.timeline.length, 96);
+		assert.equal(ds.projectStats.cur.name, '当前工程');
+		assert.equal(ds.projectStats.cur.totalWork, 0);
+		assert.deepEqual(ds.sortedProjectIds, ['cur']);
+	});
+
+	it('工程按总工时降序并依次配色；坏配置被跳过', async () => {
+		const { buildDataset, COLOR_PALETTE } = await import('../iframe/js/src/app/working-hours/aggregate.js');
+		const now = new Date(2026, 9, 22, 12, 0, 0);
+		const ds = buildDataset(
+			{
+				STATS_2026_10_22: day({ 0: { a: [10, 0], b: [99, 0] } }, { a: 'A', b: 'B' }),
+				STATS_2026_10_22_broken: 'not json',
+				OTHER_KEY: 'x',
+			},
+			{ now }
+		);
+		assert.deepEqual(ds.sortedProjectIds, ['b', 'a']);
+		assert.equal(ds.pidColorMap.b, COLOR_PALETTE[0]);
+		assert.equal(ds.pidColorMap.a, COLOR_PALETTE[1]);
+	});
+
+	it('今日工时只统计今天那 96 格', async () => {
+		const { buildDataset, getTodayWorkHours } = await import('../iframe/js/src/app/working-hours/aggregate.js');
+		const now = new Date(2026, 9, 22, 12, 0, 0);
+		const ds = buildDataset({ STATS_2026_10_22: day({ 0: { p: [3600, 0] }, 10: { p: [1800, 0] } }, { p: 'P' }) }, { now });
+		assert.equal(getTodayWorkHours(ds.timeline, ds.tsMap, ds.todayTs), 1.5);
+		assert.equal(getTodayWorkHours(ds.timeline, ds.tsMap, ds.todayTs, 'p'), 1.5);
+		assert.equal(getTodayWorkHours(ds.timeline, ds.tsMap, ds.todayTs, 'other'), 0);
+		assert.equal(getTodayWorkHours(ds.timeline, ds.tsMap, 0), 0, '时间轴上没有的日期返回 0');
+	});
+});
+
+describe('app/working-hours/reportTemplate', () => {
+	it('标题转义、数据与校验和注入、库标签二选一', async () => {
+		const { buildSecureReportHtml, buildLibTags } = await import('../iframe/js/src/app/working-hours/reportTemplate.js');
+		const html = buildSecureReportHtml({
+			fileName: '工时<A&B>',
+			libTags: '<script>lib</script>',
+			data: 'DATA_DATA',
+			hash: 'HASH_HASH',
+		});
+		assert.equal(html.includes('工时&lt;A&amp;B&gt;'), true, '标题必须转义');
+		assert.equal(html.includes('const _D = "DATA_DATA"'), true);
+		assert.equal(html.includes('const _H = "HASH_HASH"'), true);
+		assert.equal(html.includes('<script>lib</script>'), true);
+		assert.equal(html.includes('cdn.jsdelivr.net'), false, '已内联就不该再引 CDN');
+
+		// 注意：模板里的 `<\/script>` 求值后就是真正的 `</script>` —— 那正是库自己的闭合标签
+		assert.equal(buildLibTags('e', 'f'), '<script>e</script>\n\t<script>f</script>');
+		assert.ok(buildLibTags('', 'f').includes('cdn.jsdelivr.net/npm/echarts'), '缺任意一个就整体回退 CDN');
+		assert.ok(buildLibTags('e', '').includes('cdn.jsdelivr.net/npm/fflate'));
+	});
+});

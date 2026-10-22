@@ -178,3 +178,16 @@ EDA 扩展的 iframe 页面**不是文件 URL**，而是宿主拼出来的 `blob
 `fetch('/iframe/js/echarts.min.js')` 想内联本地库实现「离线看报告」，按上面第 2 条**必然失败并静默回退 CDN**
 → 离线打开导出报告图表仍是空的。正解是构建期把库源码作为字符串打进 bundle（`loader: { '.txt': 'text' }`）。
 
+
+## 前端模块化迁移状态（2026-10-22，18/18 页完成）
+
+- 源码在 `iframe/js/src/`（82 个 ESM 模块，`.edaignore` 已排除），产物仍是 `iframe/js/app/<Page>.js`
+  （`npm run build:iframe` 按页打包成单文件 IIFE），18 个 HTML 只删了 `common.js` 那一行。
+- **`common.js` 至今逐字节未动**（B0 备份的 sha256 可反查），待 B7 收尾时删门面。
+- 每页结构：`app/<page-kebab>/index.js`（只做取 DOM → 调模块 → 刷 UI）+ 同目录纯逻辑模型；
+  共享件在 `core/`、`ui/`、`sch/`。模块头五标签由 `test/moduleHeader.test.mjs` 强制。
+- ⚠️ **IIFE 化后，HTML 行内 `onclick` 引用的函数必须显式挂到 `window`**
+  （`Object.assign(window, {...})`），否则按钮静默失效。`test/inlineHandlers.test.mjs` 会审计全部页面。
+- ⚠️ 写盘类页面（GenerateNet / PcbToSch / ReplaceComponent）重构后**必须做逐字节对照**：
+  把原函数从备份抽出来，用 `node:vm` + 桩跑，与新模块比多组配置（详见 `2026-10-22.md`）。
+  本轮靠它抓到 V2 `FONTSTYLE st2` 的 `60` 写错列。
