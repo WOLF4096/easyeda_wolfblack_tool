@@ -1,12 +1,6 @@
 /*! 由 npm run build:iframe 从 iframe/js/src 生成，请勿直接修改本文件 */
 "use strict";
 (() => {
-  // iframe/js/src/core/util.js
-  function escapeHtml(value) {
-    if (value === null || value === void 0) return "";
-    return String(value).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
-  }
-
   // iframe/js/src/core/log.js
   var LOG_LEVELS = { debug: 10, info: 20, warn: 30, error: 40 };
   var currentLogLevel = LOG_LEVELS.info;
@@ -68,6 +62,242 @@
     }
   };
 
+  // iframe/js/src/app/working-hours/aggregate.js
+  var COLOR_PALETTE = Object.freeze([
+    "#5470c6",
+    "#91cc75",
+    "#fac858",
+    "#ee6666",
+    "#73c0de",
+    "#3ba272",
+    "#fc8452",
+    "#9a60b4",
+    "#ea7ccc",
+    "#16a34a",
+    "#d946ef",
+    "#f59e0b",
+    "#06b6d4",
+    "#8b5cf6",
+    "#ec4899",
+    "#10b981",
+    "#f43f5e",
+    "#6366f1",
+    "#84cc16",
+    "#f97316",
+    "#0ea5e9",
+    "#64748b",
+    "#fbbf24",
+    "#22c55e"
+  ]);
+  var SLOTS_PER_DAY = 96;
+  var SLOT_MS = 15 * 60 * 1e3;
+  function dayTsOf(dateKey) {
+    const parts = dateKey.split("_");
+    if (parts.length < 4) return NaN;
+    return (/* @__PURE__ */ new Date(`${parts[1]}/${parts[2]}/${parts[3]} 00:00:00`)).getTime();
+  }
+  function collectDayConfigs(configs) {
+    const out = [];
+    for (const entry of Object.entries(configs || {})) {
+      const dateKey = entry[0];
+      if (!dateKey.startsWith("STATS_")) continue;
+      let dayData;
+      try {
+        dayData = typeof entry[1] === "string" ? JSON.parse(entry[1]) : entry[1];
+      } catch {
+        continue;
+      }
+      if (!dayData) continue;
+      const ts = dayTsOf(dateKey);
+      if (Number.isNaN(ts)) continue;
+      out.push({ dateKey, ts, dayData });
+    }
+    return out;
+  }
+  function buildTimeline(minTs, maxTs) {
+    const timeline = [];
+    const tsMap = /* @__PURE__ */ new Map();
+    let index = 0;
+    for (let ts = minTs; ts <= maxTs; ts += 24 * 3600 * 1e3) {
+      for (let slot = 0; slot < SLOTS_PER_DAY; slot++) {
+        const slotTs = ts + slot * SLOT_MS;
+        timeline.push({ ts: slotTs, work: {}, rest: {} });
+        tsMap.set(slotTs, index++);
+      }
+    }
+    return { timeline, tsMap };
+  }
+  function buildDataset(configs, options = {}) {
+    const currentUuid = options.currentUuid || null;
+    const currentName = options.currentName || "未命名工程";
+    const now = options.now || /* @__PURE__ */ new Date();
+    const days = collectDayConfigs(configs);
+    const projectMeta = {};
+    let minTs = Infinity;
+    let maxTs = -Infinity;
+    for (const day of days) {
+      if (day.dayData.meta) Object.assign(projectMeta, day.dayData.meta);
+      if (day.ts < minTs) minTs = day.ts;
+      if (day.ts > maxTs) maxTs = day.ts;
+    }
+    const todayTs = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0).getTime();
+    if (minTs === Infinity) {
+      minTs = todayTs;
+      maxTs = todayTs;
+    }
+    if (todayTs < minTs) minTs = todayTs;
+    if (todayTs > maxTs) maxTs = todayTs;
+    const { timeline, tsMap } = buildTimeline(minTs, maxTs);
+    const projectStats = {};
+    for (const pId of Object.keys(projectMeta)) {
+      projectStats[pId] = { name: projectMeta[pId], uuid: pId, totalWork: 0, totalRest: 0, startTs: Infinity, endTs: -Infinity };
+    }
+    if (currentUuid && !projectStats[currentUuid]) {
+      projectMeta[currentUuid] = currentName;
+      projectStats[currentUuid] = {
+        name: currentName,
+        uuid: currentUuid,
+        totalWork: 0,
+        totalRest: 0,
+        startTs: Infinity,
+        endTs: -Infinity
+      };
+    }
+    for (const day of days) {
+      const slots = day.dayData.slots;
+      if (!slots) continue;
+      for (const slotEntry of Object.entries(slots)) {
+        const slotTs = day.ts + parseInt(slotEntry[0], 10) * SLOT_MS;
+        const tlIndex = tsMap.get(slotTs);
+        if (tlIndex === void 0) continue;
+        for (const projEntry of Object.entries(slotEntry[1])) {
+          const pId = projEntry[0];
+          const wTime = projEntry[1][0] || 0;
+          const rTime = projEntry[1][1] || 0;
+          timeline[tlIndex].work[pId] = wTime;
+          timeline[tlIndex].rest[pId] = rTime;
+          const stat = projectStats[pId];
+          if (!stat) continue;
+          stat.totalWork += wTime;
+          stat.totalRest += rTime;
+          if (wTime > 0 || rTime > 0) {
+            if (slotTs < stat.startTs) stat.startTs = slotTs;
+            if (slotTs > stat.endTs) stat.endTs = slotTs;
+          }
+        }
+      }
+    }
+    const sortedProjectIds = Object.keys(projectMeta).sort((a, b) => projectStats[b].totalWork - projectStats[a].totalWork);
+    const pidColorMap = {};
+    sortedProjectIds.forEach((pId, idx) => {
+      pidColorMap[pId] = COLOR_PALETTE[idx % COLOR_PALETTE.length];
+    });
+    return {
+      timeline,
+      tsMap,
+      projectMeta,
+      projectStats,
+      sortedProjectIds,
+      pidColorMap,
+      todayTs
+    };
+  }
+  function getTodayWorkHours(timeline, tsMap, todayTs, targetUuid = null) {
+    const startIndex = tsMap.get(todayTs);
+    if (startIndex === void 0) return 0;
+    let totalSeconds = 0;
+    for (let i = startIndex; i < startIndex + SLOTS_PER_DAY && i < timeline.length; i++) {
+      const slot = timeline[i];
+      for (const pid in slot.work) {
+        if (!targetUuid || pid === targetUuid) totalSeconds += slot.work[pid];
+      }
+    }
+    return totalSeconds / 3600;
+  }
+
+  // iframe/js/src/app/working-hours/runtime.js
+  var data = {
+    timeline: [],
+    tsMap: /* @__PURE__ */ new Map(),
+    projectMeta: {},
+    projectStats: {},
+    sortedProjectIds: [],
+    pidColorMap: {},
+    todayTs: 0
+  };
+  function emptyChartCache() {
+    return { lastClusterSize: -1, lastYMax: -1, lastHourInterval: -1, lastDynamicYMax: -1 };
+  }
+  var ui = {
+    activeTab: "total",
+    currentUuid: null,
+    currentName: "未命名工程",
+    selectedDetailUuid: null,
+    selectedManageUuid: null,
+    hiddenSeries: /* @__PURE__ */ new Set(),
+    sortField: "",
+    sortOrder: "desc",
+    weeklyOffset: 0,
+    rhythmMode: "time",
+    rhythmFirstInit: true,
+    /** 节律图最近一次聚合结果（图例悬浮汇总要用，原本挂在 echarts 实例的私有字段上） */
+    rhythmAgg: null,
+    mainClusterSize: 1,
+    manageClusterSize: 1,
+    /** 主图 / 工程管理图各自的「上次渲染参数」缓存，用于跳过无变化的 setOption */
+    chartCache: { main: emptyChartCache(), manage: emptyChartCache() }
+  };
+  function applyDataset(ds) {
+    data.timeline = ds.timeline;
+    data.tsMap = ds.tsMap;
+    data.projectMeta = ds.projectMeta;
+    data.projectStats = ds.projectStats;
+    data.sortedProjectIds = ds.sortedProjectIds;
+    data.pidColorMap = ds.pidColorMap;
+    data.todayTs = ds.todayTs;
+  }
+  function chartData() {
+    return {
+      timeline: data.timeline,
+      tsMap: data.tsMap,
+      projectMeta: data.projectMeta,
+      projectStats: data.projectStats,
+      sortedProjectIds: data.sortedProjectIds,
+      pidColorMap: data.pidColorMap,
+      todayTs: data.todayTs,
+      hiddenSeries: ui.hiddenSeries
+    };
+  }
+  function resetChartCache(key) {
+    ui.chartCache[key] = emptyChartCache();
+  }
+
+  // iframe/js/src/app/working-hours/dayRange.js
+  var SLOTS_PER_DAY2 = 96;
+  function getDayAlignedIndices(startTs, endTs, timeline, tsMap, todayTs) {
+    if (startTs === Infinity || endTs === -Infinity) {
+      const todayIdx = tsMap.has(todayTs) ? tsMap.get(todayTs) : 0;
+      return { startValue: todayIdx, endValue: todayIdx + SLOTS_PER_DAY2 - 1 };
+    }
+    const dStart = new Date(startTs);
+    const dayStartTs = new Date(dStart.getFullYear(), dStart.getMonth(), dStart.getDate(), 0, 0, 0).getTime();
+    const dEnd = new Date(endTs);
+    const dayEndTs = new Date(dEnd.getFullYear(), dEnd.getMonth(), dEnd.getDate() + 1, 0, 0, 0).getTime();
+    let startValue = 0;
+    let endValue = timeline.length - 1;
+    if (tsMap.has(dayStartTs)) startValue = tsMap.get(dayStartTs);
+    else if (dayStartTs < timeline[0].ts) startValue = 0;
+    if (tsMap.has(dayEndTs)) endValue = tsMap.get(dayEndTs);
+    else if (dayEndTs > timeline[timeline.length - 1].ts) endValue = timeline.length - 1;
+    return { startValue, endValue };
+  }
+
+  // iframe/js/src/core/util.js
+  function escapeHtml(value) {
+    if (value === null || value === void 0) return "";
+    return String(value).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+  }
+
   // iframe/js/src/core/eda.js
   function getEda() {
     try {
@@ -127,178 +357,250 @@
     return banner(doc, text, opts.timeoutMs === void 0 ? 3e3 : opts.timeoutMs) ? "dom" : "none";
   }
 
-  // iframe/js/src/app/working-hours/time.js
-  function formatDuration(seconds) {
-    if (!seconds) return "00:00:00";
-    const h = Math.floor(seconds / 3600);
-    const m = Math.floor(seconds % 3600 / 60);
-    const s = Math.floor(seconds % 60);
-    return `${h.toString().padStart(2, "0")}:${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
+  // iframe/js/src/app/working-hours/reminder.js
+  function formatMin(m) {
+    const h = Math.floor(m / 60);
+    const min = m % 60;
+    if (h > 0) return `${h}:${min.toString().padStart(2, "0")}:00`;
+    return `${min.toString().padStart(2, "0")}:00`;
   }
-  function formatTimeCN(hoursFloat) {
-    if (isNaN(hoursFloat) || hoursFloat === null) return "0时0分";
-    const totalMin = Math.round(hoursFloat * 60);
-    const h = Math.floor(totalMin / 60);
-    const m = totalMin % 60;
-    return `${h}时${m}分`;
-  }
-  function formatFullDateTime(ts) {
-    if (!ts || ts === Infinity || ts === -Infinity) return "无";
-    const d = new Date(ts);
-    return `${d.getFullYear()}/${d.getMonth() + 1}/${d.getDate()} ${d.getHours().toString().padStart(2, "0")}:${d.getMinutes().toString().padStart(2, "0")}`;
+  function parseMin(str) {
+    if (!str) return 0;
+    const text = str.toString().trim();
+    if (/^\d+$/.test(text)) return parseInt(text, 10);
+    const parts = text.split(":").filter((x) => x !== "").map(Number);
+    if (parts.length >= 3) return (isNaN(parts[0]) ? 0 : parts[0]) * 60 + (isNaN(parts[1]) ? 0 : parts[1]);
+    if (parts.length === 2) return isNaN(parts[0]) ? 0 : parts[0];
+    return isNaN(parseInt(text, 10)) ? 0 : parseInt(text, 10);
   }
 
-  // iframe/js/src/app/working-hours/aggregate.js
-  var COLOR_PALETTE = Object.freeze([
-    "#5470c6",
-    "#91cc75",
-    "#fac858",
-    "#ee6666",
-    "#73c0de",
-    "#3ba272",
-    "#fc8452",
-    "#9a60b4",
-    "#ea7ccc",
-    "#16a34a",
-    "#d946ef",
-    "#f59e0b",
-    "#06b6d4",
-    "#8b5cf6",
-    "#ec4899",
-    "#10b981",
-    "#f43f5e",
-    "#6366f1",
-    "#84cc16",
-    "#f97316",
-    "#0ea5e9",
-    "#64748b",
-    "#fbbf24",
-    "#22c55e"
-  ]);
-  var SLOTS_PER_DAY = 96;
-  var SLOT_MS = 15 * 60 * 1e3;
-  function dayTsOf(dateKey) {
-    const parts = dateKey.split("_");
-    if (parts.length < 4) return NaN;
-    return (/* @__PURE__ */ new Date(`${parts[1]}/${parts[2]}/${parts[3]} 00:00:00`)).getTime();
-  }
-  function collectDayConfigs(configs) {
-    const out = [];
-    for (const entry of Object.entries(configs || {})) {
-      const dateKey = entry[0];
-      if (!dateKey.startsWith("STATS_")) continue;
-      let dayData;
-      try {
-        dayData = typeof entry[1] === "string" ? JSON.parse(entry[1]) : entry[1];
-      } catch {
-        continue;
-      }
-      if (!dayData) continue;
-      const ts = dayTsOf(dateKey);
-      if (Number.isNaN(ts)) continue;
-      out.push({ dateKey, ts, dayData });
-    }
-    return out;
-  }
-  function buildTimeline(minTs, maxTs) {
-    const timeline = [];
-    const tsMap2 = /* @__PURE__ */ new Map();
-    let index = 0;
-    for (let ts = minTs; ts <= maxTs; ts += 24 * 3600 * 1e3) {
-      for (let slot = 0; slot < SLOTS_PER_DAY; slot++) {
-        const slotTs = ts + slot * SLOT_MS;
-        timeline.push({ ts: slotTs, work: {}, rest: {} });
-        tsMap2.set(slotTs, index++);
-      }
-    }
-    return { timeline, tsMap: tsMap2 };
-  }
-  function buildDataset(configs, options = {}) {
-    const currentUuid = options.currentUuid || null;
-    const currentName = options.currentName || "未命名工程";
-    const now = options.now || /* @__PURE__ */ new Date();
-    const days = collectDayConfigs(configs);
-    const projectMeta = {};
-    let minTs = Infinity;
-    let maxTs = -Infinity;
-    for (const day of days) {
-      if (day.dayData.meta) Object.assign(projectMeta, day.dayData.meta);
-      if (day.ts < minTs) minTs = day.ts;
-      if (day.ts > maxTs) maxTs = day.ts;
-    }
-    const todayTs = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0).getTime();
-    if (minTs === Infinity) {
-      minTs = todayTs;
-      maxTs = todayTs;
-    }
-    if (todayTs < minTs) minTs = todayTs;
-    if (todayTs > maxTs) maxTs = todayTs;
-    const { timeline, tsMap: tsMap2 } = buildTimeline(minTs, maxTs);
-    const projectStats2 = {};
-    for (const pId of Object.keys(projectMeta)) {
-      projectStats2[pId] = { name: projectMeta[pId], uuid: pId, totalWork: 0, totalRest: 0, startTs: Infinity, endTs: -Infinity };
-    }
-    if (currentUuid && !projectStats2[currentUuid]) {
-      projectMeta[currentUuid] = currentName;
-      projectStats2[currentUuid] = {
-        name: currentName,
-        uuid: currentUuid,
-        totalWork: 0,
-        totalRest: 0,
-        startTs: Infinity,
-        endTs: -Infinity
-      };
-    }
-    for (const day of days) {
-      const slots = day.dayData.slots;
-      if (!slots) continue;
-      for (const slotEntry of Object.entries(slots)) {
-        const slotTs = day.ts + parseInt(slotEntry[0], 10) * SLOT_MS;
-        const tlIndex = tsMap2.get(slotTs);
-        if (tlIndex === void 0) continue;
-        for (const projEntry of Object.entries(slotEntry[1])) {
-          const pId = projEntry[0];
-          const wTime = projEntry[1][0] || 0;
-          const rTime = projEntry[1][1] || 0;
-          timeline[tlIndex].work[pId] = wTime;
-          timeline[tlIndex].rest[pId] = rTime;
-          const stat = projectStats2[pId];
-          if (!stat) continue;
-          stat.totalWork += wTime;
-          stat.totalRest += rTime;
-          if (wTime > 0 || rTime > 0) {
-            if (slotTs < stat.startTs) stat.startTs = slotTs;
-            if (slotTs > stat.endTs) stat.endTs = slotTs;
-          }
-        }
-      }
-    }
-    const sortedProjectIds2 = Object.keys(projectMeta).sort((a, b) => projectStats2[b].totalWork - projectStats2[a].totalWork);
-    const pidColorMap2 = {};
-    sortedProjectIds2.forEach((pId, idx) => {
-      pidColorMap2[pId] = COLOR_PALETTE[idx % COLOR_PALETTE.length];
-    });
+  // iframe/js/src/app/working-hours/reminderApp.js
+  var STORAGE_KEY = "USER_CONFIG_REMINDERS";
+  var DEBUG_KEY = "WORKING_HOURS_DEBUG_ENABLED";
+  function defaultData() {
     return {
-      timeline,
-      tsMap: tsMap2,
-      projectMeta,
-      projectStats: projectStats2,
-      sortedProjectIds: sortedProjectIds2,
-      pidColorMap: pidColorMap2,
-      todayTs
+      durationRules: [],
+      intervalRules: [],
+      welcomeEnabled: true,
+      idleEnabled: true,
+      welcomeText: "距离上次打开EDA经过了<time>",
+      idleText: "距离上次离开经过了<time>",
+      idleThresholdMin: 10,
+      lastHb: 0
     };
   }
-  function getTodayWorkHours(timeline, tsMap2, todayTs, targetUuid = null) {
-    const startIndex = tsMap2.get(todayTs);
-    if (startIndex === void 0) return 0;
-    let totalSeconds = 0;
-    for (let i = startIndex; i < startIndex + SLOTS_PER_DAY && i < timeline.length; i++) {
-      const slot = timeline[i];
-      for (const pid in slot.work) {
-        if (!targetUuid || pid === targetUuid) totalSeconds += slot.work[pid];
+  function stateApi() {
+    return {
+      /**
+       * 从存储读取规则并回填表单
+       *
+       * @returns {Promise<void>}
+       * @sideEffects 读存储 + 写 DOM
+       */
+      async init() {
+        try {
+          const str = await eda.sys_Storage.getExtensionUserConfig(STORAGE_KEY);
+          if (str) {
+            const parsed = JSON.parse(str);
+            if (Array.isArray(parsed)) this.data.durationRules = parsed;
+            else this.data = Object.assign(this.data, parsed);
+          }
+        } catch (e) {
+          logger.warn("处理工时记录失败", e);
+        }
+        document.getElementById("welcome-enabled").checked = !!this.data.welcomeEnabled;
+        document.getElementById("idle-enabled").checked = !!this.data.idleEnabled;
+        document.getElementById("welcome-text-input").value = this.data.welcomeText || "";
+        document.getElementById("idle-text-input").value = this.data.idleText || "";
+        document.getElementById("idle-min-input").value = this.data.idleThresholdMin || 10;
+        this.render();
+      },
+      // 纯换算在 ./reminder.js；这里保留同名方法，因为行内 onclick 还在用 ReminderApp.*
+      formatMin(m) {
+        return formatMin(m);
+      },
+      parseMin(str) {
+        return parseMin(str);
+      },
+      /**
+       * 取某种规则的数组
+       *
+       * @param {'duration'|'interval'} type 规则类型
+       * @returns {Array<object>} 规则数组
+       * @sideEffects 无
+       */
+      rulesOf(type) {
+        return type === "duration" ? this.data.durationRules : this.data.intervalRules;
       }
-    }
-    return totalSeconds / 3600;
+    };
+  }
+  function renderApi() {
+    return {
+      /**
+       * 重绘两块规则列表
+       *
+       * @returns {void}
+       * @sideEffects 写 DOM
+       */
+      render() {
+        this.renderList("duration", "list-duration");
+        this.renderList("interval", "list-interval");
+      },
+      /**
+       * 渲染一块规则列表
+       *
+       * @param {'duration'|'interval'} type 规则类型
+       * @param {string} containerId 容器 id
+       * @returns {void}
+       * @sideEffects 写 DOM
+       */
+      renderList(type, containerId) {
+        const container = document.getElementById(containerId);
+        container.innerHTML = "";
+        const rules = this.rulesOf(type);
+        if (rules.length === 0) {
+          container.innerHTML = '<div style="text-align:center; color:#666; padding:10px; font-size:11px;">暂无规则</div>';
+          return;
+        }
+        const color = type === "duration" ? "var(--vscode-link)" : "var(--vscode-success-fill)";
+        rules.forEach((item, idx) => {
+          const div = document.createElement("div");
+          div.className = "reminder-item";
+          div.style.padding = "4px 8px";
+          div.innerHTML = `
+                        <input class="list-input" style="width:55px; color:${color}; font-weight:bold; font-family:Consolas;"
+                               value="${this.formatMin(item.m)}" onchange="ReminderApp.updateRule('${type}', ${idx}, 'm', this.value)">
+                        <input class="list-input" style="flex:1; margin:0 5px;" value="${escapeHtml(item.msg)}"
+                               onchange="ReminderApp.updateRule('${type}', ${idx}, 'msg', this.value)">
+                        <div class="stepper" style="height:22px; margin-right:5px;" title="提醒次数：触发时显示几条提醒">
+                            <button onclick="ReminderApp.stepRule('${type}', ${idx}, -1)">-</button>
+                            <input type="number" value="${item.count || 1}" readonly>
+                            <button onclick="ReminderApp.stepRule('${type}', ${idx}, 1)">+</button>
+                        </div>
+                        <button class="small-btn del" style="padding:0 4px;" onclick="ReminderApp.remove('${type}', ${idx})">×</button>`;
+          container.appendChild(div);
+        });
+      }
+    };
+  }
+  function ruleApi() {
+    return {
+      /**
+       * 新增一条规则
+       *
+       * @param {'duration'|'interval'} type 规则类型
+       * @returns {Promise<void>}
+       * @sideEffects 写存储 + 重绘
+       */
+      async add(type) {
+        const prefix = type === "duration" ? "dur" : "int";
+        const mVal = document.getElementById(`add-${prefix}-m`).value;
+        const msg = document.getElementById(`add-${prefix}-msg`).value.trim();
+        const count = parseInt(document.getElementById(`add-${prefix}-c`).value) || 1;
+        const m = this.parseMin(mVal);
+        if (!m || m <= 0) {
+          toast("时间无效", "error");
+          return;
+        }
+        if (!msg) {
+          toast("内容为空", "error");
+          return;
+        }
+        const rules = this.rulesOf(type);
+        rules.push({ m, msg, count });
+        rules.sort((a, b) => a.m - b.m);
+        document.getElementById(`add-${prefix}-m`).value = "";
+        document.getElementById(`add-${prefix}-msg`).value = "";
+        document.getElementById(`add-${prefix}-c`).value = "1";
+        await this.save();
+      },
+      /**
+       * 改一条规则的字段
+       *
+       * @param {'duration'|'interval'} type 规则类型
+       * @param {number} idx 下标
+       * @param {'m'|'msg'} field 字段
+       * @param {string} val 新值
+       * @returns {Promise<void>}
+       * @sideEffects 写存储 + 重绘
+       */
+      async updateRule(type, idx, field, val) {
+        const rules = this.rulesOf(type);
+        if (!rules[idx]) return;
+        if (field === "m") rules[idx].m = this.parseMin(val);
+        else if (field === "msg") rules[idx].msg = val;
+        await this.save();
+      },
+      /**
+       * 调整提醒次数
+       *
+       * @param {'duration'|'interval'} type 规则类型
+       * @param {number} idx 下标
+       * @param {number} delta 增量
+       * @returns {Promise<void>}
+       * @sideEffects 写存储 + 重绘
+       */
+      async stepRule(type, idx, delta) {
+        const rules = this.rulesOf(type);
+        if (!rules[idx]) return;
+        rules[idx].count = Math.max(1, (rules[idx].count || 1) + delta);
+        await this.save();
+      },
+      /**
+       * 二次确认后删除一条规则
+       *
+       * @param {'duration'|'interval'} type 规则类型
+       * @param {number} index 下标
+       * @returns {void}
+       * @sideEffects 弹窗 + 可能写存储
+       */
+      remove(type, index) {
+        eda.sys_Dialog.showConfirmationMessage("确定要删除这条提醒规则吗？", "确认删除", "确认", "取消", async (confirmed) => {
+          if (!confirmed) return;
+          this.rulesOf(type).splice(index, 1);
+          await this.save();
+        });
+      }
+    };
+  }
+  function prefsApi() {
+    return {
+      /**
+       * 把表单与规则写入存储
+       *
+       * @returns {Promise<void>}
+       * @sideEffects 写存储 + 重绘
+       */
+      async save() {
+        this.data.welcomeEnabled = document.getElementById("welcome-enabled").checked;
+        this.data.idleEnabled = document.getElementById("idle-enabled").checked;
+        this.data.welcomeText = document.getElementById("welcome-text-input").value;
+        this.data.idleText = document.getElementById("idle-text-input").value;
+        this.data.idleThresholdMin = parseInt(document.getElementById("idle-min-input").value) || 10;
+        try {
+          await eda.sys_Storage.setExtensionUserConfig(STORAGE_KEY, JSON.stringify(this.data));
+          this.render();
+          toast("自动保存成功", "success");
+        } catch (e) {
+          toast("保存失败:" + e.message, "error");
+        }
+      },
+      /**
+       * 切换调试日志开关
+       *
+       * @returns {Promise<void>}
+       * @sideEffects 写存储
+       */
+      async toggleDebug() {
+        const raw = await eda.sys_Storage.getExtensionUserConfig(DEBUG_KEY);
+        const isDebug = raw === "true";
+        await eda.sys_Storage.setExtensionUserConfig(DEBUG_KEY, (!isDebug).toString());
+        toast(`Debug模式已${!isDebug ? "开启" : "关闭"}，请查看控制台日志`, "info");
+      }
+    };
+  }
+  function createReminderApp() {
+    return Object.assign({ KEY: STORAGE_KEY, data: defaultData() }, stateApi(), renderApi(), ruleApi(), prefsApi());
   }
 
   // iframe/js/src/app/working-hours/payload.js
@@ -699,233 +1001,901 @@
     };
   }
 
-  // iframe/js/src/app/working-hours/reminder.js
-  function formatMin(m) {
-    const h = Math.floor(m / 60);
-    const min = m % 60;
-    if (h > 0) return `${h}:${min.toString().padStart(2, "0")}:00`;
-    return `${min.toString().padStart(2, "0")}:00`;
+  // iframe/js/src/app/working-hours/time.js
+  function formatDuration(seconds) {
+    if (!seconds) return "00:00:00";
+    const h = Math.floor(seconds / 3600);
+    const m = Math.floor(seconds % 3600 / 60);
+    const s = Math.floor(seconds % 60);
+    return `${h.toString().padStart(2, "0")}:${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
   }
-  function parseMin(str) {
-    if (!str) return 0;
-    const text = str.toString().trim();
-    if (/^\d+$/.test(text)) return parseInt(text, 10);
-    const parts = text.split(":").filter((x) => x !== "").map(Number);
-    if (parts.length >= 3) return (isNaN(parts[0]) ? 0 : parts[0]) * 60 + (isNaN(parts[1]) ? 0 : parts[1]);
-    if (parts.length === 2) return isNaN(parts[0]) ? 0 : parts[0];
-    return isNaN(parseInt(text, 10)) ? 0 : parseInt(text, 10);
+  function formatTimeCN(hoursFloat) {
+    if (isNaN(hoursFloat) || hoursFloat === null) return "0时0分";
+    const totalMin = Math.round(hoursFloat * 60);
+    const h = Math.floor(totalMin / 60);
+    const m = totalMin % 60;
+    return `${h}时${m}分`;
+  }
+  function formatFullDateTime(ts) {
+    if (!ts || ts === Infinity || ts === -Infinity) return "无";
+    const d = new Date(ts);
+    return `${d.getFullYear()}/${d.getMonth() + 1}/${d.getDate()} ${d.getHours().toString().padStart(2, "0")}:${d.getMinutes().toString().padStart(2, "0")}`;
   }
 
-  // iframe/js/src/app/working-hours/index.js
-  var CURRENT_UUID = null;
-  var CURRENT_NAME = "未命名工程";
-  var GLOBAL_TODAY_TS = 0;
-  var SELECTED_DETAIL_UUID = null;
-  var state = { activeTab: "total" };
-  var hiddenSeries = /* @__PURE__ */ new Set();
-  var globalTimeline = [];
-  var globalProjectMeta = {};
-  var pidColorMap = {};
-  var sortedProjectIds = [];
-  var projectStats = {};
-  var tsMap = /* @__PURE__ */ new Map();
-  var myChart = null;
-  var manageChart = null;
-  var heatmapChart = null;
-  var rhythmChart = null;
-  var weeklyBarChart = null;
-  var weeklyPieChart = null;
-  var currentClusterSize = 1;
-  var manageClusterSize = 1;
-  var chartCache = {
-    main: { lastClusterSize: -1, lastYMax: -1, lastHourInterval: -1, lastDynamicYMax: -1 },
-    manage: { lastClusterSize: -1, lastYMax: -1, lastHourInterval: -1, lastDynamicYMax: -1 }
-  };
-  var currentSortField = "";
-  var currentSortOrder = "desc";
-  var currentlySelectedManageUuid = null;
-  function getDayAlignedIndices(startTs, endTs) {
-    if (startTs === Infinity || endTs === -Infinity) {
-      return { startValue: tsMap.has(GLOBAL_TODAY_TS) ? tsMap.get(GLOBAL_TODAY_TS) : 0, endValue: tsMap.has(GLOBAL_TODAY_TS) ? tsMap.get(GLOBAL_TODAY_TS) + 95 : 95 };
-    }
-    const dStart = new Date(startTs);
-    const dayStartTs = new Date(dStart.getFullYear(), dStart.getMonth(), dStart.getDate(), 0, 0, 0).getTime();
-    const dEnd = new Date(endTs);
-    const dayEndTs = new Date(dEnd.getFullYear(), dEnd.getMonth(), dEnd.getDate() + 1, 0, 0, 0).getTime();
-    let sIdx = 0;
-    let eIdx = globalTimeline.length - 1;
-    if (tsMap.has(dayStartTs)) sIdx = tsMap.get(dayStartTs);
-    else if (dayStartTs < globalTimeline[0]?.ts) sIdx = 0;
-    if (tsMap.has(dayEndTs)) eIdx = tsMap.get(dayEndTs);
-    else if (dayEndTs > globalTimeline[globalTimeline.length - 1]?.ts) eIdx = globalTimeline.length - 1;
-    return { startValue: sIdx, endValue: eIdx };
-  }
-  async function loadAllData() {
-    try {
-      const info = await eda.dmt_Project.getCurrentProjectInfo();
-      if (info) {
-        CURRENT_UUID = info.uuid;
-        CURRENT_NAME = info.friendlyName || "未命名工程";
-      }
-    } catch (e) {
-      console.log("当前未在有效的工程上下文中");
-    }
-    let allConfigs = {};
-    try {
-      allConfigs = await eda.sys_Storage.getExtensionAllUserConfigs();
-      if (!allConfigs) allConfigs = {};
-    } catch (e) {
-      console.error("扩展数据配置读取失败:", e);
-    }
-    const ds = buildDataset(allConfigs, { currentUuid: CURRENT_UUID, currentName: CURRENT_NAME });
-    globalTimeline = ds.timeline;
-    globalProjectMeta = ds.projectMeta;
-    projectStats = ds.projectStats;
-    tsMap = ds.tsMap;
-    pidColorMap = ds.pidColorMap;
-    sortedProjectIds = ds.sortedProjectIds;
-    GLOBAL_TODAY_TS = ds.todayTs;
-    updateHeaderStats();
-  }
-  function getTodayWorkHours2(targetUuid = null) {
-    return getTodayWorkHours(globalTimeline, tsMap, GLOBAL_TODAY_TS, targetUuid);
-  }
-  function getProjectTitleString(uuid) {
+  // iframe/js/src/app/working-hours/projectSummary.js
+  function getProjectTitleString(projectStats, uuid) {
     if (!uuid || !projectStats[uuid]) return "暂无数据";
     const p = projectStats[uuid];
     return `工程：${escapeHtml(p.name)} 、时间：${formatFullDateTime(p.startTs)} ~ ${formatFullDateTime(p.endTs)} 、工作：${formatDuration(p.totalWork)} 、空闲：${formatDuration(p.totalRest)}`;
   }
-  function initLegendToggle() {
-    document.getElementById("legend-title-main").addEventListener("click", function() {
-      const dom = document.getElementById("custom-legend");
-      dom.classList.toggle("collapsed");
-      document.getElementById("legend-toggle-icon").innerText = dom.classList.contains("collapsed") ? "▶" : "▼";
-    });
-    document.getElementById("legend-title-manage").addEventListener("click", function() {
-      const dom = document.getElementById("manage-custom-legend");
-      dom.classList.toggle("collapsed");
-      document.getElementById("m-legend-toggle-icon").innerText = dom.classList.contains("collapsed") ? "▶" : "▼";
-    });
-    document.getElementById("legend-title-rhythm").addEventListener("click", function() {
-      const dom = document.getElementById("rhythm-custom-legend");
-      dom.classList.toggle("collapsed");
-      document.getElementById("r-legend-toggle-icon").innerText = dom.classList.contains("collapsed") ? "▶" : "▼";
-    });
+
+  // iframe/js/src/app/working-hours/charts/options/heatmap.js
+  var DAY_MS = 24 * 3600 * 1e3;
+  var SPAN_DAYS = 365;
+  var PIECES = [
+    { min: 21601, color: "#56D364" },
+    { min: 14401, max: 21600, color: "#2EA043" },
+    { min: 7021, max: 14400, color: "#196C2E" },
+    { min: 1, max: 7200, color: "#033A16" }
+  ];
+  function dayKey(ts) {
+    const d = new Date(ts);
+    return [d.getFullYear(), (d.getMonth() + 1).toString().padStart(2, "0"), d.getDate().toString().padStart(2, "0")].join("-");
   }
-  document.body.addEventListener("click", function(e) {
-    const item = e.target.closest(".legend-item");
-    if (!item) return;
-    const seriesName = item.getAttribute("data-name");
-    if (hiddenSeries.has(seriesName)) hiddenSeries.delete(seriesName);
-    else hiddenSeries.add(seriesName);
-    chartCache.main = { lastClusterSize: -1, lastYMax: -1, lastHourInterval: -1, lastDynamicYMax: -1 };
-    chartCache.manage = { lastClusterSize: -1, lastYMax: -1, lastHourInterval: -1, lastDynamicYMax: -1 };
-    if (state.activeTab === "manage" && currentlySelectedManageUuid) {
-      handleZoomOrPanCore(manageChart, "manage", currentlySelectedManageUuid, false);
-    } else if (state.activeTab === "rhythm") {
-      renderRhythmChart();
-    } else {
-      handleZoomOrPan();
-      if (typeof renderHeatmap === "function") renderHeatmap();
+  function counts(pid, ctx, side) {
+    if (ctx.filterUuid && pid !== ctx.filterUuid) return false;
+    if (ctx.hiddenSeries.has(side)) return false;
+    return !ctx.hiddenSeries.has(ctx.projectMeta[pid]);
+  }
+  function addSlot(dayStat, slot, ctx) {
+    for (const pid in slot.work) {
+      if (counts(pid, ctx, "工作时间")) dayStat.work += slot.work[pid];
     }
-  });
-  document.body.addEventListener("mouseover", function(e) {
-    const item = e.target.closest(".legend-item");
-    if (!item) return;
-    const panel = item.closest(".legend-panel");
-    if (!panel) return;
-    const detailEl = panel.querySelector(".legend-detail");
-    if (!detailEl) return;
-    const seriesName = item.getAttribute("data-name");
-    if (seriesName === "工作时间" || seriesName === "空闲时间") {
-      let totalSec = 0;
-      if (state.activeTab === "total") {
-        sortedProjectIds.forEach((uuid) => {
-          const p = projectStats[uuid];
-          if (p) totalSec += seriesName === "工作时间" ? p.totalWork : p.totalRest;
+    for (const pid in slot.rest) {
+      if (counts(pid, ctx, "空闲时间")) dayStat.rest += slot.rest[pid];
+    }
+  }
+  function collectDaily(timeline, opts) {
+    const ctx = {
+      filterUuid: opts.filterUuid || null,
+      hiddenSeries: opts.hiddenSeries || /* @__PURE__ */ new Set(),
+      projectMeta: opts.projectMeta || {}
+    };
+    const fromTs = opts.fromTs || 0;
+    const includeEmpty = opts.includeEmpty !== false;
+    const daily = /* @__PURE__ */ new Map();
+    for (const slot of timeline) {
+      if (slot.ts < fromTs) continue;
+      const key = dayKey(slot.ts);
+      if (!daily.has(key)) daily.set(key, { work: 0, rest: 0 });
+      addSlot(daily.get(key), slot, ctx);
+    }
+    const out = [];
+    daily.forEach((stat, key) => {
+      if (!includeEmpty && stat.work === 0 && stat.rest === 0) return;
+      out.push([key, stat.work, stat.rest]);
+    });
+    return out;
+  }
+  function buildHeatmapOption(data2, theme, opts) {
+    const now = new Date(opts.nowTs);
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0).getTime();
+    const startTs = todayStart - SPAN_DAYS * DAY_MS;
+    const rows = collectDaily(data2, {
+      filterUuid: opts.filterUuid,
+      hiddenSeries: opts.hiddenSeries,
+      projectMeta: opts.projectMeta,
+      fromTs: startTs
+    });
+    return {
+      backgroundColor: "transparent",
+      tooltip: {
+        appendToBody: true,
+        backgroundColor: "rgba(37, 37, 38, 0.95)",
+        borderColor: "#454545",
+        borderWidth: 1,
+        textStyle: { color: "#cccccc", fontSize: 12 },
+        formatter: function formatter(p) {
+          return `<b style="font-size:13px; color:#fff;">${p.value[0]}</b><br/>
+                                <div style="margin-top:6px; font-size:12px;"><span class="color-block" style="background:#39d353;"></span> 工作时间: <span style="float:right; font-weight:bold; margin-left: 15px; color:#fff;">${formatDuration(p.value[1] || 0)}</span></div>
+                                <div style="margin-top:4px; font-size:12px;"><span class="color-block" style="background:#b0b0b0;"></span> 空闲时间: <span style="float:right; font-weight:bold; margin-left: 15px; color:#fff;">${formatDuration(p.value[2] || 0)}</span></div>`;
+        }
+      },
+      visualMap: {
+        type: "piecewise",
+        show: false,
+        dimension: 1,
+        pieces: PIECES,
+        outOfRange: { color: "#151B23" }
+      },
+      calendar: {
+        top: 25,
+        left: 45,
+        right: 25,
+        bottom: 15,
+        range: [dayKey(startTs), dayKey(todayStart)],
+        cellSize: ["auto", 14],
+        itemStyle: { color: "#151B23", borderWidth: 4, borderColor: "#1e1e1e", borderRadius: 2 },
+        yearLabel: { show: false },
+        dayLabel: { color: "#858585", nameMap: "ZH", fontSize: 10 },
+        monthLabel: { color: "#858585", nameMap: "ZH", fontSize: 10 },
+        splitLine: { show: false }
+      },
+      series: { type: "heatmap", coordinateSystem: "calendar", data: rows, itemStyle: { borderRadius: 2 } }
+    };
+  }
+
+  // iframe/js/src/app/working-hours/exportPayload.js
+  function collectHeatmapForExport(timeline, filterUuid) {
+    return collectDaily(timeline, { filterUuid: filterUuid || null, includeEmpty: false });
+  }
+  function findDataRange(timeline) {
+    let minIdx = -1;
+    let maxIdx = -1;
+    for (let i = 0; i < timeline.length; i += 1) {
+      const slot = timeline[i];
+      if (Object.keys(slot.work).length === 0 && Object.keys(slot.rest).length === 0) continue;
+      if (minIdx === -1) minIdx = i;
+      maxIdx = i;
+    }
+    return { minIdx, maxIdx };
+  }
+  function buildProjectPayload(data2, uuid, bounds) {
+    const pStat = data2.projectStats[uuid];
+    const baseTs = data2.timeline[bounds.startValue].ts;
+    const timeData = [];
+    for (let i = bounds.startValue; i <= bounds.endValue; i += 1) {
+      const w = data2.timeline[i].work[uuid] || 0;
+      const r = data2.timeline[i].rest[uuid] || 0;
+      if (w > 0 || r > 0) timeData.push([i - bounds.startValue, { [uuid]: w }, { [uuid]: r }]);
+    }
+    return {
+      pageTitle: getProjectTitleString(data2.projectStats, uuid),
+      baseTs,
+      totalSlots: bounds.endValue - bounds.startValue + 1,
+      projectMeta: { [uuid]: { name: pStat.name, color: data2.pidColorMap[uuid] || "#007acc" } },
+      data: timeData,
+      heatmapData: collectHeatmapForExport(data2.timeline, uuid)
+    };
+  }
+  function buildTotalTrendPayload(data2) {
+    const range = findDataRange(data2.timeline);
+    if (range.minIdx === -1) return null;
+    const baseTs = data2.timeline[range.minIdx].ts;
+    const endTs = data2.timeline[range.maxIdx].ts + 15 * 60 * 1e3;
+    const timeData = [];
+    let rangeWork = 0;
+    let rangeRest = 0;
+    for (let i = range.minIdx; i <= range.maxIdx; i += 1) {
+      const wObj = {};
+      const rObj = {};
+      for (const uid in data2.timeline[i].work) {
+        wObj[uid] = data2.timeline[i].work[uid];
+        rangeWork += wObj[uid];
+      }
+      for (const uid in data2.timeline[i].rest) {
+        rObj[uid] = data2.timeline[i].rest[uid];
+        rangeRest += rObj[uid];
+      }
+      if (Object.keys(wObj).length === 0 && Object.keys(rObj).length === 0) continue;
+      timeData.push([i - range.minIdx, wObj, rObj]);
+    }
+    const projectMeta = {};
+    data2.sortedProjectIds.forEach((uid) => {
+      projectMeta[uid] = { name: data2.projectMeta[uid], color: data2.pidColorMap[uid] };
+    });
+    return {
+      pageTitle: "全部工程时间总趋势 、时间：" + formatFullDateTime(baseTs) + " ~ " + formatFullDateTime(endTs) + " 、工作：" + formatDuration(rangeWork) + " 、空闲：" + formatDuration(rangeRest),
+      baseTs,
+      totalSlots: range.maxIdx - range.minIdx + 1,
+      projectMeta,
+      data: timeData,
+      heatmapData: collectHeatmapForExport(data2.timeline, null)
+    };
+  }
+
+  // iframe/js/src/app/working-hours/exportReport.js
+  function download(blob, fileName) {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = fileName;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
+  function safeFileName(name) {
+    return name.replace(/[/\\:*?"<>|]/g, "_");
+  }
+  function createExporter(ctx) {
+    const data2 = ctx.data;
+    async function triggerSecureExport(payload, fileNameBase) {
+      let securePack;
+      try {
+        securePack = await packPayload(payload);
+      } catch (e) {
+        logger.error("导出数据打包失败", e);
+        toast("数据打包失败", "error");
+        return;
+      }
+      const libs = getInlineLibs();
+      if (!libs.echarts || !libs.fflate) {
+        logger.error("导出失败：内嵌图表库缺失（fflate 未加载或构建未注入）");
+        toast("导出失败：内置图表库缺失，请重装扩展", "error");
+        return;
+      }
+      const html = buildSecureReportHtml({
+        fileName: fileNameBase,
+        libTags: buildLibTags(libs.echarts, libs.fflate),
+        data: securePack.data,
+        hash: securePack.hash
+      });
+      download(new Blob([html], { type: "text/html;charset=utf-8" }), `${fileNameBase}.html`);
+      toast("图表导出成功", "success");
+    }
+    async function exportProjectChart(uuid) {
+      const pStat = data2.projectStats[uuid];
+      if (!pStat || pStat.startTs === Infinity) {
+        toast("当前工程暂无可导出数据", "warning");
+        return;
+      }
+      const bounds = getDayAlignedIndices(pStat.startTs, pStat.endTs, data2.timeline, data2.tsMap, data2.todayTs);
+      await triggerSecureExport(buildProjectPayload(data2, uuid, bounds), `工程耗时图_${safeFileName(pStat.name)}`);
+    }
+    async function exportTotalChart() {
+      if (data2.timeline.length === 0) {
+        toast("当前暂无可导出数据", "warning");
+        return;
+      }
+      const payload = buildTotalTrendPayload(data2);
+      if (!payload) {
+        toast("当前记录全为空，无法导出", "warning");
+        return;
+      }
+      await triggerSecureExport(payload, "总趋势耗时图");
+    }
+    function exportAllDataJson() {
+      if (data2.timeline.length === 0) {
+        toast("当前暂无可导出数据", "warning");
+        return;
+      }
+      try {
+        const filtered = data2.timeline.filter((slot) => Object.keys(slot.work).length > 0 || Object.keys(slot.rest).length > 0);
+        if (filtered.length === 0) {
+          toast("所有时间片均为空，无有效数据导出", "warning");
+          return;
+        }
+        const payload = {
+          exportTime: (/* @__PURE__ */ new Date()).toLocaleString(),
+          projectMeta: data2.projectMeta,
+          stats: data2.projectStats,
+          timeline: filtered
+        };
+        const d = /* @__PURE__ */ new Date();
+        const stamp = `${d.getFullYear()}${(d.getMonth() + 1).toString().padStart(2, "0")}${d.getDate().toString().padStart(2, "0")}`;
+        download(new Blob([JSON.stringify(payload, null, 2)], { type: "application/json;charset=utf-8" }), `全部工程耗时数据备份_${stamp}.json`);
+        toast("全部数据 JSON 导出成功", "success");
+      } catch (e) {
+        logger.error("导出 JSON 失败", e);
+        toast("导出失败: " + e.message, "error");
+      }
+    }
+    return {
+      exportProjectChart,
+      exportTotalChart,
+      exportAllDataJson
+    };
+  }
+
+  // iframe/js/src/app/working-hours/charts/chartView.js
+  function createChartView(options) {
+    const theme = options.theme || "dark";
+    const elRef = options.el;
+    const echartsRef = options.echartsRef;
+    let instance = null;
+    function resolveEl() {
+      if (typeof elRef === "function") return elRef();
+      if (typeof elRef === "string") return typeof document === "undefined" ? null : document.getElementById(elRef);
+      return elRef || null;
+    }
+    function resolveEcharts() {
+      if (echartsRef) return echartsRef;
+      return typeof echarts === "undefined" ? null : echarts;
+    }
+    const view = {
+      /**
+       * 惰性初始化；容器不存在时返回 null（页面某些 tab 未渲染时不报错）
+       *
+       * @returns {object|null} echarts 实例
+       * @sideEffects 创建实例
+       */
+      init() {
+        if (instance) return instance;
+        const api = resolveEcharts();
+        const dom = resolveEl();
+        if (!api || !dom) return null;
+        instance = api.init(dom, theme);
+        return instance;
+      },
+      /**
+       * 是否已经初始化
+       *
+       * @returns {boolean} 已初始化返回 true
+       * @sideEffects 无
+       */
+      get isReady() {
+        return instance !== null;
+      },
+      /**
+       * 当前实例（未初始化时为 null）
+       *
+       * @returns {object|null} echarts 实例
+       * @sideEffects 无
+       */
+      get instance() {
+        return instance;
+      },
+      /**
+       * 设置 option（未初始化时自动 init）
+       *
+       * @param {object} option echarts option
+       * @param {boolean|object} [notMerge=false] 是否不合并（echarts 的 notMerge 参数）
+       * @returns {boolean} 是否设置成功
+       * @sideEffects 重绘图表
+       */
+      setOption(option, notMerge) {
+        const inst = view.init();
+        if (!inst) return false;
+        inst.setOption(option, notMerge === void 0 ? false : notMerge);
+        return true;
+      },
+      /**
+       * 读当前 option
+       *
+       * @returns {object|null} option
+       * @sideEffects 无
+       */
+      getOption() {
+        return instance ? instance.getOption() : null;
+      },
+      /**
+       * 绑定 echarts 事件（实例销毁后需重新绑定，见 rightDrag）
+       *
+       * @param {string} event 事件名
+       * @param {Function} handler 处理函数
+       * @returns {boolean} 是否绑定成功
+       * @sideEffects 注册监听
+       */
+      on(event, handler) {
+        const inst = view.init();
+        if (!inst) return false;
+        inst.on(event, handler);
+        return true;
+      },
+      /**
+       * 分发 action（dataZoom 等）
+       *
+       * @param {object} action action 对象
+       * @returns {boolean} 是否分发成功
+       * @sideEffects 触发图表交互
+       */
+      dispatchAction(action) {
+        if (!instance) return false;
+        instance.dispatchAction(action);
+        return true;
+      },
+      /**
+       * 按容器尺寸重绘（未初始化或已销毁时静默跳过）
+       *
+       * @returns {void}
+       * @sideEffects 重绘
+       */
+      resize() {
+        if (instance) instance.resize();
+      },
+      /**
+       * 销毁实例并清空引用
+       *
+       * @returns {void}
+       * @sideEffects 释放 canvas
+       */
+      destroy() {
+        if (!instance) return;
+        instance.dispose();
+        instance = null;
+      },
+      /**
+       * 导出 data URL（周报合成图片用）
+       *
+       * @param {object} [opts] echarts getDataURL 参数
+       * @returns {string} data URL；未初始化返回空串
+       * @sideEffects 生成图片
+       */
+      getDataURL(opts) {
+        return instance ? instance.getDataURL(opts) : "";
+      },
+      /**
+       * 取 zrender（右键拖动平移需要）
+       *
+       * @returns {object|null} zrender
+       * @sideEffects 无
+       */
+      getZr() {
+        return instance ? instance.getZr() : null;
+      }
+    };
+    return view;
+  }
+
+  // iframe/js/src/app/working-hours/charts/rightDrag.js
+  function bindRightDrag(view, options) {
+    const getMaxIndex = options.getMaxIndex;
+    const zr = view.getZr();
+    if (!zr) return false;
+    let dragging = false;
+    let startX = 0;
+    zr.on("mousedown", (e) => {
+      if (e.event.button !== 2) return;
+      dragging = true;
+      startX = e.offsetX;
+      zr.setCursorStyle("grabbing");
+    });
+    zr.on("mousemove", (e) => {
+      if (!dragging) return;
+      const inst = view.instance;
+      if (!inst) return;
+      const from = inst.convertFromPixel({ seriesIndex: 0 }, [startX, e.offsetY]);
+      const to = inst.convertFromPixel({ seriesIndex: 0 }, [e.offsetX, e.offsetY]);
+      if (!from || !to) return;
+      const deltaIndex = from[0] - to[0];
+      const currentDz = inst.getOption().dataZoom[0];
+      let newStart = currentDz.startValue + deltaIndex;
+      let newEnd = currentDz.endValue + deltaIndex;
+      const maxIdx = getMaxIndex();
+      if (newStart < 0) {
+        newEnd -= newStart;
+        newStart = 0;
+      }
+      if (newEnd > maxIdx) {
+        newStart -= newEnd - maxIdx;
+        newEnd = maxIdx;
+      }
+      inst.dispatchAction({ type: "dataZoom", startValue: newStart, endValue: newEnd });
+      startX = e.offsetX;
+    });
+    zr.on("mouseup", (e) => {
+      if (e.event.button !== 2) return;
+      dragging = false;
+      zr.setCursorStyle("default");
+    });
+    return true;
+  }
+
+  // iframe/js/src/app/working-hours/charts/zoomSync.js
+  function mirrorWindow(entries, from) {
+    const option = from.view.getOption();
+    const dz = option && option.dataZoom && option.dataZoom[0];
+    if (!dz || dz.startValue === void 0) return;
+    for (const entry of entries) {
+      if (entry === from) continue;
+      entry.view.dispatchAction({ type: "dataZoom", startValue: dz.startValue, endValue: dz.endValue });
+    }
+  }
+  function linkZoom(views, options) {
+    const opts = options || {};
+    const delay = opts.delay === void 0 ? 120 : opts.delay;
+    const mirror = opts.mirror === true;
+    const timers = /* @__PURE__ */ new Map();
+    const entries = (views || []).filter((item) => item && item.view);
+    for (const entry of entries) {
+      entry.view.on("dataZoom", () => {
+        const prev = timers.get(entry.id);
+        if (prev) clearTimeout(prev);
+        timers.set(
+          entry.id,
+          setTimeout(() => {
+            timers.delete(entry.id);
+            entry.onZoom();
+            if (mirror && entry.id !== opts.sourceId) mirrorWindow(entries, entry);
+          }, delay)
+        );
+      });
+    }
+    return {
+      /**
+       * 切断所有待执行的防抖回调
+       *
+       * @returns {void}
+       * @sideEffects 清理定时器
+       */
+      dispose() {
+        for (const timer of timers.values()) clearTimeout(timer);
+        timers.clear();
+      }
+    };
+  }
+
+  // iframe/js/src/app/working-hours/charts/zoomModel.js
+  var SLOT_CAPACITY_SEC = 900;
+  var HOURS_PER_VIEW = 48;
+  function computeZoomWindow(timeline, dz) {
+    const totalSlots = timeline.length;
+    let startIdx = 0;
+    let endIdx = totalSlots - 1;
+    if (dz && dz.startValue !== void 0) {
+      startIdx = Math.max(0, Math.floor(dz.startValue));
+      endIdx = Math.min(totalSlots - 1, Math.ceil(dz.endValue));
+    }
+    const exactDiffHours = (timeline[endIdx].ts - timeline[startIdx].ts) / (3600 * 1e3);
+    const safeDiffHours = Math.round(exactDiffHours * 10) / 10;
+    const clusterSize = Math.max(1, Math.ceil(safeDiffHours / HOURS_PER_VIEW));
+    return {
+      startIdx,
+      endIdx,
+      safeDiffHours,
+      clusterSize,
+      dataYMax: clusterSize * SLOT_CAPACITY_SEC,
+      hourInterval: Math.max(2, Math.ceil(safeDiffHours / 24) * 2)
+    };
+  }
+  function sumVisible(map, ctx) {
+    let total = 0;
+    for (const pid in map) {
+      if (ctx.filterPid && pid !== ctx.filterPid) continue;
+      if (ctx.hiddenSeries.has(ctx.projectMeta[pid])) continue;
+      total += map[pid];
+    }
+    return total;
+  }
+  function computeVisibleMax(timeline, opts) {
+    const ctx = {
+      filterPid: opts.filterByUuid ? opts.filterUuid : null,
+      hiddenSeries: opts.hiddenSeries,
+      projectMeta: opts.projectMeta
+    };
+    const showWork = !ctx.hiddenSeries.has("工作时间");
+    const showRest = !ctx.hiddenSeries.has("空闲时间");
+    const blockStartIdx = Math.floor(opts.startIdx / opts.clusterSize) * opts.clusterSize;
+    let visibleMax = 0;
+    for (let i = blockStartIdx; i <= opts.endIdx; i += opts.clusterSize) {
+      let blockTotal = 0;
+      for (let k = 0; k < opts.clusterSize && i + k < timeline.length; k += 1) {
+        const slot = timeline[i + k];
+        if (showWork) blockTotal += sumVisible(slot.work, ctx);
+        if (showRest) blockTotal += sumVisible(slot.rest, ctx);
+      }
+      if (blockTotal > visibleMax) visibleMax = blockTotal;
+    }
+    return visibleMax;
+  }
+  function finalizeYMax(visibleMax, dataYMax) {
+    let yMax = Math.ceil(Math.min(visibleMax, dataYMax) / 60) * 60;
+    if (yMax <= 0) yMax = Math.max(60, Math.floor(dataYMax / 3 / 60) * 60);
+    return Math.min(yMax, dataYMax);
+  }
+
+  // iframe/js/src/app/working-hours/charts/seriesData.js
+  function mergeSide(timeline, from, clusterSize, filterPid, side) {
+    const merged = {};
+    for (let k = 0; k < clusterSize && from + k < timeline.length; k += 1) {
+      const bucket = timeline[from + k][side];
+      for (const pid in bucket) {
+        if (filterPid && pid !== filterPid) continue;
+        merged[pid] = (merged[pid] || 0) + bucket[pid];
+      }
+    }
+    return merged;
+  }
+  function mergeRange(timeline, from, clusterSize, filterPid) {
+    return {
+      work: mergeSide(timeline, from, clusterSize, filterPid, "work"),
+      rest: mergeSide(timeline, from, clusterSize, filterPid, "rest")
+    };
+  }
+  function appendWorkBlocks(out, ctx) {
+    let yOffset = 0;
+    for (const pid of ctx.sortedProjectIds) {
+      if (ctx.filterPid && pid !== ctx.filterPid) continue;
+      if (ctx.hiddenSeries.has(ctx.projectMeta[pid])) continue;
+      const val = ctx.work[pid] || 0;
+      if (val <= 0) continue;
+      if (yOffset >= ctx.yMax) break;
+      let height = val;
+      let nextOffset = yOffset + height;
+      if (nextOffset > ctx.yMax) {
+        height = ctx.yMax - yOffset;
+        nextOffset = ctx.yMax;
+      }
+      out.push([ctx.index, yOffset, nextOffset, pid, ctx.clusterSize]);
+      yOffset = nextOffset;
+    }
+    return yOffset;
+  }
+  function appendRestBlock(out, ctx) {
+    if (ctx.hiddenSeries.has("空闲时间") || ctx.yOffset >= ctx.yMax) return;
+    let totalRest = 0;
+    for (const pid in ctx.rest) {
+      if (ctx.hiddenSeries.has(ctx.projectMeta[pid])) continue;
+      totalRest += ctx.rest[pid];
+    }
+    if (totalRest <= 0) return;
+    let height = totalRest;
+    let nextOffset = ctx.yOffset + height;
+    if (nextOffset > ctx.yMax) {
+      height = ctx.yMax - ctx.yOffset;
+      nextOffset = ctx.yMax;
+    }
+    out.push([ctx.index, ctx.yOffset, nextOffset, "REST", ctx.clusterSize]);
+  }
+  function buildClusterSeries(data2, opts) {
+    const out = [];
+    const filterPid = opts.filterPid || null;
+    for (let i = 0; i < data2.timeline.length; i += opts.clusterSize) {
+      const merged = mergeRange(data2.timeline, i, opts.clusterSize, filterPid);
+      let yOffset = 0;
+      if (!data2.hiddenSeries.has("工作时间")) {
+        yOffset = appendWorkBlocks(out, {
+          index: i,
+          clusterSize: opts.clusterSize,
+          yMax: opts.yMax,
+          work: merged.work,
+          sortedProjectIds: data2.sortedProjectIds,
+          projectMeta: data2.projectMeta,
+          hiddenSeries: data2.hiddenSeries,
+          filterPid
         });
-      } else if (state.activeTab === "project" && SELECTED_DETAIL_UUID) {
-        const p = projectStats[SELECTED_DETAIL_UUID];
-        if (p) totalSec = seriesName === "工作时间" ? p.totalWork : p.totalRest;
-      } else if (state.activeTab === "manage" && currentlySelectedManageUuid) {
-        const p = projectStats[currentlySelectedManageUuid];
-        if (p) totalSec = seriesName === "工作时间" ? p.totalWork : p.totalRest;
-      } else if (state.activeTab === "rhythm") {
-        if (rhythmChart && rhythmChart._aggWork && rhythmChart._aggRest) {
-          const arr = seriesName === "工作时间" ? rhythmChart._aggWork : rhythmChart._aggRest;
-          for (let i = 0; i < arr.length; i++) totalSec += arr[i];
-        }
       }
-      detailEl.innerHTML = `<div style="color:#fff;">${escapeHtml(seriesName)}总和：<span style="color:var(--vscode-link); font-weight:bold;">${formatDuration(totalSec)}</span></div>`;
-      return;
+      appendRestBlock(out, {
+        index: i,
+        clusterSize: opts.clusterSize,
+        yMax: opts.yMax,
+        yOffset,
+        rest: merged.rest,
+        projectMeta: data2.projectMeta,
+        hiddenSeries: data2.hiddenSeries
+      });
     }
-    let targetUuid = null;
-    for (const uuid of sortedProjectIds) {
-      if (globalProjectMeta[uuid] === seriesName) {
-        targetUuid = uuid;
-        break;
-      }
-    }
-    if (targetUuid && projectStats[targetUuid]) {
-      const p = projectStats[targetUuid];
-      detailEl.innerHTML = `
-                    <div style="color:#e0e0e0; font-weight:bold; white-space:nowrap; text-overflow:ellipsis; overflow:hidden;">${escapeHtml(seriesName)}</div>
-                    <div style="margin-top:4px;">
-                        工作时间: <span style="color:#fff">${formatDuration(p.totalWork)}</span><br/>
-                        空闲时间: <span style="color:#fff">${formatDuration(p.totalRest)}</span>
-                    </div>`;
-    }
-  });
-  document.body.addEventListener("mouseout", function(e) {
-    const item = e.target.closest(".legend-item");
-    if (!item) return;
-    const panel = item.closest(".legend-panel");
-    if (!panel) return;
-    const detailEl = panel.querySelector(".legend-detail");
-    if (detailEl) detailEl.innerHTML = "把鼠标悬浮在工程上查看详情";
-  });
-  function bindRightDrag(chartInstance) {
-    let isRightDragging = false;
-    let rightDragStartX = 0;
-    chartInstance.getZr().on("mousedown", function(e) {
-      if (e.event.button === 2) {
-        isRightDragging = true;
-        rightDragStartX = e.offsetX;
-        chartInstance.getZr().setCursorStyle("grabbing");
-      }
-    });
-    chartInstance.getZr().on("mousemove", function(e) {
-      if (isRightDragging) {
-        const startPt = chartInstance.convertFromPixel({ seriesIndex: 0 }, [rightDragStartX, e.offsetY]);
-        const endPt = chartInstance.convertFromPixel({ seriesIndex: 0 }, [e.offsetX, e.offsetY]);
-        if (startPt && endPt) {
-          const deltaIndex = startPt[0] - endPt[0];
-          const currentDz = chartInstance.getOption().dataZoom[0];
-          let newStart = currentDz.startValue + deltaIndex;
-          let newEnd = currentDz.endValue + deltaIndex;
-          const maxIdx = globalTimeline.length - 1;
-          if (newStart < 0) {
-            newEnd -= newStart;
-            newStart = 0;
-          }
-          if (newEnd > maxIdx) {
-            newStart -= newEnd - maxIdx;
-            newEnd = maxIdx;
-          }
-          chartInstance.dispatchAction({ type: "dataZoom", startValue: newStart, endValue: newEnd });
-          rightDragStartX = e.offsetX;
-        }
-      }
-    });
-    chartInstance.getZr().on("mouseup", function(e) {
-      if (e.event.button === 2) {
-        isRightDragging = false;
-        chartInstance.getZr().setCursorStyle("default");
-      }
-    });
+    return out;
   }
-  function createChartOption(bounds, isManage, specificUuid) {
-    const dummyData = new Float32Array(globalTimeline.length).fill(900);
+  function buildHourIntervalFormatter(hourInterval) {
+    return function interval(index, value) {
+      const d = new Date(Number(value));
+      if (d.getMinutes() !== 0) return false;
+      if (d.getHours() === 0) return true;
+      return d.getHours() % hourInterval === 0;
+    };
+  }
+
+  // iframe/js/src/app/working-hours/charts/legendHtml.js
+  function scanWindow(timeline, opts) {
+    const visiblePIds = /* @__PURE__ */ new Set();
+    let hasRestTime = false;
+    for (let i = opts.startIdx; i <= opts.endIdx; i += 1) {
+      const slot = timeline[i];
+      for (const pid in slot.rest) {
+        if (opts.targetUuid && pid !== opts.targetUuid) continue;
+        if (slot.rest[pid] > 0) hasRestTime = true;
+      }
+      for (const pid in slot.work) {
+        if (opts.targetUuid && pid !== opts.targetUuid) continue;
+        if (slot.work[pid] > 0) visiblePIds.add(pid);
+      }
+    }
+    return { visiblePIds, hasRestTime };
+  }
+  function buildLegendHtml(data2, opts) {
+    const scan = scanWindow(data2.timeline, {
+      startIdx: opts.startIdx,
+      endIdx: opts.endIdx,
+      targetUuid: opts.targetUuid || null
+    });
+    const targetUuid = opts.targetUuid || null;
+    let html = "";
+    data2.sortedProjectIds.forEach((pId) => {
+      if (targetUuid && pId !== targetUuid) return;
+      if (!scan.visiblePIds.has(pId)) return;
+      const name = data2.projectMeta[pId];
+      const isHidden = data2.hiddenSeries.has(name);
+      html += `<div class="legend-item ${isHidden ? "hidden" : ""}" data-name="${escapeHtml(name)}">
+                        <span class="color-block" style="background:${data2.pidColorMap[pId]};"></span>
+                        <span style="font-size:11px; white-space:nowrap; text-overflow:ellipsis; overflow:hidden;">${escapeHtml(name)}</span>
+                    </div>`;
+    });
+    if (scan.visiblePIds.size > 0) {
+      const isWorkHidden = data2.hiddenSeries.has("工作时间");
+      html += `<div class="legend-item ${isWorkHidden ? "hidden" : ""}" data-name="工作时间">
+                    <span class="color-block" style="background: linear-gradient(135deg, #5470c6, #91cc75, #fac858);"></span>
+                    <span style="font-size:11px; font-weight:bold;">工作时间</span>
+                </div>`;
+    }
+    if (scan.hasRestTime) {
+      const isHidden = data2.hiddenSeries.has("空闲时间");
+      html += `<div class="legend-item ${isHidden ? "hidden" : ""}" data-name="空闲时间">
+                    <span class="color-block" style="background:var(--vscode-chart-rest);"></span><span style="font-size:11px; color:#aaa;">空闲时间</span>
+                </div>`;
+    }
+    return html || '<div style="color:#666; font-size:11px;">当前区间无记录</div>';
+  }
+
+  // iframe/js/src/app/working-hours/charts/zoomApply.js
+  function createZoomApplier(ctx) {
+    const data2 = ctx.data;
+    const ui2 = ctx.ui;
+    function apply(view, opts) {
+      const option = view.getOption();
+      if (!option || !option.dataZoom || !option.dataZoom[0]) return;
+      const win = computeZoomWindow(data2.timeline, option.dataZoom[0]);
+      if (opts.key === "main") ui2.mainClusterSize = win.clusterSize;
+      else ui2.manageClusterSize = win.clusterSize;
+      refreshLegend(opts, win);
+      const dynamicYMax = updateSeries(view, opts, win);
+      const cache = ui2.chartCache[opts.key];
+      if (dynamicYMax !== cache.lastDynamicYMax) {
+        view.setOption({ yAxis: { max: dynamicYMax } });
+        cache.lastDynamicYMax = dynamicYMax;
+      }
+    }
+    function refreshLegend(opts, win) {
+      const targetUuid = opts.key === "main" ? ui2.activeTab === "project" ? ui2.selectedDetailUuid : null : ui2.selectedManageUuid;
+      const legendEl = document.getElementById(opts.legendListId);
+      if (legendEl) legendEl.innerHTML = buildLegendHtml(chartData(), { startIdx: win.startIdx, endIdx: win.endIdx, targetUuid });
+    }
+    function updateSeries(view, opts, win) {
+      const cache = ui2.chartCache[opts.key];
+      const changed = win.clusterSize !== cache.lastClusterSize || win.dataYMax !== cache.lastYMax || win.hourInterval !== cache.lastHourInterval;
+      if (changed) {
+        view.setOption({
+          xAxis: { axisLabel: { interval: buildHourIntervalFormatter(win.hourInterval) } },
+          series: [
+            {},
+            { data: buildClusterSeries(chartData(), { clusterSize: win.clusterSize, yMax: win.dataYMax, filterPid: opts.filterByUuid ? opts.filterUuid : null }) }
+          ]
+        });
+        cache.lastClusterSize = win.clusterSize;
+        cache.lastYMax = win.dataYMax;
+        cache.lastHourInterval = win.hourInterval;
+      }
+      const visibleMax = computeVisibleMax(data2.timeline, {
+        startIdx: win.startIdx,
+        endIdx: win.endIdx,
+        clusterSize: win.clusterSize,
+        filterByUuid: opts.filterByUuid,
+        filterUuid: opts.filterUuid,
+        hiddenSeries: ui2.hiddenSeries,
+        projectMeta: data2.projectMeta
+      });
+      return finalizeYMax(visibleMax, win.dataYMax);
+    }
+    return {
+      apply,
+      /**
+       * 主图的重算入口
+       *
+       * @returns {void}
+       * @sideEffects 重绘主图
+       */
+      handleMain() {
+        apply(ctx.mainView, {
+          key: "main",
+          filterByUuid: ui2.activeTab === "project",
+          filterUuid: ui2.selectedDetailUuid,
+          legendListId: "legend-list"
+        });
+      },
+      /**
+       * 工程管理图的重算入口
+       *
+       * @returns {void}
+       * @sideEffects 重绘工程管理图
+       */
+      handleManage() {
+        apply(ctx.manageView, {
+          key: "manage",
+          filterByUuid: true,
+          filterUuid: ui2.selectedManageUuid,
+          legendListId: "m-legend-list"
+        });
+      }
+    };
+  }
+
+  // iframe/js/src/app/working-hours/charts/options/timelineChart.js
+  var SLOT_CAPACITY_SEC2 = 900;
+  function blockTitle(startTs, size) {
+    const end = new Date(startTs + size * 15 * 60 * 1e3);
+    return `${formatFullDateTime(startTs)} ~ ${end.getHours().toString().padStart(2, "0")}:${end.getMinutes().toString().padStart(2, "0")}`;
+  }
+  function sumBlock(timeline, blockStart, size, specificUuid) {
+    const work = {};
+    let rest = 0;
+    for (let k = 0; k < size && blockStart + k < timeline.length; k += 1) {
+      const slot = timeline[blockStart + k];
+      for (const pid in slot.work) {
+        if (specificUuid && pid !== specificUuid) continue;
+        work[pid] = (work[pid] || 0) + slot.work[pid];
+      }
+      for (const pid in slot.rest) {
+        if (specificUuid && pid !== specificUuid) continue;
+        rest += slot.rest[pid];
+      }
+    }
+    return { work, rest };
+  }
+  function makeTooltipFormatter(data2, opts) {
+    return function formatter(params) {
+      const ts = Number(params[0].axisValue);
+      const tlIndex = data2.tsMap.get(ts);
+      const currentSize = opts.getClusterSize();
+      const blockStartIdx = Math.floor(tlIndex / currentSize) * currentSize;
+      const block = sumBlock(data2.timeline, blockStartIdx, currentSize, opts.specificUuid);
+      const startTs = data2.timeline[blockStartIdx].ts;
+      const title = blockTitle(startTs, currentSize);
+      let tooltipHtml = `<b style="font-size:13px; color:#fff;">${title}</b><br/>`;
+      let hasData = false;
+      if (!data2.hiddenSeries.has("工作时间")) {
+        const rows = workRows(data2, opts, block.work);
+        tooltipHtml += rows.html;
+        hasData = rows.hasData;
+      }
+      if (block.rest > 0 && !data2.hiddenSeries.has("空闲时间")) {
+        tooltipHtml += `<div style="margin: 4px 0; font-size:12px;"><span class="color-block" style="background:var(--vscode-chart-rest);"></span> 空闲时间: <span style="float:right; font-weight:bold; margin-left: 15px; color:#fff;">${formatDuration(block.rest)}</span></div>`;
+        hasData = true;
+      }
+      return hasData ? tooltipHtml : `<b style="font-size:13px; color:#fff;">${title}</b><br/><span style="color:#666;">无活动记录</span>`;
+    };
+  }
+  function visiblePids(data2, opts) {
+    if (opts.isManage && opts.specificUuid) return [opts.specificUuid];
+    return data2.sortedProjectIds;
+  }
+  function workRows(data2, opts, work) {
+    const list = visiblePids(data2, opts);
+    const activeTab = opts.getActiveTab();
+    const currentUuid = opts.getCurrentUuid();
+    const parts = [];
+    for (let i = list.length - 1; i >= 0; i -= 1) {
+      const pid = list[i];
+      if (!opts.isManage && activeTab === "project" && pid !== currentUuid) continue;
+      const name = data2.projectMeta[pid];
+      if (data2.hiddenSeries.has(name)) continue;
+      const val = work[pid] || 0;
+      if (val <= 0) continue;
+      parts.push(`<div style="margin: 4px 0; font-size:12px;"><span class="color-block" style="background:${data2.pidColorMap[pid] || "var(--vscode-link)"};"></span> ${escapeHtml(name)}: <span style="float:right; font-weight:bold; margin-left: 15px; color:#fff;">${formatDuration(val)}</span></div>`);
+    }
+    return { html: parts.join(""), hasData: parts.length > 0 };
+  }
+  function axisLabelFormatter(value) {
+    const d = new Date(Number(value));
+    const hh = d.getHours().toString().padStart(2, "0");
+    const mm = d.getMinutes().toString().padStart(2, "0");
+    if (hh === "00" && mm === "00") return `${d.getFullYear()}/${d.getMonth() + 1}/${d.getDate()}`;
+    return `${hh}:${mm}`;
+  }
+  function makeRenderItem(data2) {
+    return function renderItem(params, api) {
+      const categoryIndex = api.value(0);
+      const startY = api.value(1);
+      const endY = api.value(2);
+      const pid = api.value(3);
+      const cSize = api.value(4) || 1;
+      const leftCoord = api.coord([categoryIndex, startY]);
+      const rightCoord = api.coord([categoryIndex + cSize - 1, startY]);
+      const bandWidth = api.size([1, 0])[0];
+      const x = leftCoord[0] - bandWidth / 2;
+      const width = rightCoord[0] + bandWidth / 2 - x;
+      const y = api.coord([categoryIndex, endY])[1];
+      const height = leftCoord[1] - y;
+      if (height <= 0) return;
+      return {
+        type: "rect",
+        shape: { x, y, width, height },
+        style: api.style({ fill: pid === "REST" ? "#b0b0b0" : data2.pidColorMap[pid] || "#007acc" })
+      };
+    };
+  }
+  function buildTimelineOption(data2, theme, opts) {
+    const dummyData = new Float32Array(data2.timeline.length).fill(SLOT_CAPACITY_SEC2);
     return {
       animation: false,
       backgroundColor: "transparent",
@@ -936,68 +1906,14 @@
         borderColor: "#454545",
         borderWidth: 1,
         textStyle: { color: "#cccccc", fontSize: 12 },
-        formatter: function(params) {
-          const ts = Number(params[0].axisValue);
-          const tlIndex = tsMap.get(ts);
-          const currentSize = isManage ? manageClusterSize : currentClusterSize;
-          const blockStartIdx = Math.floor(tlIndex / currentSize) * currentSize;
-          const blockWork = {};
-          let blockRest = 0;
-          for (let k = 0; k < currentSize && blockStartIdx + k < globalTimeline.length; k++) {
-            const slot = globalTimeline[blockStartIdx + k];
-            for (const pid in slot.work) {
-              if (specificUuid && pid !== specificUuid) continue;
-              blockWork[pid] = (blockWork[pid] || 0) + slot.work[pid];
-            }
-            for (const pid in slot.rest) {
-              if (specificUuid && pid !== specificUuid) continue;
-              blockRest += slot.rest[pid];
-            }
-          }
-          const startTs = globalTimeline[blockStartIdx].ts;
-          const endTs = startTs + currentSize * 15 * 60 * 1e3;
-          const title = `${formatFullDateTime(startTs)} ~ ${new Date(endTs).getHours().toString().padStart(2, "0")}:${new Date(endTs).getMinutes().toString().padStart(2, "0")}`;
-          let tooltipHtml = `<b style="font-size:13px; color:#fff;">${title}</b><br/>`;
-          let hasData = false;
-          if (!hiddenSeries.has("工作时间")) {
-            const idsToIterate = isManage && specificUuid ? [specificUuid] : sortedProjectIds;
-            for (let i = idsToIterate.length - 1; i >= 0; i--) {
-              const pid = idsToIterate[i];
-              if (!isManage && state.activeTab === "project" && pid !== CURRENT_UUID) continue;
-              const name = globalProjectMeta[pid];
-              if (hiddenSeries.has(name)) continue;
-              const val = blockWork[pid] || 0;
-              if (val > 0) {
-                tooltipHtml += `<div style="margin: 4px 0; font-size:12px;"><span class="color-block" style="background:${pidColorMap[pid] || "var(--vscode-link)"};"></span> ${escapeHtml(name)}: <span style="float:right; font-weight:bold; margin-left: 15px; color:#fff;">${formatDuration(val)}</span></div>`;
-                hasData = true;
-              }
-            }
-          }
-          if (blockRest > 0 && !hiddenSeries.has("空闲时间")) {
-            tooltipHtml += `<div style="margin: 4px 0; font-size:12px;"><span class="color-block" style="background:var(--vscode-chart-rest);"></span> 空闲时间: <span style="float:right; font-weight:bold; margin-left: 15px; color:#fff;">${formatDuration(blockRest)}</span></div>`;
-            hasData = true;
-          }
-          return hasData ? tooltipHtml : `<b style="font-size:13px; color:#fff;">${title}</b><br/><span style="color:#666;">无活动记录</span>`;
-        }
+        formatter: makeTooltipFormatter(data2, opts)
       },
       legend: { show: false },
-      grid: { left: 60, right: 20, bottom: 45, top: isManage ? 15 : 20 },
+      grid: { left: 60, right: 20, bottom: 45, top: opts.isManage ? 15 : 20 },
       xAxis: {
         type: "category",
-        data: globalTimeline.map((item) => item.ts),
-        axisLabel: {
-          hideOverlap: true,
-          rotate: 30,
-          color: "#858585",
-          fontSize: 10,
-          formatter: function(value) {
-            const d = new Date(Number(value));
-            const hh = d.getHours().toString().padStart(2, "0");
-            const mm = d.getMinutes().toString().padStart(2, "0");
-            if (hh === "00" && mm === "00") return `${d.getFullYear()}/${d.getMonth() + 1}/${d.getDate()}`;
-            return `${hh}:${mm}`;
-          }
-        },
+        data: data2.timeline.map((item) => item.ts),
+        axisLabel: { hideOverlap: true, rotate: 30, color: "#858585", fontSize: 10, formatter: axisLabelFormatter },
         axisLine: { lineStyle: { color: "#333" } }
       },
       yAxis: {
@@ -1006,579 +1922,163 @@
         axisLabel: { color: "#858585", fontSize: 10, formatter: (value) => formatDuration(value) },
         splitLine: { lineStyle: { color: "#252526" } }
       },
-      dataZoom: [{
-        type: "inside",
-        startValue: bounds.startValue,
-        endValue: bounds.endValue,
-        zoomOnMouseWheel: true,
-        moveOnMouseMove: true,
-        moveOnMouseWheel: false,
-        filterMode: "none",
-        minValueSpan: 23
-      }],
+      dataZoom: [
+        {
+          type: "inside",
+          startValue: opts.bounds.startValue,
+          endValue: opts.bounds.endValue,
+          zoomOnMouseWheel: true,
+          moveOnMouseMove: true,
+          moveOnMouseWheel: false,
+          filterMode: "none",
+          minValueSpan: 23
+        }
+      ],
       series: [
         { type: "bar", data: Array.from(dummyData), itemStyle: { color: "rgba(0,0,0,0)" }, barGap: "-100%", large: true, progressive: 0, progressiveThreshold: 999999 },
-        {
-          type: "custom",
-          clip: true,
-          progressive: 0,
-          progressiveThreshold: 999999,
-          renderItem: function(params, api) {
-            const categoryIndex = api.value(0);
-            const startY = api.value(1);
-            const endY = api.value(2);
-            const pid = api.value(3);
-            const cSize = api.value(4) || 1;
-            const leftCoord = api.coord([categoryIndex, startY]);
-            const rightCoord = api.coord([categoryIndex + cSize - 1, startY]);
-            const bandWidth = api.size([1, 0])[0];
-            const x = leftCoord[0] - bandWidth / 2;
-            const width = rightCoord[0] + bandWidth / 2 - x;
-            const y = api.coord([categoryIndex, endY])[1];
-            const height = leftCoord[1] - y;
-            if (height <= 0) return;
-            return { type: "rect", shape: { x, y, width, height }, style: api.style({ fill: pid === "REST" ? "#b0b0b0" : pidColorMap[pid] || "#007acc" }) };
-          },
-          encode: { x: 0, y: [1, 2] },
-          data: []
-        }
+        { type: "custom", clip: true, progressive: 0, progressiveThreshold: 999999, renderItem: makeRenderItem(data2), encode: { x: 0, y: [1, 2] }, data: [] }
       ]
     };
   }
-  function renderHeatmap() {
-    if (!heatmapChart) {
-      const dom = document.getElementById("heatmap-container");
-      if (!dom) return;
-      heatmapChart = echarts.init(dom, "dark");
-      heatmapChart.on("click", function(params) {
-        const dateStr = params.value[0];
-        const targetTs = (/* @__PURE__ */ new Date(dateStr.replace(/-/g, "/") + " 00:00:00")).getTime();
-        const bounds = getDayAlignedIndices(targetTs, targetTs);
-        if (myChart) {
-          myChart.dispatchAction({ type: "dataZoom", startValue: bounds.startValue, endValue: bounds.endValue });
-          handleZoomOrPan();
-        }
+
+  // iframe/js/src/app/working-hours/views/legendPanel.js
+  var DETAIL_HINT = "把鼠标悬浮在工程上查看详情";
+  var COLLAPSE_TARGETS = [
+    ["legend-title-main", "custom-legend", "legend-toggle-icon"],
+    ["legend-title-manage", "manage-custom-legend", "m-legend-toggle-icon"],
+    ["legend-title-rhythm", "rhythm-custom-legend", "r-legend-toggle-icon"]
+  ];
+  function initCollapseToggles() {
+    for (const [titleId, panelId, iconId] of COLLAPSE_TARGETS) {
+      const title = document.getElementById(titleId);
+      if (!title) continue;
+      title.addEventListener("click", () => {
+        const panel = document.getElementById(panelId);
+        if (!panel) return;
+        panel.classList.toggle("collapsed");
+        const icon = document.getElementById(iconId);
+        if (icon) icon.innerText = panel.classList.contains("collapsed") ? "▶" : "▼";
       });
     }
-    const filterUuid = state.activeTab === "project" ? SELECTED_DETAIL_UUID : null;
-    const dailyData = /* @__PURE__ */ new Map();
-    const now = /* @__PURE__ */ new Date();
-    const startTs = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0).getTime() - 365 * 24 * 3600 * 1e3;
-    for (let i = 0; i < globalTimeline.length; i++) {
-      const slot = globalTimeline[i];
-      if (slot.ts < startTs) continue;
-      const d = new Date(slot.ts);
-      const dateStr = [d.getFullYear(), (d.getMonth() + 1).toString().padStart(2, "0"), d.getDate().toString().padStart(2, "0")].join("-");
-      if (!dailyData.has(dateStr)) dailyData.set(dateStr, { work: 0, rest: 0 });
-      const dayStat = dailyData.get(dateStr);
-      for (const pid in slot.work) {
-        if (filterUuid && pid !== filterUuid) continue;
-        if (!hiddenSeries.has(globalProjectMeta[pid]) && !hiddenSeries.has("工作时间")) dayStat.work += slot.work[pid];
-      }
-      for (const pid in slot.rest) {
-        if (filterUuid && pid !== filterUuid) continue;
-        if (!hiddenSeries.has(globalProjectMeta[pid]) && !hiddenSeries.has("空闲时间")) dayStat.rest += slot.rest[pid];
-      }
+  }
+  function projectTotal(ctx, uuid, isWork) {
+    const p = uuid ? ctx.projectStats[uuid] : null;
+    if (!p) return 0;
+    return isWork ? p.totalWork : p.totalRest;
+  }
+  function rhythmTotal(ctx, isWork) {
+    const agg = ctx.getRhythmAgg();
+    if (!agg) return 0;
+    const arr = isWork ? agg.work : agg.rest;
+    let total = 0;
+    for (let i = 0; i < arr.length; i += 1) total += arr[i];
+    return total;
+  }
+  function seriesTotal(ctx, name) {
+    const isWork = name === "工作时间";
+    const tab = ctx.getActiveTab();
+    if (tab === "total") {
+      return ctx.sortedProjectIds.reduce((sum, uuid) => sum + projectTotal(ctx, uuid, isWork), 0);
     }
-    const result = [];
-    dailyData.forEach((stat, dateStr) => result.push([dateStr, stat.work, stat.rest]));
-    const endStr = [now.getFullYear(), (now.getMonth() + 1).toString().padStart(2, "0"), now.getDate().toString().padStart(2, "0")].join("-");
-    const startD = new Date(startTs);
-    const startStr = [startD.getFullYear(), (startD.getMonth() + 1).toString().padStart(2, "0"), startD.getDate().toString().padStart(2, "0")].join("-");
-    heatmapChart.setOption({
-      backgroundColor: "transparent",
-      tooltip: {
-        appendToBody: true,
-        backgroundColor: "rgba(37, 37, 38, 0.95)",
-        borderColor: "#454545",
-        borderWidth: 1,
-        textStyle: { color: "#cccccc", fontSize: 12 },
-        formatter: function(p) {
-          return `<b style="font-size:13px; color:#fff;">${p.value[0]}</b><br/>
-                                <div style="margin-top:6px; font-size:12px;"><span class="color-block" style="background:#39d353;"></span> 工作时间: <span style="float:right; font-weight:bold; margin-left: 15px; color:#fff;">${formatDuration(p.value[1] || 0)}</span></div>
-                                <div style="margin-top:4px; font-size:12px;"><span class="color-block" style="background:#b0b0b0;"></span> 空闲时间: <span style="float:right; font-weight:bold; margin-left: 15px; color:#fff;">${formatDuration(p.value[2] || 0)}</span></div>`;
-        }
-      },
-      visualMap: {
-        type: "piecewise",
-        show: false,
-        dimension: 1,
-        pieces: [{ min: 21601, color: "#56D364" }, { min: 14401, max: 21600, color: "#2EA043" }, { min: 7021, max: 14400, color: "#196C2E" }, { min: 1, max: 7200, color: "#033A16" }],
-        outOfRange: { color: "#151B23" }
-      },
-      calendar: {
-        top: 25,
-        left: 45,
-        right: 25,
-        bottom: 15,
-        range: [startStr, endStr],
-        cellSize: ["auto", 14],
-        itemStyle: { color: "#151B23", borderWidth: 4, borderColor: "#1e1e1e", borderRadius: 2 },
-        yearLabel: { show: false },
-        dayLabel: { color: "#858585", nameMap: "ZH", fontSize: 10 },
-        monthLabel: { color: "#858585", nameMap: "ZH", fontSize: 10 },
-        splitLine: { show: false }
-      },
-      series: { type: "heatmap", coordinateSystem: "calendar", data: result, itemStyle: { borderRadius: 2 } }
-    });
+    if (tab === "rhythm") return rhythmTotal(ctx, isWork);
+    const selected = tab === "project" ? ctx.getSelectedDetailUuid() : tab === "manage" ? ctx.getSelectedManageUuid() : null;
+    return projectTotal(ctx, selected, isWork);
   }
-  function initChartCore() {
-    initLegendToggle();
-    myChart = echarts.init(document.getElementById("chart-container"), "dark");
-    const bounds = getDayAlignedIndices(GLOBAL_TODAY_TS, GLOBAL_TODAY_TS);
-    myChart.setOption(createChartOption(bounds, false));
-    bindRightDrag(myChart);
-    let zoomTimer = null;
-    myChart.on("dataZoom", () => {
-      if (zoomTimer) clearTimeout(zoomTimer);
-      zoomTimer = setTimeout(handleZoomOrPan, 120);
-    });
-    handleZoomOrPan();
-    renderHeatmap();
+  function totalDetailHtml(ctx, name) {
+    const total = seriesTotal(ctx, name);
+    return `<div style="color:#fff;">${escapeHtml(name)}总和：<span style="color:var(--vscode-link); font-weight:bold;">${formatDuration(total)}</span></div>`;
   }
-  var currentRhythmMode = "time";
-  var rhythmFirstInit = true;
-  function setRhythmMode(mode) {
-    currentRhythmMode = mode;
-    document.getElementById("rhythm-mode-time").classList.toggle("active", mode === "time");
-    document.getElementById("rhythm-mode-project").classList.toggle("active", mode === "project");
-    renderRhythmChart();
-  }
-  function onQuickTimeChange() {
-    document.querySelector('input[name="time-submode"][value="quick"]').checked = true;
-    renderRhythmChart();
-  }
-  function onCustomDateChange() {
-    document.querySelector('input[name="time-submode"][value="custom"]').checked = true;
-    renderRhythmChart();
-  }
-  function updateRhythmProjectSelector() {
-    const selector = document.getElementById("rhythm-project-select");
-    if (!selector) return;
-    const currentVal = selector.value;
-    selector.innerHTML = '<option value="">-- 请选择工程 --</option>';
-    Object.keys(globalProjectMeta).sort((a, b) => {
-      return (globalProjectMeta[a] || "").localeCompare(globalProjectMeta[b] || "", "zh");
-    }).forEach((uuid) => {
-      const opt = document.createElement("option");
-      opt.value = uuid;
-      opt.innerText = globalProjectMeta[uuid];
-      if (uuid === currentVal) opt.selected = true;
-      selector.appendChild(opt);
-    });
-  }
-  function renderRhythmChart() {
-    if (!rhythmChart) {
-      const dom = document.getElementById("rhythm-chart-container");
-      if (!dom) return;
-      rhythmChart = echarts.init(dom, "dark");
-    }
-    let startTs = 0;
-    let endTs = Infinity;
-    const now = /* @__PURE__ */ new Date();
-    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0).getTime();
-    if (currentRhythmMode === "time") {
-      const subModeEl = document.querySelector('input[name="time-submode"]:checked');
-      const subMode = subModeEl ? subModeEl.value : "quick";
-      if (subMode === "custom") {
-        const customStart = document.getElementById("rhythm-start-date").value;
-        const customEnd = document.getElementById("rhythm-end-date").value;
-        if (customStart) startTs = (/* @__PURE__ */ new Date(customStart + "T00:00:00")).getTime();
-        if (customEnd) endTs = (/* @__PURE__ */ new Date(customEnd + "T23:59:59")).getTime();
-      } else {
-        const presetEl = document.querySelector('input[name="rhythm-time-radio"]:checked');
-        const preset = presetEl ? presetEl.value : "all";
-        if (preset === "day") startTs = todayStart;
-        else if (preset === "week") startTs = todayStart - 6 * 24 * 3600 * 1e3;
-        else if (preset === "month") startTs = todayStart - 29 * 24 * 3600 * 1e3;
-        else if (preset === "year") startTs = todayStart - 364 * 24 * 3600 * 1e3;
+  function projectDetailHtml(ctx, name) {
+    let targetUuid = null;
+    for (const uuid of ctx.sortedProjectIds) {
+      if (ctx.projectMeta[uuid] === name) {
+        targetUuid = uuid;
+        break;
       }
     }
-    const targetUuid = document.getElementById("rhythm-project-select").value;
-    const aggregatedWork = new Float64Array(96).fill(0);
-    const aggregatedRest = new Float64Array(96).fill(0);
-    for (let i = 0; i < globalTimeline.length; i++) {
-      const slot = globalTimeline[i];
-      if (currentRhythmMode === "time" && (slot.ts < startTs || slot.ts > endTs)) continue;
-      const d = new Date(slot.ts);
-      const slotIndex = d.getHours() * 4 + Math.floor(d.getMinutes() / 15);
-      let sWork = 0;
-      let sRest = 0;
-      if (currentRhythmMode === "project") {
-        if (targetUuid) {
-          sWork = slot.work[targetUuid] || 0;
-          sRest = slot.rest[targetUuid] || 0;
-        }
-      } else {
-        for (const pid in slot.work) sWork += slot.work[pid];
-        for (const pid in slot.rest) sRest += slot.rest[pid];
-      }
-      aggregatedWork[slotIndex] += sWork;
-      aggregatedRest[slotIndex] += sRest;
-    }
-    rhythmChart._aggWork = aggregatedWork;
-    rhythmChart._aggRest = aggregatedRest;
-    if (rhythmFirstInit) {
-      hiddenSeries.add("空闲时间");
-      rhythmFirstInit = false;
-    }
-    let showWork = !hiddenSeries.has("工作时间");
-    let showRest = !hiddenSeries.has("空闲时间");
-    const rListDom = document.getElementById("r-legend-list");
-    if (rListDom) {
-      rListDom.innerHTML = `
-					<div class="legend-item ${!showWork ? "hidden" : ""}" data-name="工作时间">
-						<span class="color-block" style="background: linear-gradient(135deg, #007acc, #3ba272);"></span>
-						<span style="font-size:11px; font-weight:bold;">工作时间</span>
-					</div>
-					<div class="legend-item ${!showRest ? "hidden" : ""}" data-name="空闲时间">
-						<span class="color-block" style="background: var(--vscode-chart-rest);"></span>
-						<span style="font-size:11px; color:#aaa;">空闲时间</span>
-					</div>
-				`;
-    }
-    let maxTotal = 0;
-    for (let i = 0; i < 96; i++) {
-      let total = 0;
-      if (showWork) total += aggregatedWork[i];
-      if (showRest) total += aggregatedRest[i];
-      if (total > maxTotal) maxTotal = total;
-    }
-    const axisMax = maxTotal > 0 ? maxTotal / 0.96 : 100;
-    const categories = [];
-    for (let h = 0; h < 24; h++) {
-      for (let m = 0; m < 60; m += 15) {
-        categories.push(`${h.toString().padStart(2, "0")}:${m.toString().padStart(2, "0")}`);
-      }
-    }
-    const option = {
-      backgroundColor: "transparent",
-      tooltip: {
-        trigger: "axis",
-        axisPointer: { type: "cross" },
-        backgroundColor: "rgba(37, 37, 38, 0.95)",
-        borderColor: "#454545",
-        textStyle: { color: "#cccccc", fontSize: 12 },
-        formatter: function(params) {
-          const startTime = params[0].name;
-          const timeParts = startTime.split(":").map(Number);
-          let endH = timeParts[0];
-          let endM = timeParts[1] + 15;
-          if (endM >= 60) {
-            endM = 0;
-            endH += 1;
-          }
-          const endTime = `${endH.toString().padStart(2, "0")}:${endM.toString().padStart(2, "0")}`;
-          let html = `<b style="font-size:13px; color:#fff;">${startTime} ~ ${endTime}</b><br/>`;
-          let hasData = false;
-          params.forEach((p) => {
-            if (p.value > 0) {
-              const blockColor = typeof p.color === "string" ? p.color : p.color && p.color.colorStops ? p.color.colorStops[0].color : "#007acc";
-              html += `<div style="margin: 4px 0; font-size:12px;"><span class="color-block" style="background:${blockColor};"></span> ${p.seriesName}: <span style="float:right; font-weight:bold; margin-left: 15px; color:#fff;">${formatDuration(p.value)}</span></div>`;
-              hasData = true;
-            }
-          });
-          return hasData ? html : html + `<span style="color:#666;">无活动记录</span>`;
-        }
-      },
-      angleAxis: {
-        type: "category",
-        data: categories,
-        startAngle: 90,
-        clockwise: true,
-        axisLine: { lineStyle: { color: "var(--vscode-border)" } },
-        splitLine: { show: true, lineStyle: { color: "var(--vscode-border)", type: "solid" } },
-        axisLabel: {
-          interval: 3,
-          color: "#CCCCCC",
-          fontSize: 12,
-          textShadowColor: "rgba(0,0,0,0.8)",
-          textShadowBlur: 3,
-          formatter: function(value) {
-            return value.endsWith(":00") ? value.split(":")[0] : "";
-          }
-        },
-        axisPointer: { label: { backgroundColor: "#1E1F20", color: "#D0DFDF" } }
-      },
-      radiusAxis: {
-        max: axisMax,
-        axisLabel: { show: false, color: "#999999", fontSize: 10, formatter: (v) => v === 0 ? "" : formatDuration(v) },
-        axisLine: { show: false },
-        splitLine: { lineStyle: { color: "var(--vscode-border)", type: "dashed" } },
-        axisPointer: { label: { formatter: (params) => formatDuration(params.value) } }
-      },
-      polar: { center: ["50%", "50%"], radius: "76%" },
-      series: [
-        {
-          type: "bar",
-          data: showWork ? Array.from(aggregatedWork) : new Float64Array(96).fill(0),
-          coordinateSystem: "polar",
-          name: "工作时间",
-          stack: "time-stack",
-          barCategoryGap: "0%",
-          itemStyle: { color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [{ offset: 0, color: "#007acc" }, { offset: 1, color: "#3ba272" }]) }
-        },
-        {
-          type: "bar",
-          data: showRest ? Array.from(aggregatedRest) : new Float64Array(96).fill(0),
-          coordinateSystem: "polar",
-          name: "空闲时间",
-          stack: "time-stack",
-          barCategoryGap: "0%",
-          itemStyle: { color: "#666666" }
-        }
-      ]
-    };
-    rhythmChart.setOption(option);
-  }
-  function initManageChart(selectedUuid, selectedName) {
-    if (manageChart) {
-      manageChart.dispose();
-    }
-    const container = document.getElementById("manage-chart-container");
-    if (!container) return;
-    manageChart = echarts.init(container, "dark");
-    const pStat = projectStats[selectedUuid];
-    const bounds = getDayAlignedIndices(pStat.startTs, pStat.endTs);
-    chartCache.manage = { lastClusterSize: -1, lastYMax: -1, lastHourInterval: -1, lastDynamicYMax: -1 };
-    manageChart.setOption(createChartOption(bounds, true, selectedUuid));
-    bindRightDrag(manageChart);
-    let zoomTimer = null;
-    manageChart.on("dataZoom", () => {
-      if (zoomTimer) clearTimeout(zoomTimer);
-      zoomTimer = setTimeout(() => handleZoomOrPanCore(manageChart, "manage", selectedUuid, false), 120);
-    });
-    handleZoomOrPanCore(manageChart, "manage", selectedUuid, false);
-  }
-  function buildLegendHtml(startIdx, endIdx, isMainView) {
-    const visiblePIds = /* @__PURE__ */ new Set();
-    let hasRestTime = false;
-    let targetUuid = isMainView ? state.activeTab === "project" ? SELECTED_DETAIL_UUID : null : currentlySelectedManageUuid;
-    for (let i = startIdx; i <= endIdx; i++) {
-      for (const pid in globalTimeline[i].rest) {
-        if (targetUuid && pid !== targetUuid) continue;
-        if (globalTimeline[i].rest[pid] > 0) hasRestTime = true;
-      }
-      for (const pid in globalTimeline[i].work) {
-        if (targetUuid && pid !== targetUuid) continue;
-        if (globalTimeline[i].work[pid] > 0) visiblePIds.add(pid);
-      }
-    }
-    let html = "";
-    sortedProjectIds.forEach((pId) => {
-      if (targetUuid && pId !== targetUuid) return;
-      if (visiblePIds.has(pId)) {
-        const name = globalProjectMeta[pId];
-        const isHidden = hiddenSeries.has(name);
-        html += `<div class="legend-item ${isHidden ? "hidden" : ""}" data-name="${escapeHtml(name)}">
-                        <span class="color-block" style="background:${pidColorMap[pId]};"></span>
-                        <span style="font-size:11px; white-space:nowrap; text-overflow:ellipsis; overflow:hidden;">${escapeHtml(name)}</span>
+    if (!targetUuid || !ctx.projectStats[targetUuid]) return "";
+    const p = ctx.projectStats[targetUuid];
+    return `
+                    <div style="color:#e0e0e0; font-weight:bold; white-space:nowrap; text-overflow:ellipsis; overflow:hidden;">${escapeHtml(name)}</div>
+                    <div style="margin-top:4px;">
+                        工作时间: <span style="color:#fff">${formatDuration(p.totalWork)}</span><br/>
+                        空闲时间: <span style="color:#fff">${formatDuration(p.totalRest)}</span>
                     </div>`;
-      }
-    });
-    if (visiblePIds.size > 0) {
-      const isWorkHidden = hiddenSeries.has("工作时间");
-      html += `<div class="legend-item ${isWorkHidden ? "hidden" : ""}" data-name="工作时间">
-                    <span class="color-block" style="background: linear-gradient(135deg, #5470c6, #91cc75, #fac858);"></span>
-                    <span style="font-size:11px; font-weight:bold;">工作时间</span>
-                </div>`;
-    }
-    if (hasRestTime) {
-      const isHidden = hiddenSeries.has("空闲时间");
-      html += `<div class="legend-item ${isHidden ? "hidden" : ""}" data-name="空闲时间">
-                    <span class="color-block" style="background:var(--vscode-chart-rest);"></span><span style="font-size:11px; color:#aaa;">空闲时间</span>
-                </div>`;
-    }
-    return html || '<div style="color:#666; font-size:11px;">当前区间无记录</div>';
   }
-  function updateChartData(chartInstance, currentTab, filterUuid, clusterSize, yMax, hourInterval) {
-    const customData = [];
-    for (let i = 0; i < globalTimeline.length; i += clusterSize) {
-      const mergedWork = {};
-      const mergedRest = {};
-      for (let k = 0; k < clusterSize && i + k < globalTimeline.length; k++) {
-        const slot = globalTimeline[i + k];
-        for (const pid in slot.work) {
-          if ((currentTab === "project" || currentTab === "manage") && pid !== filterUuid) continue;
-          mergedWork[pid] = (mergedWork[pid] || 0) + slot.work[pid];
-        }
-        for (const pid in slot.rest) {
-          if ((currentTab === "project" || currentTab === "manage") && pid !== filterUuid) continue;
-          mergedRest[pid] = (mergedRest[pid] || 0) + slot.rest[pid];
-        }
+  function initLegendPanel(ctx) {
+    initCollapseToggles();
+    document.body.addEventListener("click", (e) => {
+      const item = e.target.closest(".legend-item");
+      if (!item) return;
+      const seriesName = item.getAttribute("data-name");
+      if (ctx.hiddenSeries.has(seriesName)) ctx.hiddenSeries.delete(seriesName);
+      else ctx.hiddenSeries.add(seriesName);
+      ctx.onSeriesToggled();
+    });
+    document.body.addEventListener("mouseover", (e) => {
+      const item = e.target.closest(".legend-item");
+      if (!item) return;
+      const panel = item.closest(".legend-panel");
+      if (!panel) return;
+      const detailEl = panel.querySelector(".legend-detail");
+      if (!detailEl) return;
+      const seriesName = item.getAttribute("data-name");
+      if (seriesName === "工作时间" || seriesName === "空闲时间") {
+        detailEl.innerHTML = totalDetailHtml(ctx, seriesName);
+        return;
       }
-      let yOffset = 0;
-      if (!hiddenSeries.has("工作时间")) {
-        for (const pid of sortedProjectIds) {
-          if ((currentTab === "project" || currentTab === "manage") && pid !== filterUuid) continue;
-          const name = globalProjectMeta[pid];
-          if (hiddenSeries.has(name)) continue;
-          let val = mergedWork[pid] || 0;
-          if (val > 0) {
-            if (yOffset >= yMax) break;
-            let nextOffset = yOffset + val;
-            if (nextOffset > yMax) {
-              val = yMax - yOffset;
-              nextOffset = yMax;
-            }
-            customData.push([i, yOffset, nextOffset, pid, clusterSize]);
-            yOffset = nextOffset;
-          }
-        }
-      }
-      if (!hiddenSeries.has("空闲时间") && yOffset < yMax) {
-        let totalRestVal = 0;
-        for (const pid in mergedRest) {
-          const name = globalProjectMeta[pid];
-          if (!hiddenSeries.has(name)) totalRestVal += mergedRest[pid];
-        }
-        if (totalRestVal > 0) {
-          let val = totalRestVal;
-          let nextOffset = yOffset + val;
-          if (nextOffset > yMax) {
-            val = yMax - yOffset;
-            nextOffset = yMax;
-          }
-          customData.push([i, yOffset, nextOffset, "REST", clusterSize]);
-        }
-      }
-    }
-    chartInstance.setOption({
-      xAxis: { axisLabel: { interval: function(index, value) {
-        const d = new Date(Number(value));
-        if (d.getMinutes() !== 0) return false;
-        if (d.getHours() === 0) return true;
-        return d.getHours() % hourInterval === 0;
-      } } },
-      series: [{}, { data: customData }]
+      const html = projectDetailHtml(ctx, seriesName);
+      if (html) detailEl.innerHTML = html;
+    });
+    document.body.addEventListener("mouseout", (e) => {
+      const item = e.target.closest(".legend-item");
+      if (!item) return;
+      const panel = item.closest(".legend-panel");
+      if (!panel) return;
+      const detailEl = panel.querySelector(".legend-detail");
+      if (detailEl) detailEl.innerHTML = DETAIL_HINT;
     });
   }
-  function handleZoomOrPanCore(chartInstance, currentTab, filterUuid, isMain) {
-    if (!chartInstance) return;
-    const currentOption = chartInstance.getOption();
-    if (!currentOption.dataZoom || !currentOption.dataZoom[0]) return;
-    const dz = currentOption.dataZoom[0];
-    const totalSlots = globalTimeline.length;
-    let startIdx = 0, endIdx = totalSlots - 1;
-    if (dz.startValue !== void 0) {
-      startIdx = Math.max(0, Math.floor(dz.startValue));
-      endIdx = Math.min(totalSlots - 1, Math.ceil(dz.endValue));
+
+  // iframe/js/src/app/working-hours/views/manageTable.js
+  var SORTERS = {
+    name: (a) => a.name,
+    start: (a) => a.startTs,
+    end: (a) => a.endTs,
+    work: (a) => a.totalWork,
+    rest: (a) => a.totalRest
+  };
+  function sortProjectList(list, field, order) {
+    if (!field) return list.slice();
+    const sorted = list.slice();
+    const pick = SORTERS[field];
+    if (!pick) return sorted;
+    if (field === "name") {
+      sorted.sort((a, b) => order === "desc" ? b.name.localeCompare(a.name) : a.name.localeCompare(b.name));
+      return sorted;
     }
-    const exactDiffHours = (globalTimeline[endIdx].ts - globalTimeline[startIdx].ts) / (3600 * 1e3);
-    const safeDiffHours = Math.round(exactDiffHours * 10) / 10;
-    let multiplier = Math.max(1, Math.ceil(safeDiffHours / 48));
-    let clusterSize = multiplier;
-    let dataYMax = multiplier * 900;
-    let hourInterval = Math.max(2, Math.ceil(safeDiffHours / 24) * 2);
-    if (isMain) {
-      currentClusterSize = clusterSize;
-      document.getElementById("legend-list").innerHTML = buildLegendHtml(startIdx, endIdx, true);
-    } else {
-      manageClusterSize = clusterSize;
-      document.getElementById("m-legend-list").innerHTML = buildLegendHtml(startIdx, endIdx, false);
-    }
-    let visibleMax = 0;
-    const blockStartIdx = Math.floor(startIdx / clusterSize) * clusterSize;
-    for (let i = blockStartIdx; i <= endIdx; i += clusterSize) {
-      let blockTotal = 0;
-      for (let k = 0; k < clusterSize && i + k < globalTimeline.length; k++) {
-        const slot = globalTimeline[i + k];
-        if (!hiddenSeries.has("工作时间")) {
-          for (const pid in slot.work) {
-            if ((currentTab === "project" || currentTab === "manage") && pid !== filterUuid) continue;
-            if (!hiddenSeries.has(globalProjectMeta[pid])) blockTotal += slot.work[pid];
-          }
-        }
-        if (!hiddenSeries.has("空闲时间")) {
-          for (const pid in slot.rest) {
-            if ((currentTab === "project" || currentTab === "manage") && pid !== filterUuid) continue;
-            if (!hiddenSeries.has(globalProjectMeta[pid])) blockTotal += slot.rest[pid];
-          }
-        }
-      }
-      if (blockTotal > visibleMax) visibleMax = blockTotal;
-    }
-    let dynamicYMax = Math.min(visibleMax, dataYMax);
-    dynamicYMax = Math.ceil(dynamicYMax / 60) * 60;
-    if (dynamicYMax <= 0) dynamicYMax = Math.max(60, Math.floor(dataYMax / 3 / 60) * 60);
-    if (dynamicYMax > dataYMax) dynamicYMax = dataYMax;
-    const cacheKey = isMain ? "main" : "manage";
-    const cache = chartCache[cacheKey];
-    if (clusterSize !== cache.lastClusterSize || dataYMax !== cache.lastYMax || hourInterval !== cache.lastHourInterval) {
-      updateChartData(chartInstance, currentTab, filterUuid, clusterSize, dataYMax, hourInterval);
-      cache.lastClusterSize = clusterSize;
-      cache.lastYMax = dataYMax;
-      cache.lastHourInterval = hourInterval;
-    }
-    if (dynamicYMax !== cache.lastDynamicYMax) {
-      chartInstance.setOption({ yAxis: { max: dynamicYMax } });
-      cache.lastDynamicYMax = dynamicYMax;
-    }
+    sorted.sort((a, b) => order === "desc" ? pick(b) - pick(a) : pick(a) - pick(b));
+    return sorted;
   }
-  function handleZoomOrPan() {
-    const filterUuid = state.activeTab === "project" ? SELECTED_DETAIL_UUID : null;
-    handleZoomOrPanCore(myChart, state.activeTab, filterUuid, true);
-  }
-  function sortTable(field) {
-    if (currentSortField === field) {
-      currentSortOrder = currentSortOrder === "desc" ? "asc" : "desc";
-    } else {
-      currentSortField = field;
-      currentSortOrder = "desc";
-    }
-    renderManageTable();
-  }
-  function renderManageTable() {
-    const tbody = document.getElementById("project-table-body");
-    tbody.innerHTML = "";
+  function updateSortIndicators(field, order) {
     ["name", "start", "end", "work", "rest"].forEach((f) => {
       const el = document.getElementById(`sort-${f}`);
-      if (el) {
-        if (currentSortField === f) {
-          el.innerText = currentSortOrder === "desc" ? " ▼" : " ▲";
-          el.style.color = "var(--vscode-link)";
-        } else {
-          el.innerText = "";
-        }
+      if (!el) return;
+      if (field !== f) {
+        el.innerText = "";
+        return;
       }
+      el.innerText = order === "desc" ? " ▼" : " ▲";
+      el.style.color = "var(--vscode-link)";
     });
-    let list = Object.values(projectStats);
-    if (currentSortField) {
-      list.sort((a, b) => {
-        let valA, valB;
-        if (currentSortField === "name") {
-          valA = a.name;
-          valB = b.name;
-          return currentSortOrder === "desc" ? valB.localeCompare(valA) : valA.localeCompare(valB);
-        } else if (currentSortField === "start") {
-          valA = a.startTs;
-          valB = b.startTs;
-        } else if (currentSortField === "end") {
-          valA = a.endTs;
-          valB = b.endTs;
-        } else if (currentSortField === "work") {
-          valA = a.totalWork;
-          valB = b.totalWork;
-        } else if (currentSortField === "rest") {
-          valA = a.totalRest;
-          valB = b.totalRest;
-        }
-        return currentSortOrder === "desc" ? valB - valA : valA - valB;
-      });
-    }
-    if (!currentlySelectedManageUuid && list.length > 0) currentlySelectedManageUuid = list[0].uuid;
-    list.forEach((item) => {
-      const tr = document.createElement("tr");
-      tr.style.cursor = "pointer";
-      if (currentlySelectedManageUuid === item.uuid) tr.style.background = "var(--vscode-active)";
-      tr.onclick = () => {
-        currentlySelectedManageUuid = item.uuid;
-        document.querySelectorAll("#project-table-body tr").forEach((r) => r.style.background = "");
-        tr.style.background = "var(--vscode-active)";
-        document.getElementById("manage-chart-title").innerText = getProjectTitleString(item.uuid);
-        initManageChart(item.uuid, item.name);
-      };
-      tr.innerHTML = `
+  }
+  function createRow(item, active, onSelect) {
+    const tr = document.createElement("tr");
+    tr.style.cursor = "pointer";
+    tr.dataset.uuid = item.uuid;
+    if (active) tr.style.background = "var(--vscode-active)";
+    tr.onclick = () => onSelect(item.uuid);
+    tr.innerHTML = `
                     <td title="${escapeHtml(item.name)}">${escapeHtml(item.name)}</td>
                     <td>${formatFullDateTime(item.startTs)}</td>
                     <td>${formatFullDateTime(item.endTs)}</td>
@@ -1591,636 +2091,406 @@
                         <button class="small-btn del" onclick="confirmDeleteProject('${item.uuid}')">删除</button>
                     </td>
                 `;
-      tbody.appendChild(tr);
-    });
-    if (currentlySelectedManageUuid) {
-      const activeItem = list.find((i) => i.uuid === currentlySelectedManageUuid);
-      if (activeItem) {
-        document.getElementById("manage-chart-title").innerText = getProjectTitleString(activeItem.uuid);
-        initManageChart(activeItem.uuid, activeItem.name);
+    return tr;
+  }
+  function renderManageTable(options) {
+    const tbody = document.getElementById("project-table-body");
+    if (!tbody) return [];
+    tbody.innerHTML = "";
+    updateSortIndicators(options.sortField, options.sortOrder);
+    const list = sortProjectList(Object.values(options.projectStats), options.sortField, options.sortOrder);
+    if (list.length === 0) options.onNoSelection();
+    for (const item of list) {
+      tbody.appendChild(createRow(item, options.selectedUuid === item.uuid, options.onSelect));
+    }
+    return list;
+  }
+
+  // iframe/js/src/app/working-hours/views/managePanel.js
+  function createManagePanel(ctx) {
+    const data2 = ctx.data;
+    const ui2 = ctx.ui;
+    const view = ctx.view;
+    let zoomLink = null;
+    function initChart(uuid) {
+      if (!uuid || !data2.projectStats[uuid]) return;
+      if (!document.getElementById("manage-chart-container")) return;
+      view.destroy();
+      if (zoomLink) {
+        zoomLink.dispose();
+        zoomLink = null;
       }
-    } else {
-      if (manageChart) {
-        manageChart.dispose();
-        manageChart = null;
-      }
+      if (!view.init()) return;
+      resetChartCache("manage");
+      const pStat = data2.projectStats[uuid];
+      view.setOption(
+        buildTimelineOption(chartData(), "dark", {
+          bounds: getDayAlignedIndices(pStat.startTs, pStat.endTs, data2.timeline, data2.tsMap, data2.todayTs),
+          isManage: true,
+          specificUuid: uuid,
+          getClusterSize: () => ui2.manageClusterSize,
+          getActiveTab: () => ui2.activeTab,
+          getCurrentUuid: () => ui2.currentUuid
+        })
+      );
+      bindRightDrag(view, { getMaxIndex: () => data2.timeline.length - 1 });
+      zoomLink = linkZoom([{ id: "manage", view, onZoom: ctx.zoomer.handleManage }], { sourceId: "manage" });
+      ctx.zoomer.handleManage();
+    }
+    function onRowSelect(uuid) {
+      ui2.selectedManageUuid = uuid;
+      document.querySelectorAll("#project-table-body tr").forEach((r) => {
+        r.style.background = "";
+      });
+      const row = document.querySelector(`#project-table-body tr[data-uuid="${uuid}"]`);
+      if (row) row.style.background = "var(--vscode-active)";
+      document.getElementById("manage-chart-title").innerText = getProjectTitleString(data2.projectStats, uuid);
+      initChart(uuid);
+    }
+    function onEmpty() {
+      view.destroy();
       document.getElementById("manage-chart-title").innerText = "当前暂无工程数据";
     }
-  }
-  function getHeatmapDataForExport(filterUuid = null) {
-    const dailyData = /* @__PURE__ */ new Map();
-    for (let i = 0; i < globalTimeline.length; i++) {
-      const slot = globalTimeline[i];
-      const d = new Date(slot.ts);
-      const dateStr = [d.getFullYear(), (d.getMonth() + 1).toString().padStart(2, "0"), d.getDate().toString().padStart(2, "0")].join("-");
-      let sWork = 0;
-      let sRest = 0;
-      for (const pid in slot.work) {
-        if (filterUuid && pid !== filterUuid) continue;
-        sWork += slot.work[pid];
-      }
-      for (const pid in slot.rest) {
-        if (filterUuid && pid !== filterUuid) continue;
-        sRest += slot.rest[pid];
-      }
-      if (sWork > 0 || sRest > 0) {
-        if (!dailyData.has(dateStr)) dailyData.set(dateStr, { work: 0, rest: 0 });
-        const dayStat = dailyData.get(dateStr);
-        dayStat.work += sWork;
-        dayStat.rest += sRest;
-      }
-    }
-    const result = [];
-    dailyData.forEach((stat, dateStr) => result.push([dateStr, stat.work, stat.rest]));
-    return result;
-  }
-  async function exportProjectChart(uuid) {
-    const pStat = projectStats[uuid];
-    if (!pStat || pStat.startTs === Infinity) {
-      toast("当前工程暂无可导出数据", "warning");
-      return;
-    }
-    const bounds = getDayAlignedIndices(pStat.startTs, pStat.endTs);
-    const baseTs = globalTimeline[bounds.startValue].ts;
-    const totalSlots = bounds.endValue - bounds.startValue + 1;
-    const timeData = [];
-    for (let i = bounds.startValue; i <= bounds.endValue; i++) {
-      const w = globalTimeline[i].work[uuid] || 0;
-      const r = globalTimeline[i].rest[uuid] || 0;
-      if (w > 0 || r > 0) {
-        timeData.push([i - bounds.startValue, { [uuid]: w }, { [uuid]: r }]);
-      }
-    }
-    const payloadObj = {
-      pageTitle: getProjectTitleString(uuid),
-      baseTs,
-      totalSlots,
-      projectMeta: { [uuid]: { name: pStat.name, color: pidColorMap[uuid] || "#007acc" } },
-      data: timeData,
-      heatmapData: getHeatmapDataForExport(uuid)
-      // <-- 注入热力图数据
-    };
-    await triggerSecureExport(payloadObj, `工程耗时图_${pStat.name.replace(/[\/\\:\*\?"<>\|]/g, "_")}`);
-  }
-  async function exportTotalChart() {
-    if (globalTimeline.length === 0) {
-      toast("当前暂无可导出数据", "warning");
-      return;
-    }
-    let minIdx = -1, maxIdx = -1;
-    for (let i = 0; i < globalTimeline.length; i++) {
-      if (Object.keys(globalTimeline[i].work).length > 0 || Object.keys(globalTimeline[i].rest).length > 0) {
-        if (minIdx === -1) minIdx = i;
-        maxIdx = i;
-      }
-    }
-    if (minIdx === -1) {
-      toast("当前记录全为空，无法导出", "warning");
-      return;
-    }
-    const baseTs = globalTimeline[minIdx].ts;
-    const endTs = globalTimeline[maxIdx].ts + 15 * 60 * 1e3;
-    const totalSlots = maxIdx - minIdx + 1;
-    const timeData = [];
-    let rangeWork = 0, rangeRest = 0;
-    for (let i = minIdx; i <= maxIdx; i++) {
-      let wObj = {}, rObj = {};
-      let hasData = false;
-      for (let uid in globalTimeline[i].work) {
-        wObj[uid] = globalTimeline[i].work[uid];
-        hasData = true;
-        rangeWork += wObj[uid];
-      }
-      for (let uid in globalTimeline[i].rest) {
-        rObj[uid] = globalTimeline[i].rest[uid];
-        hasData = true;
-        rangeRest += rObj[uid];
-      }
-      if (hasData) timeData.push([i - minIdx, wObj, rObj]);
-    }
-    let pMeta = {};
-    sortedProjectIds.forEach((uid) => {
-      pMeta[uid] = { name: globalProjectMeta[uid], color: pidColorMap[uid] };
-    });
-    const payloadObj = {
-      pageTitle: "全部工程时间总趋势 、时间：" + formatFullDateTime(baseTs) + " ~ " + formatFullDateTime(endTs) + " 、工作：" + formatDuration(rangeWork) + " 、空闲：" + formatDuration(rangeRest),
-      baseTs,
-      totalSlots,
-      projectMeta: pMeta,
-      data: timeData,
-      heatmapData: getHeatmapDataForExport(null)
-      // <-- 注入全局热力图数据
-    };
-    await triggerSecureExport(payloadObj, `总趋势耗时图`);
-  }
-  function exportAllDataJson() {
-    if (globalTimeline.length === 0) {
-      toast("当前暂无可导出数据", "warning");
-      return;
-    }
-    try {
-      const filteredTimeline = globalTimeline.filter((slot) => Object.keys(slot.work).length > 0 || Object.keys(slot.rest).length > 0);
-      if (filteredTimeline.length === 0) {
-        toast("所有时间片均为空，无有效数据导出", "warning");
-        return;
-      }
-      const payload = { exportTime: (/* @__PURE__ */ new Date()).toLocaleString(), projectMeta: globalProjectMeta, stats: projectStats, timeline: filteredTimeline };
-      const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json;charset=utf-8" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      const d = /* @__PURE__ */ new Date();
-      a.download = `全部工程耗时数据备份_${d.getFullYear()}${(d.getMonth() + 1).toString().padStart(2, "0")}${d.getDate().toString().padStart(2, "0")}.json`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-      toast("全部数据 JSON 导出成功", "success");
-    } catch (e) {
-      console.error(e);
-      toast("导出失败: " + e.message, "error");
-    }
-  }
-  async function triggerSecureExport(payloadObj, fileNameBase) {
-    let securePack;
-    try {
-      securePack = await packPayload(payloadObj);
-    } catch (e) {
-      toast("数据打包失败", "error");
-      return;
-    }
-    const libs = getInlineLibs();
-    if (!libs.echarts || !libs.fflate) {
-      logger.error("导出失败：内嵌图表库缺失（fflate 未加载或构建未注入）");
-      toast("导出失败：内置图表库缺失，请重装扩展", "error");
-      return;
-    }
-    const libTags = buildLibTags(libs.echarts, libs.fflate);
-    const htmlContent = buildSecureReportHtml({
-      fileName: fileNameBase,
-      libTags,
-      data: securePack.data,
-      hash: securePack.hash
-    });
-    const blob = new Blob([htmlContent], { type: "text/html;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `${fileNameBase}.html`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-    toast("图表导出成功", "success");
-  }
-  function clearAllDataConfirm() {
-    if (!window.eda || !eda.sys_Dialog) return;
-    eda.sys_Dialog.showConfirmationMessage(
-      "警告：此操作不可逆，将彻底删除所有本地记录的工程耗时数据。\n确认要清除全部数据吗？",
-      "确认强制清除",
-      "确认清除",
-      "取消",
-      async (mainButtonClicked) => {
-        if (mainButtonClicked) {
-          const mask = document.getElementById("loading-mask");
-          mask.style.display = "flex";
-          mask.innerText = "正在强制擦除时间切片记录...";
-          try {
-            let allConfigs = await eda.sys_Storage.getExtensionAllUserConfigs();
-            for (const key in allConfigs) {
-              if (key.startsWith("STATS_")) await eda.sys_Storage.setExtensionUserConfig(key, "");
-            }
-            toast("全部记录已被安全擦除", "success");
-            await loadAllData();
-            SELECTED_DETAIL_UUID = null;
-            currentlySelectedManageUuid = null;
-            switchTab("total");
-          } catch (e) {
-            toast("清除产生未知错误: " + e.message, "error");
-          }
-          mask.style.display = "none";
-        }
-      }
-    );
-  }
-  function confirmDeleteProject(uuid, name) {
-    name = name || globalProjectMeta[uuid] || "未命名工程";
-    eda.sys_Dialog.showConfirmationMessage(
-      `确认彻底删除 “${name}” 的全部时间记录？
-(此操作无法恢复)`,
-      "确认清除时间片记录",
-      "确认删除",
-      "取消",
-      async (mainButtonClicked) => {
-        if (mainButtonClicked) await deleteProjectData(uuid);
-      }
-    );
-  }
-  async function deleteProjectData(uuid) {
-    const mask = document.getElementById("loading-mask");
-    mask.style.display = "flex";
-    mask.innerText = "正在执行本地存储清洗...";
-    try {
-      let allConfigs = await eda.sys_Storage.getExtensionAllUserConfigs();
-      if (!allConfigs) allConfigs = {};
-      for (const dateKey in allConfigs) {
-        if (!dateKey.startsWith("STATS_")) continue;
-        let dayData;
-        try {
-          dayData = typeof allConfigs[dateKey] === "string" ? JSON.parse(allConfigs[dateKey]) : allConfigs[dateKey];
-        } catch (e) {
-          continue;
-        }
-        if (!dayData) continue;
-        let isModified = false;
-        if (dayData.slots) {
-          for (const slotId in dayData.slots) {
-            if (dayData.slots[slotId] && dayData.slots[slotId][uuid]) {
-              delete dayData.slots[slotId][uuid];
-              isModified = true;
-              if (Object.keys(dayData.slots[slotId]).length === 0) delete dayData.slots[slotId];
-            }
-          }
-        }
-        if (dayData.meta && dayData.meta[uuid]) {
-          delete dayData.meta[uuid];
-          isModified = true;
-        }
-        if (isModified) await eda.sys_Storage.setExtensionUserConfig(dateKey, JSON.stringify(dayData));
-      }
-      toast("底层驱动数据同步擦除成功", "success");
-      await loadAllData();
-      if (currentlySelectedManageUuid === uuid) {
-        currentlySelectedManageUuid = null;
-        if (manageChart) {
-          manageChart.dispose();
-          manageChart = null;
-        }
-        document.getElementById("manage-chart-title").innerText = "请点击上方工程行查看对应工程时间轴";
-        document.getElementById("manage-custom-legend").classList.add("collapsed");
-      }
-      if (SELECTED_DETAIL_UUID === uuid) {
-        SELECTED_DETAIL_UUID = null;
-        if (state.activeTab === "project") {
-          updateProjectSelector();
-          onProjectSelectorChange();
-        }
-      }
-      renderManageTable();
-      if (manageChart && currentlySelectedManageUuid) initManageChart(currentlySelectedManageUuid, globalProjectMeta[currentlySelectedManageUuid] || "");
-      mask.style.display = "none";
-    } catch (e) {
-      mask.innerText = "擦除产生未知错误: " + e.message;
-      mask.onclick = () => mask.style.display = "none";
-    }
-  }
-  var ReminderApp = {
-    KEY: "USER_CONFIG_REMINDERS",
-    data: {
-      durationRules: [],
-      intervalRules: [],
-      welcomeEnabled: true,
-      idleEnabled: true,
-      welcomeText: "距离上次打开EDA经过了<time>",
-      idleText: "距离上次离开经过了<time>",
-      idleThresholdMin: 10,
-      lastHb: 0
-    },
-    init: async function() {
-      try {
-        const str = await eda.sys_Storage.getExtensionUserConfig(this.KEY);
-        if (str) {
-          const parsed = JSON.parse(str);
-          if (Array.isArray(parsed)) {
-            this.data.durationRules = parsed;
-          } else {
-            this.data = Object.assign(this.data, parsed);
-          }
-        }
-      } catch (e) {
-        logger.warn("处理工时记录失败", e);
-      }
-      document.getElementById("welcome-enabled").checked = !!this.data.welcomeEnabled;
-      document.getElementById("idle-enabled").checked = !!this.data.idleEnabled;
-      document.getElementById("welcome-text-input").value = this.data.welcomeText || "";
-      document.getElementById("idle-text-input").value = this.data.idleText || "";
-      document.getElementById("idle-min-input").value = this.data.idleThresholdMin || 10;
-      this.render();
-    },
-    // 纯换算已抽到 ./reminder.js；这里保留同名方法，因为行内 onclick 还在用 ReminderApp.*
-    formatMin: function(m) {
-      return formatMin(m);
-    },
-    parseMin: function(str) {
-      return parseMin(str);
-    },
-    render: function() {
-      this.renderList("duration", "list-duration");
-      this.renderList("interval", "list-interval");
-    },
-    renderList: function(type, containerId) {
-      const container = document.getElementById(containerId);
-      container.innerHTML = "";
-      const rules = type === "duration" ? this.data.durationRules : this.data.intervalRules;
-      if (rules.length === 0) {
-        container.innerHTML = '<div style="text-align:center; color:#666; padding:10px; font-size:11px;">暂无规则</div>';
-        return;
-      }
-      rules.forEach((item, idx) => {
-        const div = document.createElement("div");
-        div.className = "reminder-item";
-        div.style.padding = "4px 8px";
-        const color = type === "duration" ? "var(--vscode-link)" : "var(--vscode-success-fill)";
-        div.innerHTML = `
-                        <input class="list-input" style="width:55px; color:${color}; font-weight:bold; font-family:Consolas;"
-                               value="${this.formatMin(item.m)}" onchange="ReminderApp.updateRule('${type}', ${idx}, 'm', this.value)">
-                        <input class="list-input" style="flex:1; margin:0 5px;" value="${escapeHtml(item.msg)}"
-                               onchange="ReminderApp.updateRule('${type}', ${idx}, 'msg', this.value)">
-                        <div class="stepper" style="height:22px; margin-right:5px;" title="提醒次数：触发时显示几条提醒">
-                            <button onclick="ReminderApp.stepRule('${type}', ${idx}, -1)">-</button>
-                            <input type="number" value="${item.count || 1}" readonly>
-                            <button onclick="ReminderApp.stepRule('${type}', ${idx}, 1)">+</button>
-                        </div>
-                        <button class="small-btn del" style="padding:0 4px;" onclick="ReminderApp.remove('${type}', ${idx})">×</button>`;
-        container.appendChild(div);
+    function refreshTable() {
+      const list = sortProjectList(Object.values(data2.projectStats), ui2.sortField, ui2.sortOrder);
+      if (!ui2.selectedManageUuid && list.length > 0) ui2.selectedManageUuid = list[0].uuid;
+      renderManageTable({
+        projectStats: data2.projectStats,
+        sortField: ui2.sortField,
+        sortOrder: ui2.sortOrder,
+        selectedUuid: ui2.selectedManageUuid,
+        onSelect: onRowSelect,
+        onNoSelection: onEmpty
       });
-    },
-    add: async function(type) {
-      const prefix = type === "duration" ? "dur" : "int";
-      const mVal = document.getElementById(`add-${prefix}-m`).value;
-      const msg = document.getElementById(`add-${prefix}-msg`).value.trim();
-      const count = parseInt(document.getElementById(`add-${prefix}-c`).value) || 1;
-      const m = this.parseMin(mVal);
-      if (!m || m <= 0) {
-        toast("时间无效", "error");
-        return;
+      if (!ui2.selectedManageUuid) return;
+      const active = list.find((item) => item.uuid === ui2.selectedManageUuid);
+      if (!active) return;
+      document.getElementById("manage-chart-title").innerText = getProjectTitleString(data2.projectStats, active.uuid);
+      initChart(active.uuid);
+    }
+    function sortTable(field) {
+      if (ui2.sortField === field) ui2.sortOrder = ui2.sortOrder === "desc" ? "asc" : "desc";
+      else {
+        ui2.sortField = field;
+        ui2.sortOrder = "desc";
       }
-      if (!msg) {
-        toast("内容为空", "error");
-        return;
-      }
-      const rules = type === "duration" ? this.data.durationRules : this.data.intervalRules;
-      rules.push({ m, msg, count });
-      rules.sort((a, b) => a.m - b.m);
-      document.getElementById(`add-${prefix}-m`).value = "";
-      document.getElementById(`add-${prefix}-msg`).value = "";
-      document.getElementById(`add-${prefix}-c`).value = "1";
-      await this.save();
-    },
-    updateRule: async function(type, idx, field, val) {
-      const rules = type === "duration" ? this.data.durationRules : this.data.intervalRules;
-      if (!rules[idx]) return;
-      if (field === "m") rules[idx].m = this.parseMin(val);
-      else if (field === "msg") rules[idx].msg = val;
-      await this.save();
-    },
-    stepRule: async function(type, idx, delta) {
-      const rules = type === "duration" ? this.data.durationRules : this.data.intervalRules;
-      if (!rules[idx]) return;
-      rules[idx].count = Math.max(1, (rules[idx].count || 1) + delta);
-      await this.save();
-    },
-    remove: function(type, index) {
-      eda.sys_Dialog.showConfirmationMessage("确定要删除这条提醒规则吗？", "确认删除", "确认", "取消", async (confirmed) => {
-        if (confirmed) {
-          const rules = type === "duration" ? this.data.durationRules : this.data.intervalRules;
-          rules.splice(index, 1);
-          await this.save();
-        }
-      });
-    },
-    save: async function() {
-      this.data.welcomeEnabled = document.getElementById("welcome-enabled").checked;
-      this.data.idleEnabled = document.getElementById("idle-enabled").checked;
-      this.data.welcomeText = document.getElementById("welcome-text-input").value;
-      this.data.idleText = document.getElementById("idle-text-input").value;
-      this.data.idleThresholdMin = parseInt(document.getElementById("idle-min-input").value) || 10;
-      try {
-        await eda.sys_Storage.setExtensionUserConfig(this.KEY, JSON.stringify(this.data));
-        this.render();
-        toast("自动保存成功", "success");
-      } catch (e) {
-        toast("保存失败:" + e.message, "error");
-      }
-    },
-    toggleDebug: async function() {
-      const key = "WORKING_HOURS_DEBUG_ENABLED";
-      const raw = await eda.sys_Storage.getExtensionUserConfig(key);
-      const isDebug = raw === "true";
-      await eda.sys_Storage.setExtensionUserConfig(key, (!isDebug).toString());
-      toast(`Debug模式已${!isDebug ? "开启" : "关闭"}，请查看控制台日志`, "info");
+      refreshTable();
     }
-  };
-  function updateHeaderStats() {
-    const titleEl = document.getElementById("page-title");
-    const scopeEl = document.getElementById("headerScope");
-    const valEl = document.getElementById("headerVal");
-    if (state.activeTab === "total") {
-      titleEl.innerText = "全部工程时间总趋势";
-      scopeEl.innerText = "今日总计已工作:";
-      valEl.innerText = formatTimeCN(getTodayWorkHours2(null));
-    } else if (state.activeTab === "project") {
-      titleEl.innerText = SELECTED_DETAIL_UUID ? getProjectTitleString(SELECTED_DETAIL_UUID) : "请选择工程";
-      scopeEl.innerText = "";
-      valEl.innerText = "";
-    } else if (state.activeTab === "manage") {
-      titleEl.innerText = "工程耗时管理";
-      scopeEl.innerText = "本地记录工程项目总数:";
-      valEl.innerText = `${Object.keys(projectStats).length} 个`;
-    } else if (state.activeTab === "reminder") {
-      titleEl.innerText = "时限触发器规则设定";
-      scopeEl.innerText = "今日总计已工作:";
-      valEl.innerText = formatTimeCN(getTodayWorkHours2(null));
-    } else if (state.activeTab === "more") {
-      titleEl.innerText = "更多选项";
-      scopeEl.innerText = "";
-      valEl.innerText = "";
-    } else if (state.activeTab === "rhythm") {
-      titleEl.innerText = "节律分析 (活动钟)";
-      scopeEl.innerText = "";
-      valEl.innerText = "";
-    } else if (state.activeTab === "weekly") {
-      titleEl.innerText = "工程开发周报";
-      scopeEl.innerText = "";
-      valEl.innerText = "";
-    }
-  }
-  async function switchTab(tab) {
-    state.activeTab = tab;
-    if (tab === "project") {
-      try {
-        const info = await eda.dmt_Project.getCurrentProjectInfo();
-        if (info && info.uuid) {
-          CURRENT_UUID = info.uuid;
-          CURRENT_NAME = info.friendlyName || "未命名工程";
-          if (!globalProjectMeta[CURRENT_UUID]) {
-            globalProjectMeta[CURRENT_UUID] = CURRENT_NAME;
-            projectStats[CURRENT_UUID] = { name: CURRENT_NAME, uuid: CURRENT_UUID, totalWork: 0, totalRest: 0, startTs: Infinity, endTs: -Infinity };
-          }
-        }
-      } catch (e) {
-        logger.warn("处理工时记录失败", e);
-      }
-      if (!SELECTED_DETAIL_UUID) SELECTED_DETAIL_UUID = CURRENT_UUID;
-      updateProjectSelector();
-    }
-    document.querySelectorAll(".sidebar-item").forEach((el) => el.classList.remove("active"));
-    if (window.event && window.event.currentTarget) window.event.currentTarget.classList.add("active");
-    else {
-      const items = document.querySelectorAll(".sidebar-item");
-      const idx = ["total", "project", "weekly", "manage", "rhythm", "reminder", "more"].indexOf(tab);
-      if (items[idx]) items[idx].classList.add("active");
-    }
-    document.querySelectorAll(".view-container").forEach((el) => el.classList.add("hidden"));
-    if (tab === "rhythm") {
-      document.getElementById("view-rhythm").classList.remove("hidden");
-      updateRhythmProjectSelector();
-      setTimeout(() => renderRhythmChart(), 50);
-      if (rhythmChart) rhythmChart.resize();
-    }
-    document.getElementById("project-empty-tip").classList.add("hidden");
-    const selector = document.getElementById("project-selector");
-    if (selector) selector.style.display = tab === "project" ? "inline-block" : "none";
-    updateHeaderStats();
-    if (tab === "total" || tab === "project") {
-      if (tab === "project" && !SELECTED_DETAIL_UUID) {
-        const emptyTip = document.getElementById("project-empty-tip");
-        emptyTip.innerHTML = `<b>当前未打开工程</b><small>当前视图不包含任何数据。请在顶部下拉菜单中选择一个项目。</small>`;
-        emptyTip.classList.remove("hidden");
-      } else {
-        document.getElementById("view-chart").classList.remove("hidden");
-        chartCache.main = { lastClusterSize: -1, lastYMax: -1, lastHourInterval: -1, lastDynamicYMax: -1 };
-        if (myChart) {
-          myChart.resize();
-          let bounds;
-          if (tab === "project" && SELECTED_DETAIL_UUID && projectStats[SELECTED_DETAIL_UUID] && projectStats[SELECTED_DETAIL_UUID].startTs !== Infinity) {
-            bounds = getDayAlignedIndices(projectStats[SELECTED_DETAIL_UUID].startTs, projectStats[SELECTED_DETAIL_UUID].endTs);
-          } else bounds = getDayAlignedIndices(GLOBAL_TODAY_TS, GLOBAL_TODAY_TS);
-          myChart.dispatchAction({ type: "dataZoom", startValue: bounds.startValue, endValue: bounds.endValue });
-          handleZoomOrPan();
-          if (typeof renderHeatmap === "function") renderHeatmap();
-        }
-      }
-    } else if (tab === "weekly") {
-      document.getElementById("view-weekly").classList.remove("hidden");
-      setTimeout(() => renderWeeklyReport(), 50);
-    } else if (tab === "manage") {
-      document.getElementById("view-manage").classList.remove("hidden");
-      renderManageTable();
-      if (manageChart) manageChart.resize();
-    } else if (tab === "reminder") {
-      document.getElementById("view-reminder").classList.remove("hidden");
-      ReminderApp.render();
-    } else if (tab === "more") {
-      document.getElementById("view-more").classList.remove("hidden");
-    }
-  }
-  function updateProjectSelector() {
-    const selector = document.getElementById("project-selector");
-    if (!selector) return;
-    selector.innerHTML = "";
-    if (!SELECTED_DETAIL_UUID) {
-      const opt = document.createElement("option");
-      opt.value = "";
-      opt.innerText = "-- 请选择工程 --";
-      selector.appendChild(opt);
-    }
-    Object.keys(globalProjectMeta).sort((a, b) => (globalProjectMeta[a] || "").localeCompare(globalProjectMeta[b] || "", "zh")).forEach((uuid) => {
-      const opt = document.createElement("option");
-      opt.value = uuid;
-      opt.innerText = globalProjectMeta[uuid];
-      if (uuid === SELECTED_DETAIL_UUID) opt.selected = true;
-      selector.appendChild(opt);
-    });
-    const rhythmSelector = document.getElementById("rhythm-project-select");
-    if (rhythmSelector) rhythmSelector.innerHTML = selector.innerHTML;
-  }
-  function onProjectSelectorChange() {
-    const selector = document.getElementById("project-selector");
-    if (!selector) return;
-    SELECTED_DETAIL_UUID = selector.value || null;
-    updateHeaderStats();
-    chartCache.main = { lastClusterSize: -1, lastYMax: -1, lastHourInterval: -1, lastDynamicYMax: -1 };
-    if (!SELECTED_DETAIL_UUID) {
-      document.getElementById("view-chart").classList.add("hidden");
-      document.getElementById("project-empty-tip").innerHTML = `<div style="margin-bottom:8px; font-weight: bold; color:#e0e0e0;">当前未打开工程</div><div style="font-size:11px; color:#666;">当前视图不包含任何数据。请在顶部下拉菜单中选择一个项目。</div>`;
-      document.getElementById("project-empty-tip").classList.remove("hidden");
-    } else {
-      document.getElementById("project-empty-tip").classList.add("hidden");
-      document.getElementById("view-chart").classList.remove("hidden");
-      if (myChart) {
-        myChart.resize();
-        let bounds = SELECTED_DETAIL_UUID && projectStats[SELECTED_DETAIL_UUID] && projectStats[SELECTED_DETAIL_UUID].startTs !== Infinity ? getDayAlignedIndices(projectStats[SELECTED_DETAIL_UUID].startTs, projectStats[SELECTED_DETAIL_UUID].endTs) : getDayAlignedIndices(GLOBAL_TODAY_TS, GLOBAL_TODAY_TS);
-        myChart.dispatchAction({ type: "dataZoom", startValue: bounds.startValue, endValue: bounds.endValue });
-        handleZoomOrPan();
-        if (typeof renderHeatmap === "function") renderHeatmap();
-      }
-    }
-  }
-  var currentWeeklyOffset = 0;
-  function changeWeek(delta) {
-    currentWeeklyOffset += delta;
-    renderWeeklyReport();
-  }
-  function getWeekInfo(offset) {
-    const now = /* @__PURE__ */ new Date();
-    const day = now.getDay() || 7;
-    const monday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - day + 1);
-    const targetMonday = new Date(monday.getTime() + offset * 7 * 24 * 3600 * 1e3);
-    const targetSunday = new Date(targetMonday.getTime() + 6 * 24 * 3600 * 1e3);
-    const startOfYear = new Date(targetMonday.getFullYear(), 0, 1);
-    const weekNum = Math.ceil(((targetMonday - startOfYear) / 864e5 + startOfYear.getDay() + 1) / 7);
     return {
-      monday: targetMonday.getTime(),
-      sunday: targetSunday.getTime(),
-      rangeText: `${targetMonday.getFullYear()} 第 ${weekNum} 周 (${targetMonday.getMonth() + 1}.${targetMonday.getDate()} - ${targetSunday.getMonth() + 1}.${targetSunday.getDate()})`
+      initChart,
+      refreshTable,
+      sortTable
     };
   }
-  function renderWeeklyReport() {
-    if (!weeklyBarChart) weeklyBarChart = echarts.init(document.getElementById("weekly-bar-chart"), "dark");
-    if (!weeklyPieChart) weeklyPieChart = echarts.init(document.getElementById("weekly-pie-chart"), "dark");
-    const info = getWeekInfo(currentWeeklyOffset);
-    document.getElementById("weekly-range-text").innerText = info.rangeText;
-    const weekData = Array.from({ length: 7 }, () => ({ work: {}, totalWork: 0 }));
+
+  // iframe/js/src/app/working-hours/charts/options/rhythm.js
+  var SLOT_MINUTES = 15;
+  var SLOT_COUNT = 24 * 60 / SLOT_MINUTES;
+  function slotIndexOf(ts) {
+    const d = new Date(ts);
+    return d.getHours() * (60 / SLOT_MINUTES) + Math.floor(d.getMinutes() / SLOT_MINUTES);
+  }
+  function addAll(work, rest, index, slot) {
+    for (const pid in slot.work) work[index] += slot.work[pid];
+    for (const pid in slot.rest) rest[index] += slot.rest[pid];
+  }
+  function inWindow(ts, isTime, range) {
+    if (!isTime) return true;
+    return ts >= range.start && ts <= range.end;
+  }
+  function addOne(work, rest, index, slot, uuid) {
+    work[index] += slot.work[uuid] || 0;
+    rest[index] += slot.rest[uuid] || 0;
+  }
+  function aggregateRhythm(timeline, opts) {
+    const isTime = opts.mode !== "project";
+    const range = {
+      start: opts.rangeStart === void 0 ? 0 : opts.rangeStart,
+      end: opts.rangeEnd === void 0 ? Infinity : opts.rangeEnd
+    };
+    const targetUuid = opts.targetUuid || null;
+    const work = new Float64Array(SLOT_COUNT).fill(0);
+    const rest = new Float64Array(SLOT_COUNT).fill(0);
+    for (const slot of timeline) {
+      if (!inWindow(slot.ts, isTime, range)) continue;
+      const index = slotIndexOf(slot.ts);
+      if (isTime) addAll(work, rest, index, slot);
+      else if (targetUuid) addOne(work, rest, index, slot, targetUuid);
+    }
+    return { work, rest };
+  }
+  function computeAxisMax(work, rest, showWork, showRest) {
+    let maxTotal = 0;
+    for (let i = 0; i < work.length; i += 1) {
+      let total = 0;
+      if (showWork) total += work[i];
+      if (showRest) total += rest[i];
+      if (total > maxTotal) maxTotal = total;
+    }
+    return maxTotal > 0 ? maxTotal / 0.96 : 100;
+  }
+  function buildCategories() {
+    const categories = [];
+    for (let h = 0; h < 24; h += 1) {
+      for (let m = 0; m < 60; m += SLOT_MINUTES) {
+        categories.push(`${h.toString().padStart(2, "0")}:${m.toString().padStart(2, "0")}`);
+      }
+    }
+    return categories;
+  }
+  function rhythmTooltip(params) {
+    const startTime = params[0].name;
+    const timeParts = startTime.split(":").map(Number);
+    let endH = timeParts[0];
+    let endM = timeParts[1] + SLOT_MINUTES;
+    if (endM >= 60) {
+      endM = 0;
+      endH += 1;
+    }
+    const endTime = `${endH.toString().padStart(2, "0")}:${endM.toString().padStart(2, "0")}`;
+    let html = `<b style="font-size:13px; color:#fff;">${startTime} ~ ${endTime}</b><br/>`;
+    let hasData = false;
+    params.forEach((p) => {
+      if (p.value <= 0) return;
+      const blockColor = typeof p.color === "string" ? p.color : p.color && p.color.colorStops ? p.color.colorStops[0].color : "#007acc";
+      html += `<div style="margin: 4px 0; font-size:12px;"><span class="color-block" style="background:${blockColor};"></span> ${p.seriesName}: <span style="float:right; font-weight:bold; margin-left: 15px; color:#fff;">${formatDuration(p.value)}</span></div>`;
+      hasData = true;
+    });
+    return hasData ? html : html + '<span style="color:#666;">无活动记录</span>';
+  }
+  function buildRhythmOption(data2, theme, opts) {
+    const zero = () => new Float64Array(SLOT_COUNT).fill(0);
+    return {
+      backgroundColor: "transparent",
+      tooltip: {
+        trigger: "axis",
+        axisPointer: { type: "cross" },
+        backgroundColor: "rgba(37, 37, 38, 0.95)",
+        borderColor: "#454545",
+        textStyle: { color: "#cccccc", fontSize: 12 },
+        formatter: rhythmTooltip
+      },
+      angleAxis: {
+        type: "category",
+        data: buildCategories(),
+        startAngle: 90,
+        clockwise: true,
+        axisLine: { lineStyle: { color: "var(--vscode-border)" } },
+        splitLine: { show: true, lineStyle: { color: "var(--vscode-border)", type: "solid" } },
+        axisLabel: {
+          interval: 3,
+          color: "#CCCCCC",
+          fontSize: 12,
+          textShadowColor: "rgba(0,0,0,0.8)",
+          textShadowBlur: 3,
+          formatter: function formatter(value) {
+            return value.endsWith(":00") ? value.split(":")[0] : "";
+          }
+        },
+        axisPointer: { label: { backgroundColor: "#1E1F20", color: "#D0DFDF" } }
+      },
+      radiusAxis: {
+        max: data2.axisMax,
+        axisLabel: { show: false, color: "#999999", fontSize: 10, formatter: (v) => v === 0 ? "" : formatDuration(v) },
+        axisLine: { show: false },
+        splitLine: { lineStyle: { color: "var(--vscode-border)", type: "dashed" } },
+        axisPointer: { label: { formatter: (params) => formatDuration(params.value) } }
+      },
+      polar: { center: ["50%", "50%"], radius: "76%" },
+      series: [
+        {
+          type: "bar",
+          data: data2.showWork ? Array.from(data2.work) : zero(),
+          coordinateSystem: "polar",
+          name: "工作时间",
+          stack: "time-stack",
+          barCategoryGap: "0%",
+          itemStyle: { color: opts.makeGradient([
+            { offset: 0, color: "#007acc" },
+            { offset: 1, color: "#3ba272" }
+          ]) }
+        },
+        {
+          type: "bar",
+          data: data2.showRest ? Array.from(data2.rest) : zero(),
+          coordinateSystem: "polar",
+          name: "空闲时间",
+          stack: "time-stack",
+          barCategoryGap: "0%",
+          itemStyle: { color: "#666666" }
+        }
+      ]
+    };
+  }
+
+  // iframe/js/src/app/working-hours/views/rhythmPanel.js
+  var PRESETS = {
+    all: null,
+    day: 0,
+    week: 6,
+    month: 29,
+    year: 364
+  };
+  function readRange(mode, now) {
+    if (mode !== "time") return { start: 0, end: Infinity };
+    const subModeEl = document.querySelector('input[name="time-submode"]:checked');
+    if (subModeEl && subModeEl.value === "custom") {
+      const startStr = document.getElementById("rhythm-start-date").value;
+      const endStr = document.getElementById("rhythm-end-date").value;
+      return {
+        start: startStr ? (/* @__PURE__ */ new Date(startStr + "T00:00:00")).getTime() : 0,
+        end: endStr ? (/* @__PURE__ */ new Date(endStr + "T23:59:59")).getTime() : Infinity
+      };
+    }
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0).getTime();
+    const presetEl = document.querySelector('input[name="rhythm-time-radio"]:checked');
+    const preset = presetEl ? presetEl.value : "all";
+    if (!Object.prototype.hasOwnProperty.call(PRESETS, preset)) return { start: 0, end: Infinity };
+    const days = PRESETS[preset];
+    if (days === null) return { start: 0, end: Infinity };
+    return { start: todayStart - days * 24 * 3600 * 1e3, end: Infinity };
+  }
+  function renderLegend(showWork, showRest) {
+    const list = document.getElementById("r-legend-list");
+    if (!list) return;
+    list.innerHTML = `
+					<div class="legend-item ${!showWork ? "hidden" : ""}" data-name="工作时间">
+						<span class="color-block" style="background: linear-gradient(135deg, #007acc, #3ba272);"></span>
+						<span style="font-size:11px; font-weight:bold;">工作时间</span>
+					</div>
+					<div class="legend-item ${!showRest ? "hidden" : ""}" data-name="空闲时间">
+						<span class="color-block" style="background: var(--vscode-chart-rest);"></span>
+						<span style="font-size:11px; color:#aaa;">空闲时间</span>
+					</div>
+				`;
+  }
+  function createRhythmPanel(ctx) {
+    const data2 = ctx.data;
+    const ui2 = ctx.ui;
+    const view = ctx.view;
+    function render() {
+      if (!view.isReady && !view.init()) return;
+      const range = readRange(ui2.rhythmMode, /* @__PURE__ */ new Date());
+      const selector = document.getElementById("rhythm-project-select");
+      const agg = aggregateRhythm(data2.timeline, {
+        mode: ui2.rhythmMode,
+        rangeStart: range.start,
+        rangeEnd: range.end,
+        targetUuid: selector ? selector.value : null
+      });
+      ui2.rhythmAgg = agg;
+      if (ui2.rhythmFirstInit) {
+        ui2.hiddenSeries.add("空闲时间");
+        ui2.rhythmFirstInit = false;
+      }
+      const showWork = !ui2.hiddenSeries.has("工作时间");
+      const showRest = !ui2.hiddenSeries.has("空闲时间");
+      renderLegend(showWork, showRest);
+      view.setOption(
+        buildRhythmOption(
+          {
+            work: agg.work,
+            rest: agg.rest,
+            showWork,
+            showRest,
+            axisMax: computeAxisMax(agg.work, agg.rest, showWork, showRest)
+          },
+          "dark",
+          { makeGradient: (stops) => new echarts.graphic.LinearGradient(0, 0, 0, 1, stops) }
+        )
+      );
+    }
+    function setMode(mode) {
+      ui2.rhythmMode = mode;
+      document.getElementById("rhythm-mode-time").classList.toggle("active", mode === "time");
+      document.getElementById("rhythm-mode-project").classList.toggle("active", mode === "project");
+      render();
+    }
+    function selectQuick() {
+      document.querySelector('input[name="time-submode"][value="quick"]').checked = true;
+      render();
+    }
+    function selectCustom() {
+      document.querySelector('input[name="time-submode"][value="custom"]').checked = true;
+      render();
+    }
+    function updateProjectSelector2() {
+      const selector = document.getElementById("rhythm-project-select");
+      if (!selector) return;
+      const currentVal = selector.value;
+      selector.innerHTML = '<option value="">-- 请选择工程 --</option>';
+      Object.keys(data2.projectMeta).sort((a, b) => (data2.projectMeta[a] || "").localeCompare(data2.projectMeta[b] || "", "zh")).forEach((uuid) => {
+        const opt = document.createElement("option");
+        opt.value = uuid;
+        opt.innerText = data2.projectMeta[uuid];
+        if (uuid === currentVal) opt.selected = true;
+        selector.appendChild(opt);
+      });
+    }
+    return {
+      render,
+      setMode,
+      selectQuick,
+      selectCustom,
+      updateProjectSelector: updateProjectSelector2
+    };
+  }
+
+  // iframe/js/src/app/working-hours/charts/options/weekly.js
+  var DAY_MS2 = 24 * 3600 * 1e3;
+  var WEEK_DAYS = 7;
+  var DAY_LABELS = ["周一", "周二", "周三", "周四", "周五", "周六", "周日"];
+  function getWeekInfo(offset, nowTs) {
+    const now = new Date(nowTs);
+    const day = now.getDay() || WEEK_DAYS;
+    const thisMonday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - day + 1);
+    const monday = new Date(thisMonday.getTime() + offset * WEEK_DAYS * DAY_MS2);
+    const sunday = new Date(monday.getTime() + (WEEK_DAYS - 1) * DAY_MS2);
+    const startOfYear = new Date(monday.getFullYear(), 0, 1);
+    const weekNum = Math.ceil(((monday - startOfYear) / 864e5 + startOfYear.getDay() + 1) / WEEK_DAYS);
+    return {
+      monday: monday.getTime(),
+      sunday: sunday.getTime(),
+      rangeText: `${monday.getFullYear()} 第 ${weekNum} 周 (${monday.getMonth() + 1}.${monday.getDate()} - ${sunday.getMonth() + 1}.${sunday.getDate()})`
+    };
+  }
+  function aggregateWeekly(timeline, mondayTs) {
+    const weekData = Array.from({ length: WEEK_DAYS }, () => ({ work: {}, totalWork: 0 }));
     const projectTotals = {};
     let totalSeconds = 0;
-    for (let i = 0; i < globalTimeline.length; i++) {
-      const slot = globalTimeline[i];
-      if (slot.ts >= info.monday && slot.ts < info.monday + 7 * 24 * 3600 * 1e3) {
-        const dayIdx = Math.floor((slot.ts - info.monday) / (24 * 3600 * 1e3));
-        if (dayIdx >= 0 && dayIdx < 7) {
-          for (const pid in slot.work) {
-            const sec = slot.work[pid];
-            weekData[dayIdx].work[pid] = (weekData[dayIdx].work[pid] || 0) + sec;
-            weekData[dayIdx].totalWork += sec;
-            projectTotals[pid] = (projectTotals[pid] || 0) + sec;
-            totalSeconds += sec;
-          }
-        }
+    for (const slot of timeline) {
+      if (slot.ts < mondayTs || slot.ts >= mondayTs + WEEK_DAYS * DAY_MS2) continue;
+      const dayIdx = Math.floor((slot.ts - mondayTs) / DAY_MS2);
+      if (dayIdx < 0 || dayIdx >= WEEK_DAYS) continue;
+      for (const pid in slot.work) {
+        const sec = slot.work[pid];
+        weekData[dayIdx].work[pid] = (weekData[dayIdx].work[pid] || 0) + sec;
+        weekData[dayIdx].totalWork += sec;
+        projectTotals[pid] = (projectTotals[pid] || 0) + sec;
+        totalSeconds += sec;
       }
     }
-    document.getElementById("weekly-total-work").innerText = formatDuration(totalSeconds);
-    document.getElementById("weekly-avg-work").innerText = formatDuration(Math.round(totalSeconds / 7));
+    return { weekData, projectTotals, totalSeconds };
+  }
+  function pickTopProject(projectTotals, projectMeta) {
     let topPid = "--";
     let maxSec = 0;
     for (const pid in projectTotals) {
-      if (projectTotals[pid] > maxSec) {
-        maxSec = projectTotals[pid];
-        topPid = globalProjectMeta[pid] || pid;
-      }
+      if (projectTotals[pid] <= maxSec) continue;
+      maxSec = projectTotals[pid];
+      topPid = projectMeta[pid] || pid;
     }
-    document.getElementById("weekly-top-project").innerText = topPid;
-    const days = ["周一", "周二", "周三", "周四", "周五", "周六", "周日"];
-    const barSeries = sortedProjectIds.map((pid) => {
-      return {
-        name: globalProjectMeta[pid],
-        type: "bar",
-        stack: "total",
-        data: weekData.map((d) => d.work[pid] || 0),
-        itemStyle: { color: pidColorMap[pid] }
-      };
-    }).filter((s) => s.data.some((v) => v > 0));
-    weeklyBarChart.setOption({
+    return topPid;
+  }
+  function buildWeeklyBarOption(data2, theme) {
+    const series = data2.sortedProjectIds.map((pid) => ({
+      name: data2.projectMeta[pid],
+      type: "bar",
+      stack: "total",
+      data: data2.weekData.map((d) => d.work[pid] || 0),
+      itemStyle: { color: data2.pidColorMap[pid] }
+    })).filter((s) => s.data.some((v) => v > 0));
+    return {
       backgroundColor: "transparent",
       tooltip: {
         trigger: "axis",
@@ -2237,16 +2507,18 @@
         }
       },
       grid: { top: 30, left: 70, right: 10, bottom: 30 },
-      xAxis: { type: "category", data: days, axisLabel: { color: "#858585" } },
+      xAxis: { type: "category", data: DAY_LABELS, axisLabel: { color: "#858585" } },
       yAxis: { type: "value", axisLabel: { color: "#858585", formatter: (value) => formatDuration(value) }, splitLine: { lineStyle: { color: "#333" } } },
-      series: barSeries
-    }, true);
-    const pieData = Object.keys(projectTotals).map((pid) => ({
-      name: globalProjectMeta[pid] || pid,
-      value: projectTotals[pid],
-      itemStyle: { color: pidColorMap[pid] }
+      series
+    };
+  }
+  function buildWeeklyPieOption(data2, theme) {
+    const pieData = Object.keys(data2.projectTotals).map((pid) => ({
+      name: data2.projectMeta[pid] || pid,
+      value: data2.projectTotals[pid],
+      itemStyle: { color: data2.pidColorMap[pid] }
     })).sort((a, b) => b.value - a.value);
-    weeklyPieChart.setOption({
+    return {
       backgroundColor: "transparent",
       tooltip: {
         trigger: "item",
@@ -2260,24 +2532,394 @@
                                 占比: <span style="float:right; font-weight:bold; margin-left:15px; color:#fff;">${params.percent}%</span>`;
         }
       },
-      series: [{
-        type: "pie",
-        radius: ["35%", "60%"],
-        center: ["50%", "55%"],
-        avoidLabelOverlap: true,
-        data: pieData,
-        label: { show: false },
-        labelLine: { show: false },
-        emphasis: { itemStyle: { shadowBlur: 10, shadowOffsetX: 0, shadowColor: "rgba(0, 0, 0, 0.5)" } }
-      }]
-    }, true);
+      series: [
+        {
+          type: "pie",
+          radius: ["35%", "60%"],
+          center: ["50%", "55%"],
+          avoidLabelOverlap: true,
+          data: pieData,
+          label: { show: false },
+          labelLine: { show: false },
+          emphasis: { itemStyle: { shadowBlur: 10, shadowOffsetX: 0, shadowColor: "rgba(0, 0, 0, 0.5)" } }
+        }
+      ]
+    };
   }
-  async function exportWeeklyReport() {
-    const barImg = weeklyBarChart.getDataURL({ type: "png", backgroundColor: "#252526" });
-    const pieImg = weeklyPieChart.getDataURL({ type: "png", backgroundColor: "#252526" });
+
+  // iframe/js/src/app/working-hours/views/weeklyPanel.js
+  function createWeeklyPanel(ctx) {
+    const data2 = ctx.data;
+    const ui2 = ctx.ui;
+    function render() {
+      ctx.barView.init();
+      ctx.pieView.init();
+      const info = getWeekInfo(ui2.weeklyOffset, Date.now());
+      document.getElementById("weekly-range-text").innerText = info.rangeText;
+      const agg = aggregateWeekly(data2.timeline, info.monday);
+      document.getElementById("weekly-total-work").innerText = formatDuration(agg.totalSeconds);
+      document.getElementById("weekly-avg-work").innerText = formatDuration(Math.round(agg.totalSeconds / 7));
+      document.getElementById("weekly-top-project").innerText = pickTopProject(agg.projectTotals, data2.projectMeta);
+      ctx.barView.setOption(
+        buildWeeklyBarOption(
+          { weekData: agg.weekData, projectMeta: data2.projectMeta, pidColorMap: data2.pidColorMap, sortedProjectIds: data2.sortedProjectIds },
+          "dark"
+        ),
+        true
+      );
+      ctx.pieView.setOption(buildWeeklyPieOption({ projectTotals: agg.projectTotals, projectMeta: data2.projectMeta, pidColorMap: data2.pidColorMap }, "dark"), true);
+    }
+    function changeWeek(delta) {
+      ui2.weeklyOffset += delta;
+      render();
+    }
+    return { render, changeWeek };
+  }
+
+  // iframe/js/src/app/working-hours/views/tabRouter.js
+  var VIEW_ID = {
+    total: "view-chart",
+    project: "view-chart",
+    weekly: "view-weekly",
+    manage: "view-manage",
+    rhythm: "view-rhythm",
+    reminder: "view-reminder",
+    more: "view-more"
+  };
+  var SIDEBAR_ORDER = ["total", "project", "weekly", "manage", "rhythm", "reminder", "more"];
+  function highlightSidebar(tab) {
+    document.querySelectorAll(".sidebar-item").forEach((el) => el.classList.remove("active"));
+    if (window.event && window.event.currentTarget) {
+      window.event.currentTarget.classList.add("active");
+      return;
+    }
+    const items = document.querySelectorAll(".sidebar-item");
+    const idx = SIDEBAR_ORDER.indexOf(tab);
+    if (items[idx]) items[idx].classList.add("active");
+  }
+  function renderHeader(ctx, tab) {
+    const titleEl = document.getElementById("page-title");
+    const scopeEl = document.getElementById("headerScope");
+    const valEl = document.getElementById("headerVal");
+    const todayWork = () => formatTimeCN(ctx.getTodayWorkHours(null));
+    const HEADERS = {
+      total: () => {
+        titleEl.innerText = "全部工程时间总趋势";
+        scopeEl.innerText = "今日总计已工作:";
+        valEl.innerText = todayWork();
+      },
+      project: () => {
+        titleEl.innerText = ctx.ui.selectedDetailUuid ? getProjectTitleString(ctx.data.projectStats, ctx.ui.selectedDetailUuid) : "请选择工程";
+        scopeEl.innerText = "";
+        valEl.innerText = "";
+      },
+      manage: () => {
+        titleEl.innerText = "工程耗时管理";
+        scopeEl.innerText = "本地记录工程项目总数:";
+        valEl.innerText = `${Object.keys(ctx.data.projectStats).length} 个`;
+      },
+      reminder: () => {
+        titleEl.innerText = "时限触发器规则设定";
+        scopeEl.innerText = "今日总计已工作:";
+        valEl.innerText = todayWork();
+      },
+      more: () => {
+        titleEl.innerText = "更多选项";
+        scopeEl.innerText = "";
+        valEl.innerText = "";
+      },
+      rhythm: () => {
+        titleEl.innerText = "节律分析 (活动钟)";
+        scopeEl.innerText = "";
+        valEl.innerText = "";
+      },
+      weekly: () => {
+        titleEl.innerText = "工程开发周报";
+        scopeEl.innerText = "";
+        valEl.innerText = "";
+      }
+    };
+    const handler = HEADERS[tab];
+    if (handler) handler();
+  }
+  async function syncCurrentProject(ctx) {
+    try {
+      const info = await eda.dmt_Project.getCurrentProjectInfo();
+      if (info && info.uuid) {
+        ctx.ui.currentUuid = info.uuid;
+        ctx.ui.currentName = info.friendlyName || "未命名工程";
+        if (!ctx.data.projectMeta[ctx.ui.currentUuid]) {
+          ctx.data.projectMeta[ctx.ui.currentUuid] = ctx.ui.currentName;
+          ctx.data.projectStats[ctx.ui.currentUuid] = {
+            name: ctx.ui.currentName,
+            uuid: ctx.ui.currentUuid,
+            totalWork: 0,
+            totalRest: 0,
+            startTs: Infinity,
+            endTs: -Infinity
+          };
+        }
+      }
+    } catch (e) {
+      logger.warn("处理工时记录失败", e);
+    }
+    if (!ctx.ui.selectedDetailUuid) ctx.ui.selectedDetailUuid = ctx.ui.currentUuid;
+    updateProjectSelector(ctx);
+  }
+  function timelineBounds(ctx) {
+    const stats = ctx.data.projectStats[ctx.ui.selectedDetailUuid];
+    const useProject = ctx.ui.activeTab === "project" && ctx.ui.selectedDetailUuid && stats && stats.startTs !== Infinity;
+    if (useProject) return getDayAlignedIndices(stats.startTs, stats.endTs, ctx.data.timeline, ctx.data.tsMap, ctx.data.todayTs);
+    return getDayAlignedIndices(ctx.data.todayTs, ctx.data.todayTs, ctx.data.timeline, ctx.data.tsMap, ctx.data.todayTs);
+  }
+  function showTimelineView(ctx) {
+    if (ctx.ui.activeTab === "project" && !ctx.ui.selectedDetailUuid) {
+      const emptyTip = document.getElementById("project-empty-tip");
+      emptyTip.innerHTML = "<b>当前未打开工程</b><small>当前视图不包含任何数据。请在顶部下拉菜单中选择一个项目。</small>";
+      emptyTip.classList.remove("hidden");
+      return;
+    }
+    document.getElementById("view-chart").classList.remove("hidden");
+    ctx.resetMainCache();
+    if (!ctx.mainChart.isReady) return;
+    ctx.mainChart.resize();
+    const bounds = timelineBounds(ctx);
+    ctx.mainChart.dispatchAction({ type: "dataZoom", startValue: bounds.startValue, endValue: bounds.endValue });
+    ctx.handleZoomOrPan();
+    ctx.renderHeatmap();
+  }
+  var TAB_EFFECTS = {
+    total: showTimelineView,
+    project: showTimelineView,
+    weekly: (ctx) => setTimeout(() => ctx.renderWeeklyReport(), 50),
+    manage: (ctx) => {
+      ctx.renderManageTable();
+      ctx.resizeManageChart();
+    },
+    rhythm: (ctx) => {
+      ctx.updateRhythmProjectSelector();
+      setTimeout(() => ctx.renderRhythmChart(), 50);
+      ctx.resizeRhythmChart();
+    },
+    reminder: (ctx) => ctx.renderReminder(),
+    more: () => {
+    }
+  };
+  async function switchTab(ctx, tab) {
+    ctx.ui.activeTab = tab;
+    if (tab === "project") await syncCurrentProject(ctx);
+    highlightSidebar(tab);
+    document.querySelectorAll(".view-container").forEach((el) => el.classList.add("hidden"));
+    if (tab !== "total" && tab !== "project") {
+      const view = VIEW_ID[tab] ? document.getElementById(VIEW_ID[tab]) : null;
+      if (view) view.classList.remove("hidden");
+    }
+    document.getElementById("project-empty-tip").classList.add("hidden");
+    const selector = document.getElementById("project-selector");
+    if (selector) selector.style.display = tab === "project" ? "inline-block" : "none";
+    renderHeader(ctx, tab);
+    const effect = TAB_EFFECTS[tab];
+    if (effect) effect(ctx);
+  }
+  function updateProjectSelector(ctx) {
+    const selector = document.getElementById("project-selector");
+    if (!selector) return;
+    selector.innerHTML = "";
+    if (!ctx.ui.selectedDetailUuid) {
+      const opt = document.createElement("option");
+      opt.value = "";
+      opt.innerText = "-- 请选择工程 --";
+      selector.appendChild(opt);
+    }
+    Object.keys(ctx.data.projectMeta).sort((a, b) => (ctx.data.projectMeta[a] || "").localeCompare(ctx.data.projectMeta[b] || "", "zh")).forEach((uuid) => {
+      const opt = document.createElement("option");
+      opt.value = uuid;
+      opt.innerText = ctx.data.projectMeta[uuid];
+      if (uuid === ctx.ui.selectedDetailUuid) opt.selected = true;
+      selector.appendChild(opt);
+    });
+    const rhythmSelector = document.getElementById("rhythm-project-select");
+    if (rhythmSelector) rhythmSelector.innerHTML = selector.innerHTML;
+  }
+  function onProjectSelectorChange(ctx) {
+    const selector = document.getElementById("project-selector");
+    if (!selector) return;
+    ctx.ui.selectedDetailUuid = selector.value || null;
+    renderHeader(ctx, ctx.ui.activeTab);
+    ctx.resetMainCache();
+    if (!ctx.ui.selectedDetailUuid) {
+      document.getElementById("view-chart").classList.add("hidden");
+      const tip = document.getElementById("project-empty-tip");
+      tip.innerHTML = '<div style="margin-bottom:8px; font-weight: bold; color:#e0e0e0;">当前未打开工程</div><div style="font-size:11px; color:#666;">当前视图不包含任何数据。请在顶部下拉菜单中选择一个项目。</div>';
+      tip.classList.remove("hidden");
+      return;
+    }
+    document.getElementById("project-empty-tip").classList.add("hidden");
+    document.getElementById("view-chart").classList.remove("hidden");
+    if (!ctx.mainChart.isReady) return;
+    ctx.mainChart.resize();
+    const bounds = timelineBounds(ctx);
+    ctx.mainChart.dispatchAction({ type: "dataZoom", startValue: bounds.startValue, endValue: bounds.endValue });
+    ctx.handleZoomOrPan();
+    ctx.renderHeatmap();
+  }
+  function createTabRouter(ctx) {
+    return {
+      switchTab: (tab) => switchTab(ctx, tab),
+      updateHeaderStats: () => renderHeader(ctx, ctx.ui.activeTab),
+      updateProjectSelector: () => updateProjectSelector(ctx),
+      onProjectSelectorChange: () => onProjectSelectorChange(ctx)
+    };
+  }
+
+  // iframe/js/src/app/working-hours/views/dataAdmin.js
+  function stripProjectFromDay(dayData, uuid) {
+    let modified = false;
+    if (dayData.slots) {
+      for (const slotId in dayData.slots) {
+        const slot = dayData.slots[slotId];
+        if (!slot || !slot[uuid]) continue;
+        delete slot[uuid];
+        modified = true;
+        if (Object.keys(slot).length === 0) delete dayData.slots[slotId];
+      }
+    }
+    if (dayData.meta && dayData.meta[uuid]) {
+      delete dayData.meta[uuid];
+      modified = true;
+    }
+    return modified;
+  }
+  async function purgeProject(uuid) {
+    const raw = await eda.sys_Storage.getExtensionAllUserConfigs();
+    const allConfigs = raw || {};
+    for (const dateKey in allConfigs) {
+      if (!dateKey.startsWith("STATS_")) continue;
+      let dayData;
+      try {
+        dayData = typeof allConfigs[dateKey] === "string" ? JSON.parse(allConfigs[dateKey]) : allConfigs[dateKey];
+      } catch (e) {
+        continue;
+      }
+      if (!dayData) continue;
+      if (!stripProjectFromDay(dayData, uuid)) continue;
+      await eda.sys_Storage.setExtensionUserConfig(dateKey, JSON.stringify(dayData));
+    }
+  }
+  async function deleteProject(ctx, uuid) {
+    const ui2 = ctx.ui;
+    const hooks = ctx.hooks;
+    const mask = document.getElementById("loading-mask");
+    mask.style.display = "flex";
+    mask.innerText = "正在执行本地存储清洗...";
+    try {
+      await purgeProject(uuid);
+      toast("底层驱动数据同步擦除成功", "success");
+      await hooks.reloadData();
+      if (ui2.selectedManageUuid === uuid) {
+        ui2.selectedManageUuid = null;
+        hooks.disposeManageChart();
+        document.getElementById("manage-chart-title").innerText = "请点击上方工程行查看对应工程时间轴";
+        document.getElementById("manage-custom-legend").classList.add("collapsed");
+      }
+      if (ui2.selectedDetailUuid === uuid) {
+        ui2.selectedDetailUuid = null;
+        if (ui2.activeTab === "project") {
+          hooks.updateProjectSelector();
+          hooks.onProjectSelectorChange();
+        }
+      }
+      hooks.renderManageTable();
+      if (ui2.selectedManageUuid) hooks.initManageChart(ui2.selectedManageUuid, ctx.data.projectMeta[ui2.selectedManageUuid] || "");
+      mask.style.display = "none";
+    } catch (e) {
+      mask.innerText = "擦除产生未知错误: " + e.message;
+      mask.onclick = () => {
+        mask.style.display = "none";
+      };
+    }
+  }
+  function confirmDelete(ctx, uuid, name) {
+    const projectName = name || ctx.data.projectMeta[uuid] || "未命名工程";
+    eda.sys_Dialog.showConfirmationMessage(
+      `确认彻底删除 “${projectName}” 的全部时间记录？
+(此操作无法恢复)`,
+      "确认清除时间片记录",
+      "确认删除",
+      "取消",
+      async (mainButtonClicked) => {
+        if (mainButtonClicked) await deleteProject(ctx, uuid);
+      }
+    );
+  }
+  function clearAll(ctx) {
+    if (!window.eda || !eda.sys_Dialog) return;
+    eda.sys_Dialog.showConfirmationMessage(
+      "警告：此操作不可逆，将彻底删除所有本地记录的工程耗时数据。\n确认要清除全部数据吗？",
+      "确认强制清除",
+      "确认清除",
+      "取消",
+      async (mainButtonClicked) => {
+        if (!mainButtonClicked) return;
+        const mask = document.getElementById("loading-mask");
+        mask.style.display = "flex";
+        mask.innerText = "正在强制擦除时间切片记录...";
+        try {
+          const allConfigs = await eda.sys_Storage.getExtensionAllUserConfigs();
+          for (const key in allConfigs) {
+            if (key.startsWith("STATS_")) await eda.sys_Storage.setExtensionUserConfig(key, "");
+          }
+          toast("全部记录已被安全擦除", "success");
+          await ctx.hooks.reloadData();
+          ctx.ui.selectedDetailUuid = null;
+          ctx.ui.selectedManageUuid = null;
+          await ctx.hooks.switchTab("total");
+        } catch (e) {
+          logger.error("清除工时记录失败", e);
+          toast("清除产生未知错误: " + e.message, "error");
+        }
+        mask.style.display = "none";
+      }
+    );
+  }
+  function createDataAdmin(ctx) {
+    return {
+      clearAllDataConfirm: () => clearAll(ctx),
+      confirmDeleteProject: (uuid, name) => confirmDelete(ctx, uuid, name),
+      deleteProjectData: (uuid) => deleteProject(ctx, uuid)
+    };
+  }
+
+  // iframe/js/src/app/working-hours/views/weeklyExport.js
+  var CANVAS_W = 800;
+  var CANVAS_H = 600;
+  var CARDS = [
+    [30, "本周总投入", "weekly-total-work", 20],
+    [285, "日均工时", "weekly-avg-work", 20],
+    [540, "最专注工程", "weekly-top-project", 14]
+  ];
+  function textOf(id) {
+    const el = document.getElementById(id);
+    return el ? el.innerText : "";
+  }
+  function drawCards(ctx) {
+    ctx.fillStyle = "#252526";
+    for (const card of CARDS) ctx.fillRect(card[0], 110, 230, 80);
+    ctx.fillStyle = "#858585";
+    ctx.font = "12px Arial";
+    for (const card of CARDS) ctx.fillText(card[1], card[0] + 10, 135);
+    ctx.fillStyle = "#007acc";
+    for (const card of CARDS) {
+      ctx.font = `bold ${card[3]}px Arial`;
+      ctx.fillText(textOf(card[2]), card[0] + 10, 170);
+    }
+  }
+  async function exportWeeklyReport(views) {
+    const barImg = views.barView.getDataURL({ type: "png", backgroundColor: "#252526" });
+    const pieImg = views.pieView.getDataURL({ type: "png", backgroundColor: "#252526" });
     const canvas = document.createElement("canvas");
-    canvas.width = 800;
-    canvas.height = 600;
+    canvas.width = CANVAS_W;
+    canvas.height = CANVAS_H;
     const ctx = canvas.getContext("2d");
     ctx.fillStyle = "#1e1e1e";
     ctx.fillRect(0, 0, canvas.width, canvas.height);
@@ -2286,22 +2928,8 @@
     ctx.fillText("工程开发周报", 30, 50);
     ctx.font = "16px Arial";
     ctx.fillStyle = "#858585";
-    ctx.fillText(document.getElementById("weekly-range-text").innerText, 30, 85);
-    ctx.fillStyle = "#252526";
-    ctx.fillRect(30, 110, 230, 80);
-    ctx.fillRect(285, 110, 230, 80);
-    ctx.fillRect(540, 110, 230, 80);
-    ctx.fillStyle = "#858585";
-    ctx.font = "12px Arial";
-    ctx.fillText("本周总投入", 40, 135);
-    ctx.fillText("日均工时", 295, 135);
-    ctx.fillText("最专注工程", 550, 135);
-    ctx.fillStyle = "#007acc";
-    ctx.font = "bold 20px Arial";
-    ctx.fillText(document.getElementById("weekly-total-work").innerText, 40, 170);
-    ctx.fillText(document.getElementById("weekly-avg-work").innerText, 295, 170);
-    ctx.font = "bold 14px Arial";
-    ctx.fillText(document.getElementById("weekly-top-project").innerText, 550, 170);
+    ctx.fillText(textOf("weekly-range-text"), 30, 85);
+    drawCards(ctx);
     const imgBar = new Image();
     imgBar.src = barImg;
     imgBar.onload = () => {
@@ -2310,51 +2938,172 @@
       imgPie.src = pieImg;
       imgPie.onload = () => {
         ctx.drawImage(imgPie, 490, 210, 280, 360);
-        const finalUrl = canvas.toDataURL("image/png");
         const a = document.createElement("a");
-        a.href = finalUrl;
-        a.download = `周报_${document.getElementById("weekly-range-text").innerText}.png`;
+        a.href = canvas.toDataURL("image/png");
+        a.download = `周报_${textOf("weekly-range-text")}.png`;
         a.click();
       };
     };
   }
+
+  // iframe/js/src/app/working-hours/index.js
+  var mainView = createChartView({ el: "chart-container" });
+  var manageView = createChartView({ el: "manage-chart-container" });
+  var heatmapView = createChartView({ el: "heatmap-container" });
+  var rhythmView = createChartView({ el: "rhythm-chart-container" });
+  var weeklyBarView = createChartView({ el: "weekly-bar-chart" });
+  var weeklyPieView = createChartView({ el: "weekly-pie-chart" });
+  var ALL_VIEWS = [mainView, manageView, heatmapView, rhythmView, weeklyBarView, weeklyPieView];
+  var zoomer = createZoomApplier({ data, ui, mainView, manageView });
+  var managePanel = createManagePanel({ data, ui, view: manageView, zoomer });
+  var rhythmPanel = createRhythmPanel({ data, ui, view: rhythmView });
+  var weeklyPanel = createWeeklyPanel({ data, ui, barView: weeklyBarView, pieView: weeklyPieView });
+  function getTodayWorkHours2(targetUuid) {
+    return getTodayWorkHours(data.timeline, data.tsMap, data.todayTs, targetUuid || null);
+  }
+  async function loadAllData() {
+    try {
+      const info = await eda.dmt_Project.getCurrentProjectInfo();
+      if (info) {
+        ui.currentUuid = info.uuid;
+        ui.currentName = info.friendlyName || "未命名工程";
+      }
+    } catch (e) {
+      logger.info("当前未在有效的工程上下文中");
+    }
+    let allConfigs = {};
+    try {
+      allConfigs = await eda.sys_Storage.getExtensionAllUserConfigs() || {};
+    } catch (e) {
+      logger.error("扩展数据配置读取失败", e);
+    }
+    applyDataset(buildDataset(allConfigs, { currentUuid: ui.currentUuid, currentName: ui.currentName }));
+    router.updateHeaderStats();
+  }
+  function onHeatmapClick(params) {
+    const targetTs = (/* @__PURE__ */ new Date(String(params.value[0]).replace(/-/g, "/") + " 00:00:00")).getTime();
+    const bounds = getDayAlignedIndices(targetTs, targetTs, data.timeline, data.tsMap, data.todayTs);
+    if (!mainView.isReady) return;
+    mainView.dispatchAction({ type: "dataZoom", startValue: bounds.startValue, endValue: bounds.endValue });
+    zoomer.handleMain();
+  }
+  function renderHeatmap() {
+    if (!heatmapView.isReady) {
+      if (!heatmapView.init()) return;
+      heatmapView.on("click", onHeatmapClick);
+    }
+    heatmapView.setOption(
+      buildHeatmapOption(data.timeline, "dark", {
+        nowTs: Date.now(),
+        filterUuid: ui.activeTab === "project" ? ui.selectedDetailUuid : null,
+        hiddenSeries: ui.hiddenSeries,
+        projectMeta: data.projectMeta
+      })
+    );
+  }
+  function onSeriesToggled() {
+    resetChartCache("main");
+    resetChartCache("manage");
+    if (ui.activeTab === "manage" && ui.selectedManageUuid) zoomer.handleManage();
+    else if (ui.activeTab === "rhythm") rhythmPanel.render();
+    else {
+      zoomer.handleMain();
+      renderHeatmap();
+    }
+  }
+  function initChartCore() {
+    initLegendPanel({
+      hiddenSeries: ui.hiddenSeries,
+      projectStats: data.projectStats,
+      sortedProjectIds: data.sortedProjectIds,
+      projectMeta: data.projectMeta,
+      getRhythmAgg: () => ui.rhythmAgg,
+      getActiveTab: () => ui.activeTab,
+      getSelectedDetailUuid: () => ui.selectedDetailUuid,
+      getSelectedManageUuid: () => ui.selectedManageUuid,
+      onSeriesToggled
+    });
+    if (!mainView.init()) return;
+    mainView.setOption(
+      buildTimelineOption(chartData(), "dark", {
+        bounds: getDayAlignedIndices(data.todayTs, data.todayTs, data.timeline, data.tsMap, data.todayTs),
+        isManage: false,
+        getClusterSize: () => ui.mainClusterSize,
+        getActiveTab: () => ui.activeTab,
+        getCurrentUuid: () => ui.currentUuid
+      })
+    );
+    bindRightDrag(mainView, { getMaxIndex: () => data.timeline.length - 1 });
+    linkZoom([{ id: "main", view: mainView, onZoom: zoomer.handleMain }], { sourceId: "main" });
+    zoomer.handleMain();
+    renderHeatmap();
+  }
+  var reminderApp = createReminderApp();
+  var exporter = createExporter({ ui, data });
+  var router = createTabRouter({
+    ui,
+    data,
+    getTodayWorkHours: getTodayWorkHours2,
+    renderHeatmap,
+    handleZoomOrPan: zoomer.handleMain,
+    resetMainCache: () => resetChartCache("main"),
+    mainChart: mainView,
+    renderRhythmChart: rhythmPanel.render,
+    resizeRhythmChart: () => rhythmView.resize(),
+    updateRhythmProjectSelector: rhythmPanel.updateProjectSelector,
+    renderWeeklyReport: weeklyPanel.render,
+    renderManageTable: managePanel.refreshTable,
+    resizeManageChart: () => manageView.resize(),
+    renderReminder: () => reminderApp.render()
+  });
+  var admin = createDataAdmin({
+    ui,
+    data,
+    hooks: {
+      reloadData: loadAllData,
+      switchTab: router.switchTab,
+      // 注意：重建图表要用模板方法（bind），不能直接传 panel 上的方法引用
+      renderManageTable: () => managePanel.refreshTable(),
+      initManageChart: (uuid) => managePanel.initChart(uuid),
+      disposeManageChart: () => manageView.destroy(),
+      updateProjectSelector: router.updateProjectSelector,
+      onProjectSelectorChange: router.onProjectSelectorChange
+    }
+  });
   window.addEventListener("resize", () => {
-    if (myChart) myChart.resize();
-    if (manageChart) manageChart.resize();
-    if (heatmapChart) heatmapChart.resize();
-    if (rhythmChart) rhythmChart.resize();
-    if (weeklyBarChart) weeklyBarChart.resize();
-    if (weeklyPieChart) weeklyPieChart.resize();
+    for (const view of ALL_VIEWS) view.resize();
   });
   (async function main() {
     try {
       await new Promise((resolve) => setTimeout(resolve, 50));
       await loadAllData();
       initChartCore();
-      await ReminderApp.init();
+      await reminderApp.init();
       document.getElementById("loading-mask").style.display = "none";
-      switchTab("total");
+      router.switchTab("total");
     } catch (e) {
-      document.getElementById("loading-mask").innerText = "内核渲染矩阵加载失败: " + e.message;
-      console.error(e);
+      const mask = document.getElementById("loading-mask");
+      mask.innerText = "内核渲染矩阵加载失败: " + e.message;
+      logger.error("工时页初始化失败", e);
     }
   })();
+  var exportWeeklyReportImage = () => exportWeeklyReport({ barView: weeklyBarView, pieView: weeklyPieView });
   Object.assign(window, {
     // 下面两个只出现在「表格行」的 innerHTML 里（不是静态 HTML），漏了按钮就点不动
-    exportProjectChart,
-    confirmDeleteProject,
-    switchTab,
-    sortTable,
-    changeWeek,
-    clearAllDataConfirm,
-    exportAllDataJson,
-    exportTotalChart,
-    exportWeeklyReport,
-    onCustomDateChange,
-    onProjectSelectorChange,
-    onQuickTimeChange,
-    renderRhythmChart,
-    setRhythmMode,
-    ReminderApp
+    exportProjectChart: exporter.exportProjectChart,
+    confirmDeleteProject: admin.confirmDeleteProject,
+    switchTab: router.switchTab,
+    sortTable: managePanel.sortTable,
+    changeWeek: weeklyPanel.changeWeek,
+    clearAllDataConfirm: admin.clearAllDataConfirm,
+    exportAllDataJson: exporter.exportAllDataJson,
+    exportTotalChart: exporter.exportTotalChart,
+    exportWeeklyReport: exportWeeklyReportImage,
+    onCustomDateChange: rhythmPanel.selectCustom,
+    onProjectSelectorChange: router.onProjectSelectorChange,
+    onQuickTimeChange: rhythmPanel.selectQuick,
+    renderRhythmChart: rhythmPanel.render,
+    setRhythmMode: rhythmPanel.setMode,
+    ReminderApp: reminderApp
   });
 })();
