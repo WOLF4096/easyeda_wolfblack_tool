@@ -151,7 +151,16 @@
 		sys_Clipboard: { writeText: ok, readText: async () => '' },
 		pcb_ManufactureData: { getNetlistFile: async () => ({ text: async () => JSON.stringify(netlistJson) }) },
 		sch_ManufactureData: { getNetlistFile: async () => ({ text: async () => JSON.stringify(netlistJson) }) },
-		pcb_Net: { setNetlist: ok },
+		// getAllNets 是 OutPinNet「导出网络长度」用的：缺失时该按钮必然抛错，
+		// 冒烟会把它记成 console.error（重构前就是这样，属于 mock 缺口而非产品缺陷）
+		pcb_Net: {
+			setNetlist: ok,
+			getAllNets: async () => [
+				{ net: 'GND', length: 123.45 },
+				{ net: 'VCC', length: 67.8 },
+				{ net: 'Net1', length: 0 },
+			],
+		},
 		sch_Netlist: { setNetlist: ok },
 		pcb_SelectControl: { getAllSelectedPrimitives: async () => [], getSelectedPrimitives: async () => [] },
 		sch_SelectControl: { getAllSelectedPrimitives: async () => [], getSelectedPrimitives_PrimitiveId: async () => [] },

@@ -96,9 +96,16 @@ describe('模块头契约（iframe/js/src/**）', () => {
 			const declared = tagValue(header, '@//exports/');
 			const expected = declared === '无' ? [] : declared.split(',').map((s) => s.trim()).filter(Boolean);
 
+			if (expected.length === 0) {
+				// 页面入口没有导出，且**不能 import**（它在导入时就会去查 DOM、拉网表）。
+				// 所以这里改验源码：注释之外不允许出现 export 语句。
+				const code = fs.readFileSync(file, 'utf8').replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+				assert.equal(/^\s*export\s/m.test(code), false, `${rel} 声明无导出，但源码里有 export 语句`);
+				return;
+			}
+
 			const mod = await import(`../iframe/js/src/${rel}`);
 			const actual = Object.keys(mod).sort();
-
 			assert.deepEqual(actual, expected.slice().sort(), `${rel} 的导出与模块头不一致`);
 		});
 

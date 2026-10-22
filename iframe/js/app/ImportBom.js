@@ -1,496 +1,620 @@
-const WC = window.WolfCommon;
-if (!WC) {
-	(document.body || document.documentElement).innerHTML = '<div style="padding:24px;font:14px/1.6 sans-serif;color:#f28b82">公共模块 common.js 未加载，请重新安装扩展</div>';
-	throw new Error('[狼黑工具] 公共模块 common.js 未加载');
-}
-const { getEditorVersion, getVersionFamily, getNetlist, setNetlist, getComponentsContainer, escapeHtml } = WC;
+/*! 由 npm run build:iframe 从 iframe/js/src 生成，请勿直接修改本文件 */
+"use strict";
+(() => {
+  // iframe/js/src/core/eda.js
+  var NETLIST_KEY = "JLCEDA";
+  function getEda() {
+    try {
+      if (typeof eda !== "undefined" && eda) return eda;
+    } catch (e) {
+    }
+    try {
+      if (globalThis.parent && globalThis.parent !== globalThis && globalThis.parent.eda) return globalThis.parent.eda;
+    } catch (e) {
+    }
+    return globalThis.eda || null;
+  }
 
-        // 全局变量
-        let jsonData = {};
-        let componentsMap = {}; 
-        let tableData = [];
-        let Page;
-		let currentSortKey = null; // 当前排序的列名
-        let currentSortAsc = true; // 是否升序
+  // iframe/js/src/core/log.js
+  var LOG_LEVELS = { debug: 10, info: 20, warn: 30, error: 40 };
+  var currentLogLevel = LOG_LEVELS.info;
+  function logAt(level, ...args) {
+    if ((LOG_LEVELS[level] || 0) < currentLogLevel) return;
+    const method = level === "debug" ? "log" : level;
+    const fn = console[method] || console.log;
+    try {
+      fn.apply(console, ["[狼黑工具]", ...args]);
+    } catch (e) {
+    }
+  }
+  var logger = {
+    /**
+     * 调试日志（默认不输出）
+     *
+     * @param {...*} args 日志参数
+     * @returns {void}
+     * @sideEffects console
+     */
+    debug: (...args) => logAt("debug", ...args),
+    /**
+     * 普通信息
+     *
+     * @param {...*} args 日志参数
+     * @returns {void}
+     * @sideEffects console
+     */
+    info: (...args) => logAt("info", ...args),
+    /**
+     * 警告
+     *
+     * @param {...*} args 日志参数
+     * @returns {void}
+     * @sideEffects console
+     */
+    warn: (...args) => logAt("warn", ...args),
+    /**
+     * 错误
+     *
+     * @param {...*} args 日志参数
+     * @returns {void}
+     * @sideEffects console
+     */
+    error: (...args) => logAt("error", ...args),
+    /**
+     * 调整日志级别
+     *
+     * @param {'debug'|'info'|'warn'|'error'|'off'} level 级别名，`off` 表示全部静默
+     * @returns {void}
+     * @sideEffects 修改模块内的当前级别
+     */
+    setLevel: (level) => {
+      if (level === "off") {
+        currentLogLevel = Number.POSITIVE_INFINITY;
+        return;
+      }
+      if (LOG_LEVELS[level]) currentLogLevel = LOG_LEVELS[level];
+    }
+  };
 
-        // DOM元素
-        const tableBody = document.getElementById('tableBody');
-        const statusBar = document.getElementById('statusBar');
-        const selectAllBtn = document.getElementById('selectAll');
-        const pasteBtn = document.getElementById('pasteBtn');
-        const importBtn = document.getElementById('importBtn');
-        const masterCheckbox = document.getElementById('masterCheckbox');
-        const versionTag = document.getElementById('versionTag');
+  // iframe/js/src/core/netlist.js
+  async function readNetlistFile(getFile, page) {
+    const file = await getFile();
+    if (!file) throw new Error("获取的网表为空");
+    const text = await file.text();
+    if (!text || !text.trim()) throw new Error("获取的网表为空");
+    let json;
+    try {
+      json = JSON.parse(text);
+    } catch (e) {
+      throw new Error(`网表格式无法解析（${page}）：${e && e.message || e}`);
+    }
+    return { page, text, json };
+  }
+  async function getNetlist(page = "AUTO") {
+    const edaObj = getEda();
+    if (!edaObj) {
+      throw new Error("未检测到 EDA 运行环境");
+    }
+    const readPcb = () => readNetlistFile(() => edaObj.pcb_ManufactureData.getNetlistFile(NETLIST_KEY), "PCB");
+    const readSch = () => readNetlistFile(() => edaObj.sch_ManufactureData.getNetlistFile(NETLIST_KEY), "SCH");
+    if (page === "PCB") return readPcb();
+    if (page === "SCH") return readSch();
+    try {
+      return await readPcb();
+    } catch (pcbError) {
+      logger.debug("PCB 网表不可用，回退原理图网表：", pcbError);
+      return readSch();
+    }
+  }
+  async function setNetlist(page, json) {
+    const edaObj = getEda();
+    if (!edaObj) {
+      throw new Error("未检测到 EDA 运行环境");
+    }
+    const text = typeof json === "string" ? json : JSON.stringify(json);
+    const writePcb = () => edaObj.pcb_Net.setNetlist(NETLIST_KEY, text);
+    const writeSch = () => edaObj.sch_Netlist.setNetlist(NETLIST_KEY, text);
+    if (page === "PCB") {
+      await writePcb();
+      return "PCB";
+    }
+    if (page === "SCH") {
+      await writeSch();
+      return "SCH";
+    }
+    try {
+      await writePcb();
+      return "PCB";
+    } catch (pcbError) {
+      await writeSch();
+      return "SCH";
+    }
+  }
+  function getComponentsContainer(netlistObj) {
+    if (!netlistObj) return {};
+    return netlistObj.components ? netlistObj.components : netlistObj;
+  }
 
-        // 加载BOM数据
-        async function loadBOMData() {
-            try {
-                tableData = [];
-                for (const [key, component] of Object.entries(componentsMap)) {
-                    if (!component || !component.props) continue;
+  // iframe/js/src/core/util.js
+  function escapeHtml(value) {
+    if (value === null || value === void 0) return "";
+    return String(value).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+  }
+  function naturalCompare(a, b) {
+    const sa = a === null || a === void 0 ? "" : String(a);
+    const sb = b === null || b === void 0 ? "" : String(b);
+    return sa.localeCompare(sb, "en", { numeric: true, sensitivity: "base" });
+  }
 
-                    const props = component.props;
-                    
-                    // 兼容性修复：部分基础元件（如电阻电容）的名字通常存在 Value 字段中
-                    // V4 的 Name 可能是模板串 "={Value}"（引用 Value 属性），直接显示会变成字面量，
-                    // 这里解引用后再用；解析不到才退回原串。
-                    const rawCompName = String(props.Name || '');
-                    const compName = /^=\{.*\}$/.test(rawCompName) ? (props.Value || props.value || '') : (rawCompName || props.Value || props.value || '');
-                    const compDesignator = props.Designator || '';
-                    
-                    // 新增：提取封装属性用于后台分组判定
-                    const compFootprint = props.FootprintName || props.Footprint || ''; 
+  // iframe/js/src/core/version.js
+  var cachedVersion = null;
+  function getEditorVersion() {
+    if (cachedVersion !== null) return cachedVersion;
+    try {
+      const edaObj = getEda();
+      if (!edaObj || !edaObj.sys_Environment || typeof edaObj.sys_Environment.getEditorCurrentVersion !== "function") {
+        return "";
+      }
+      const version = edaObj.sys_Environment.getEditorCurrentVersion();
+      const text = version === null || version === void 0 ? "" : String(version).trim();
+      if (text) cachedVersion = text;
+      return text;
+    } catch (e) {
+      return "";
+    }
+  }
+  function getVersionFamily() {
+    const version = getEditorVersion();
+    if (!version) return "";
+    if (version.startsWith("4")) return "V4";
+    if (version.startsWith("3")) return "V3";
+    if (version.startsWith("2.2")) return "V2.2";
+    if (version.startsWith("2")) return "V2";
+    return "";
+  }
 
-                    tableData.push({
-                        jsonKey: key, 
-                        uniqueId: props['Unique ID'],
-                        designator: compDesignator,
-                        name: compName,
-                        footprint: compFootprint, // 存入记录中
-                        supplier: props.Supplier || '', 
-                        supplierPart: props['Supplier Part'] || '',
-                        manufacturerPart: props['Manufacturer Part'] || '',
-                        manufacturer: props.Manufacturer || '',
-                        selected: false,
-                        changed: false,
-                        original: {
-                            designator: compDesignator,
-                            name: compName,
-                            supplier: props.Supplier || '', 
-                            supplierPart: props['Supplier Part'] || '',
-                            manufacturerPart: props['Manufacturer Part'] || '',
-                            manufacturer: props.Manufacturer || '',
-                        },
-                    });
-                }
-                renderTable();
-            } catch (error) {
-                console.error('加载BOM数据失败:', error);
-                statusBar.textContent = '加载BOM数据失败: ' + error.message;
-                statusBar.className = 'status-bar error';
-            }
+  // iframe/js/src/ui/statusBar.js
+  var LEVEL_CLASS = Object.freeze({
+    "": "",
+    info: "info",
+    ok: "success",
+    success: "success",
+    warn: "warning",
+    warning: "warning",
+    err: "error",
+    error: "error"
+  });
+  var ACCENT = "accent";
+  function percentOf(done, total) {
+    const d = Number(done);
+    const t = Number(total);
+    if (!Number.isFinite(d) || !Number.isFinite(t) || t <= 0) return 0;
+    return Math.max(0, Math.min(100, Math.floor(d / t * 100)));
+  }
+  function classOf(base, level) {
+    const suffix = LEVEL_CLASS[level === void 0 ? "" : level];
+    if (suffix === void 0) return base;
+    return suffix ? base + " " + suffix : base;
+  }
+  function createStatusBar(options = {}) {
+    const textEl = options.textEl || null;
+    const barEl = options.barEl || null;
+    const baseClass = options.baseClass || "status";
+    const barBaseClass = options.barBaseClass || "status-bar";
+    const widthProp = options.widthProp || "width";
+    function text(message, level) {
+      if (!textEl) return;
+      textEl.textContent = message === null || message === void 0 ? "" : String(message);
+      textEl.className = classOf(baseClass, level);
+    }
+    function width(percent, level) {
+      if (!barEl) return;
+      const p = Math.max(0, Math.min(100, Number(percent) || 0));
+      barEl.style[widthProp] = p + "%";
+      const suffix = level === void 0 ? ACCENT : LEVEL_CLASS[level];
+      barEl.className = suffix ? barBaseClass + " " + suffix : barBaseClass;
+    }
+    function progress(done, total, suffix, level) {
+      const p = percentOf(done, total);
+      text(`${done} / ${total} ${p}%${suffix ? "　" + suffix : ""}`, level);
+      width(p, level);
+      return p;
+    }
+    function reset() {
+      text("", "");
+      width(0, "");
+    }
+    return { text, progress, width, reset };
+  }
+
+  // iframe/js/src/ui/table.js
+  var SORT_INDICATOR = Object.freeze({ asc: "▲", desc: "▼", none: "" });
+  function nextSortState(state, key) {
+    const current = state || { key: null, asc: true };
+    if (current.key === key) return { key, asc: !current.asc };
+    return { key, asc: true };
+  }
+  function selectionSummary(items, isSelected) {
+    const list = Array.isArray(items) ? items : [];
+    let count = 0;
+    for (const item of list) {
+      if (isSelected(item)) count++;
+    }
+    const total = list.length;
+    return {
+      count,
+      total,
+      isAll: total > 0 && count === total,
+      isIndeterminate: count > 0 && count < total
+    };
+  }
+  function setAllSelected(items, setSelected, value) {
+    const list = Array.isArray(items) ? items : [];
+    for (const item of list) setSelected(item, !!value);
+    return list.length;
+  }
+
+  // iframe/js/src/app/import-bom/bomModel.js
+  var TRACKED_FIELDS = ["name", "manufacturerPart", "manufacturer", "supplierPart", "supplier"];
+  function resolveComponentName(props) {
+    const source = props || {};
+    const raw = String(source.Name || "");
+    if (/^=\{.*\}$/.test(raw)) return source.Value || source.value || "";
+    return raw || source.Value || source.value || "";
+  }
+  function buildRows(container) {
+    const rows = [];
+    if (!container || typeof container !== "object") return rows;
+    for (const [key, component] of Object.entries(container)) {
+      if (!component || !component.props) continue;
+      const props = component.props;
+      const designator = props.Designator || "";
+      const name = resolveComponentName(props);
+      rows.push({
+        jsonKey: key,
+        uniqueId: props["Unique ID"],
+        designator,
+        name,
+        footprint: props.FootprintName || props.Footprint || "",
+        supplier: props.Supplier || "",
+        supplierPart: props["Supplier Part"] || "",
+        manufacturerPart: props["Manufacturer Part"] || "",
+        manufacturer: props.Manufacturer || "",
+        selected: false,
+        changed: false,
+        original: snapshot(designator, name, props)
+      });
+    }
+    return rows;
+  }
+  function snapshot(designator, name, props) {
+    return {
+      designator,
+      name,
+      supplier: props.Supplier || "",
+      supplierPart: props["Supplier Part"] || "",
+      manufacturerPart: props["Manufacturer Part"] || "",
+      manufacturer: props.Manufacturer || ""
+    };
+  }
+  function groupRows(rows) {
+    const map = /* @__PURE__ */ new Map();
+    const groups = [];
+    for (const item of Array.isArray(rows) ? rows : []) {
+      const prefix = String(item.designator || "").replace(/[0-9]+$/, "");
+      const key = JSON.stringify([
+        prefix,
+        item.footprint,
+        item.name,
+        item.supplier,
+        item.supplierPart,
+        item.manufacturerPart,
+        item.manufacturer,
+        item.changed,
+        item.original.name,
+        item.original.supplier,
+        item.original.supplierPart,
+        item.original.manufacturerPart,
+        item.original.manufacturer
+      ]);
+      let group = map.get(key);
+      if (!group) {
+        group = {
+          items: [],
+          designators: [],
+          name: item.name,
+          supplier: item.supplier,
+          supplierPart: item.supplierPart,
+          manufacturerPart: item.manufacturerPart,
+          manufacturer: item.manufacturer,
+          changed: item.changed,
+          original: item.original,
+          selected: item.selected
+        };
+        map.set(key, group);
+        groups.push(group);
+      }
+      group.items.push(item);
+      group.designators.push(item.designator);
+      if (!item.selected) group.selected = false;
+    }
+    return groups;
+  }
+  function sortGroups(groups, state) {
+    const list = (Array.isArray(groups) ? groups : []).slice();
+    if (!state || !state.key) return list;
+    const dir = state.asc === false ? -1 : 1;
+    list.sort((a, b) => {
+      const valA = state.key === "designators" ? a.designators.join(", ") : String(a[state.key] || "");
+      const valB = state.key === "designators" ? b.designators.join(", ") : String(b[state.key] || "");
+      return dir * naturalCompare(valA, valB);
+    });
+    return list;
+  }
+  function applyPaste(rows, pasteItems) {
+    const list = Array.isArray(rows) ? rows : [];
+    let updated = 0;
+    const missing = [];
+    const byDesignator = /* @__PURE__ */ new Map();
+    for (const row of list) {
+      if (!byDesignator.has(row.designator)) byDesignator.set(row.designator, row);
+    }
+    for (const pasteItem of Array.isArray(pasteItems) ? pasteItems : []) {
+      for (const designator of pasteItem.designators) {
+        const row = byDesignator.get(designator);
+        if (!row) {
+          missing.push(designator);
+          continue;
         }
-
-        // 渲染表格 (UI 核心修改点)
-        function renderTable() {
-            tableBody.innerHTML = '';
-
-            // innerHTML 专用：两个值都转义，只保留箭头标签本身
-            const formatCell = (oldVal, newVal) => {
-                if (newVal && newVal !== oldVal) {
-                    return `${escapeHtml(oldVal || '-')} <span class="change-arrow">→</span> ${escapeHtml(newVal)}`;
-                }
-                return escapeHtml(oldVal || '-');
-            };
-
-            // title 专用：赋给 DOM 属性，不需要 HTML 转义（转义反而会显示成 &quot;）
-            const formatTitle = (oldVal, newVal) => {
-                if (newVal && newVal !== oldVal) {
-                    return `${oldVal || '-'} → ${newVal}`;
-                }
-                return String(oldVal || '-');
-            };
-
-            // 1. 动态对数据进行分组 (除位号以外的所有参数相同的分到一组)
-            const groupedMap = {};
-            const groupedView = [];
-
-            tableData.forEach((item) => {
-                // 核心修复点：提取位号的字母前缀 (如 R1 -> R, C12 -> C, IC1 -> IC)
-                const prefix = (item.designator || '').replace(/[0-9]+$/, '');
-
-                // 将封装 (item.footprint) 隐式加入到分组标识 (groupKey) 中
-                const groupKey = `${prefix}|${item.footprint}|${item.name}|${item.supplier}|${item.supplierPart}|${item.manufacturerPart}|${item.manufacturer}|` +
-                                 `${item.original.name}|${item.original.supplier}|${item.original.supplierPart}|${item.original.manufacturerPart}|${item.original.manufacturer}|${item.changed}`;
-
-                if (!groupedMap[groupKey]) {
-                    groupedMap[groupKey] = {
-                        items: [], // 存储原始数据引用
-                        designators: [],
-                        name: item.name,
-                        supplier: item.supplier,
-                        supplierPart: item.supplierPart,
-                        manufacturerPart: item.manufacturerPart,
-                        manufacturer: item.manufacturer,
-                        changed: item.changed,
-                        original: item.original,
-                        selected: item.selected
-                    };
-                    groupedView.push(groupedMap[groupKey]);
-                }
-                groupedMap[groupKey].items.push(item);
-                groupedMap[groupKey].designators.push(item.designator);
-                
-                // 组内只要有一个没选中，则状态为非全选
-                if (!item.selected) {
-                    groupedMap[groupKey].selected = false;
-                }
-            });
-
-			// 排序逻辑 
-            if (currentSortKey) {
-                groupedView.sort((a, b) => {
-                    let valA, valB;
-
-                    if (currentSortKey === 'designators') {
-                        // 位号是数组，合并成字符串后再比对
-                        valA = a.designators.join(', ');
-                        valB = b.designators.join(', ');
-                    } else {
-                        // 其他属性直接读取字符串
-                        valA = String(a[currentSortKey] || '');
-                        valB = String(b[currentSortKey] || '');
-                    }
-
-                    // 使用 localeCompare 进行自然排序 (开启 numeric: true，使 C2 排在 C10 前面)
-                    const compareResult = valA.localeCompare(valB, undefined, { numeric: true, sensitivity: 'base' });
-                    
-                    return currentSortAsc ? compareResult : -compareResult;
-                });
-            }
-
-            // 2. 渲染分组后的数据
-            groupedView.forEach((group) => {
-                const row = document.createElement('tr');
-                if (!group.selected) row.classList.add('disabled-row');
-
-                // 复选框列
-                const checkboxCell = document.createElement('td');
-                const checkbox = document.createElement('input');
-                checkbox.type = 'checkbox';
-                checkbox.className = 'row-selector';
-                checkbox.checked = group.selected;
-                checkbox.addEventListener('change', () => {
-                    const isChecked = checkbox.checked;
-                    group.selected = isChecked;
-                    // 同步勾选/取消勾选该组下的所有物理元件
-                    group.items.forEach(it => it.selected = isChecked);
-                    
-                    if(isChecked) row.classList.remove('disabled-row');
-                    else row.classList.add('disabled-row');
-                    
-                    updateMasterCheckbox();
-                    updateSelectAllButton();
-                });
-                checkboxCell.appendChild(checkbox);
-                row.appendChild(checkboxCell);
-
-                // 位号列 (合并显示，以逗号分隔)
-                const designatorCell = document.createElement('td');
-                const desStr = group.designators.join(', ');
-                designatorCell.textContent = desStr;
-                designatorCell.title = desStr;
-                row.appendChild(designatorCell);
-
-                // 名称列
-                const nameCell = document.createElement('td');
-                nameCell.innerHTML = group.changed && group.name !== group.original.name ? formatCell(group.original.name, group.name) : escapeHtml(group.original.name || '-');
-                nameCell.title = group.changed && group.name !== group.original.name ? formatTitle(group.original.name, group.name) : group.original.name || '-';
-                row.appendChild(nameCell);
-
-                // 制造商编号列 (提前到这里)
-                const manufacturerPartCell = document.createElement('td');
-                manufacturerPartCell.innerHTML = group.changed && group.manufacturerPart !== group.original.manufacturerPart ? formatCell(group.original.manufacturerPart, group.manufacturerPart) : escapeHtml(group.original.manufacturerPart || '-');
-                manufacturerPartCell.title = group.changed && group.manufacturerPart !== group.original.manufacturerPart ? formatTitle(group.original.manufacturerPart, group.manufacturerPart) : group.original.manufacturerPart || '-';
-                row.appendChild(manufacturerPartCell);
-
-                // 制造商名称列 (提前到这里)
-                const manufacturerCell = document.createElement('td');
-                manufacturerCell.innerHTML = group.changed && group.manufacturer !== group.original.manufacturer ? formatCell(group.original.manufacturer, group.manufacturer) : escapeHtml(group.original.manufacturer || '-');
-                manufacturerCell.title = group.changed && group.manufacturer !== group.original.manufacturer ? formatTitle(group.original.manufacturer, group.manufacturer) : group.original.manufacturer || '-';
-                row.appendChild(manufacturerCell);
-
-                // 供应商编号(立创编号)列 (往后挪)
-                const supplierPartCell = document.createElement('td');
-                supplierPartCell.innerHTML = group.changed && group.supplierPart !== group.original.supplierPart ? formatCell(group.original.supplierPart, group.supplierPart) : escapeHtml(group.original.supplierPart || '-');
-                supplierPartCell.title = group.changed && group.supplierPart !== group.original.supplierPart ? formatTitle(group.original.supplierPart, group.supplierPart) : group.original.supplierPart || '-';
-                row.appendChild(supplierPartCell);
-
-                // 供应商列 (放在最后)
-                const supplierCell = document.createElement('td');
-                supplierCell.innerHTML = group.changed && group.supplier !== group.original.supplier ? formatCell(group.original.supplier, group.supplier) : escapeHtml(group.original.supplier || '-');
-                supplierCell.title = group.changed && group.supplier !== group.original.supplier ? formatTitle(group.original.supplier, group.supplier) : group.original.supplier || '-';
-                row.appendChild(supplierCell);
-
-                tableBody.appendChild(row);
-            });
+        let supplier = pasteItem.supplier;
+        if (!supplier && pasteItem.supplierPart && pasteItem.supplierPart.trim().toUpperCase().startsWith("C")) {
+          supplier = "LCSC";
         }
+        const next = {
+          name: pasteItem.name,
+          manufacturerPart: pasteItem.manufacturerPart,
+          manufacturer: pasteItem.manufacturer,
+          supplierPart: pasteItem.supplierPart,
+          supplier
+        };
+        const hasChanges = TRACKED_FIELDS.some((field) => next[field] !== row.original[field]);
+        if (!hasChanges) continue;
+        Object.assign(row, next, { changed: true, selected: true });
+        updated++;
+      }
+    }
+    return { updated, missing };
+  }
+  function applyToComponent(row, comp) {
+    if (!comp) return false;
+    comp.props = comp.props || {};
+    const value = row.name || row.original.name;
+    comp.props.Value = value;
+    if (!/^=\{.*\}$/.test(String(comp.props.Name || ""))) {
+      comp.props.Name = value;
+    }
+    comp.props.Supplier = row.supplier || row.original.supplier;
+    comp.props["Supplier Part"] = row.supplierPart || row.original.supplierPart;
+    comp.props["Manufacturer Part"] = row.manufacturerPart || row.original.manufacturerPart;
+    comp.props.Manufacturer = row.manufacturer || row.original.manufacturer;
+    row.changed = false;
+    row.original = snapshot(row.designator, row.name, comp.props);
+    return true;
+  }
 
-        // 更新状态栏
-        function updateStatusBar() {
-            const uniqueIds = tableData.map((item) => item.uniqueId).filter((id) => id && id !== '');
-            const hasEmptyUniqueId = tableData.some((item) => !item.uniqueId || item.uniqueId === '');
-            const uniqueIdsSet = new Set(uniqueIds);
-            const hasDuplicateUniqueId = uniqueIdsSet.size !== uniqueIds.length;
+  // iframe/js/src/app/import-bom/pasteParser.js
+  function parsePaste(text) {
+    const raw = String(text === null || text === void 0 ? "" : text).trim();
+    const items = [];
+    if (!raw) return items;
+    const lines = raw.split("\n");
+    const firstLine = lines[0];
+    const useTab = firstLine.includes("	");
+    const delimiter = useTab ? "	" : ",";
+    const designatorSeparator = useTab ? "," : "、";
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed) continue;
+      const cells = trimmed.split(delimiter).slice(0, 6);
+      while (cells.length < 6) cells.push("");
+      items.push({
+        designators: splitDesignators(cells[0], designatorSeparator),
+        name: cells[1].trim(),
+        manufacturerPart: cells[2].trim(),
+        manufacturer: cells[3].trim(),
+        supplierPart: cells[4].trim(),
+        supplier: cells[5].trim()
+      });
+    }
+    return items;
+  }
+  function splitDesignators(field, separator) {
+    const text = String(field || "").trim();
+    if (!text.includes(separator)) return text ? [text] : [];
+    return text.split(separator).map((d) => d.trim()).filter((d) => d);
+  }
 
-            if (hasEmptyUniqueId || hasDuplicateUniqueId) {
-                let msg = '注意：';
-                if (hasEmptyUniqueId) msg += '存在空的唯一ID; ';
-                if (hasDuplicateUniqueId) msg += '存在重复的唯一ID; ';
-                msg += '建议先重置唯一ID，否则可能导致异常。';
-
-                statusBar.textContent = msg;
-                statusBar.className = 'status-bar warning';
-                importBtn.disabled = false;
-            } else {
-                statusBar.textContent = `数据加载成功 (${(getVersionFamily() || 'V2') + '模式'})，可以粘贴并导入`;
-                statusBar.className = 'status-bar success';
-                importBtn.disabled = false;
-            }
-        }
-
-        // 更新全选按钮文本
-        function updateSelectAllButton() {
-            const allSelected = tableData.length > 0 && tableData.every((item) => item.selected);
-            selectAllBtn.textContent = allSelected ? '全不选' : '全选';
-        }
-
-        // 更新主复选框状态
-        function updateMasterCheckbox() {
-            const allSelected = tableData.length > 0 && tableData.every((item) => item.selected);
-            const someSelected = tableData.some((item) => item.selected);
-            masterCheckbox.checked = allSelected;
-            masterCheckbox.indeterminate = someSelected && !allSelected;
-        }
-
-        // 主复选框状态更新
-        masterCheckbox.addEventListener('change', function () {
-            tableData.forEach((item) => {
-                item.selected = masterCheckbox.checked;
-            });
-            renderTable();
-            updateSelectAllButton();
-        });
-
-        // 全选/取消全选
-        selectAllBtn.addEventListener('click', function () {
-            const allSelected = tableData.every((item) => item.selected);
-            tableData.forEach((item) => {
-                item.selected = !allSelected;
-            });
-            renderTable();
-            updateMasterCheckbox();
-            updateSelectAllButton();
-        });
-
-        // 粘贴功能
-        pasteBtn.addEventListener('click', async function () {
-            try {
-                const clipboardText = await navigator.clipboard.readText();
-                const lines = clipboardText.trim().split('\n');
-                const pasteData = [];
-
-                const firstLine = lines[0];
-                let delimiter = '\t';
-                let designatorSeparator = ',';
-
-                if (firstLine.includes('\t')) {
-                    delimiter = '\t';
-                    designatorSeparator = ',';
-                } else {
-                    delimiter = ',';
-                    designatorSeparator = '、';
-                }
-
-                console.log(`[Debug] 检测到格式: 分隔符=${delimiter === '\t' ? 'TSV' : 'CSV'}, 位号分隔符=${designatorSeparator}`);
-
-                for (let i = 0; i < lines.length; i++) {
-                    const line = lines[i].trim();
-                    if (!line) continue;
-
-                    const parts = line.split(delimiter);
-                    const paddedParts = [...parts];
-                    // 补齐 6 列 (位号|名称|制编|制名|供编|供名)
-                    while (paddedParts.length < 6) paddedParts.push(''); 
-                    const finalParts = paddedParts.slice(0, 6);
-
-                    const designatorField = finalParts[0].trim();
-                    let designators = [];
-
-                    if (designatorField.includes(designatorSeparator)) {
-                        designators = designatorField.split(designatorSeparator).map((d) => d.trim()).filter((d) => d);
-                    } else {
-                        designators = [designatorField];
-                    }
-
-                    pasteData.push({
-                        designators: designators,
-                        name: finalParts[1].trim(),
-                        manufacturerPart: finalParts[2].trim(), // 第3列：制造商编号
-                        manufacturer: finalParts[3].trim(),     // 第4列：制造商
-                        supplierPart: finalParts[4].trim(),     // 第5列：供应商编号
-                        supplier: finalParts[5].trim(),         // 第6列：供应商
-                    });
-                }
-
-                let updateCount = 0;
-                let matchedDesignators = new Set(); 
-
-                for (const pasteItem of pasteData) {
-                    for (const designator of pasteItem.designators) {
-                        const tableItem = tableData.find((item) => item.designator === designator);
-
-                        if (tableItem) {
-                            // 优先使用 Excel 粘贴进来的供应商字段
-                            let newSupplier = pasteItem.supplier;
-                            
-                            // 智能兼容：如果 Excel 里没填供应商，但供应商编号以 'C' 开头，依旧自动补全 LCSC
-                            if (!newSupplier && pasteItem.supplierPart && pasteItem.supplierPart.trim().toUpperCase().startsWith('C')) {
-                                newSupplier = 'LCSC';
-                            }
-
-                            const hasChanges =
-                                pasteItem.name !== tableItem.original.name ||
-                                pasteItem.manufacturerPart !== tableItem.original.manufacturerPart ||
-                                pasteItem.manufacturer !== tableItem.original.manufacturer ||
-                                pasteItem.supplierPart !== tableItem.original.supplierPart ||
-                                newSupplier !== tableItem.original.supplier; // 增加供应商对比
-
-                            if (hasChanges) {
-                                tableItem.name = pasteItem.name;
-                                tableItem.manufacturerPart = pasteItem.manufacturerPart;
-                                tableItem.manufacturer = pasteItem.manufacturer;
-                                tableItem.supplierPart = pasteItem.supplierPart;
-                                tableItem.supplier = newSupplier; // 更新供应商
-                                tableItem.changed = true;
-                                tableItem.selected = true; 
-                                updateCount++;
-                                matchedDesignators.add(designator);
-                            }
-                        } else {
-                            console.warn(`[Debug] 未找到位号: ${designator}`);
-                        }
-                    }
-                }
-
-                renderTable();
-                updateMasterCheckbox(); 
-                updateSelectAllButton();
-
-                if (updateCount > 0) {
-                    statusBar.textContent = `成功匹配并更新了 ${updateCount} 个组件的属性 (已自动勾选)`;
-                    statusBar.className = 'status-bar success';
-                } else {
-                    statusBar.textContent = '没有检测到需要更新的属性，或数据无变化';
-                    statusBar.className = 'status-bar warning';
-                }
-            } catch (error) {
-                console.error('[Debug] 粘贴失败:', error);
-                statusBar.textContent = '粘贴失败: ' + error.message;
-                statusBar.className = 'status-bar error';
-            }
-        });
-
-        // 导入功能
-        importBtn.addEventListener('click', async function () {
-            try {
-                const selectedItems = tableData.filter((item) => item.selected);
-
-                if (selectedItems.length === 0) {
-                    statusBar.textContent = '请至少选择一个项目进行导入';
-                    statusBar.className = 'status-bar warning';
-                    return;
-                }
-
-                let successCount = 0;
-                selectedItems.forEach((item) => {
-                    if (item.jsonKey && componentsMap[item.jsonKey]) {
-                        const comp = componentsMap[item.jsonKey];
-
-                        const newValue = item.name || item.original.name;
-                        comp.props = comp.props || {};
-                        // V4 画布上的器件值来自 Value（Name 属性是 ={Value} 模板），
-                        // 只写 Name 会出现「提示导入成功但画面没变」，所以两版都写 Value；
-                        // Name 仅在它本身是字面值时才覆盖，避免把模板串改成固定文本。
-                        comp.props.Value = newValue;
-                        if (!/^=\{.*\}$/.test(String(comp.props.Name || ''))) {
-                            comp.props.Name = newValue;
-                        }
-                        comp.props.Supplier = item.supplier || item.original.supplier; // 写入新供应商
-                        comp.props['Supplier Part'] = item.supplierPart || item.original.supplierPart;
-                        comp.props['Manufacturer Part'] = item.manufacturerPart || item.original.manufacturerPart;
-                        comp.props.Manufacturer = item.manufacturer || item.original.manufacturer;
-
-                        // (这里删除了原先硬编码的 C 开头写 LCSC 逻辑，因为粘贴阶段已经赋好值了)
-
-                        item.changed = false;
-                        item.original = {
-                            designator: item.designator,
-                            name: item.name,
-                            supplier: item.supplier, // 同步 original
-                            supplierPart: item.supplierPart,
-                            manufacturerPart: item.manufacturerPart,
-                            manufacturer: item.manufacturer,
-                        };
-                        successCount++;
-                    }
-                });
-
-                const listjson = JSON.stringify(jsonData, null, 2);
-
-                await setNetlist(Page, listjson);
-
-                statusBar.textContent = `成功导入并写回了 ${successCount} 个组件的属性`;
-                statusBar.className = 'status-bar success';
-
-                setTimeout(() => {
-                    loadBOMData();
-                }, 500);
-            } catch (error) {
-                console.error('[Debug] 导入失败:', error);
-                statusBar.textContent = '导入失败: ' + error.message;
-                statusBar.className = 'status-bar error';
-            }
-        });
-
-        // 初始化
-        document.addEventListener('DOMContentLoaded', async function () {
-			
-			// --- 新增：绑定表头排序点击事件 ---
-            document.querySelectorAll('th.sortable').forEach(th => {
-                th.addEventListener('click', function() {
-                    const key = this.getAttribute('data-key');
-                    
-                    if (currentSortKey === key) {
-                        // 点击相同的列，切换升降序
-                        currentSortAsc = !currentSortAsc;
-                    } else {
-                        // 点击新的列，默认升序
-                        currentSortKey = key;
-                        currentSortAsc = true;
-                    }
-
-                    // 更新 UI 箭头显示
-                    document.querySelectorAll('th.sortable .sort-arrow').forEach(span => span.textContent = '');
-                    const arrowSpan = this.querySelector('.sort-arrow');
-                    arrowSpan.textContent = currentSortAsc ? '▲' : '▼';
-
-                    // 重新渲染表格应用排序
-                    renderTable();
-                });
-            });
-
-            try {
-                const version = getEditorVersion();
-                console.log('[Debug] 当前EDA版本:', version);
-                versionTag.textContent = version ? (getVersionFamily() || 'V2') + '模式' : 'V2模式 (默认)';
-            } catch (e) {
-                console.warn('[Debug] 版本检测失败', e);
-                versionTag.textContent = '模式未知';
-            }
-
-            try {
-                const netlist = await getNetlist('AUTO');
-                Page = netlist.page;
-                jsonData = netlist.json;
-
-                componentsMap = getComponentsContainer(jsonData);
-
-                await loadBOMData();
-                updateStatusBar();
-            } catch (error) {
-                console.error('[Debug] 初始化错误', error);
-                statusBar.textContent = '初始化失败: 未能读取到画布环境数据';
-                statusBar.className = 'status-bar error';
-            }
-        });
+  // iframe/js/src/app/import-bom/index.js
+  var jsonData = {};
+  var componentsMap = {};
+  var tableData = [];
+  var Page = "PCB";
+  var sortState = { key: null, asc: true };
+  var tableBody = document.getElementById("tableBody");
+  var selectAllBtn = document.getElementById("selectAll");
+  var pasteBtn = document.getElementById("pasteBtn");
+  var importBtn = document.getElementById("importBtn");
+  var masterCheckbox = document.getElementById("masterCheckbox");
+  var versionTag = document.getElementById("versionTag");
+  var bar = createStatusBar({ textEl: document.getElementById("statusBar"), baseClass: "status-bar" });
+  function formatCell(oldVal, newVal) {
+    if (newVal && newVal !== oldVal) {
+      return `${escapeHtml(oldVal || "-")} <span class="change-arrow">→</span> ${escapeHtml(newVal)}`;
+    }
+    return escapeHtml(oldVal || "-");
+  }
+  function formatTitle(oldVal, newVal) {
+    if (newVal && newVal !== oldVal) return `${oldVal || "-"} → ${newVal}`;
+    return String(oldVal || "-");
+  }
+  function createPropCell(group, field) {
+    const cell = document.createElement("td");
+    const changed = group.changed && group[field] !== group.original[field];
+    cell.innerHTML = changed ? formatCell(group.original[field], group[field]) : escapeHtml(group.original[field] || "-");
+    cell.title = changed ? formatTitle(group.original[field], group[field]) : group.original[field] || "-";
+    return cell;
+  }
+  function renderTable() {
+    tableBody.innerHTML = "";
+    const groups = sortGroups(groupRows(tableData), sortState);
+    for (const group of groups) {
+      const row = document.createElement("tr");
+      if (!group.selected) row.classList.add("disabled-row");
+      row.appendChild(createSelectorCell(group, row));
+      const designatorCell = document.createElement("td");
+      const designators = group.designators.join(", ");
+      designatorCell.textContent = designators;
+      designatorCell.title = designators;
+      row.appendChild(designatorCell);
+      row.appendChild(createPropCell(group, "name"));
+      row.appendChild(createPropCell(group, "manufacturerPart"));
+      row.appendChild(createPropCell(group, "manufacturer"));
+      row.appendChild(createPropCell(group, "supplierPart"));
+      row.appendChild(createPropCell(group, "supplier"));
+      tableBody.appendChild(row);
+    }
+  }
+  function createSelectorCell(group, row) {
+    const cell = document.createElement("td");
+    const checkbox = document.createElement("input");
+    checkbox.type = "checkbox";
+    checkbox.className = "row-selector";
+    checkbox.checked = group.selected;
+    checkbox.addEventListener("change", () => {
+      group.selected = checkbox.checked;
+      for (const item of group.items) item.selected = checkbox.checked;
+      row.classList.toggle("disabled-row", !checkbox.checked);
+      updateMasterCheckbox();
+      updateSelectAllButton();
+    });
+    cell.appendChild(checkbox);
+    return cell;
+  }
+  function updateStatusBar() {
+    const ids = tableData.map((item) => item.uniqueId).filter((id) => id && id !== "");
+    const hasEmpty = tableData.some((item) => !item.uniqueId || item.uniqueId === "");
+    const hasDuplicate = new Set(ids).size !== ids.length;
+    if (hasEmpty || hasDuplicate) {
+      let msg = "注意：";
+      if (hasEmpty) msg += "存在空的唯一ID; ";
+      if (hasDuplicate) msg += "存在重复的唯一ID; ";
+      msg += "建议先重置唯一ID，否则可能导致异常。";
+      bar.text(msg, "warning");
+    } else {
+      bar.text(`数据加载成功 (${(getVersionFamily() || "V2") + "模式"})，可以粘贴并导入`, "success");
+    }
+    importBtn.disabled = false;
+  }
+  function updateSelectAllButton() {
+    const summary = selectionSummary(tableData, (item) => item.selected);
+    selectAllBtn.textContent = summary.isAll ? "全不选" : "全选";
+  }
+  function updateMasterCheckbox() {
+    const summary = selectionSummary(tableData, (item) => item.selected);
+    masterCheckbox.checked = summary.isAll;
+    masterCheckbox.indeterminate = summary.isIndeterminate;
+  }
+  function loadBOMData() {
+    try {
+      tableData = buildRows(componentsMap);
+      renderTable();
+    } catch (error) {
+      console.error("加载BOM数据失败:", error);
+      bar.text("加载BOM数据失败: " + error.message, "error");
+    }
+  }
+  async function handlePaste() {
+    try {
+      const text = await navigator.clipboard.readText();
+      const stat = applyPaste(tableData, parsePaste(text));
+      renderTable();
+      updateMasterCheckbox();
+      updateSelectAllButton();
+      if (stat.updated > 0) {
+        bar.text(`成功匹配并更新了 ${stat.updated} 个组件的属性 (已自动勾选)`, "success");
+      } else {
+        bar.text("没有检测到需要更新的属性，或数据无变化", "warning");
+      }
+    } catch (error) {
+      console.error("粘贴失败:", error);
+      bar.text("粘贴失败: " + error.message, "error");
+    }
+  }
+  async function handleImport() {
+    try {
+      const selected = tableData.filter((item) => item.selected);
+      if (selected.length === 0) {
+        bar.text("请至少选择一个项目进行导入", "warning");
+        return;
+      }
+      let successCount = 0;
+      for (const item of selected) {
+        if (!item.jsonKey || !componentsMap[item.jsonKey]) continue;
+        if (applyToComponent(item, componentsMap[item.jsonKey])) successCount++;
+      }
+      await setNetlist(Page, JSON.stringify(jsonData, null, 2));
+      bar.text(`成功导入并写回了 ${successCount} 个组件的属性`, "success");
+      setTimeout(loadBOMData, 500);
+    } catch (error) {
+      console.error("导入失败:", error);
+      bar.text("导入失败: " + error.message, "error");
+    }
+  }
+  function bindSortHeaders() {
+    document.querySelectorAll("th.sortable").forEach((th) => {
+      th.addEventListener("click", () => {
+        sortState = nextSortState(sortState, th.getAttribute("data-key"));
+        document.querySelectorAll("th.sortable .sort-arrow").forEach((span) => span.textContent = "");
+        const arrow = th.querySelector(".sort-arrow");
+        if (arrow) arrow.textContent = sortState.asc ? "▲" : "▼";
+        renderTable();
+      });
+    });
+  }
+  async function init() {
+    try {
+      const version = getEditorVersion();
+      versionTag.textContent = version ? (getVersionFamily() || "V2") + "模式" : "V2模式 (默认)";
+    } catch (e) {
+      versionTag.textContent = "模式未知";
+    }
+    try {
+      const netlist = await getNetlist("AUTO");
+      Page = netlist.page;
+      jsonData = netlist.json;
+      componentsMap = getComponentsContainer(jsonData);
+      loadBOMData();
+      updateStatusBar();
+    } catch (error) {
+      console.error("初始化错误", error);
+      bar.text("初始化失败: 未能读取到画布环境数据", "error");
+    }
+  }
+  masterCheckbox.addEventListener("change", () => {
+    setAllSelected(tableData, (item, value) => item.selected = value, masterCheckbox.checked);
+    renderTable();
+    updateSelectAllButton();
+  });
+  selectAllBtn.addEventListener("click", () => {
+    const summary = selectionSummary(tableData, (item) => item.selected);
+    setAllSelected(tableData, (item, value) => item.selected = value, !summary.isAll);
+    renderTable();
+    updateMasterCheckbox();
+    updateSelectAllButton();
+  });
+  pasteBtn.addEventListener("click", handlePaste);
+  importBtn.addEventListener("click", handleImport);
+  bindSortHeaders();
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", init);
+  else init();
+})();
