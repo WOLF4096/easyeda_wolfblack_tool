@@ -2,11 +2,11 @@
 	"name": "wolfblack-tool",
 	"uuid": "345f2952d65b1a5ca2f11721b90309c9",
 	"displayName": "狼黑工具",
-	"description": "24 个画板小工具：贴图、改网络、换器件、反推原理图、记工时",
+	"description": "画板工具集：反推原理图、改网络、换器件、记工时",
 	"version": "1.21.0",
 	"publisher": "wolfblack",
 	"engines": {
-		"eda": "^2.2.45"
+		"eda": ">=2.2.45"
 	},
 	"license": "Apache-2.0",
 	"repository": {
@@ -69,7 +69,8 @@
 						"id": "PinSorting",
 						"title": "引脚排序",
 						"registerFn": "PinSorting"
-					},{
+					},
+					{
 						"id": "WorkingHours",
 						"title": "工作时间统计",
 						"registerFn": "WorkingHours"
@@ -91,15 +92,18 @@
 						"id": "PcbToSch",
 						"title": "从PCB转原理图",
 						"registerFn": "PcbToSch"
-					},{
+					},
+					{
 						"id": "AutoWirePlacerPCB",
 						"title": "从PCB创建导线",
 						"registerFn": "AutoWirePlacerPCB"
-					},{
+					},
+					{
 						"id": "AutoWirePlacerNET",
 						"title": "从网表创建导线",
 						"registerFn": "AutoWirePlacerNET"
-					},{
+					},
+					{
 						"id": "Component",
 						"title": "器件",
 						"menuItems": [
