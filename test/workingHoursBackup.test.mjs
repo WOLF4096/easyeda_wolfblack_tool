@@ -26,7 +26,7 @@ import { describe, it } from 'node:test';
 
 import { buildDataset } from '../iframe/js/src/app/working-hours/aggregate.js';
 import { BACKUP_FORMAT, BACKUP_VERSION, buildBackupBody, expandBackupBody } from '../iframe/js/src/app/working-hours/backupFormat.js';
-import { base64ToBytes, bytesToBase64 } from '../iframe/js/src/app/working-hours/backupCrypto.js';
+import { base64ToBytes, bytesToBase64, createSignature } from '../iframe/js/src/app/working-hours/backupCrypto.js';
 import { packBackup, unpackBackup } from '../iframe/js/src/app/working-hours/backupCodec.js';
 import { planMerge } from '../iframe/js/src/app/working-hours/backupMerge.js';
 import { sumWorkSeconds } from '../iframe/js/src/app/working-hours/views/profilePanel.js';
@@ -264,6 +264,41 @@ describe('工时备份：打包与校验', () => {
 		await assert.rejects(() => unpackBackup({ envelope: { ...envelope, payload: 'bm90LWd6aXA=' }, currentUser: USER, zip: ZIP }), /解压失败/);
 	});
 
+	it('已知边界：数据体只是 gzip + Base64，拿到文件就能读出明文（它不是加密）', async () => {
+		const envelope = await makeEnvelope();
+		const plain = zlib.gunzipSync(base64ToBytes(envelope.payload)).toString('utf8');
+		assert.match(plain, /"username":"darksteel"/);
+		assert.match(plain, /"uuid":"c9587c631b53481a997b8c95d02dc891"/);
+		// 槽位格式也是可读的 `[工程下标, 工作秒, 空闲秒]`
+		assert.match(plain, /\[0,900,0\]/);
+	});
+
+	it('已知边界：改完数字后用文件里的身份重签，导入会通过（只防手改，不防伪造）', async () => {
+		const envelope = await makeEnvelope();
+		const body = decodeBody(envelope);
+		body.d[0][1][0][1][0][1] = 60; // 900 → 60 秒
+		const payload = encodeBody(body);
+		// 文件里带 username + uuid，重建签名不需要任何额外秘密
+		const signature = await createSignature({ user: body.u, exportedAt: envelope.exportedAt, payload: payload });
+
+		const forged = { ...envelope, payload: payload, signature: signature };
+		const back = await unpackBackup({ envelope: forged, currentUser: USER, zip: ZIP });
+
+		assert.equal(back.stats.workSeconds, 1680, '重签后确实能改写工时（原 2520 秒）');
+		assert.deepEqual(back.days[0].slots['0'][P1], [60, 0]);
+	});
+
+	it('但没有本账号 uuid 的人造不出可用文件：uuid 不符一律拒绝', async () => {
+		const envelope = await makeEnvelope();
+		const body = decodeBody(envelope);
+		body.u.uuid = '00000000000000000000000000000000';
+		const payload = encodeBody(body);
+		const signature = await createSignature({ user: body.u, exportedAt: envelope.exportedAt, payload: payload });
+		const forged = { ...envelope, user: { ...envelope.user, uuid: body.u.uuid }, payload: payload, signature: signature };
+
+		await assert.rejects(() => unpackBackup({ envelope: forged, currentUser: USER, zip: ZIP }), /不能导入别人的数据/);
+	});
+
 	it('没有当前账号信息时不允许导出（否则文件没人能导入）', async () => {
 		await assert.rejects(() => packBackup({ data: datasetOf(CONFIGS), user: {}, zip: ZIP }), /未获取到当前账号信息/);
 	});
@@ -340,7 +375,7 @@ describe('个人信息面板：累计工时', () => {
 
 describe('个人信息面板：DOM 写入', () => {
 	/** 面板会用到的元素 id */
-	const IDS = ['profile-avatar-img', 'profile-avatar-fallback', 'profile-name', 'profile-sub', 'profile-total', 'profile-projects'];
+	const IDS = ['profile-avatar-img', 'profile-avatar-fallback', 'profile-name', 'profile-total', 'profile-projects'];
 
 	/**
 	 * 造一个极简 document（只实现面板用到的几个 API）
@@ -386,7 +421,6 @@ describe('个人信息面板：DOM 写入', () => {
 
 			panel.render();
 			assert.equal(doc.els.get('profile-name').textContent, '狼黑');
-			assert.equal(doc.els.get('profile-sub').textContent, '@darksteel · 客户编号 354055A');
 			assert.equal(doc.els.get('profile-total').textContent, '1时17分');
 			assert.equal(doc.els.get('profile-projects').textContent, '2 个工程');
 			assert.equal(doc.els.get('profile-avatar-img').getAttribute('src'), null, '未进面板不应发起头像请求');

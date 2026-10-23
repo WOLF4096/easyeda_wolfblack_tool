@@ -27,8 +27,21 @@
 - 新增 `views/dataImport.js`（读文件 → 校验 → 预览合并量 → 二次确认 → 逐日写 `STATS_*` → 重载）与 `views/profilePanel.js`（头像/昵称/账号/累计工时/工程数）；`index.js` 增加 `session.user` + `loadUser()`，并把 `pickImportFile` / `onImportFileChange` 暴露到 window（行内事件契约）
 - 用户信息只存内存（`sys_Environment.getUserInfo()` 现取），不落盘；导出时写进备份并被签名保护。头像走 `image.lceda.cn`，因此**首次进入「更多选项」才加载**（`profile.showAvatar` 由 `TAB_EFFECTS.more` 触发），只打开工时页不会多一次外网请求
 - 导入链路可脱离浏览器验证：`unpackBackup` / `createDataImport` 支持注入压缩实现（浏览器默认 `fflate`，测试注入 `node:zlib`），`test` 里用「内存存储 + 自动确认对话框」替身跑通「选文件 → 校验 → 确认 → 落盘 → 重载」
+- 个人信息卡去掉「账号 · 客户编号」那一行：删掉 `#profile-sub` 节点、`subtitleOf()` 与 `.wh-profile-sub` 样式（不做「留着再 `display:none`」，避免死代码）。卡片现在只有头像、昵称、累计工时、工程数
+- **安全边界实测**（2026-10-23，`zlib` + 真实 pack/unpack 走一遍）：
+
+  | 尝试 | 结果 |
+  | :--- | :--- |
+  | 拿到 JSON，只用 `base64 -d` + `gunzip` 读内容 | **成功**：348 B 明文全可读，含 `username`/`uuid`/每格秒数 |
+  | 改数字后直接导入（签名不动） | 拒绝：签名校验失败 |
+  | 改数字后用文件内的 `u` 重算签名 | **通过**：实测 900→60 秒，导入后总工时 2400 → 1560 |
+  | 另一个账号导入这份文件 | 拒绝：归属 uuid 不符 |
+  | 伪造一份 uuid 不同的文件 | 拒绝：同上 |
+
+  结论：HMAC 只防「手改数字」，**不是加密也不防懂格式的伪造**——密钥材料（用户名 + uuid）本来就在文件里。「不能导入别人的数据」成立的前提是 uuid 没外泄（没有备份文件的人拿不到它）。该边界已固化成两条「已知边界」用例，防止后续文档过度承诺；真要防伪造需要另加**不在文件里**的备份口令来加密载荷（本轮未做）
+- 文档同步该边界：README 工时章节加「备份不是加密文件」提示，PRIVACY 注明备份仅压缩+签名、内容可读
 - 真实样本验证（`测试样本/全部工程耗时数据备份_20261023.json`，50213 B）：新文件 **2973 B（5.9%）**；259 个格子逐格比对 **0 不一致**；导入后重算总工时 31074 s 与样本一致、工程数 9 = 9
-- 工程数据：`npm test` **755 → 807 用例**（新增 `test/workingHoursBackup.test.mjs` 28 条；另 6 个新模块由 moduleHeader 自动纳入 24 条）；`check:deps` 114 个模块 / 222 条 import 无环；`check:js` 0 违规；`check:layout` WorkingHours 960×600 无溢出
+- 工程数据：`npm test` **755 → 810 用例**（新增 `test/workingHoursBackup.test.mjs` 31 条；另 6 个新模块由 moduleHeader 自动纳入 24 条）；`check:deps` 114 个模块 / 222 条 import 无环；`check:js` 0 违规；`check:layout` WorkingHours 960×600 无溢出
 - 冒烟：`test/pages/run.mjs --only WorkingHours` 仍报 `drawImage ... width or height of 0`（周报「导出图片」在隐藏视图下 `getDataURL`）。已确认**与本版无关**：stash 掉本版改动后在同一 HEAD 上重跑，报同一条 —— 属既有 headless + 隐藏 canvas 的缺口
 
 ## v1.21.0 `2026-10-22`

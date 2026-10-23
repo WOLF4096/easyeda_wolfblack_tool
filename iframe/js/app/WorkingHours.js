@@ -3445,13 +3445,6 @@
     if (!user) return "未获取到用户信息";
     return user.nickname || user.username || "EDA 用户";
   }
-  function subtitleOf(user) {
-    if (!user) return "请确认已在 EDA 中登录，登录后重开本页";
-    const parts = [];
-    if (user.username) parts.push(`@${user.username}`);
-    if (user.customerCode) parts.push(`客户编号 ${user.customerCode}`);
-    return parts.length > 0 ? parts.join(" · ") : "本地账号";
-  }
   function fallbackText(user) {
     const name = displayName(user);
     return [...name][0] || "狼";
@@ -3492,7 +3485,6 @@
       const stats = ctx.data && ctx.data.projectStats || {};
       renderAvatar(user);
       setText("profile-name", displayName(user));
-      setText("profile-sub", subtitleOf(user));
       setText("profile-total", formatTimeCN(sumWorkSeconds(stats) / 3600));
       setText("profile-projects", `${Object.keys(stats).length} 个工程`);
     }

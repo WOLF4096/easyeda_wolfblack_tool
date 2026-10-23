@@ -3545,14 +3545,6 @@ label.inline,
 	white-space: nowrap;
 }
 
-.wh-profile-sub {
-	overflow: hidden;
-	color: var(--vscode-text-muted);
-	font-size: 11px;
-	text-overflow: ellipsis;
-	white-space: nowrap;
-}
-
 .wh-profile-metrics {
 	display: flex;
 	gap: 20px;
