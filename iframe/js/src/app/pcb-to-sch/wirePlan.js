@@ -1,6 +1,6 @@
 /**
  * @//module/ app/pcb-to-sch/wirePlan
- * @//description/ 按引脚朝向生成器件引脚的导线（源码行由 sch/emitter 发射）
+ * @//description/ 按引脚朝向生成器件引脚的导线（源码行由 sch/emitter 发射），一个引脚位置只出一条导线
  * @//exports/ planWires
  * @//dependencies/ sch/emitter
  * @//example/ const { planWires } = await import('./wirePlan.js')
@@ -9,6 +9,10 @@
  *
  * 引脚朝向（`angle`）决定导线往哪边拉：0 朝左、90 朝上、180 朝右、270 朝下。
  * V2 与 V3/V4 的引脚 Y 方向相反（V2 向上为正、V3+ 向下为正），所以 `y` 取 ±1 参与计算。
+ *
+ * ⚠️ **一个引脚位置只允许一条导线**：PCB 上一个引脚对应多个焊盘时（焊盘编号 1~4、符号里
+ * 也画了 4 个同位置引脚），`comp.pins` 会有 4 个键，逐个键画线就会在同一个点上叠出 4 条
+ * 完全重合的导线。这里按「引脚绝对坐标」去重，同一点只画第一条。
  *
  * 开发者：WOLF4096
  * 辅助开发：DeepSeek-V4.1-Flash
@@ -33,7 +37,24 @@ const WIRE_END = Object.freeze({
 });
 
 /**
+ * 引脚位置键（「一个引脚只画一条导线」的去重依据）
+ *
+ * 坐标是符号坐标 + 器件放置坐标后的绝对坐标；3 位小数足够收敛浮点误差
+ * （EDA 焊盘量化 0.1 mil，1e-3 mil 的精度不会把两个不同引脚误并成一个）。
+ *
+ * @param {number} pinX 引脚绝对 X
+ * @param {number} pinY 引脚绝对 Y
+ * @returns {string} 去重键
+ * @sideEffects 无（纯函数）
+ */
+function pinKeyOf(pinX, pinY) {
+	return `${pinX.toFixed(3)}|${pinY.toFixed(3)}`;
+}
+
+/**
  * 生成一个部件上所有「有网络」引脚的导线
+ *
+ * 同一个引脚位置只出一条导线（见文件头），其余同位置引脚直接跳过。
  *
  * @param {object} input 参数对象
  * @param {object} input.comp 器件（需含 `symbolUuid` 与 `pins`）
@@ -53,6 +74,8 @@ export function planWires(input) {
 	const symbolPins = part.pins || {};
 	const yDir = input.isV2 ? 1 : -1;
 	const lines = [];
+	// 本部件已经画过导线的引脚位置（多个引脚号画在同一位置时只保留一条导线）
+	const drawn = new Set();
 
 	const nextRow = () => {
 		const n = input.nextId();
@@ -60,7 +83,7 @@ export function planWires(input) {
 	};
 
 	for (const entry of Object.entries(input.comp.pins || {})) {
-		pushWireForPin(lines, input, symbolPins, entry, yDir, nextRow);
+		pushWireForPin(lines, input, symbolPins, entry, yDir, nextRow, drawn);
 	}
 
 	return lines;
@@ -75,10 +98,11 @@ export function planWires(input) {
  * @param {Array} entry `[引脚号, 网络名]`
  * @param {number} yDir Y 轴方向
  * @param {() => {id: number, ticket: number}} nextRow 取下一行 id
+ * @param {Set<string>} drawn 已画过导线的引脚位置（就地修改）
  * @returns {void}
- * @sideEffects 追加 `lines`、调用 `nextRow()`
+ * @sideEffects 追加 `lines`、调用 `nextRow()`、修改 `drawn`
  */
-function pushWireForPin(lines, input, symbolPins, entry, yDir, nextRow) {
+function pushWireForPin(lines, input, symbolPins, entry, yDir, nextRow, drawn) {
 	const pinNumber = entry[0];
 	const netName = entry[1];
 	if (!netName) return;
@@ -88,6 +112,12 @@ function pushWireForPin(lines, input, symbolPins, entry, yDir, nextRow) {
 
 	const pinX = input.compX + pinInfo.x;
 	const pinY = input.isV2 ? input.compY + pinInfo.y : input.compY - pinInfo.y;
+
+	// 一个引脚只允许一条导线：同位置的第二个及以后的引脚不再重复出线（否则会重叠绘制）
+	const pinKey = pinKeyOf(pinX, pinY);
+	if (drawn.has(pinKey)) return;
+	drawn.add(pinKey);
+
 	const spread = WIRE_END[pinInfo.angle] || WIRE_END[0];
 	const end = spread(pinX, pinY, input.wireLength, yDir);
 

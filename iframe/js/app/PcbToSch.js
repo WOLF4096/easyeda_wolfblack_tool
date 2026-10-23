@@ -631,22 +631,26 @@
     180: (pinX, pinY, len) => ({ endX: pinX + len, endY: pinY, netT: 0 }),
     270: (pinX, pinY, len, y) => ({ endX: pinX, endY: pinY + len * y, netT: 90 })
   });
+  function pinKeyOf(pinX, pinY) {
+    return `${pinX.toFixed(3)}|${pinY.toFixed(3)}`;
+  }
   function planWires(input) {
     const parts = input.symbolDb[input.comp.symbolUuid] || [];
     const part = parts[input.partIdx] || parts[0] || { pins: {} };
     const symbolPins = part.pins || {};
     const yDir = input.isV2 ? 1 : -1;
     const lines = [];
+    const drawn = /* @__PURE__ */ new Set();
     const nextRow = () => {
       const n = input.nextId();
       return { id: n, ticket: n };
     };
     for (const entry of Object.entries(input.comp.pins || {})) {
-      pushWireForPin(lines, input, symbolPins, entry, yDir, nextRow);
+      pushWireForPin(lines, input, symbolPins, entry, yDir, nextRow, drawn);
     }
     return lines;
   }
-  function pushWireForPin(lines, input, symbolPins, entry, yDir, nextRow) {
+  function pushWireForPin(lines, input, symbolPins, entry, yDir, nextRow, drawn) {
     const pinNumber = entry[0];
     const netName = entry[1];
     if (!netName) return;
@@ -654,6 +658,9 @@
     if (!pinInfo) return;
     const pinX = input.compX + pinInfo.x;
     const pinY = input.isV2 ? input.compY + pinInfo.y : input.compY - pinInfo.y;
+    const pinKey = pinKeyOf(pinX, pinY);
+    if (drawn.has(pinKey)) return;
+    drawn.add(pinKey);
     const spread = WIRE_END[pinInfo.angle] || WIRE_END[0];
     const end = spread(pinX, pinY, input.wireLength, yDir);
     lines.push(

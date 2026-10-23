@@ -1247,6 +1247,49 @@ describe('app/pcb-to-sch/sourceBuilder', () => {
 		assert.equal(noWire.filter((l) => l.includes('"type":"WIRE"')).length, 0);
 	});
 
+	it('一个引脚位置只画一条导线（多焊盘引脚不再叠四条）', async () => {
+		const { buildSchSource } = await import('../iframe/js/src/app/pcb-to-sch/sourceBuilder.js');
+		// 一个引脚对应 PCB 上 4 个焊盘：符号里 4 个引脚号画在同一坐标
+		const stackedDb = {
+			sym4: [
+				{
+					name: 'Q.1',
+					pins: {
+						1: { x: 0, y: 0, angle: 180, name: 'D' },
+						2: { x: 0, y: 0, angle: 180, name: 'D' },
+						3: { x: 0, y: 0, angle: 180, name: 'D' },
+						4: { x: 0, y: 0, angle: 180, name: 'D' },
+					},
+					pinBbox: [-40, -40, 40, 40],
+				},
+			],
+		};
+		const stackedComp = {
+			designator: 'Q1',
+			name: 'MOS',
+			deviceUuid: 'd2',
+			symbolUuid: 'sym4',
+			uniqueId: 'u4',
+			pins: { 1: 'VCC', 2: 'VCC', 3: 'VCC', 4: 'VCC' },
+		};
+		const wiresOf = (db, comp, format) =>
+			buildSchSource({
+				components: [comp],
+				symbolDb: db,
+				format: format,
+				options: { classify: 'ref', genWire: true, now: () => 1 },
+			})
+				.split('\n')
+				.filter((l) => (format === 'v2' ? l.startsWith('["WIRE"') : l.includes('"type":"WIRE"')));
+
+		assert.equal(wiresOf(stackedDb, stackedComp, 'modern').length, 1, '同位置 4 个引脚只允许 1 条导线');
+		assert.equal(wiresOf(stackedDb, stackedComp, 'v2').length, 1, 'V2 同样只允许 1 条导线');
+		// 反例：引脚坐标不同时不能被误并（4 个引脚 → 4 条导线）
+		const spreadComp = { ...stackedComp, symbolUuid: 'sym' };
+		spreadComp.pins = { 1: 'VCC', 2: 'GND' };
+		assert.equal(wiresOf(symbolDb, spreadComp, 'modern').length, 2, '不同位置的引脚互不影响');
+	});
+
 	it('V2 格式：头部 6 行、ATTR 的 y 位置分 0/null、Designator 在 Name 之前', async () => {
 		const { buildSchSource } = await import('../iframe/js/src/app/pcb-to-sch/sourceBuilder.js');
 		const lines = buildSchSource({ components: [comps[0]], symbolDb, format: 'v2', options: { classify: 'ref' } }).split(

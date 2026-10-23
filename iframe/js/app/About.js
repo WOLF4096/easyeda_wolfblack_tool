@@ -295,7 +295,7 @@
 				'点「构建源码」，核对无误后点「写入文档」',
 				'需要留档时可用「导出表格」「导出网络」',
 			],
-			note: '写入前请保持在原理图页。写完会清点器件数，为 0 时会明确提示，不会假报成功。',
+			note: '写入前请保持在原理图页。写完会清点器件数，为 0 时会明确提示，不会假报成功。一个引脚只画一条导线，多焊盘的引脚不会重复叠线。',
 		},
 		{
 			name: '从 PCB 创建导线',
@@ -427,7 +427,7 @@
 	function showVersion() {
 		const el = document.getElementById('appVersion');
 		if (!el) return;
-		el.textContent = true ? 'v1.22.0' : '';
+		el.textContent = true ? 'v1.22.1' : '';
 	}
 	function bindImageModal() {
 		const modal = document.getElementById('imageModal');
