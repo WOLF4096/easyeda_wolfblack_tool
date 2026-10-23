@@ -354,7 +354,7 @@
     const key = level.trim().toLowerCase();
     return Object.prototype.hasOwnProperty.call(TOAST_LEVEL, key) ? TOAST_LEVEL[key] : level;
   }
-  function banner(doc, text, timeoutMs) {
+  function banner(doc, text2, timeoutMs) {
     if (!doc || !doc.body || typeof doc.createElement !== "function") return false;
     let bar = doc.getElementById(BANNER_ID);
     if (!bar) {
@@ -363,16 +363,16 @@
       bar.style.cssText = "position:fixed;left:0;right:0;top:0;padding:8px 12px;background:#5a1d1d;color:#fff;font:13px/1.5 sans-serif;z-index:9999";
       doc.body.appendChild(bar);
     }
-    bar.textContent = text;
+    bar.textContent = text2;
     setTimeout(() => {
       if (typeof bar.remove === "function") bar.remove();
     }, timeoutMs);
     return true;
   }
-  function showOnHost(host, text, type) {
+  function showOnHost(host, text2, type) {
     try {
       if (!host || !host.sys_Message || typeof host.sys_Message.showToastMessage !== "function") return false;
-      host.sys_Message.showToastMessage(text, type);
+      host.sys_Message.showToastMessage(text2, type);
       return true;
     } catch (e) {
       return false;
@@ -381,9 +381,9 @@
   function toast(message, level = TOAST_LEVEL.info, opts = {}) {
     const doc = opts.doc || globalThis.document;
     const host = opts.host === void 0 ? getEda() : opts.host;
-    const text = message === null || message === void 0 ? "" : String(message);
-    if (showOnHost(host, text, normalizeLevel(level))) return "host";
-    return banner(doc, text, opts.timeoutMs === void 0 ? 3e3 : opts.timeoutMs) ? "dom" : "none";
+    const text2 = message === null || message === void 0 ? "" : String(message);
+    if (showOnHost(host, text2, normalizeLevel(level))) return "host";
+    return banner(doc, text2, opts.timeoutMs === void 0 ? 3e3 : opts.timeoutMs) ? "dom" : "none";
   }
 
   // iframe/js/src/app/working-hours/reminder.js
@@ -395,12 +395,12 @@
   }
   function parseMin(str) {
     if (!str) return 0;
-    const text = str.toString().trim();
-    if (/^\d+$/.test(text)) return parseInt(text, 10);
-    const parts = text.split(":").filter((x) => x !== "").map(Number);
+    const text2 = str.toString().trim();
+    if (/^\d+$/.test(text2)) return parseInt(text2, 10);
+    const parts = text2.split(":").filter((x) => x !== "").map(Number);
     if (parts.length >= 3) return (isNaN(parts[0]) ? 0 : parts[0]) * 60 + (isNaN(parts[1]) ? 0 : parts[1]);
     if (parts.length === 2) return isNaN(parts[0]) ? 0 : parts[0];
-    return isNaN(parseInt(text, 10)) ? 0 : parseInt(text, 10);
+    return isNaN(parseInt(text2, 10)) ? 0 : parseInt(text2, 10);
   }
 
   // iframe/js/src/app/working-hours/reminderApp.js
@@ -1223,6 +1223,326 @@
     };
   }
 
+  // iframe/js/src/app/working-hours/backupFormat.js
+  var BACKUP_FORMAT = "wolfblack-working-hours";
+  var BACKUP_VERSION = 2;
+  var SLOT_MAX_SECONDS = 15 * 60;
+  var SLOTS_PER_DAY3 = 96;
+  var SLOT_MS2 = SLOT_MAX_SECONDS * 1e3;
+  var DATE_KEY_PATTERN = /^\d{4}_\d{2}_\d{2}$/;
+  function fail(message) {
+    throw new Error(message);
+  }
+  function text(value) {
+    return typeof value === "string" ? value : "";
+  }
+  function toNumber(value) {
+    return typeof value === "number" && Number.isFinite(value) ? value : 0;
+  }
+  function clampSeconds(value) {
+    return Math.max(0, Math.min(SLOT_MAX_SECONDS, Math.round(toNumber(value))));
+  }
+  function normalizeUser(user) {
+    const src = user || {};
+    return {
+      username: text(src.username),
+      nickname: text(src.nickname),
+      uuid: text(src.uuid),
+      customerCode: text(src.customerCode),
+      avatar: text(src.avatar)
+    };
+  }
+  function dateKeyOf(ts) {
+    const d = new Date(ts);
+    const month = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    return `${d.getFullYear()}_${month}_${day}`;
+  }
+  function dayStartOf(ts) {
+    const d = new Date(ts);
+    return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+  }
+  function slotIndexOf(ts) {
+    return Math.round((ts - dayStartOf(ts)) / SLOT_MS2);
+  }
+  function cellEntries(cell, indexOf) {
+    if (!cell || typeof cell !== "object") return [];
+    const work = cell.work || {};
+    const rest = cell.rest || {};
+    const uuids = /* @__PURE__ */ new Set([...Object.keys(work), ...Object.keys(rest)]);
+    const out = [];
+    for (const uuid of uuids) {
+      const w = clampSeconds(work[uuid]);
+      const r = clampSeconds(rest[uuid]);
+      const pair = clampPair(w, r);
+      if (pair.work === 0 && pair.rest === 0) continue;
+      out.push([indexOf(uuid), pair.work, pair.rest]);
+    }
+    return out;
+  }
+  function buildBackupBody(options) {
+    const opts = options || {};
+    const data2 = opts.data || {};
+    const projectMeta = data2.projectMeta || {};
+    const projectStats = data2.projectStats || {};
+    const projectIndex = /* @__PURE__ */ new Map();
+    const projects = [];
+    function indexOf(uuid) {
+      const hit = projectIndex.get(uuid);
+      if (hit !== void 0) return hit;
+      const name = text(projectMeta[uuid]) || text((projectStats[uuid] || {}).name);
+      projectIndex.set(uuid, projects.length);
+      projects.push([uuid, name]);
+      return projects.length - 1;
+    }
+    for (const uuid of Object.keys(projectMeta)) indexOf(uuid);
+    const days = /* @__PURE__ */ new Map();
+    for (const cell of data2.timeline || []) {
+      const entries = cellEntries(cell, indexOf);
+      if (entries.length === 0) continue;
+      const key = dateKeyOf(cell.ts);
+      if (!days.has(key)) days.set(key, []);
+      days.get(key).push([slotIndexOf(cell.ts), entries]);
+    }
+    return {
+      f: BACKUP_FORMAT,
+      v: BACKUP_VERSION,
+      u: normalizeUser(opts.user),
+      t: toNumber(opts.exportedAt),
+      p: projects,
+      d: Array.from(days.entries())
+    };
+  }
+  function assertBodyHeader(body) {
+    if (!body || typeof body !== "object") fail("备份内容为空或不是对象");
+    if (body.f !== BACKUP_FORMAT) fail("这不是「狼黑工具」的工时备份文件");
+    if (body.v !== BACKUP_VERSION) fail(`备份格式版本不支持（${body.v}）`);
+    if (!body.u || typeof body.u !== "object") fail("备份缺少用户信息，无法校验归属");
+    if (!Array.isArray(body.p)) fail("备份缺少工程字典");
+    if (!Array.isArray(body.d)) fail("备份缺少工时数据");
+    if (!Number.isFinite(body.t)) fail("备份缺少导出时间");
+  }
+  function clampPair(work, rest) {
+    if (!Number.isFinite(work) || !Number.isFinite(rest)) fail("备份里有非数字的时长");
+    if (work < 0 || rest < 0) fail("备份里有负数时长");
+    const w = clampSeconds(work);
+    const r = Math.max(0, Math.min(SLOT_MAX_SECONDS - w, Math.round(rest)));
+    return { work: w, rest: r };
+  }
+  function mergeTriple(triple, day, slotKey, projects, projectMeta) {
+    if (!Array.isArray(triple) || triple.length < 3) fail("备份的工时记录格式不正确");
+    const pIdx = triple[0];
+    if (!Number.isInteger(pIdx) || pIdx < 0 || pIdx >= projects.length) fail(`备份引用了不存在的工程下标：${pIdx}`);
+    const uuid = projects[pIdx][0];
+    const pair = clampPair(triple[1], triple[2]);
+    const cell = day.slots[slotKey];
+    const current = cell[uuid] || [0, 0];
+    cell[uuid] = [Math.max(current[0], pair.work), Math.max(current[1], pair.rest)];
+    day.meta[uuid] = projectMeta[uuid] || "";
+  }
+  function assertDayEntry(entry) {
+    if (!Array.isArray(entry) || typeof entry[0] !== "string") fail("备份的日期条目格式不正确");
+    if (!DATE_KEY_PATTERN.test(entry[0])) fail(`备份里的日期不合法：${entry[0]}`);
+    if (!Array.isArray(entry[1])) fail(`备份里 ${entry[0]} 的槽位不是数组`);
+    return entry[0];
+  }
+  function expandSlot(slotEntry, day, projects, projectMeta) {
+    if (!Array.isArray(slotEntry) || !Array.isArray(slotEntry[1])) fail("备份的槽位条目格式不正确");
+    const slotIdx = slotEntry[0];
+    if (!Number.isInteger(slotIdx) || slotIdx < 0 || slotIdx >= SLOTS_PER_DAY3) fail(`备份里的槽位下标越界：${slotIdx}`);
+    const slotKey = String(slotIdx);
+    if (!day.slots[slotKey]) day.slots[slotKey] = {};
+    for (const triple of slotEntry[1]) mergeTriple(triple, day, slotKey, projects, projectMeta);
+  }
+  function expandDay(entry, projects, projectMeta) {
+    const dateKey = assertDayEntry(entry);
+    const day = { dateKey, meta: {}, slots: {} };
+    for (const slotEntry of entry[1]) expandSlot(slotEntry, day, projects, projectMeta);
+    return day;
+  }
+  function summarize(days) {
+    const uuids = /* @__PURE__ */ new Set();
+    let slots = 0;
+    let workSeconds = 0;
+    for (const day of days) {
+      for (const cell of Object.values(day.slots)) {
+        for (const uuid of Object.keys(cell)) {
+          uuids.add(uuid);
+          slots += 1;
+          workSeconds += cell[uuid][0];
+        }
+      }
+    }
+    return { days: days.length, projects: uuids.size, slots, workSeconds };
+  }
+  function expandBackupBody(body) {
+    assertBodyHeader(body);
+    const projects = body.p;
+    const projectMeta = {};
+    for (const item of projects) {
+      if (!Array.isArray(item) || typeof item[0] !== "string") fail("备份的工程字典格式不正确");
+      projectMeta[item[0]] = text(item[1]);
+    }
+    const days = body.d.map((entry) => expandDay(entry, projects, projectMeta));
+    return {
+      user: normalizeUser(body.u),
+      exportedAt: body.t,
+      projectMeta,
+      days,
+      stats: summarize(days)
+    };
+  }
+
+  // iframe/js/src/app/working-hours/backupCrypto.js
+  var KEY_SALT = "wolfblack-working-hours";
+  var CHUNK = 32768;
+  var encoder = new TextEncoder();
+  function ensureSubtle() {
+    const host = globalThis.crypto;
+    if (!host || !host.subtle) throw new Error("当前环境不支持签名校验（WebCrypto 不可用）");
+    return host.subtle;
+  }
+  function keyTextOf(user) {
+    const src = user || {};
+    const username = typeof src.username === "string" ? src.username : "";
+    const uuid = typeof src.uuid === "string" ? src.uuid : "";
+    return `${KEY_SALT}|${username}|${uuid}`;
+  }
+  function messageOf(exportedAt, payload) {
+    return encoder.encode(`v${BACKUP_VERSION}|${exportedAt}|${payload}`);
+  }
+  function importKey(subtle, user) {
+    return subtle.importKey("raw", encoder.encode(keyTextOf(user)), { name: "HMAC", hash: "SHA-256" }, false, ["sign", "verify"]);
+  }
+  function bytesToBase64(bytes) {
+    let binary = "";
+    for (let i = 0; i < bytes.length; i += CHUNK) {
+      binary += String.fromCharCode.apply(null, bytes.subarray(i, i + CHUNK));
+    }
+    return btoa(binary);
+  }
+  function base64ToBytes(value) {
+    if (typeof value !== "string" || value.length === 0) throw new Error("备份载荷为空");
+    let binary;
+    try {
+      binary = atob(value);
+    } catch (e) {
+      throw new Error("备份载荷不是合法的 Base64");
+    }
+    const out = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) out[i] = binary.charCodeAt(i);
+    return out;
+  }
+  async function createSignature(parts) {
+    const subtle = ensureSubtle();
+    const key = await importKey(subtle, parts.user);
+    const mac = await subtle.sign("HMAC", key, messageOf(parts.exportedAt, parts.payload));
+    return bytesToBase64(new Uint8Array(mac));
+  }
+  async function checkSignature(parts) {
+    const subtle = ensureSubtle();
+    const key = await importKey(subtle, parts.user);
+    try {
+      return await subtle.verify("HMAC", key, base64ToBytes(parts.signature), messageOf(parts.exportedAt, parts.payload));
+    } catch (e) {
+      return false;
+    }
+  }
+
+  // iframe/js/src/app/working-hours/backupCodec.js
+  var encoder2 = new TextEncoder();
+  var decoder = new TextDecoder();
+  function resolveZip(zip) {
+    if (zip && typeof zip.gzip === "function" && typeof zip.gunzip === "function") return zip;
+    if (typeof fflate === "undefined") throw new Error("压缩库未加载，无法处理备份文件");
+    return {
+      gzip: (bytes) => fflate.gzipSync(bytes, { level: 9 }),
+      gunzip: (bytes) => fflate.gunzipSync(bytes)
+    };
+  }
+  function assertEnvelopeFields(envelope) {
+    if (envelope.version !== BACKUP_VERSION) throw new Error(`备份版本不支持（${envelope.version}）`);
+    if (typeof envelope.payload !== "string" || envelope.payload.length === 0) throw new Error("备份缺少数据载荷");
+    if (typeof envelope.signature !== "string" || envelope.signature.length === 0) throw new Error("备份缺少签名");
+    if (!Number.isFinite(envelope.exportedAt)) throw new Error("备份缺少导出时间");
+    if (!envelope.user || typeof envelope.user !== "object") throw new Error("备份缺少用户信息");
+  }
+  function assertEnvelope(envelope) {
+    if (!envelope || typeof envelope !== "object") throw new Error("备份文件为空或不是 JSON 对象");
+    if (envelope.format !== BACKUP_FORMAT) {
+      if (envelope.timeline || envelope.stats) {
+        throw new Error("这是旧版备份（不含用户信息与签名），请在原电脑升级后用新版重新导出");
+      }
+      throw new Error("这不是「狼黑工具」的工时备份文件");
+    }
+    assertEnvelopeFields(envelope);
+  }
+  function decodeBody(payload, zip) {
+    const bytes = base64ToBytes(payload);
+    let plain;
+    try {
+      plain = decoder.decode(zip.gunzip(bytes));
+    } catch (e) {
+      throw new Error("备份数据解压失败，文件可能已损坏");
+    }
+    try {
+      return JSON.parse(plain);
+    } catch (e) {
+      throw new Error("备份数据不是合法的 JSON，文件可能已损坏");
+    }
+  }
+  function assertSameUser(envelope, restored) {
+    const head = envelope.user;
+    if (head.uuid !== restored.user.uuid || head.username !== restored.user.username) {
+      throw new Error("备份文件头与数据内容不一致，文件可能被改过");
+    }
+    if (envelope.exportedAt !== restored.exportedAt) throw new Error("备份导出时间与数据不一致，文件可能被改过");
+  }
+  function assertOwnership(user, currentUser) {
+    if (!currentUser || typeof currentUser.uuid !== "string" || currentUser.uuid.length === 0) {
+      throw new Error("未获取到当前账号信息，无法校验备份归属");
+    }
+    if (user.uuid !== currentUser.uuid) {
+      const owner = user.nickname || user.username || "其他账号";
+      throw new Error(`这是「${owner}」的备份，不能导入别人的数据`);
+    }
+  }
+  async function packBackup(options) {
+    const opts = options || {};
+    const user = opts.user || {};
+    if (typeof user.uuid !== "string" || user.uuid.length === 0) throw new Error("未获取到当前账号信息，无法生成备份");
+    const exportedAt = Number.isFinite(opts.exportedAt) ? opts.exportedAt : Date.now();
+    const zip = resolveZip(opts.zip);
+    const body = buildBackupBody({ data: opts.data, user, exportedAt });
+    const payload = bytesToBase64(zip.gzip(encoder2.encode(JSON.stringify(body))));
+    const signature = await createSignature({ user: body.u, exportedAt, payload });
+    return {
+      format: BACKUP_FORMAT,
+      version: BACKUP_VERSION,
+      exportedAt,
+      user: body.u,
+      payload,
+      signature
+    };
+  }
+  async function checkEnvelopeSignature(envelope, currentUser, backupUser) {
+    const parts = { exportedAt: envelope.exportedAt, payload: envelope.payload, signature: envelope.signature };
+    if (await checkSignature({ ...parts, user: currentUser })) return true;
+    return checkSignature({ ...parts, user: { username: backupUser.username, uuid: currentUser.uuid } });
+  }
+  async function unpackBackup(options) {
+    const opts = options || {};
+    const envelope = opts.envelope;
+    assertEnvelope(envelope);
+    const body = decodeBody(envelope.payload, resolveZip(opts.zip));
+    const restored = expandBackupBody(body);
+    assertSameUser(envelope, restored);
+    assertOwnership(restored.user, opts.currentUser);
+    const passed = await checkEnvelopeSignature(envelope, opts.currentUser, restored.user);
+    if (!passed) throw new Error("签名校验失败：备份可能被改动过，或不是本账号导出的文件");
+    return restored;
+  }
+
   // iframe/js/src/app/working-hours/exportReport.js
   function download(blob, fileName) {
     const url = URL.createObjectURL(blob);
@@ -1284,30 +1604,30 @@
       }
       await triggerSecureExport(payload, "总趋势耗时图");
     }
-    function exportAllDataJson() {
+    async function exportAllDataJson() {
       if (data2.timeline.length === 0) {
         toast("当前暂无可导出数据", "warning");
         return;
       }
+      const user = ctx.getUser ? ctx.getUser() : null;
+      if (!user || !user.uuid) {
+        toast("未获取到当前账号信息，无法生成备份", "error");
+        return;
+      }
+      const hasRecords = data2.timeline.some((slot) => Object.keys(slot.work).length > 0 || Object.keys(slot.rest).length > 0);
+      if (!hasRecords) {
+        toast("所有时间片均为空，无有效数据导出", "warning");
+        return;
+      }
       try {
-        const filtered = data2.timeline.filter((slot) => Object.keys(slot.work).length > 0 || Object.keys(slot.rest).length > 0);
-        if (filtered.length === 0) {
-          toast("所有时间片均为空，无有效数据导出", "warning");
-          return;
-        }
-        const payload = {
-          exportTime: (/* @__PURE__ */ new Date()).toLocaleString(),
-          projectMeta: data2.projectMeta,
-          stats: data2.projectStats,
-          timeline: filtered
-        };
+        const envelope = await packBackup({ data: data2, user });
         const d = /* @__PURE__ */ new Date();
         const stamp = `${d.getFullYear()}${(d.getMonth() + 1).toString().padStart(2, "0")}${d.getDate().toString().padStart(2, "0")}`;
-        download(new Blob([JSON.stringify(payload, null, 2)], { type: "application/json;charset=utf-8" }), `全部工程耗时数据备份_${stamp}.json`);
-        toast("全部数据 JSON 导出成功", "success");
+        download(new Blob([JSON.stringify(envelope, null, 2)], { type: "application/json;charset=utf-8" }), `全部工程耗时数据备份_${stamp}.json`);
+        toast("全部数据已压缩并签名导出", "success");
       } catch (e) {
         logger.error("导出 JSON 失败", e);
-        toast("导出失败: " + e.message, "error");
+        toast("导出失败: " + (e && e.message ? e.message : "未知错误"), "error");
       }
     }
     return {
@@ -2215,7 +2535,7 @@
   // iframe/js/src/app/working-hours/charts/options/rhythm.js
   var SLOT_MINUTES = 15;
   var SLOT_COUNT = 24 * 60 / SLOT_MINUTES;
-  function slotIndexOf(ts) {
+  function slotIndexOf2(ts) {
     const d = new Date(ts);
     return d.getHours() * (60 / SLOT_MINUTES) + Math.floor(d.getMinutes() / SLOT_MINUTES);
   }
@@ -2242,7 +2562,7 @@
     const rest = new Float64Array(SLOT_COUNT).fill(0);
     for (const slot of timeline) {
       if (!inWindow(slot.ts, isTime, range)) continue;
-      const index = slotIndexOf(slot.ts);
+      const index = slotIndexOf2(slot.ts);
       if (isTime) addAll(work, rest, index, slot);
       else if (targetUuid) addOne(work, rest, index, slot, targetUuid);
     }
@@ -2731,7 +3051,9 @@
       ctx.resizeRhythmChart();
     },
     reminder: (ctx) => ctx.renderReminder(),
-    more: () => {
+    // 个人信息卡在这里才首次加载头像（其余 tab 不产生外网请求）
+    more: (ctx) => {
+      if (ctx.renderProfile) ctx.renderProfile();
     }
   };
   async function switchTab(ctx, tab) {
@@ -2919,6 +3241,268 @@
     };
   }
 
+  // iframe/js/src/app/working-hours/backupMerge.js
+  var STATS_PREFIX = "STATS_";
+  function toNumber2(value) {
+    return typeof value === "number" && Number.isFinite(value) ? value : 0;
+  }
+  function parseDay(raw) {
+    if (raw && typeof raw === "object") return raw;
+    if (typeof raw !== "string" || raw.length === 0) return { meta: {}, slots: {} };
+    try {
+      const parsed = JSON.parse(raw);
+      return parsed && typeof parsed === "object" ? parsed : { meta: {}, slots: {} };
+    } catch (e) {
+      return { meta: {}, slots: {} };
+    }
+  }
+  function mergeCell(cell, uuid, pair, delta) {
+    const incoming = Array.isArray(pair) ? pair : [0, 0];
+    const current = Array.isArray(cell[uuid]) ? cell[uuid] : [0, 0];
+    const currentWork = toNumber2(current[0]);
+    const currentRest = toNumber2(current[1]);
+    let work = Math.max(0, Math.min(SLOT_MAX_SECONDS, Math.max(currentWork, toNumber2(incoming[0]))));
+    let rest = Math.max(0, Math.min(SLOT_MAX_SECONDS - work, Math.max(currentRest, toNumber2(incoming[1]))));
+    if (work < currentWork || rest < currentRest) return false;
+    if (work === currentWork && rest === currentRest) return false;
+    cell[uuid] = [work, rest];
+    delta.slots += 1;
+    delta.workSeconds += work - currentWork;
+    return true;
+  }
+  function mergeMeta(local, meta) {
+    let added = 0;
+    for (const uuid of Object.keys(meta || {})) {
+      if (Object.prototype.hasOwnProperty.call(local.meta, uuid)) continue;
+      local.meta[uuid] = meta[uuid];
+      added += 1;
+    }
+    return added;
+  }
+  function mergeSlots(local, slots, delta) {
+    let changed = false;
+    for (const slotKey of Object.keys(slots || {})) {
+      const incoming = slots[slotKey] || {};
+      if (!local.slots[slotKey] || typeof local.slots[slotKey] !== "object") local.slots[slotKey] = {};
+      const cell = local.slots[slotKey];
+      for (const uuid of Object.keys(incoming)) {
+        if (mergeCell(cell, uuid, incoming[uuid], delta)) changed = true;
+      }
+    }
+    return changed;
+  }
+  function mergeDay(local, day) {
+    const delta = { changed: false, slots: 0, projects: 0, workSeconds: 0 };
+    if (!local.meta || typeof local.meta !== "object") local.meta = {};
+    if (!local.slots || typeof local.slots !== "object") local.slots = {};
+    delta.projects = mergeMeta(local, day.meta);
+    const slotsChanged = mergeSlots(local, day.slots, delta);
+    delta.changed = delta.projects > 0 || slotsChanged;
+    return delta;
+  }
+  function planMerge(configs, days) {
+    const source = configs || {};
+    const updates = [];
+    const stats = { days: 0, projects: 0, slots: 0, workSeconds: 0 };
+    for (const day of days || []) {
+      const key = STATS_PREFIX + day.dateKey;
+      const local = parseDay(source[key]);
+      const delta = mergeDay(local, day);
+      if (!delta.changed) continue;
+      updates.push({ key, dayData: local });
+      stats.days += 1;
+      stats.projects += delta.projects;
+      stats.slots += delta.slots;
+      stats.workSeconds += delta.workSeconds;
+    }
+    return { updates, stats };
+  }
+  async function applyMerge(updates) {
+    let written = 0;
+    for (const item of updates || []) {
+      await eda.sys_Storage.setExtensionUserConfig(item.key, JSON.stringify(item.dayData));
+      written += 1;
+    }
+    return written;
+  }
+
+  // iframe/js/src/app/working-hours/views/dataImport.js
+  var MAX_FILE_BYTES = 32 * 1024 * 1024;
+  function readWithReader(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result));
+      reader.onerror = () => reject(new Error("读取备份文件失败"));
+      reader.readAsText(file, "utf-8");
+    });
+  }
+  async function readEnvelope(file) {
+    if (file.size > MAX_FILE_BYTES) throw new Error("备份文件超过 32 MB，可能不是工时备份");
+    const content = typeof file.text === "function" ? await file.text() : await readWithReader(file);
+    try {
+      return JSON.parse(content);
+    } catch (e) {
+      throw new Error("文件不是合法的 JSON，请选择「导出全部数据」生成的 .json 备份");
+    }
+  }
+  function showMask(mask, text2) {
+    if (!mask) return;
+    const label = mask.querySelector("span");
+    if (label) label.textContent = text2;
+    else mask.innerText = text2;
+    mask.style.display = "flex";
+  }
+  function createDataImport(ctx) {
+    let busy = false;
+    async function runImport(plan) {
+      const mask = document.getElementById("loading-mask");
+      showMask(mask, "正在合并导入数据...");
+      try {
+        await applyMerge(plan.updates);
+        if (ctx.hooks && ctx.hooks.reloadData) await ctx.hooks.reloadData();
+        toast(`导入完成：${plan.stats.days} 天 / ${plan.stats.slots} 条记录`, "success");
+      } catch (e) {
+        logger.error("写入导入的工时数据失败", e);
+        toast("导入写入失败：" + (e && e.message ? e.message : "未知错误"), "error");
+      } finally {
+        if (mask) mask.style.display = "none";
+      }
+    }
+    function confirmMerge(backup, plan) {
+      if (!window.eda || !eda.sys_Dialog) {
+        toast("当前环境无法弹出确认框，已取消导入", "error");
+        return;
+      }
+      const owner = backup.user.nickname || backup.user.username || "当前账号";
+      const hours = (plan.stats.workSeconds / 3600).toFixed(1);
+      const text2 = [
+        `确认导入「${owner}」于 ${formatFullDateTime(backup.exportedAt)} 导出的备份？`,
+        "",
+        `将补入 ${plan.stats.days} 天、${plan.stats.slots} 条记录（约 ${hours} 小时工时）。`,
+        "导入只补不覆盖：本地更大的记录保持不变，同一份文件重复导入不会翻倍。"
+      ].join("\n");
+      eda.sys_Dialog.showConfirmationMessage(text2, "确认导入工时备份", "确认导入", "取消", (clicked) => {
+        if (clicked) runImport(plan);
+      });
+    }
+    async function prepareMerge(backup) {
+      const configs = await eda.sys_Storage.getExtensionAllUserConfigs() || {};
+      const plan = planMerge(configs, backup.days);
+      if (plan.updates.length === 0) {
+        toast("本地已包含该备份的全部记录，无需导入", "info");
+        return;
+      }
+      confirmMerge(backup, plan);
+    }
+    function takeFile(event) {
+      const input = event && event.target;
+      const file = input && input.files ? input.files[0] : null;
+      if (input) input.value = "";
+      return file || null;
+    }
+    async function onFileChange(event) {
+      const file = takeFile(event);
+      if (!file || busy) return;
+      busy = true;
+      try {
+        const envelope = await readEnvelope(file);
+        const backup = await unpackBackup({ envelope, currentUser: ctx.getUser ? ctx.getUser() : null, zip: ctx.zip });
+        await prepareMerge(backup);
+      } catch (e) {
+        logger.error("导入工时备份失败", e);
+        toast(e && e.message ? e.message : "导入失败", "error");
+      } finally {
+        busy = false;
+      }
+    }
+    function pickFile() {
+      const input = document.getElementById("import-file-input");
+      if (!input) {
+        toast("导入入口不可用，请重开本页", "error");
+        return;
+      }
+      input.value = "";
+      input.click();
+    }
+    return { pickFile, onFileChange };
+  }
+
+  // iframe/js/src/app/working-hours/views/profilePanel.js
+  function sumWorkSeconds(projectStats) {
+    const stats = projectStats || {};
+    let total = 0;
+    for (const uuid of Object.keys(stats)) {
+      const value = stats[uuid] ? stats[uuid].totalWork : 0;
+      if (typeof value === "number" && Number.isFinite(value)) total += value;
+    }
+    return total;
+  }
+  function avatarUrl(src) {
+    if (typeof src !== "string" || src.length === 0) return "";
+    return src.startsWith("//") ? `https:${src}` : src;
+  }
+  function displayName(user) {
+    if (!user) return "未获取到用户信息";
+    return user.nickname || user.username || "EDA 用户";
+  }
+  function subtitleOf(user) {
+    if (!user) return "请确认已在 EDA 中登录，登录后重开本页";
+    const parts = [];
+    if (user.username) parts.push(`@${user.username}`);
+    if (user.customerCode) parts.push(`客户编号 ${user.customerCode}`);
+    return parts.length > 0 ? parts.join(" · ") : "本地账号";
+  }
+  function fallbackText(user) {
+    const name = displayName(user);
+    return [...name][0] || "狼";
+  }
+  function setText(id, value) {
+    const el = document.getElementById(id);
+    if (el) el.textContent = value;
+  }
+  function createProfilePanel(ctx) {
+    let avatarBound = false;
+    let avatarVisible = false;
+    function bindAvatarFallback(img, fallback) {
+      if (avatarBound) return;
+      avatarBound = true;
+      img.addEventListener("error", () => {
+        img.classList.add("hidden");
+        fallback.classList.remove("hidden");
+      });
+    }
+    function renderAvatar(user) {
+      const img = document.getElementById("profile-avatar-img");
+      const fallback = document.getElementById("profile-avatar-fallback");
+      if (!img || !fallback) return;
+      setText("profile-avatar-fallback", fallbackText(user));
+      const url = avatarVisible ? avatarUrl(user && user.avatar) : "";
+      if (!url) {
+        img.classList.add("hidden");
+        fallback.classList.remove("hidden");
+        return;
+      }
+      bindAvatarFallback(img, fallback);
+      if (img.getAttribute("src") !== url) img.setAttribute("src", url);
+      img.classList.remove("hidden");
+      fallback.classList.add("hidden");
+    }
+    function render() {
+      const user = ctx.getUser ? ctx.getUser() : null;
+      const stats = ctx.data && ctx.data.projectStats || {};
+      renderAvatar(user);
+      setText("profile-name", displayName(user));
+      setText("profile-sub", subtitleOf(user));
+      setText("profile-total", formatTimeCN(sumWorkSeconds(stats) / 3600));
+      setText("profile-projects", `${Object.keys(stats).length} 个工程`);
+    }
+    function showAvatar() {
+      avatarVisible = true;
+      render();
+    }
+    return { render, showAvatar };
+  }
+
   // iframe/js/src/app/working-hours/views/weeklyExport.js
   var CANVAS_W = 800;
   var CANVAS_H = 600;
@@ -2987,10 +3571,20 @@
   var managePanel = createManagePanel({ data, ui, view: manageView, zoomer });
   var rhythmPanel = createRhythmPanel({ data, ui, view: rhythmView });
   var weeklyPanel = createWeeklyPanel({ data, ui, barView: weeklyBarView, pieView: weeklyPieView });
+  var session = { user: null };
+  async function loadUser() {
+    try {
+      session.user = await eda.sys_Environment.getUserInfo() || null;
+    } catch (e) {
+      session.user = null;
+      logger.info("未获取到用户信息（未登录或宿主不支持）");
+    }
+  }
   function getTodayWorkHours2(targetUuid) {
     return getTodayWorkHours(data.timeline, data.tsMap, data.todayTs, targetUuid || null);
   }
   async function loadAllData() {
+    await loadUser();
     try {
       const info = await eda.dmt_Project.getCurrentProjectInfo();
       if (info) {
@@ -3008,6 +3602,7 @@
     }
     applyDataset(buildDataset(allConfigs, { currentUuid: ui.currentUuid, currentName: ui.currentName }));
     router.updateHeaderStats();
+    profile.render();
   }
   function onHeatmapClick(params) {
     const targetTs = (/* @__PURE__ */ new Date(String(params.value[0]).replace(/-/g, "/") + " 00:00:00")).getTime();
@@ -3068,7 +3663,8 @@
     renderHeatmap();
   }
   var reminderApp = createReminderApp();
-  var exporter = createExporter({ ui, data });
+  var exporter = createExporter({ ui, data, getUser: () => session.user });
+  var profile = createProfilePanel({ data, getUser: () => session.user });
   var router = createTabRouter({
     ui,
     data,
@@ -3083,7 +3679,8 @@
     renderWeeklyReport: weeklyPanel.render,
     renderManageTable: managePanel.refreshTable,
     resizeManageChart: () => manageView.resize(),
-    renderReminder: () => reminderApp.render()
+    renderReminder: () => reminderApp.render(),
+    renderProfile: profile.showAvatar
   });
   var admin = createDataAdmin({
     ui,
@@ -3098,6 +3695,10 @@
       updateProjectSelector: router.updateProjectSelector,
       onProjectSelectorChange: router.onProjectSelectorChange
     }
+  });
+  var importer = createDataImport({
+    getUser: () => session.user,
+    hooks: { reloadData: loadAllData }
   });
   window.addEventListener("resize", () => {
     for (const view of ALL_VIEWS) view.resize();
@@ -3127,6 +3728,8 @@
     clearAllDataConfirm: admin.clearAllDataConfirm,
     exportAllDataJson: exporter.exportAllDataJson,
     exportTotalChart: exporter.exportTotalChart,
+    pickImportFile: importer.pickFile,
+    onImportFileChange: importer.onFileChange,
     exportWeeklyReport: exportWeeklyReportImage,
     onCustomDateChange: rhythmPanel.selectCustom,
     onProjectSelectorChange: router.onProjectSelectorChange,

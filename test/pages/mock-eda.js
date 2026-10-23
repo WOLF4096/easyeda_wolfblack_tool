@@ -119,6 +119,13 @@
 			getEditorCurrentVersion: () => '3.2.149',
 			getLanguage: () => 'zh-Hans',
 			getTheme: () => 'dark',
+			getUserInfo: () => ({
+				username: 'mock-user',
+				nickname: '冒烟测试账号',
+				avatar: '',
+				uuid: 'mock-user-uuid',
+				customerCode: '000000',
+			}),
 		},
 		sys_Message: {
 			showToastMessage: ok,

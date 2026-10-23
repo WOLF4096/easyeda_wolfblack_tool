@@ -1,13 +1,14 @@
 /**
  * @//module/ app/working-hours/exportReport
- * @//description/ 三种导出动作：单工程量图、全量趋势图、全量 JSON 备份
+ * @//description/ 三种导出动作：单工程量图、全量趋势图、全量 JSON 备份（含用户信息、压缩、签名）
  * @//exports/ createExporter, safeFileName
- * @//dependencies/ ui/toast, core/log, app/working-hours/payload, app/working-hours/reportTemplate, app/working-hours/libInline, app/working-hours/exportPayload, app/working-hours/dayRange, app/working-hours/projectSummary
- * @//example/ const exporter = createExporter({ ui, data })
+ * @//dependencies/ ui/toast, core/log, app/working-hours/payload, app/working-hours/reportTemplate, app/working-hours/libInline, app/working-hours/exportPayload, app/working-hours/dayRange, app/working-hours/projectSummary, app/working-hours/backupCodec
+ * @//example/ const exporter = createExporter({ ui, data, getUser })
  *            await exporter.exportTotalChart()
  *
  * 报告的数据组装在 `exportPayload.js`（纯函数、可单测），这里只管下载与错误提示。
  * 导出的 .html 必须能在**断网**环境打开，所以 echarts/fflate 走构建期内联（见 libInline.js）。
+ * 全量 JSON 备份走 `backupCodec`：紧凑化 + gzip + 用户签名，导入时能校验归属与完整性。
  *
  * 开发者：WOLF4096
  * 辅助开发：DeepSeek-V4.1-Flash
@@ -21,6 +22,7 @@ import { buildLibTags, buildSecureReportHtml } from './reportTemplate.js';
 import { getInlineLibs } from './libInline.js';
 import { buildProjectPayload, buildTotalTrendPayload } from './exportPayload.js';
 import { getDayAlignedIndices } from './dayRange.js';
+import { packBackup } from './backupCodec.js';
 
 /**
  * 触发浏览器下载
@@ -58,6 +60,7 @@ export function safeFileName(name) {
  * @param {object} ctx 上下文
  * @param {object} ctx.ui 交互状态（读 activeTab / todayTs 之外的当前工程）
  * @param {object} ctx.data 数据集
+ * @param {() => object|null} [ctx.getUser] 取当前用户信息（全量备份要写进文件并签名）
  * @returns {{exportProjectChart: Function, exportTotalChart: Function, exportAllDataJson: Function}} 导出器
  * @sideEffects 无（调用时才产生副作用）
  */
@@ -140,33 +143,38 @@ export function createExporter(ctx) {
 	/**
 	 * 导出全部原始数据为 JSON（备份用）
 	 *
-	 * @returns {void}
+	 * 文件内容 = 用户信息 + 紧凑数据体 + gzip + HMAC 签名（见 `backupCodec.js`）：
+	 * 同一份数据比旧版明文小一个数量级，且导入时能判断「是不是你的、有没有被改过」。
+	 *
+	 * @returns {Promise<void>}
 	 * @sideEffects 下载文件
 	 */
-	function exportAllDataJson() {
+	async function exportAllDataJson() {
 		if (data.timeline.length === 0) {
 			toast('当前暂无可导出数据', 'warning');
 			return;
 		}
+		const user = ctx.getUser ? ctx.getUser() : null;
+		if (!user || !user.uuid) {
+			toast('未获取到当前账号信息，无法生成备份', 'error');
+			return;
+		}
+
+		const hasRecords = data.timeline.some((slot) => Object.keys(slot.work).length > 0 || Object.keys(slot.rest).length > 0);
+		if (!hasRecords) {
+			toast('所有时间片均为空，无有效数据导出', 'warning');
+			return;
+		}
+
 		try {
-			const filtered = data.timeline.filter((slot) => Object.keys(slot.work).length > 0 || Object.keys(slot.rest).length > 0);
-			if (filtered.length === 0) {
-				toast('所有时间片均为空，无有效数据导出', 'warning');
-				return;
-			}
-			const payload = {
-				exportTime: new Date().toLocaleString(),
-				projectMeta: data.projectMeta,
-				stats: data.projectStats,
-				timeline: filtered,
-			};
+			const envelope = await packBackup({ data: data, user: user });
 			const d = new Date();
 			const stamp = `${d.getFullYear()}${(d.getMonth() + 1).toString().padStart(2, '0')}${d.getDate().toString().padStart(2, '0')}`;
-			download(new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json;charset=utf-8' }), `全部工程耗时数据备份_${stamp}.json`);
-			toast('全部数据 JSON 导出成功', 'success');
+			download(new Blob([JSON.stringify(envelope, null, 2)], { type: 'application/json;charset=utf-8' }), `全部工程耗时数据备份_${stamp}.json`);
+			toast('全部数据已压缩并签名导出', 'success');
 		} catch (e) {
 			logger.error('导出 JSON 失败', e);
-			toast('导出失败: ' + e.message, 'error');
+			toast('导出失败: ' + (e && e.message ? e.message : '未知错误'), 'error');
 		}
 	}
 

@@ -17,6 +17,20 @@
 - **V4 三条写盘流程已人工验证通过**（2026-10-22，V4.1.78）：从 PCB 转原理图（符号与引脚完整）、生成物理网络三种写回、批量替换器件（器件真正替换、坐标角度不变、无临时件残留）。详见 `docs/V4回归记录.md`
 - ⚠️ **V4 待处理**：V4 下 `sys_FileManager.setDocumentSource()` 整份写回会丢掉 `POURED`（铜皮已计算填充）行 —— 实测同一份原文写回后 45,557 → 43,119 字节，`POUR` 本体仍在、填充缓存消失（V2.2 逐字节一致）。受影响：`生成物理网络`（源码方式）、`从PCB转原理图` 等整份重写源码的功能；重算铜皮可恢复。处理方案待定
 
+## v1.22.0 `2026-10-23`
+> 工时备份改为「含用户信息的紧凑格式 + HMAC 签名」，新增导入数据与个人信息面板
+
+- 备份格式重做（`backupFormat.js`）：放弃导出 `timeline` 明文，改存 `{ f, v, u, t, p, d }` —— `p` 是工程 uuid 字典（uuid 全文件只出现一次），`d` 是「日期 → [槽位下标, [[工程下标, 工作秒, 空闲秒]]]」，空槽/空天不写，`stats`/`totalWork` 这类派生字段一律不写（导入时由 `aggregate.buildDataset` 重算）。`expandBackupBody` 是 `buildBackupBody` 的严格逆函数
+- 签名（`backupCrypto.js`）：HMAC-SHA256（WebCrypto），密钥由**当前登录账号**派生 —— `wolfblack-working-hours|username|uuid`；签名消息为 `v2|exportedAt|payload`。换账号导入时签名必然不成立，因此「导入别人的数据」不只是 UI 拦阻
+- 信封与校验（`backupCodec.js`）：`{ format, version, exportedAt, user, payload, signature }`。校验顺序固定为 信封形状 → gunzip → 结构 → 信封用户 vs 数据用户 → 归属（uuid）→ 签名。旧版明文备份（含 `timeline`/`stats`）明确拒收并提示「在原电脑用新版重新导出」，因为旧文件没有用户信息、无法判断归属
+- 合并（`backupMerge.js`）：同一「天/槽/工程」取两侧较大值，夹到 900 秒内，且**只增不减**（夹取会让本地变小就整条跳过）；工程名只在本地缺失时补。因此重复导入幂等，导错文件也丢不了数据
+- 新增 `views/dataImport.js`（读文件 → 校验 → 预览合并量 → 二次确认 → 逐日写 `STATS_*` → 重载）与 `views/profilePanel.js`（头像/昵称/账号/累计工时/工程数）；`index.js` 增加 `session.user` + `loadUser()`，并把 `pickImportFile` / `onImportFileChange` 暴露到 window（行内事件契约）
+- 用户信息只存内存（`sys_Environment.getUserInfo()` 现取），不落盘；导出时写进备份并被签名保护。头像走 `image.lceda.cn`，因此**首次进入「更多选项」才加载**（`profile.showAvatar` 由 `TAB_EFFECTS.more` 触发），只打开工时页不会多一次外网请求
+- 导入链路可脱离浏览器验证：`unpackBackup` / `createDataImport` 支持注入压缩实现（浏览器默认 `fflate`，测试注入 `node:zlib`），`test` 里用「内存存储 + 自动确认对话框」替身跑通「选文件 → 校验 → 确认 → 落盘 → 重载」
+- 真实样本验证（`测试样本/全部工程耗时数据备份_20261023.json`，50213 B）：新文件 **2973 B（5.9%）**；259 个格子逐格比对 **0 不一致**；导入后重算总工时 31074 s 与样本一致、工程数 9 = 9
+- 工程数据：`npm test` **755 → 807 用例**（新增 `test/workingHoursBackup.test.mjs` 28 条；另 6 个新模块由 moduleHeader 自动纳入 24 条）；`check:deps` 114 个模块 / 222 条 import 无环；`check:js` 0 违规；`check:layout` WorkingHours 960×600 无溢出
+- 冒烟：`test/pages/run.mjs --only WorkingHours` 仍报 `drawImage ... width or height of 0`（周报「导出图片」在隐藏视图下 `getDataURL`）。已确认**与本版无关**：stash 掉本版改动后在同一 HEAD 上重跑，报同一条 —— 属既有 headless + 隐藏 canvas 的缺口
+
 ## v1.21.0 `2026-10-22`
 > 文档体系拆分：用户向 CHANGELOG 与技术档案分离、README 重写为详情文档、「关于」页改为使用步骤、补齐发布材料
 

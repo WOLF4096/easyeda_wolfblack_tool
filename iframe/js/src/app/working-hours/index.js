@@ -32,6 +32,8 @@ import { createRhythmPanel } from './views/rhythmPanel.js';
 import { createWeeklyPanel } from './views/weeklyPanel.js';
 import { createTabRouter } from './views/tabRouter.js';
 import { createDataAdmin } from './views/dataAdmin.js';
+import { createDataImport } from './views/dataImport.js';
+import { createProfilePanel } from './views/profilePanel.js';
 import { exportWeeklyReport } from './views/weeklyExport.js';
 
 // ==========================================
@@ -58,6 +60,29 @@ const weeklyPanel = createWeeklyPanel({ data: data, ui: ui, barView: weeklyBarVi
 // ==========================================
 
 /**
+ * 当前登录用户（`sys_Environment.getUserInfo()` 的结果）
+ *
+ * 只存在内存里，不落盘：备份文件需要它来签名，个人信息面板需要它来显示。
+ * 取不到（未登录 / 宿主 API 缺失）时保持 null，页面其余功能照常可用。
+ */
+const session = { user: null };
+
+/**
+ * 刷新当前用户信息
+ *
+ * @returns {Promise<void>}
+ * @sideEffects 改写 session.user
+ */
+async function loadUser() {
+	try {
+		session.user = (await eda.sys_Environment.getUserInfo()) || null;
+	} catch (e) {
+		session.user = null;
+		logger.info('未获取到用户信息（未登录或宿主不支持）');
+	}
+}
+
+/**
  * 今日工时（小时）
  *
  * @param {string|null} [targetUuid=null] 只统计某个工程
@@ -75,6 +100,8 @@ function getTodayWorkHours(targetUuid) {
  * @sideEffects 改写 runtime.data
  */
 async function loadAllData() {
+	await loadUser();
+
 	try {
 		const info = await eda.dmt_Project.getCurrentProjectInfo();
 		if (info) {
@@ -94,6 +121,7 @@ async function loadAllData() {
 
 	applyDataset(buildDataset(allConfigs, { currentUuid: ui.currentUuid, currentName: ui.currentName }));
 	router.updateHeaderStats();
+	profile.render();
 }
 
 // ==========================================
@@ -194,10 +222,11 @@ function initChartCore() {
 }
 
 // ==========================================
-// [6] 组装：路由器 / 导出器 / 危险操作 / 提醒规则
+// [6] 组装：路由器 / 导出器 / 导入器 / 个人信息 / 危险操作 / 提醒规则
 // ==========================================
 const reminderApp = createReminderApp();
-const exporter = createExporter({ ui: ui, data: data });
+const exporter = createExporter({ ui: ui, data: data, getUser: () => session.user });
+const profile = createProfilePanel({ data: data, getUser: () => session.user });
 
 const router = createTabRouter({
 	ui: ui,
@@ -214,6 +243,7 @@ const router = createTabRouter({
 	renderManageTable: managePanel.refreshTable,
 	resizeManageChart: () => manageView.resize(),
 	renderReminder: () => reminderApp.render(),
+	renderProfile: profile.showAvatar,
 });
 
 const admin = createDataAdmin({
@@ -229,6 +259,11 @@ const admin = createDataAdmin({
 		updateProjectSelector: router.updateProjectSelector,
 		onProjectSelectorChange: router.onProjectSelectorChange,
 	},
+});
+
+const importer = createDataImport({
+	getUser: () => session.user,
+	hooks: { reloadData: loadAllData },
 });
 
 // ==========================================
@@ -274,6 +309,8 @@ Object.assign(window, {
 	clearAllDataConfirm: admin.clearAllDataConfirm,
 	exportAllDataJson: exporter.exportAllDataJson,
 	exportTotalChart: exporter.exportTotalChart,
+	pickImportFile: importer.pickFile,
+	onImportFileChange: importer.onFileChange,
 	exportWeeklyReport: exportWeeklyReportImage,
 	onCustomDateChange: rhythmPanel.selectCustom,
 	onProjectSelectorChange: router.onProjectSelectorChange,

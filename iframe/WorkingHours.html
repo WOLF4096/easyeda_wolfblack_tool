@@ -5,316 +5,333 @@
   本工具为非官方第三方开源扩展，与嘉立创 / EasyEDA 官方无隶属关系
 -->
 <html lang="zh-CN">
-	<head>
-		<meta charset="UTF-8" />
-		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-		<title>狼黑工具 - 工作时间统计</title>
-		<script src="/iframe/js/echarts.min.js"></script>
-		<script src="/iframe/js/fflate.js"></script>
-		<link rel="stylesheet" href="/iframe/css/common.css" />
-	</head>
-	<body>
-		<div class="wh-shell">
-			<div class="wh-sidebar">
-				<div class="sidebar-item active" onclick="switchTab('total')">总趋势</div>
-				<div class="sidebar-item" onclick="switchTab('project')">工程详情</div>
-				<div class="sidebar-item" onclick="switchTab('manage')">工程管理</div>
-				<div class="sidebar-item" onclick="switchTab('weekly')">周报生成</div>
-				<div class="sidebar-item" onclick="switchTab('rhythm')">节律分析</div>
-				<div class="sidebar-item" onclick="switchTab('reminder')">消息提醒</div>
-				<div class="sidebar-item" onclick="switchTab('more')">更多选项</div>
+
+<head>
+	<meta charset="UTF-8" />
+	<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+	<title>狼黑工具 - 工作时间统计</title>
+	<script src="/iframe/js/echarts.min.js"></script>
+	<script src="/iframe/js/fflate.js"></script>
+	<link rel="stylesheet" href="/iframe/css/common.css" />
+</head>
+
+<body>
+	<div class="wh-shell">
+		<div class="wh-sidebar">
+			<div class="sidebar-item active" onclick="switchTab('total')">总趋势</div>
+			<div class="sidebar-item" onclick="switchTab('project')">工程详情</div>
+			<div class="sidebar-item" onclick="switchTab('manage')">工程管理</div>
+			<div class="sidebar-item" onclick="switchTab('weekly')">周报生成</div>
+			<div class="sidebar-item" onclick="switchTab('rhythm')">节律分析</div>
+			<div class="sidebar-item" onclick="switchTab('reminder')">消息提醒</div>
+			<div class="sidebar-item" onclick="switchTab('more')">更多选项</div>
+		</div>
+
+		<div class="wh-main">
+			<div class="wh-loading" id="loading-mask">
+				<div class="loading-spinner"></div>
+				<span>数据获取中...</span>
 			</div>
 
-			<div class="wh-main">
-				<div class="wh-loading" id="loading-mask">
-					<div class="loading-spinner"></div>
-					<span>数据获取中...</span>
+			<div class="wh-header">
+				<div class="wh-header-left">
+					<select id="project-selector" class="hidden" onchange="onProjectSelectorChange()"></select>
+					<div class="wh-title" id="page-title">总趋势</div>
 				</div>
-
-				<div class="wh-header">
-					<div class="wh-header-left">
-						<select
-							id="project-selector"
-							class="hidden"
-							onchange="onProjectSelectorChange()"
-						></select>
-						<div class="wh-title" id="page-title">总趋势</div>
-					</div>
-					<div class="wh-stats" id="headerStatsArea" ondblclick="ReminderApp.toggleDebug()">
-						<span id="headerScope">今日已工作</span>
-						<span id="headerVal" class="highlight">0时0分</span>
-					</div>
+				<div class="wh-stats" id="headerStatsArea" ondblclick="ReminderApp.toggleDebug()">
+					<span id="headerScope">今日已工作</span>
+					<span id="headerVal" class="highlight">0时0分</span>
 				</div>
+			</div>
 
-				<!-- 总趋势 / 工程详情 -->
-				<div id="view-chart" class="view-container view-col">
-					<div id="heatmap-container" class="wh-heatmap"></div>
+			<!-- 总趋势 / 工程详情 -->
+			<div id="view-chart" class="view-container view-col">
+				<div id="heatmap-container" class="wh-heatmap"></div>
 
-					<div id="wrapper" class="wh-chart-wrap">
-						<div id="custom-legend" class="legend-panel">
-							<div class="legend-title" id="legend-title-main">当前视图工程 <span id="legend-toggle-icon">▼</span></div>
-							<div class="legend-list" id="legend-list">加载中...</div>
-							<div class="legend-detail">把鼠标悬浮在工程上查看详情</div>
+				<div id="wrapper" class="wh-chart-wrap">
+					<div id="custom-legend" class="legend-panel">
+						<div class="legend-title" id="legend-title-main">当前视图工程 <span id="legend-toggle-icon">▼</span>
 						</div>
-						<div id="chart-container" class="wh-chart"></div>
+						<div class="legend-list" id="legend-list">加载中...</div>
+						<div class="legend-detail">把鼠标悬浮在工程上查看详情</div>
+					</div>
+					<div id="chart-container" class="wh-chart"></div>
+				</div>
+			</div>
+
+			<div id="project-empty-tip" class="view-container wh-empty-tip hidden">
+				<b>当前未打开工程</b>
+				<small>当前视图不包含任何数据。请在 EDA 中打开有效的项目。</small>
+			</div>
+
+			<!-- 周报 -->
+			<div id="view-weekly" class="view-container hidden">
+				<div class="wh-weekly" id="weekly-report-body">
+					<div class="wh-weekly-header">
+						<button class="btn-secondary" onclick="changeWeek(-1)">◀ 上一周</button>
+						<div class="wh-weekly-range" id="weekly-range-text">2023 第 42 周</div>
+						<div class="button-group">
+							<button class="btn-secondary" onclick="exportWeeklyReport()">导出图片</button>
+							<button class="btn-secondary" onclick="changeWeek(1)">下一周 ▶</button>
+						</div>
+					</div>
+
+					<div class="wh-summary">
+						<div class="wh-summary-card">
+							<span class="wh-summary-label">本周总投入</span>
+							<span class="wh-summary-value" id="weekly-total-work">0h</span>
+						</div>
+						<div class="wh-summary-card">
+							<span class="wh-summary-label">日均工时</span>
+							<span class="wh-summary-value" id="weekly-avg-work">0h</span>
+						</div>
+						<div class="wh-summary-card">
+							<span class="wh-summary-label">最专注工程</span>
+							<span class="wh-summary-value sm" id="weekly-top-project">--</span>
+						</div>
+					</div>
+
+					<div class="wh-charts-row">
+						<div class="wh-chart-card">
+							<div class="wh-chart-title">每日工时分布</div>
+							<div id="weekly-bar-chart" class="wh-chart-body"></div>
+						</div>
+						<div class="wh-chart-card">
+							<div class="wh-chart-title">项目占比情况</div>
+							<div id="weekly-pie-chart" class="wh-chart-body"></div>
+						</div>
+					</div>
+				</div>
+			</div>
+
+			<!-- 工程管理 -->
+			<div id="view-manage" class="view-container wh-manage hidden">
+				<div class="wh-manage-table">
+					<table class="wh-table">
+						<thead>
+							<tr>
+								<th class="sortable" onclick="sortTable('name')">工程名称<span id="sort-name"></span></th>
+								<th class="sortable col-mid" onclick="sortTable('start')">开始时间<span
+										id="sort-start"></span></th>
+								<th class="sortable col-mid" onclick="sortTable('end')">最后时间<span id="sort-end"></span>
+								</th>
+								<th class="sortable col-sm" onclick="sortTable('work')">工作时间<span id="sort-work"></span>
+								</th>
+								<th class="sortable col-sm" onclick="sortTable('rest')">空闲时间<span id="sort-rest"></span>
+								</th>
+								<th class="col-sm">导出图表</th>
+								<th class="col-sm">删除记录</th>
+							</tr>
+						</thead>
+						<tbody id="project-table-body"></tbody>
+					</table>
+				</div>
+
+				<div class="wh-manage-chart" id="manage-chart-wrapper">
+					<div class="wh-manage-chart-title" id="manage-chart-title">请点击上方工程行查看对应工程时间轴</div>
+
+					<div id="manage-custom-legend" class="legend-panel">
+						<div class="legend-title" id="legend-title-manage">目标工程数据 <span
+								id="m-legend-toggle-icon">▼</span></div>
+						<div class="legend-list" id="m-legend-list">加载中...</div>
+						<div class="legend-detail">把鼠标悬浮在工程上查看详情</div>
+					</div>
+
+					<div id="manage-chart-container" class="wh-chart"></div>
+				</div>
+			</div>
+
+			<!-- 节律分析 -->
+			<div id="view-rhythm" class="view-container view-row hidden">
+				<div class="wh-rhythm-side">
+					<h3 class="panel-title">节律分析维度</h3>
+
+					<div id="rhythm-mode-time" class="rhythm-mode-block active" onclick="setRhythmMode('time')">
+						<div class="rhythm-mode-title">按时间范围</div>
+						<div class="rhythm-mode-content" onclick="event.stopPropagation()">
+							<div class="time-sub-block">
+								<label class="sub-block-title">
+									<input type="radio" name="time-submode" value="quick" checked
+										onchange="renderRhythmChart()" />
+									快速选择
+								</label>
+								<div class="rhythm-quick-buttons">
+									<label><input type="radio" name="rhythm-time-radio" value="day"
+											onchange="onQuickTimeChange()" /><span>1天</span></label>
+									<label><input type="radio" name="rhythm-time-radio" value="week"
+											onchange="onQuickTimeChange()" /><span>1周</span></label>
+									<label><input type="radio" name="rhythm-time-radio" value="month"
+											onchange="onQuickTimeChange()" /><span>1月</span></label>
+									<label><input type="radio" name="rhythm-time-radio" value="year"
+											onchange="onQuickTimeChange()" /><span>1年</span></label>
+									<label><input type="radio" name="rhythm-time-radio" value="all" checked
+											onchange="onQuickTimeChange()" /><span>全部</span></label>
+								</div>
+							</div>
+
+							<div class="time-sub-block">
+								<label class="sub-block-title">
+									<input type="radio" name="time-submode" value="custom"
+										onchange="renderRhythmChart()" />
+									自定义时间段
+								</label>
+								<div class="rhythm-custom-row">
+									<input type="date" id="rhythm-start-date" onchange="onCustomDateChange()" />
+									<span class="range-sep">~</span>
+									<input type="date" id="rhythm-end-date" onchange="onCustomDateChange()" />
+								</div>
+							</div>
+						</div>
+					</div>
+
+					<div id="rhythm-mode-project" class="rhythm-mode-block" onclick="setRhythmMode('project')">
+						<div class="rhythm-mode-title">按指定工程</div>
+						<div class="rhythm-mode-content" onclick="event.stopPropagation()">
+							<div class="reminder-inline-hint">选择工程聚合历史作息:</div>
+							<select id="rhythm-project-select" onchange="renderRhythmChart()"></select>
+						</div>
 					</div>
 				</div>
 
-				<div id="project-empty-tip" class="view-container wh-empty-tip hidden">
-					<b>当前未打开工程</b>
-					<small>当前视图不包含任何数据。请在 EDA 中打开有效的项目。</small>
+				<div class="wh-rhythm-chart">
+					<div id="rhythm-custom-legend" class="legend-panel collapsed">
+						<div class="legend-title" id="legend-title-rhythm">作息图例 <span id="r-legend-toggle-icon">▶</span>
+						</div>
+						<div class="legend-list" id="r-legend-list">加载中...</div>
+						<div class="legend-detail">把鼠标悬浮在图例上查看详情</div>
+					</div>
+
+					<div id="rhythm-chart-container" class="wh-chart"></div>
+				</div>
+			</div>
+
+			<!-- 消息提醒 -->
+			<div id="view-reminder" class="view-container wh-reminder hidden">
+				<div class="reminder-card">
+					<div class="reminder-row">
+						<input type="checkbox" id="welcome-enabled" onchange="ReminderApp.save()" />
+						<span class="reminder-label">启动欢迎</span>
+						<input id="welcome-text-input" type="text" class="input-flex" onchange="ReminderApp.save()"
+							placeholder="使用 <time> 代表时间..." />
+					</div>
+					<div class="reminder-row">
+						<input type="checkbox" id="idle-enabled" onchange="ReminderApp.save()" />
+						<span class="reminder-label">挂机返回</span>
+						<div class="reminder-inline">
+							<span class="reminder-inline-hint">超过</span>
+							<input id="idle-min-input" type="number" class="input-w50" onchange="ReminderApp.save()" />
+							<span class="reminder-inline-hint">分钟后</span>
+						</div>
+						<input id="idle-text-input" type="text" class="input-flex" onchange="ReminderApp.save()"
+							placeholder="返回时提醒文本..." />
+					</div>
 				</div>
 
-				<!-- 周报 -->
-				<div id="view-weekly" class="view-container hidden">
-					<div class="wh-weekly" id="weekly-report-body">
-						<div class="wh-weekly-header">
-							<button class="btn-secondary" onclick="changeWeek(-1)">◀ 上一周</button>
-							<div class="wh-weekly-range" id="weekly-range-text">2023 第 42 周</div>
+				<div class="reminder-grid">
+					<div class="reminder-card grow">
+						<div class="reminder-section-title is-link">工作时长提醒 (每日)</div>
+						<div class="reminder-scroll">
+							<div id="list-duration" class="reminder-list"></div>
+						</div>
+						<div class="reminder-add-row">
+							<input id="add-dur-m" type="text" class="input-time" placeholder="时间" />
+							<input id="add-dur-msg" type="text" class="input-msg" placeholder="提醒内容..." />
+							<div class="stepper" title="提醒次数：触发时显示几条提醒">
+								<button
+									onclick="const el=document.getElementById('add-dur-c'); el.value=Math.max(1,parseInt(el.value)-1)">
+									-
+								</button>
+								<input id="add-dur-c" type="number" value="1" readonly />
+								<button
+									onclick="const el=document.getElementById('add-dur-c'); el.value=parseInt(el.value)+1">+</button>
+							</div>
+							<button class="btn-sm" onclick="ReminderApp.add('duration')">添加</button>
+						</div>
+					</div>
+
+					<div class="reminder-card grow">
+						<div class="reminder-section-title is-success">固定间隔提醒 (循环)</div>
+						<div class="reminder-scroll">
+							<div id="list-interval" class="reminder-list"></div>
+						</div>
+						<div class="reminder-add-row">
+							<input id="add-int-m" type="text" class="input-time" placeholder="时间" />
+							<input id="add-int-msg" type="text" class="input-msg" placeholder="提醒内容..." />
+							<div class="stepper" title="提醒次数：触发时显示几条提醒">
+								<button
+									onclick="const el=document.getElementById('add-int-c'); el.value=Math.max(1,parseInt(el.value)-1)">
+									-
+								</button>
+								<input id="add-int-c" type="number" value="1" readonly />
+								<button
+									onclick="const el=document.getElementById('add-int-c'); el.value=parseInt(el.value)+1">+</button>
+							</div>
+							<button class="btn-sm btn-success" onclick="ReminderApp.add('interval')">添加</button>
+						</div>
+					</div>
+				</div>
+			</div>
+
+			<!-- 更多选项 -->
+			<div id="view-more" class="view-container hidden">
+				<div class="wh-more">
+					<div class="wh-profile" id="wh-profile">
+						<div class="wh-profile-avatar">
+							<img id="profile-avatar-img" class="hidden" alt="用户头像" />
+							<span id="profile-avatar-fallback">狼</span>
+						</div>
+						<div class="wh-profile-info">
+							<div class="wh-profile-name" id="profile-name">未获取到用户信息</div>
+							<div class="wh-profile-sub" id="profile-sub">请确认已在 EDA 中登录</div>
+							<div class="wh-profile-metrics">
+								<div class="wh-profile-metric">
+									<b id="profile-total">0时0分</b>
+									<span>累计工作时间</span>
+								</div>
+								<div class="wh-profile-metric">
+									<b id="profile-projects">0 个工程</b>
+									<span>记录工程数</span>
+								</div>
+							</div>
+						</div>
+					</div>
+
+					<div class="reminder-card wide">
+						<div>
+							<h3>导入数据</h3>
 							<div class="button-group">
-								<button class="btn-secondary" onclick="exportWeeklyReport()">导出图片</button>
-								<button class="btn-secondary" onclick="changeWeek(1)">下一周 ▶</button>
+								<button class="btn-secondary" onclick="pickImportFile()">选择备份文件</button>
 							</div>
+							<div class="wh-note">
+								只接受本账号导出的备份文件。
+							</div>
+							<input id="import-file-input" type="file" accept=".json,application/json" class="hidden"
+								onchange="onImportFileChange(event)" />
 						</div>
 
-						<div class="wh-summary">
-							<div class="wh-summary-card">
-								<span class="wh-summary-label">本周总投入</span>
-								<span class="wh-summary-value" id="weekly-total-work">0h</span>
+						<div>
+							<h3>导出数据</h3>
+							<div class="button-group">
+								<button class="btn-secondary" onclick="exportTotalChart()">导出总趋势图表</button>
+								<button class="btn-secondary" onclick="exportAllDataJson()">导出全部数据</button>
 							</div>
-							<div class="wh-summary-card">
-								<span class="wh-summary-label">日均工时</span>
-								<span class="wh-summary-value" id="weekly-avg-work">0h</span>
-							</div>
-							<div class="wh-summary-card">
-								<span class="wh-summary-label">最专注工程</span>
-								<span class="wh-summary-value sm" id="weekly-top-project">--</span>
-							</div>
+							<div class="wh-note">导出的备份含账号信息与签名：换电脑后可导回，也会拒绝他人的文件。</div>
 						</div>
 
-						<div class="wh-charts-row">
-							<div class="wh-chart-card">
-								<div class="wh-chart-title">每日工时分布</div>
-								<div id="weekly-bar-chart" class="wh-chart-body"></div>
-							</div>
-							<div class="wh-chart-card">
-								<div class="wh-chart-title">项目占比情况</div>
-								<div id="weekly-pie-chart" class="wh-chart-body"></div>
-							</div>
-						</div>
-					</div>
-				</div>
-
-				<!-- 工程管理 -->
-				<div id="view-manage" class="view-container wh-manage hidden">
-					<div class="wh-manage-table">
-						<table class="wh-table">
-							<thead>
-								<tr>
-									<th class="sortable" onclick="sortTable('name')">工程名称<span id="sort-name"></span></th>
-									<th class="sortable col-mid" onclick="sortTable('start')">开始时间<span id="sort-start"></span></th>
-									<th class="sortable col-mid" onclick="sortTable('end')">最后时间<span id="sort-end"></span></th>
-									<th class="sortable col-sm" onclick="sortTable('work')">工作时间<span id="sort-work"></span></th>
-									<th class="sortable col-sm" onclick="sortTable('rest')">空闲时间<span id="sort-rest"></span></th>
-									<th class="col-sm">导出图表</th>
-									<th class="col-sm">删除记录</th>
-								</tr>
-							</thead>
-							<tbody id="project-table-body"></tbody>
-						</table>
-					</div>
-
-					<div class="wh-manage-chart" id="manage-chart-wrapper">
-						<div class="wh-manage-chart-title" id="manage-chart-title">请点击上方工程行查看对应工程时间轴</div>
-
-						<div id="manage-custom-legend" class="legend-panel">
-							<div class="legend-title" id="legend-title-manage">目标工程数据 <span id="m-legend-toggle-icon">▼</span></div>
-							<div class="legend-list" id="m-legend-list">加载中...</div>
-							<div class="legend-detail">把鼠标悬浮在工程上查看详情</div>
-						</div>
-
-						<div id="manage-chart-container" class="wh-chart"></div>
-					</div>
-				</div>
-
-				<!-- 节律分析 -->
-				<div id="view-rhythm" class="view-container view-row hidden">
-					<div class="wh-rhythm-side">
-						<h3 class="panel-title">节律分析维度</h3>
-
-						<div id="rhythm-mode-time" class="rhythm-mode-block active" onclick="setRhythmMode('time')">
-							<div class="rhythm-mode-title">按时间范围</div>
-							<div class="rhythm-mode-content" onclick="event.stopPropagation()">
-								<div class="time-sub-block">
-									<label class="sub-block-title">
-										<input type="radio" name="time-submode" value="quick" checked onchange="renderRhythmChart()" />
-										快速选择
-									</label>
-									<div class="rhythm-quick-buttons">
-										<label
-											><input type="radio" name="rhythm-time-radio" value="day" onchange="onQuickTimeChange()" /><span
-												>1天</span
-											></label
-										>
-										<label
-											><input type="radio" name="rhythm-time-radio" value="week" onchange="onQuickTimeChange()" /><span
-												>1周</span
-											></label
-										>
-										<label
-											><input type="radio" name="rhythm-time-radio" value="month" onchange="onQuickTimeChange()" /><span
-												>1月</span
-											></label
-										>
-										<label
-											><input type="radio" name="rhythm-time-radio" value="year" onchange="onQuickTimeChange()" /><span
-												>1年</span
-											></label
-										>
-										<label
-											><input
-												type="radio"
-												name="rhythm-time-radio"
-												value="all"
-												checked
-												onchange="onQuickTimeChange()"
-											/><span>全部</span></label
-										>
-									</div>
-								</div>
-
-								<div class="time-sub-block">
-									<label class="sub-block-title">
-										<input type="radio" name="time-submode" value="custom" onchange="renderRhythmChart()" />
-										自定义时间段
-									</label>
-									<div class="rhythm-custom-row">
-										<input type="date" id="rhythm-start-date" onchange="onCustomDateChange()" />
-										<span class="range-sep">~</span>
-										<input type="date" id="rhythm-end-date" onchange="onCustomDateChange()" />
-									</div>
-								</div>
-							</div>
-						</div>
-
-						<div id="rhythm-mode-project" class="rhythm-mode-block" onclick="setRhythmMode('project')">
-							<div class="rhythm-mode-title">按指定工程</div>
-							<div class="rhythm-mode-content" onclick="event.stopPropagation()">
-								<div class="reminder-inline-hint">选择工程聚合历史作息:</div>
-								<select id="rhythm-project-select" onchange="renderRhythmChart()"></select>
-							</div>
-						</div>
-					</div>
-
-					<div class="wh-rhythm-chart">
-						<div id="rhythm-custom-legend" class="legend-panel collapsed">
-							<div class="legend-title" id="legend-title-rhythm">作息图例 <span id="r-legend-toggle-icon">▶</span></div>
-							<div class="legend-list" id="r-legend-list">加载中...</div>
-							<div class="legend-detail">把鼠标悬浮在图例上查看详情</div>
-						</div>
-
-						<div id="rhythm-chart-container" class="wh-chart"></div>
-					</div>
-				</div>
-
-				<!-- 消息提醒 -->
-				<div id="view-reminder" class="view-container wh-reminder hidden">
-					<div class="reminder-card">
-						<div class="reminder-row">
-							<input type="checkbox" id="welcome-enabled" onchange="ReminderApp.save()" />
-							<span class="reminder-label">启动欢迎</span>
-							<input
-								id="welcome-text-input"
-								type="text"
-								class="input-flex"
-								onchange="ReminderApp.save()"
-								placeholder="使用 <time> 代表时间..."
-							/>
-						</div>
-						<div class="reminder-row">
-							<input type="checkbox" id="idle-enabled" onchange="ReminderApp.save()" />
-							<span class="reminder-label">挂机返回</span>
-							<div class="reminder-inline">
-								<span class="reminder-inline-hint">超过</span>
-								<input id="idle-min-input" type="number" class="input-w50" onchange="ReminderApp.save()" />
-								<span class="reminder-inline-hint">分钟后</span>
-							</div>
-							<input
-								id="idle-text-input"
-								type="text"
-								class="input-flex"
-								onchange="ReminderApp.save()"
-								placeholder="返回时提醒文本..."
-							/>
-						</div>
-					</div>
-
-					<div class="reminder-grid">
-						<div class="reminder-card grow">
-							<div class="reminder-section-title is-link">工作时长提醒 (每日)</div>
-							<div class="reminder-scroll">
-								<div id="list-duration" class="reminder-list"></div>
-							</div>
-							<div class="reminder-add-row">
-								<input id="add-dur-m" type="text" class="input-time" placeholder="时间" />
-								<input id="add-dur-msg" type="text" class="input-msg" placeholder="提醒内容..." />
-								<div class="stepper" title="提醒次数：触发时显示几条提醒">
-									<button onclick="const el=document.getElementById('add-dur-c'); el.value=Math.max(1,parseInt(el.value)-1)">
-										-
-									</button>
-									<input id="add-dur-c" type="number" value="1" readonly />
-									<button onclick="const el=document.getElementById('add-dur-c'); el.value=parseInt(el.value)+1">+</button>
-								</div>
-								<button class="btn-sm" onclick="ReminderApp.add('duration')">添加</button>
-							</div>
-						</div>
-
-						<div class="reminder-card grow">
-							<div class="reminder-section-title is-success">固定间隔提醒 (循环)</div>
-							<div class="reminder-scroll">
-								<div id="list-interval" class="reminder-list"></div>
-							</div>
-							<div class="reminder-add-row">
-								<input id="add-int-m" type="text" class="input-time" placeholder="时间" />
-								<input id="add-int-msg" type="text" class="input-msg" placeholder="提醒内容..." />
-								<div class="stepper" title="提醒次数：触发时显示几条提醒">
-									<button onclick="const el=document.getElementById('add-int-c'); el.value=Math.max(1,parseInt(el.value)-1)">
-										-
-									</button>
-									<input id="add-int-c" type="number" value="1" readonly />
-									<button onclick="const el=document.getElementById('add-int-c'); el.value=parseInt(el.value)+1">+</button>
-								</div>
-								<button class="btn-sm btn-success" onclick="ReminderApp.add('interval')">添加</button>
-							</div>
-						</div>
-					</div>
-				</div>
-
-				<!-- 更多选项 -->
-				<div id="view-more" class="view-container hidden">
-					<div class="wh-more">
-						<div class="reminder-card wide">
+						<div>
+							<h3>清除数据</h3>
 							<div>
-								<h3>导出数据</h3>
-								<div class="button-group">
-									<button class="btn-secondary" onclick="exportTotalChart()">导出总趋势图表</button>
-									<button class="btn-secondary" onclick="exportAllDataJson()">导出全部数据</button>
-								</div>
+								<button class="btn-danger" onclick="clearAllDataConfirm()">清除工程耗时数据</button>
 							</div>
-
-							<div>
-								<h3>清除数据</h3>
-								<div>
-									<button class="btn-danger" onclick="clearAllDataConfirm()">清除工程耗时数据</button>
-								</div>
-								<div class="wh-note">警告：此操作不可逆，将彻底删除所有本地记录的工程耗时数据。</div>
-							</div>
+							<div class="wh-note">警告：此操作不可逆，将彻底删除所有本地记录的工程耗时数据。</div>
 						</div>
 					</div>
 				</div>
 			</div>
 		</div>
+	</div>
 
-		<script src="/iframe/js/app/WorkingHours.js"></script>
-	</body>
+	<script src="/iframe/js/app/WorkingHours.js"></script>
+</body>
+
 </html>

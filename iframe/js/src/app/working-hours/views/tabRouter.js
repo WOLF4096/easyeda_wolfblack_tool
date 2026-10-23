@@ -201,7 +201,10 @@ const TAB_EFFECTS = {
 		ctx.resizeRhythmChart();
 	},
 	reminder: (ctx) => ctx.renderReminder(),
-	more: () => {},
+	// 个人信息卡在这里才首次加载头像（其余 tab 不产生外网请求）
+	more: (ctx) => {
+		if (ctx.renderProfile) ctx.renderProfile();
+	},
 };
 
 /**
