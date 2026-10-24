@@ -28,7 +28,7 @@ import { buildPolygonPath, buildWireChains, isValidSegment } from './common/wire
 // 默认 API 配置兜底（防止解析失败导致崩溃）
 // 注意：`圆弧角度` 保留键名只为兼容历史校准数据，**已不再参与计算** ——
 // 实测 V2.2.45 与 V4 的 `pcb_PrimitiveArc.create/get` 与多边形路径 `ARC` 全是角度制，
-// 再乘一个「获取弧线.圆弧角度」会把 90° 压成 1.57°（详见 docs/测试报告-v1.17.6.md P1-3）。
+// 再乘一个「获取弧线.圆弧角度」会把 90° 压成 1.57°（1.57 ≈ 90 × π/180，即被多转了一道弧度）。
 const DEFAULT_API_CONFIG = {
 	创建折线: { 坐标: 1, 线宽: 1 },
 	创建直线: { 坐标: 1, 线宽: 1 },

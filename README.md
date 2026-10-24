@@ -73,31 +73,31 @@
 
 ## 功能清单
 
-| 功能         | 一句话说明                                     | 在哪用       | EDA 版本       | 演示                                               |
-| :----------- | :--------------------------------------------- | :----------- | :------------- | :------------------------------------------------- |
-| 基准测试     | 校准插件在新版 EDA 上的坐标与尺寸偏差          | PCB          | V2.2.45 ~ 4    | [打开](https://www.jlc-bbs.com/platform/a/1447593) |
-| 导入图片     | 导入 PNG / JPG 图片，尺寸按毫米或 DPI 精确控制 | PCB          | V2.2.45 ~ 4    | [打开](https://www.jlc-bbs.com/platform/a/1220989) |
-| 导入二维码   | 在 PCB 上生成二维码，支持多种码制与矢量输出    | PCB          | V2.2.45 ~ 4    | [打开](https://www.jlc-bbs.com/platform/a/1221020) |
-| 工作时间统计 | 自动记录每天画板时长，按工程、周、时段出图表   | PCB / 原理图 | V2.2.45 ~ 4    | [打开](https://www.jlc-bbs.com/platform/a/1221046) |
-| 焊盘 ⇄ 过孔  | 通孔焊盘和过孔互相转换，尺寸与阻焊保持不变     | PCB          | V2.2.45 ~ 4    | [打开](https://www.jlc-bbs.com/platform/a/1221301) |
-| 导线 ⇄ 线条  | 带电的导线和不带电的线条互相转换               | PCB          | V2.2.45 ~ 4    | [打开](https://www.jlc-bbs.com/platform/a/1221325) |
-| 填充 ⇄ 图片  | 填充区域和图片对象互相转换，转换后能自由缩放   | PCB          | V2.2.45 ~ 4    | [打开](https://www.jlc-bbs.com/platform/a/1447607) |
-| 创建封装     | 把画布上散着的图元打包成一个封装存进个人库     | PCB          | **仅 V2.2.45** | [打开](https://www.jlc-bbs.com/platform/a/1221362) |
-| 位号查重     | 找出 PCB 里重复的位号，点一下直接跳过去        | PCB          | V2.2.45 ~ 4    | [打开](https://www.jlc-bbs.com/platform/a/1221381) |
-| 生成物理网络 | 没有原理图也能按铜皮接触关系反推出整板网络     | PCB          | V2.2.45 ~ 4    | [打开](https://www.jlc-bbs.com/platform/a/1221422) |
-| 导入 AD 网表 | 把 Altium Designer 的网表导入当前 PCB          | PCB          | V2.2.45 ~ 4    | [打开](https://www.jlc-bbs.com/platform/a/1230646) |
-| 导出引脚网络 | 把器件引脚与网络的对应关系导出成表格           | PCB          | V2.2.45 ~ 4    | [打开](https://www.jlc-bbs.com/platform/a/1447636) |
-| 批量修改网络 | 用 Excel 两列数据批量改名，还能反查引脚        | PCB          | V2.2.45 ~ 4    | [打开](https://www.jlc-bbs.com/platform/a/1221464) |
-| 丝印代码转换 | 把 01C 这类丝印代码换算成 10kΩ 并写回          | PCB / 原理图 | V2.2.45 ~ 4    | [打开](https://www.jlc-bbs.com/platform/a/1221485) |
-| 清空多余属性 | 一键清掉替换件用不上的器件属性                 | PCB / 原理图 | V2.2.45 ~ 4    | [打开](https://www.jlc-bbs.com/platform/a/1221495) |
-| 刷新网表     | 重新读一遍网表再写回，清掉属性里的占位符       | PCB / 原理图 | V2.2.45 ~ 3    | [打开](https://www.jlc-bbs.com/platform/a/1447654) |
-| 导入 BOM     | 从 Excel 粘贴 BOM，批量回填器件参数            | PCB / 原理图 | V2.2.45 ~ 4    | [打开](https://www.jlc-bbs.com/platform/a/1221515) |
-| 批量替换器件 | 按位号批量换成立创器件，位置角度不变           | PCB          | V2.2.45 ~ 4    | [打开](https://www.jlc-bbs.com/platform/a/1221533) |
-| 模型批量更新 | 批量调整模型大小角度位置，或从旧网表恢复模型   | PCB          | V2.2.45 ~ 4    | [打开](https://www.jlc-bbs.com/platform/a/1221572) |
-| PCB 转原理图 | 拿 PCB 上的器件和位置，反向生成一张原理图      | 原理图       | V2.2.45 ~ 4    | [打开](https://www.jlc-bbs.com/platform/a/1221620) |
-| 创建导线     | 按 PCB 或网表给原理图里缺失的引脚补导线        | 原理图       | V2.2.45 ~ 4    | [打开](https://www.jlc-bbs.com/platform/a/1221655) |
-| 引脚排序     | 给符号引脚按编号或名称排序，可设间距           | 符号         | V2.2.45 ~ 4    | —                                                  |
-| EDA 桥       | 让外部程序把图形送进画布，也可作为调试通道     | 通用         | V2.2.45 ~ 4    | —                                                  |
+| 功能            | 一句话说明                                     | 在哪用       | EDA 版本       | 演示                                               |
+| :-------------- | :--------------------------------------------- | :----------- | :------------- | :------------------------------------------------- |
+| 基准测试        | 校准插件在新版 EDA 上的坐标与尺寸偏差          | PCB          | V2.2.45 ~ 4    | [打开](https://www.jlc-bbs.com/platform/a/1447593) |
+| 导入图片        | 导入 PNG / JPG 图片，尺寸按毫米或 DPI 精确控制 | PCB          | V2.2.45 ~ 4    | [打开](https://www.jlc-bbs.com/platform/a/1220989) |
+| 导入二维码      | 在 PCB 上生成二维码，支持多种码制与矢量输出    | PCB          | V2.2.45 ~ 4    | [打开](https://www.jlc-bbs.com/platform/a/1221020) |
+| 工作时间统计    | 自动记录每天画板时长，按工程、周、时段出图表   | PCB / 原理图 | V2.2.45 ~ 4    | [打开](https://www.jlc-bbs.com/platform/a/1221046) |
+| 焊盘 ⇄ 过孔     | 通孔焊盘和过孔互相转换，尺寸与阻焊保持不变     | PCB          | V2.2.45 ~ 4    | [打开](https://www.jlc-bbs.com/platform/a/1221301) |
+| 导线 ⇄ 线条     | 带电的导线和不带电的线条互相转换               | PCB          | V2.2.45 ~ 4    | [打开](https://www.jlc-bbs.com/platform/a/1221325) |
+| 填充 ⇄ 图片     | 填充区域和图片对象互相转换，转换后能自由缩放   | PCB          | V2.2.45 ~ 4    | [打开](https://www.jlc-bbs.com/platform/a/1447607) |
+| 创建封装        | 把画布上散着的图元打包成一个封装存进个人库     | PCB          | **仅 V2.2.45** | [打开](https://www.jlc-bbs.com/platform/a/1221362) |
+| 位号查重        | 找出 PCB 里重复的位号，点一下直接跳过去        | PCB          | V2.2.45 ~ 4    | [打开](https://www.jlc-bbs.com/platform/a/1221381) |
+| 生成物理网络    | 没有原理图也能按铜皮接触关系反推出整板网络     | PCB          | V2.2.45 ~ 4    | [打开](https://www.jlc-bbs.com/platform/a/1221422) |
+| 导入 AD 网表    | 把 Altium Designer 的网表导入当前 PCB          | PCB          | V2.2.45 ~ 4    | [打开](https://www.jlc-bbs.com/platform/a/1230646) |
+| 导出引脚网络    | 把器件引脚与网络的对应关系导出成表格           | PCB          | V2.2.45 ~ 4    | [打开](https://www.jlc-bbs.com/platform/a/1447636) |
+| 批量修改网络    | 用 Excel 两列数据批量改名，还能反查引脚        | PCB          | V2.2.45 ~ 4    | [打开](https://www.jlc-bbs.com/platform/a/1221464) |
+| 丝印代码转换    | 把 01C 这类丝印代码换算成 10kΩ 并写回          | PCB / 原理图 | V2.2.45 ~ 4    | [打开](https://www.jlc-bbs.com/platform/a/1221485) |
+| 清空多余属性    | 一键清掉替换件用不上的器件属性                 | PCB / 原理图 | V2.2.45 ~ 4    | [打开](https://www.jlc-bbs.com/platform/a/1221495) |
+| 刷新网表        | 重新读一遍网表再写回，清掉属性里的占位符       | PCB / 原理图 | V2.2.45 ~ 3    | [打开](https://www.jlc-bbs.com/platform/a/1447654) |
+| 导入 BOM        | 从 Excel 粘贴 BOM，批量回填器件参数            | PCB / 原理图 | V2.2.45 ~ 4    | [打开](https://www.jlc-bbs.com/platform/a/1221515) |
+| 批量替换器件    | 按位号批量换成立创器件，位置角度不变           | PCB          | V2.2.45 ~ 4    | [打开](https://www.jlc-bbs.com/platform/a/1221533) |
+| 模型批量更新    | 批量调整模型大小角度位置，或从旧网表恢复模型   | PCB          | V2.2.45 ~ 4    | [打开](https://www.jlc-bbs.com/platform/a/1221572) |
+| 从 PCB 转原理图 | 拿 PCB 上的器件和位置，反向生成一张原理图      | 原理图       | V2.2.45 ~ 4    | [打开](https://www.jlc-bbs.com/platform/a/1221620) |
+| 创建导线        | 按 PCB 或网表给原理图里缺失的引脚补导线        | 原理图       | V2.2.45 ~ 4    | [打开](https://www.jlc-bbs.com/platform/a/1221655) |
+| 引脚排序        | 给符号引脚按编号或名称排序，可设间距           | 符号         | V2.2.45 ~ 4    | —                                                  |
+| EDA 桥          | 让外部程序把图形送进画布，也可作为调试通道     | 通用         | V2.2.45 ~ 4    | —                                                  |
 
 ---
 

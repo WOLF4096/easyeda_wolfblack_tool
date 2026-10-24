@@ -1,16 +1,48 @@
-/.vscode/*
-!/.vscode/extensions.json
-!/.vscode/settings.json
-/coverage/
-/dist/
+# ============================================================
+# 本文件本身必须入库：它是「哪些东西不该进仓库」的唯一事实源。
+# 历史教训：曾把 `.gitignore` / `.edaignore` / `.prettierrc.js` / `.prettierignore`
+# 写进自己的忽略列表，导致 `.edaignore` 从未入库 —— 新克隆的仓库一打包就抛 ENOENT。
+# ============================================================
+
+# ---- 依赖与构建产物（都由 npm run build 重建）----
 /node_modules/
+/dist/
+/iframe/js/app/
+/build/dist/
+/build/test-report/
+/coverage/
+
+# ---- 临时文件 / 日志 ----
 /temp/*
 !/temp/.gitkeep
 debug.log
-.edaignore
-.prettierrc.js
-.gitignore
-.prettierignore
-测试样本
-/build/dist/
-/build/test-report/
+
+# ---- 编辑器 / IDE 私有配置 ----
+/.idea/
+/.vscode/*
+!/.vscode/extensions.json
+!/.vscode/settings.json
+
+# ---- 助手工作记忆（本地上下文，不属于代码库）----
+/.workbuddy/
+
+# ---- 文档
+# 只留 docs/FORMATLOG.md：它是 V3/V4 源码格式的技术规格，被 src/js 与 iframe/js/src
+# 的多处注释直接引用；其余文档仅作参考，不入库。
+/docs/*
+!/docs/FORMATLOG.md
+/README.dev.md
+/CHANGELOG.dev.md
+# 注意：README.md / CHANGELOG.md / PRIVACY.md / LICENSE / images/ / locales/
+# 是扩展广场的展示资源（详情、更新日志、详情图片、许可证、多语言），EDA 会读，必须入库。
+
+# ---- 一次性重构脚本（任务已完成，留在本地不归档）----
+/scripts/add-common-guard.js
+/scripts/fill-empty-catch.js
+/scripts/split-iframe.js
+
+# ---- 误建文件（文件名连空格一起被当成路径保存了下来）----
+/npm run build.cmd
+
+# ---- 测试样本：真实工程文件，体积大且含用户数据 ----
+/测试样本/

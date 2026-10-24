@@ -1,1 +1,13 @@
+# 行尾统一：仓库与工作区一律 LF。
+#
+# 为什么必须写死：本机 core.autocrlf=true，克隆出来的文本文件会被全量转成 CRLF；
+# 而 .prettierrc 要求 endOfLine: 'lf'，于是 pre-commit 的 lint-staged 会把每个文件
+# 整份重写（几千行假 diff），依赖「逐字节还原」的源码往返测试也会因此失真。
+# 写死 eol=lf 后，克隆结果与平台、本机 git 配置无关。
+* text=auto eol=lf
+
+# 二进制：交给 git 按内容判断，避免被当文本改写
+*.png binary
+*.eext binary
+
 *.json linguist-language=JSON-with-Comments
