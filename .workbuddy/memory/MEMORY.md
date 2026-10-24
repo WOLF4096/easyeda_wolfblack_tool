@@ -76,6 +76,10 @@ iframe 页面是宿主拼的 **`blob:` 文档**（`location.href = blob:https://
   直接用 `git diff --numstat iframe/js/app/` 核对（应只剩真实改动行；`git status` 的 M 可能是 mtime 假的）。
 - 样式只有 `iframe/css/common.css`（18 页共用）；`.hidden` 必须留文件最末且无 `!important`；`--vscode-*` 变量名不能改；
   被 JS 查询的类名改结构时要同步改 JS。版式自检 `npm run check:layout`。
+- ⚠️ **全局表单控件规则会吃掉单类选择器**：`input[type='text']` 等（第 371 行附近）特异性是 (0,1,1)，
+  单类 `.foo`（0,1,0）写在文件更后面也压不住 → 自定义输入框必须写成 `.父级 input.foo`（(0,2,1)），
+  `:focus`/`.is-modified` 也要带同级前缀。判定别靠肉眼，用 `getComputedStyle` 读 `backgroundColor`/`borderTopWidth`
+  （headless 里跑一遍即可，见 `temp/verify-e2e.mjs` 的做法）。
 
 ## 工时统计页的架构（v1.20.0 起）
 

@@ -388,9 +388,33 @@ export function WorkingHours() {
 	}
 
 	/**
+	 * 绑定窗口级输入事件，作为「人在干活」的第二路信号
+	 *
+	 * 只靠画布鼠标坐标时会漏判：用键盘改参数、在对话框里填表、当前没打开 PCB/原理图
+	 * （`getCurrentMousePosition()` 取不到值）都会被算成挂机，回来时弹出「离开了 N 分钟」。
+	 * 宿主没有 window（后台线程 / 测试环境）时静默跳过。
+	 *
+	 * @returns {void}
+	 * @sideEffects 注册全局事件监听（一次）
+	 */
+	function bindDomActivity() {
+		if (typeof window === 'undefined' || typeof window.addEventListener !== 'function') return;
+		const mark = () => {
+			session.lastMoveTime = Date.now();
+		};
+		['mousemove', 'mousedown', 'keydown', 'wheel'].forEach((name) => {
+			try {
+				window.addEventListener(name, mark, { passive: true, capture: true });
+			} catch (e) {
+				logger.debug('绑定活动事件失败（忽略）', e);
+			}
+		});
+	}
+
+	/**
 	 * 维护「本次挂机起点」，返回本次挂机已经持续多久
 	 *
-	 * 起点取「判定为空闲之前最后一次鼠标活动」的时间，而不是当前时间，
+	 * 起点取「判定为空闲之前最后一次活动」的时间，而不是当前时间，
 	 * 这样从挂机回到活动的那一拍算出来的就是真实的离开时长。离开状态一结束就清掉起点。
 	 *
 	 * @param {boolean} isCurrentlyIdle 本拍是否挂机
@@ -474,6 +498,8 @@ export function WorkingHours() {
 	// ==========================================
 	(async function init() {
 		try {
+			bindDomActivity(); // 键盘 / 滚轮 / 点击也算活动（画布坐标之外的场景）
+			session.lastMoveTime = Date.now();
 			await updateProjectInfo();
 			await ReminderManager.reload();
 			ReminderManager.showWelcome(); // 显示欢迎语

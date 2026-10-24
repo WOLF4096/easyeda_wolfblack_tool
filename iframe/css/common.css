@@ -1577,37 +1577,46 @@ label.inline,
 	font-size: 12px;
 }
 
-/** 转换值列：等宽 + 暖色，突出“即将写入的值” */
+/** 转换值列：等宽；颜色交给输入框自己控制（只有改过的值才高亮） */
 .cc-table .tbl td:last-child {
-	color: var(--vscode-syntax-string);
 	font-family: var(--vscode-font-mono);
 }
 
-/** 转换值输入框：平时看着像纯文本，悬停/聚焦才显边框，值被改过则高亮 */
-.cc-value-input {
+/**
+ * 转换值输入框：透明底、无边框，看着就是表格里的一段文字；
+ * 只有「会写回」的值才高亮加粗，其余保持与表体一致的 12px 常规样式。
+ *
+ * ⚠️ 必须写成 `.cc-table input.cc-value-input`：全局 `input[type='text']` 的
+ * 特异性是 (0,1,1)，单类选择器压不住，会被套上输入框的底色和边框。
+ */
+.cc-table input.cc-value-input {
 	width: 100%;
 	height: 22px;
 	padding: 0 2px;
 	background-color: transparent;
-	border: 1px solid transparent;
-	border-radius: var(--vscode-radius);
+	border: none;
+	border-radius: 0;
 	color: var(--vscode-text);
 	font: 12px/1 var(--vscode-font-mono);
+	font-weight: 400;
 	outline: none;
+	transition: none;
+	caret-color: var(--vscode-text-bright);
 }
 
-.cc-value-input:hover {
-	border-color: var(--vscode-border);
+.cc-table input.cc-value-input:focus {
+	border: none;
+	box-shadow: none;
+	background-color: transparent;
 }
 
-.cc-value-input:focus {
-	background-color: var(--vscode-bg);
-	border-color: var(--vscode-button-bg);
+.cc-table input.cc-value-input::selection {
+	background-color: var(--vscode-button-bg);
 }
 
-.cc-value-input.is-modified {
-	/* color: var(--vscode-syntax-string); */
-	font-weight: 600;
+.cc-table input.cc-value-input.is-modified {
+	color: var(--vscode-syntax-string);
+	font-weight: 700;
 }
 
 .cc-status {
