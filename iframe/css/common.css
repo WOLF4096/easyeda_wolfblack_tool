@@ -499,6 +499,7 @@ label.inline,
 
 /* 分段选择器（mm/mil、图片/矢量、图层…） */
 .segmented {
+	margin-bottom: 12px;
 	display: flex;
 	overflow: hidden;
 	border: 1px solid var(--vscode-border);
@@ -1927,7 +1928,7 @@ label.inline,
 }
 
 .ii-inputs .field-row {
-	margin-bottom: 6px;
+	margin-bottom: 10px;
 }
 
 .ii-inputs .field-row > label {
@@ -1944,11 +1945,12 @@ label.inline,
 	display: flex;
 	align-items: center;
 	gap: 5px;
-	margin-top: 6px;
+	margin-top: 12px;
 	font-size: 12px;
 }
 
 .ii-dpi-box {
+	margin-bottom: 12px;
 	display: flex;
 	gap: 8px;
 	align-items: stretch;
@@ -3636,4 +3638,3 @@ label.inline,
 	font-size: 13px;
 	text-align: center;
 }
-
