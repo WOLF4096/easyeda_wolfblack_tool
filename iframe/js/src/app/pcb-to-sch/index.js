@@ -2,7 +2,7 @@
  * @//module/ app/pcb-to-sch/index
  * @//description/ 页面入口：解包工程 → 解析 PCB → 查符号 → 构建原理图源码 → 预览表格 → 写入/导出（无导出）
  * @//exports/ 无
- * @//dependencies/ core/version, core/log, core/util, ui/statusBar, ui/progressTicker, ui/download, ui/toast, app/pcb-to-sch/model, app/pcb-to-sch/symbolParser, app/pcb-to-sch/sourceBuilder
+ * @//dependencies/ core/version, core/log, core/util, ui/statusBar, ui/progressTicker, ui/download, ui/toast, ui/rewardPrompt, app/pcb-to-sch/model, app/pcb-to-sch/symbolParser, app/pcb-to-sch/sourceBuilder
  * @//example/ 由 iframe/PcbToSch.html 加载（依赖同页的 jszip.min.js 提供全局 JSZip）
  *
  * 写入门禁（2026-10 实测）：`documentType !== 1`（非原理图页）时写入会被系统拦成「格式错误」，
@@ -21,6 +21,7 @@ import { createStatusBar } from '../../ui/statusBar.js';
 import { createProgressTicker } from '../../ui/progressTicker.js';
 import { downloadText } from '../../ui/download.js';
 import { toast } from '../../ui/toast.js';
+import { recordUsage } from '../../ui/rewardPrompt.js';
 import {
 	enrichWithSymbol,
 	findUuids,
@@ -432,6 +433,9 @@ async function onWrite() {
 		if (isSuccess && placedCount > 0) {
 			updateProgress(100, `写入成功！耗时${elapsed}秒，器件 ${placedCount} 个`);
 			toast('写入成功', 'success');
+
+			// 写入文档成功 → 记一次使用（内部吞掉异常，不影响写入结果）
+			await recordUsage();
 		} else if (isSuccess) {
 			updateProgress(100, `源码已写入，但没有生成任何器件（耗时${elapsed}秒）`);
 			toast('源码已写入，但器件没有生成：原理图页可能有旧内容，建议新建一个空白原理图页后重新写入', 'error');
@@ -572,6 +576,9 @@ async function onExportProject() {
 
 		updateProgress(100, `导出成功：${fileName}`);
 		toast('文件已导出', 'success');
+
+		// 导出文件成功 → 记一次使用（内部吞掉异常，不影响导出结果）
+		await recordUsage();
 	} catch (error) {
 		logger.error('导出失败:', error);
 		updateProgress(0, `导出错误: ${error.message}`);

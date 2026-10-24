@@ -72,6 +72,8 @@ iframe 页面是宿主拼的 **`blob:` 文档**（`location.href = blob:https://
   2026-10-22 验证有效的手法：`git worktree add temp/x HEAD` 取旧快照 → 新旧同名模块跑同一批输入 → 逐项 `deepEqual`
   （含就地副作用与抛错文案）。注意别踩两个自坑：A/B 各调一次随机 `pick()` 会拿到不同输入；带偏移参数的函数两侧要传同一组偏移。
 - ⚠️ 别对旧文件整份跑 prettier（工作区 CRLF + 旧文件 4 空格，`.prettierrc` 是 useTabs + lf → 几千行假 diff）。
+  `iframe/js/app/*` 产物同理：仓库里存的是 **esbuild 原始格式**（双引号 + 2 空格），`build:iframe` 后**不要**跑 prettier，
+  直接用 `git diff --numstat iframe/js/app/` 核对（应只剩真实改动行；`git status` 的 M 可能是 mtime 假的）。
 - 样式只有 `iframe/css/common.css`（18 页共用）；`.hidden` 必须留文件最末且无 `!important`；`--vscode-*` 变量名不能改；
   被 JS 查询的类名改结构时要同步改 JS。版式自检 `npm run check:layout`。
 

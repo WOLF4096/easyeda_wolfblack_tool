@@ -290,6 +290,200 @@
     return banner(doc, text, opts.timeoutMs === void 0 ? 3e3 : opts.timeoutMs) ? "dom" : "none";
   }
 
+  // iframe/js/src/ui/rewardDialog.js
+  var OVERLAY_ID = "reward-modal";
+  var STYLE_ID = "reward-style";
+  var ISSUE_URL = "https://github.com/WOLF4096/easyeda_wolfblack_tool/issues";
+  var IMAGES = {
+    reward: {
+      src: "/images/reward_qrcode.png",
+      fallback: "../images/reward_qrcode.png",
+      caption: "微信扫码 · 请开发者喝蜜雪"
+    },
+    wechat: {
+      src: "/images/wx.png",
+      fallback: "../images/wx.png",
+      caption: "微信扫码联系开发者"
+    }
+  };
+  var DIALOG_STYLE = `
+.rw-overlay { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; z-index: 100000;
+	background: rgba(0,0,0,0.7); display: none; justify-content: center; align-items: center;
+	backdrop-filter: blur(2px); font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+.rw-box { width: 440px; max-width: calc(100vw - 40px); max-height: 82vh; background: #252526;
+	border: 1px solid #3e3e42; border-radius: 8px; box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+	display: flex; flex-direction: column; overflow: hidden; }
+.rw-head { padding: 14px 18px; border-bottom: 1px solid #3e3e42; font-size: 15px; font-weight: bold;
+	color: #eee; display: flex; justify-content: space-between; align-items: center; flex-shrink: 0; }
+.rw-close { cursor: pointer; color: #999; font-size: 16px; line-height: 1; padding: 2px 7px; border-radius: 4px; user-select: none; }
+.rw-close:hover { background: #3c3c3c; color: #fff; }
+.rw-body { padding: 16px 18px; overflow-y: auto; font-size: 13px; line-height: 1.7; color: #ccc; background: #1e1e1e; }
+.rw-img-area { display: none; margin-top: 14px; text-align: center; background: #fff; border-radius: 6px; padding: 12px; }
+.rw-img-area img { max-width: 260px; max-height: min(260px, 36vh); width: auto; height: auto; display: block; margin: 0 auto; }
+.rw-cap { margin-top: 8px; font-size: 12px; color: #666; }
+.rw-foot { padding: 12px 18px; border-top: 1px solid #3e3e42; display: flex; gap: 8px; flex-wrap: wrap;
+	align-items: center; justify-content: flex-end; background: #333337; flex-shrink: 0; }
+/* 四个按钮统一成同一尺寸：固定高度 + inline-flex 居中，
+   button 与 a 的默认字体/行高不同，不写死的话「反馈问题」会比旁边高一截 */
+.rw-btn { display: inline-flex; align-items: center; justify-content: center; box-sizing: border-box;
+	height: 30px; padding: 0 14px; border: 1px solid #3e3e42; border-radius: 4px; background: #3c3c3c;
+	color: #ddd; font-family: inherit; font-size: 12px; line-height: 1; white-space: nowrap;
+	cursor: pointer; transition: opacity 0.15s; }
+.rw-btn:hover { background: #4e4e52; color: #fff; }
+a.rw-btn { text-decoration: none; }
+.rw-btn-reward { background: #c2492f; border-color: #c2492f; color: #fff; font-weight: 600; }
+.rw-btn-reward:hover { background: #a93b25; border-color: #a93b25; }
+.rw-btn-ghost { background: transparent; }
+`;
+  var DIALOG_HTML = `
+<div class="rw-overlay" id="${OVERLAY_ID}">
+	<div class="rw-box">
+		<div class="rw-head"><span id="rw-title">感觉不错？</span><span class="rw-close" id="rw-btn-x" title="关闭">✕</span></div>
+		<div class="rw-body">
+			<p id="rw-desc" style="margin:0;"></p>
+			<div class="rw-img-area" id="rw-img-area">
+				<img id="rw-img" alt="二维码">
+				<div class="rw-cap" id="rw-cap"></div>
+			</div>
+		</div>
+		<div class="rw-foot">
+			<button class="rw-btn rw-btn-reward" id="rw-btn-reward">请开发者喝蜜雪</button>
+			<button class="rw-btn" id="rw-btn-wechat">联系开发者</button>
+			<a class="rw-btn" id="rw-btn-issue" href="${ISSUE_URL}" target="_blank" rel="noopener noreferrer">反馈问题</a>
+			<button class="rw-btn rw-btn-ghost" id="rw-btn-close">关闭</button>
+		</div>
+	</div>
+</div>
+`;
+  function closeRewardDialog() {
+    if (typeof document === "undefined") return;
+    const overlay = document.getElementById(OVERLAY_ID);
+    if (overlay) overlay.style.display = "none";
+  }
+  function bindImageFallback(img, meta) {
+    img.onerror = () => {
+      if (img.getAttribute("src") === meta.src) {
+        img.setAttribute("src", meta.fallback);
+        return;
+      }
+      img.onerror = null;
+    };
+  }
+  function showRewardImage(kind = "reward") {
+    const overlay = ensureDialog();
+    if (!overlay) return;
+    const meta = IMAGES[kind] || IMAGES.reward;
+    const img = overlay.querySelector("#rw-img");
+    const area = overlay.querySelector("#rw-img-area");
+    const caption = overlay.querySelector("#rw-cap");
+    if (!img || !area) return;
+    bindImageFallback(img, meta);
+    img.setAttribute("src", meta.src);
+    if (caption) caption.textContent = meta.caption;
+    area.style.display = "block";
+  }
+  function hideImageArea() {
+    if (typeof document === "undefined") return;
+    const area = document.getElementById("rw-img-area");
+    if (area) area.style.display = "none";
+  }
+  function ensureDialog() {
+    if (typeof document === "undefined") return null;
+    const existing = document.getElementById(OVERLAY_ID);
+    if (existing) return existing;
+    const style = document.createElement("style");
+    style.id = STYLE_ID;
+    style.textContent = DIALOG_STYLE;
+    document.head.appendChild(style);
+    const holder = document.createElement("div");
+    holder.innerHTML = DIALOG_HTML.trim();
+    const overlay = holder.firstElementChild;
+    document.body.appendChild(overlay);
+    overlay.querySelector("#rw-btn-close").addEventListener("click", closeRewardDialog);
+    overlay.querySelector("#rw-btn-x").addEventListener("click", closeRewardDialog);
+    overlay.querySelector("#rw-btn-reward").addEventListener("click", () => showRewardImage("reward"));
+    overlay.querySelector("#rw-btn-wechat").addEventListener("click", () => showRewardImage("wechat"));
+    return overlay;
+  }
+  function fillDescription(count) {
+    const desc = document.getElementById("rw-desc");
+    if (!desc) return;
+    desc.textContent = count ? `这是你第 ${count} 次使用「从 PCB 转原理图」。如果它帮你省了时间，可以请开发者喝杯蜜雪，遇到问题也欢迎反馈～` : "本工具免费开源、持续维护。如果它帮你省了时间，欢迎请开发者喝杯蜜雪，或反馈使用中遇到的问题～";
+  }
+  function showRewardDialog(options = {}) {
+    const overlay = ensureDialog();
+    if (!overlay) return;
+    const title = overlay.querySelector("#rw-title");
+    if (title) title.textContent = options.title || "感觉不错？";
+    fillDescription(options.count);
+    hideImageArea();
+    if (options.show) showRewardImage(options.show);
+    overlay.style.display = "flex";
+  }
+
+  // iframe/js/src/ui/rewardPrompt.js
+  var COUNT_KEY = "PCB_TO_SCH_USAGE_COUNT";
+  var PROMPTED_KEY = "PCB_TO_SCH_REWARD_PROMPTED";
+  var PROMPT_STEP = 10;
+  var countCache = null;
+  var promptedCache = null;
+  var queue = Promise.resolve();
+  function toCount(value) {
+    const parsed = Number.parseInt(value, 10);
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
+  }
+  async function readValue(key) {
+    try {
+      const host = getEda();
+      if (!host || !host.sys_Storage) return null;
+      const raw = await host.sys_Storage.getExtensionUserConfig(key);
+      return raw === void 0 || raw === null ? null : raw;
+    } catch (e) {
+      return null;
+    }
+  }
+  async function writeValue(key, value) {
+    try {
+      const host = getEda();
+      if (!host || !host.sys_Storage) return false;
+      return await host.sys_Storage.setExtensionUserConfig(key, value) !== false;
+    } catch (e) {
+      return false;
+    }
+  }
+  async function readCount() {
+    if (countCache === null) countCache = toCount(await readValue(COUNT_KEY));
+    return countCache;
+  }
+  async function readPrompted() {
+    if (promptedCache === null) promptedCache = toCount(await readValue(PROMPTED_KEY));
+    return promptedCache;
+  }
+  function shouldPrompt(count, prompted) {
+    return count > 0 && count % PROMPT_STEP === 0 && prompted !== count;
+  }
+  async function recordOnce(showDialog) {
+    try {
+      const count = await readCount() + 1;
+      countCache = count;
+      await writeValue(COUNT_KEY, String(count));
+      logger.info(`累计转换次数：${count}`);
+      if (shouldPrompt(count, await readPrompted())) {
+        promptedCache = count;
+        await writeValue(PROMPTED_KEY, String(count));
+        showDialog({ title: "感觉不错？", count });
+      }
+      return count;
+    } catch (e) {
+      return -1;
+    }
+  }
+  function recordUsage(showDialog = showRewardDialog) {
+    const task = queue.then(() => recordOnce(showDialog));
+    queue = task.catch(() => void 0);
+    return task;
+  }
+
   // iframe/js/src/app/pcb-to-sch/model.js
   function findUuids(projectJson2, sheetUuid) {
     let schematicUuid = null;
@@ -1185,6 +1379,7 @@
       if (isSuccess && placedCount > 0) {
         updateProgress(100, `写入成功！耗时${elapsed}秒，器件 ${placedCount} 个`);
         toast("写入成功", "success");
+        await recordUsage();
       } else if (isSuccess) {
         updateProgress(100, `源码已写入，但没有生成任何器件（耗时${elapsed}秒）`);
         toast("源码已写入，但器件没有生成：原理图页可能有旧内容，建议新建一个空白原理图页后重新写入", "error");
@@ -1285,6 +1480,7 @@
       URL.revokeObjectURL(link.href);
       updateProgress(100, `导出成功：${fileName}`);
       toast("文件已导出", "success");
+      await recordUsage();
     } catch (error) {
       logger.error("导出失败:", error);
       updateProgress(0, `导出错误: ${error.message}`);
