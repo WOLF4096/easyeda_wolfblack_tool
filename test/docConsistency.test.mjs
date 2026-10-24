@@ -98,6 +98,19 @@ describe('文档一致性', () => {
 		assert.deepEqual(onlyV22, ['创建封装'], '只有「创建封装」允许标注为仅 V2.2.45');
 	});
 
+	it('18 个页面标题统一为「狼黑工具 - X」', () => {
+		const dir = path.join(ROOT, 'iframe');
+		const pages = fs.readdirSync(dir).filter((file) => file.endsWith('.html'));
+		assert.equal(pages.length, 18, `页面数应为 18，实际 ${pages.length}`);
+		for (const page of pages) {
+			const html = fs.readFileSync(path.join(dir, page), 'utf8');
+			const title = (html.match(/<title>([^<]*)<\/title>/) || [])[1];
+			assert.ok(title, `${page} 缺少 <title>`);
+			assert.ok(title.startsWith('狼黑工具 - '), `${page} 标题缺少「狼黑工具 - 」前缀：${title}`);
+			assert.ok(title.length > '狼黑工具 - '.length, `${page} 标题只有前缀：${title}`);
+		}
+	});
+
 	it('package.json 与 extension.json 版本号一致', () => {
 		const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8'));
 		const ext = JSON.parse(fs.readFileSync(path.join(ROOT, 'extension.json'), 'utf8'));
