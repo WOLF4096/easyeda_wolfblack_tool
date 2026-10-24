@@ -17,12 +17,12 @@
  *
  * 开发者：WOLF4096
  * 辅助开发：DeepSeek-V4.1-Flash
- * 本工具为非官方第三方开源扩展，与嘉立创 / EasyEDA 官方无隶属关系
+ * 本工具为非官方第三方开源扩展
  */
+import { spawn } from 'node:child_process';
 import fs from 'node:fs';
 import http from 'node:http';
 import path from 'node:path';
-import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -44,7 +44,11 @@ function readPageSizes() {
 }
 
 /** 生成测量用的外壳页：与页面 1:1 的 iframe + 度量脚本 */
-const HARNESS = (page, w, h) => `<!doctype html><html><head><meta charset="utf-8"><style>html,body{margin:0;padding:0;overflow:hidden;background:#0a0a0a}iframe{border:0;display:block;width:${w}px;height:${h}px}</style></head>
+const HARNESS = (
+	page,
+	w,
+	h,
+) => `<!doctype html><html><head><meta charset="utf-8"><style>html,body{margin:0;padding:0;overflow:hidden;background:#0a0a0a}iframe{border:0;display:block;width:${w}px;height:${h}px}</style></head>
 <body>
 <iframe id="f" src="/iframe/${page}.html"></iframe>
 <script>
@@ -265,7 +269,7 @@ async function main() {
 				pad(`${w}×${h}`, 12) +
 				pad(marks.length ? marks.join(' ') : '无', 10) +
 				pad(bad.length ? String(bad.length) : '-', 8) +
-				(okBad ? (okOverflow ? 'OK' : '') : '')
+				(okBad ? (okOverflow ? 'OK' : '') : ''),
 		);
 		for (const b of bad) {
 			out.push(`      ✗ ${b.why}  ${b.el}  ${b.rect ? 'rect=' + b.rect.join(',') : 'scroll=' + b.scroll.join('/')}`);

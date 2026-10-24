@@ -13,18 +13,18 @@
  *
  * 开发者：WOLF4096
  * 辅助开发：DeepSeek-V4.1-Flash
- * 本工具为非官方第三方开源扩展，与嘉立创 / EasyEDA 官方无隶属关系
+ * 本工具为非官方第三方开源扩展
  */
 import assert from 'node:assert/strict';
 import { afterEach, beforeEach, describe, it } from 'node:test';
 
 import * as edaMod from '../iframe/js/src/core/eda.js';
-import * as versionMod from '../iframe/js/src/core/version.js';
 import * as layerMod from '../iframe/js/src/core/layer.js';
-import * as netlistMod from '../iframe/js/src/core/netlist.js';
 import * as lengthMod from '../iframe/js/src/core/length.js';
+import * as netlistMod from '../iframe/js/src/core/netlist.js';
 import * as sourceLineMod from '../iframe/js/src/core/sourceLine.js';
 import * as utilMod from '../iframe/js/src/core/util.js';
+import * as versionMod from '../iframe/js/src/core/version.js';
 
 /** 把 core/* 拼成一个与旧 `WolfCommon` 同形的对象 */
 const CORE = { ...edaMod, ...versionMod, ...layerMod, ...netlistMod, ...lengthMod, ...sourceLineMod, ...utilMod };

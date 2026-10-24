@@ -2,56 +2,59 @@
 <!--
   开发者：WOLF4096
   辅助开发：DeepSeek-V4.1-Flash
-  本工具为非官方第三方开源扩展，与嘉立创 / EasyEDA 官方无隶属关系
+  本工具为非官方第三方开源扩展
 -->
 <html lang="zh-CN">
-	<head>
-		<meta charset="UTF-8" />
-		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-		<title>狼黑工具 - 批量替换器件</title>
-		<link rel="stylesheet" href="/iframe/css/common.css" />
-	</head>
-	<body class="app">
-		<div class="toolbar">
-			<div class="toolbar-left">
-				<span class="hint">本工具直接改源码，需确保无重复位号，使用前务必备份！</span>
-			</div>
-			<div class="button-group">
-				<button id="btnPaste" class="btn-secondary">粘贴</button>
-				<button id="btnFetch" class="btn-secondary" disabled>获取</button>
-				<button id="btnReplace" disabled>替换</button>
-			</div>
-		</div>
 
-		<div class="table-wrap">
-			<table id="dataTable" class="tbl rc-table">
-				<thead>
-					<tr>
-						<th><input type="checkbox" id="selectAll" title="全选/取消全选" /></th>
-						<th class="clickable-header" data-sort="designator" title="点击按位号排序">
-							位号<span class="sort-icon"></span>
-						</th>
-						<th class="clickable-header" data-sort="name" title="点击按名称排序">名称<span class="sort-icon"></span></th>
-						<th class="clickable-header" data-sort="footprint" title="点击按封装排序">
-							封装<span class="sort-icon"></span>
-						</th>
-						<th class="clickable-header" data-sort="supplierId" title="点击按立创编号排序">
-							立创编号<span class="sort-icon"></span>
-						</th>
-						<th class="clickable-header" data-key="preserveName" title="点击全选/取消全选此列">保留名称</th>
-						<th class="clickable-header" data-key="preserveFootprint" title="点击全选/取消全选此列">保留封装</th>
-						<th class="clickable-header" data-key="preserve3D" title="点击全选/取消全选此列">保留模型</th>
-					</tr>
-				</thead>
-				<tbody id="tableBody"></tbody>
-			</table>
-		</div>
+<head>
+	<meta charset="UTF-8" />
+	<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+	<title>狼黑工具 - 批量替换器件</title>
+	<link rel="stylesheet" href="/iframe/css/common.css" />
+</head>
 
-		<div class="status-bar accent" id="statusBar">
-			<div class="progress-bg" id="progressBg"></div>
-			<span class="status-text" id="statusText">准备就绪，待粘贴数据，格式：位号|C编号（必须从Excel复制粘贴）</span>
+<body class="app">
+	<div class="toolbar">
+		<div class="toolbar-left">
+			<span class="hint">本工具直接改源码，需确保无重复位号，使用前务必备份！</span>
 		</div>
+		<div class="button-group">
+			<button id="btnPaste" class="btn-secondary">粘贴</button>
+			<button id="btnFetch" class="btn-secondary" disabled>获取</button>
+			<button id="btnReplace" disabled>替换</button>
+		</div>
+	</div>
 
-		<script src="/iframe/js/app/ReplaceComponent.js"></script>
-	</body>
+	<div class="table-wrap">
+		<table id="dataTable" class="tbl rc-table">
+			<thead>
+				<tr>
+					<th><input type="checkbox" id="selectAll" title="全选/取消全选" /></th>
+					<th class="clickable-header" data-sort="designator" title="点击按位号排序">
+						位号<span class="sort-icon"></span>
+					</th>
+					<th class="clickable-header" data-sort="name" title="点击按名称排序">名称<span class="sort-icon"></span></th>
+					<th class="clickable-header" data-sort="footprint" title="点击按封装排序">
+						封装<span class="sort-icon"></span>
+					</th>
+					<th class="clickable-header" data-sort="supplierId" title="点击按立创编号排序">
+						立创编号<span class="sort-icon"></span>
+					</th>
+					<th class="clickable-header" data-key="preserveName" title="点击全选/取消全选此列">保留名称</th>
+					<th class="clickable-header" data-key="preserveFootprint" title="点击全选/取消全选此列">保留封装</th>
+					<th class="clickable-header" data-key="preserve3D" title="点击全选/取消全选此列">保留模型</th>
+				</tr>
+			</thead>
+			<tbody id="tableBody"></tbody>
+		</table>
+	</div>
+
+	<div class="status-bar accent" id="statusBar">
+		<div class="progress-bg" id="progressBg"></div>
+		<span class="status-text" id="statusText">准备就绪，待粘贴数据，格式：位号|C编号（必须从Excel复制粘贴）</span>
+	</div>
+
+	<script src="/iframe/js/app/ReplaceComponent.js"></script>
+</body>
+
 </html>

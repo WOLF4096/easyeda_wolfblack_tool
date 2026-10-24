@@ -2,81 +2,84 @@
 <!--
   开发者：WOLF4096
   辅助开发：DeepSeek-V4.1-Flash
-  本工具为非官方第三方开源扩展，与嘉立创 / EasyEDA 官方无隶属关系
+  本工具为非官方第三方开源扩展
 -->
 <html lang="zh-CN">
-	<head>
-		<meta charset="UTF-8" />
-		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-		<title>狼黑工具 - 3D 模型批量更新</title>
-		<link rel="stylesheet" href="/iframe/css/common.css" />
-	</head>
-	<body class="app">
-		<div class="toolbar">
-			<div class="toolbar-left">
-				<span class="title">3D 模型更新 &amp; 恢复</span>
-				<span class="hint">使用前必须确保没有重复位号</span>
-			</div>
-			<div class="button-group">
-				<button id="btn-get-current" class="btn-secondary">获取当前数据</button>
-				<button id="btn-load" class="btn-secondary">读取网表</button>
-				<button id="btn-unit" class="btn-secondary">单位切换</button>
-				<button id="btn-update" disabled>执行更新</button>
-			</div>
-		</div>
 
-		<div class="table-wrap">
-			<table id="data-table" class="tbl nu-table">
-				<colgroup>
-					<col class="c-d" />
-					<col />
-					<col />
-					<col class="c-w" />
-					<col class="c-w" />
-					<col class="c-w" />
-					<col class="c-w" />
-					<col class="c-w" />
-					<col class="c-w" />
-					<col class="c-w" />
-					<col class="c-w" />
-					<col class="c-w" />
-					<col class="c-s" />
-				</colgroup>
-				<thead>
-					<tr>
-						<th rowspan="2" data-sort="designator">位号</th>
-						<th rowspan="2" data-sort="footprint">封装</th>
-						<th rowspan="2" data-sort="modelTitle">3D模型</th>
-						<th colspan="3" id="th-size">大小 (mm)</th>
-						<th colspan="3">旋转 (°)</th>
-						<th colspan="3" id="th-offset">偏移 (mm)</th>
-						<th rowspan="2" data-sort="status">状态</th>
-					</tr>
-					<tr>
-						<th data-sort="sX" class="col-xyz">X</th>
-						<th data-sort="sY" class="col-xyz">Y</th>
-						<th data-sort="sZ" class="col-xyz">Z</th>
-						<th data-sort="rX" class="col-xyz">X</th>
-						<th data-sort="rY" class="col-xyz">Y</th>
-						<th data-sort="rZ" class="col-xyz">Z</th>
-						<th data-sort="oX" class="col-xyz">X</th>
-						<th data-sort="oY" class="col-xyz">Y</th>
-						<th data-sort="oZ" class="col-xyz">Z</th>
-					</tr>
-				</thead>
-				<tbody id="table-body">
-					<tr class="empty-row">
-						<td colspan="13">请先读取网表文件</td>
-					</tr>
-				</tbody>
-			</table>
-		</div>
+<head>
+	<meta charset="UTF-8" />
+	<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+	<title>狼黑工具 - 3D 模型批量更新</title>
+	<link rel="stylesheet" href="/iframe/css/common.css" />
+</head>
 
-		<div class="status-bar accent" id="statusBar">
-			<div class="progress-bg" id="progressBg"></div>
-			<span class="status-text" id="status-text">就绪</span>
+<body class="app">
+	<div class="toolbar">
+		<div class="toolbar-left">
+			<span class="title">3D 模型更新 &amp; 恢复</span>
+			<span class="hint">使用前必须确保没有重复位号</span>
 		</div>
+		<div class="button-group">
+			<button id="btn-get-current" class="btn-secondary">获取当前数据</button>
+			<button id="btn-load" class="btn-secondary">读取网表</button>
+			<button id="btn-unit" class="btn-secondary">单位切换</button>
+			<button id="btn-update" disabled>执行更新</button>
+		</div>
+	</div>
 
-		<script src="/iframe/js/app/NetlistUpdate3DModels.js"></script>
-	</body>
+	<div class="table-wrap">
+		<table id="data-table" class="tbl nu-table">
+			<colgroup>
+				<col class="c-d" />
+				<col />
+				<col />
+				<col class="c-w" />
+				<col class="c-w" />
+				<col class="c-w" />
+				<col class="c-w" />
+				<col class="c-w" />
+				<col class="c-w" />
+				<col class="c-w" />
+				<col class="c-w" />
+				<col class="c-w" />
+				<col class="c-s" />
+			</colgroup>
+			<thead>
+				<tr>
+					<th rowspan="2" data-sort="designator">位号</th>
+					<th rowspan="2" data-sort="footprint">封装</th>
+					<th rowspan="2" data-sort="modelTitle">3D模型</th>
+					<th colspan="3" id="th-size">大小 (mm)</th>
+					<th colspan="3">旋转 (°)</th>
+					<th colspan="3" id="th-offset">偏移 (mm)</th>
+					<th rowspan="2" data-sort="status">状态</th>
+				</tr>
+				<tr>
+					<th data-sort="sX" class="col-xyz">X</th>
+					<th data-sort="sY" class="col-xyz">Y</th>
+					<th data-sort="sZ" class="col-xyz">Z</th>
+					<th data-sort="rX" class="col-xyz">X</th>
+					<th data-sort="rY" class="col-xyz">Y</th>
+					<th data-sort="rZ" class="col-xyz">Z</th>
+					<th data-sort="oX" class="col-xyz">X</th>
+					<th data-sort="oY" class="col-xyz">Y</th>
+					<th data-sort="oZ" class="col-xyz">Z</th>
+				</tr>
+			</thead>
+			<tbody id="table-body">
+				<tr class="empty-row">
+					<td colspan="13">请先读取网表文件</td>
+				</tr>
+			</tbody>
+		</table>
+	</div>
+
+	<div class="status-bar accent" id="statusBar">
+		<div class="progress-bg" id="progressBg"></div>
+		<span class="status-text" id="status-text">就绪</span>
+	</div>
+
+	<script src="/iframe/js/app/NetlistUpdate3DModels.js"></script>
+</body>
+
 </html>

@@ -17,7 +17,7 @@
  *
  * 开发者：WOLF4096
  * 辅助开发：DeepSeek-V4.1-Flash
- * 本工具为非官方第三方开源扩展，与嘉立创 / EasyEDA 官方无隶属关系
+ * 本工具为非官方第三方开源扩展
  */
 import fs from 'node:fs';
 import path from 'node:path';
@@ -26,11 +26,7 @@ const ROOT = path.resolve(import.meta.dirname, '..');
 const DRY = process.argv.includes('--dry');
 
 /** 署名正文（三行，文档与代码共用同一份文本） */
-const LINES = [
-	'开发者：WOLF4096',
-	'辅助开发：DeepSeek-V4.1-Flash',
-	'本工具为非官方第三方开源扩展，与嘉立创 / EasyEDA 官方无隶属关系',
-];
+const LINES = ['开发者：WOLF4096', '辅助开发：DeepSeek-V4.1-Flash', '本工具为非官方第三方开源扩展'];
 /** 幂等标记：出现任意一处即认为已加过 */
 const MARK = '辅助开发：DeepSeek-V4.1-Flash';
 

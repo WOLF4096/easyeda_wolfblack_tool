@@ -2,100 +2,103 @@
 <!--
   开发者：WOLF4096
   辅助开发：DeepSeek-V4.1-Flash
-  本工具为非官方第三方开源扩展，与嘉立创 / EasyEDA 官方无隶属关系
+  本工具为非官方第三方开源扩展
 -->
 <html lang="zh-CN">
-	<head>
-		<meta charset="UTF-8" />
-		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-		<title>狼黑工具 - 导入图片</title>
-		<link rel="stylesheet" href="/iframe/css/common.css" />
-	</head>
-	<body class="app-row">
-		<div class="ii-preview">
-			<div class="ii-section-title"><i class="icon icon-image"></i>图像预览</div>
-			<div class="ii-preview-box" id="previewBox">
-				<div class="preview-placeholder">
-					<i class="icon icon-image"></i>
-					<p>请选择图像文件</p>
-				</div>
-				<img id="previewImage" class="hidden" alt="预览图像" />
-				<div id="gridPreview" class="grid-preview hidden"></div>
+
+<head>
+	<meta charset="UTF-8" />
+	<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+	<title>狼黑工具 - 导入图片</title>
+	<link rel="stylesheet" href="/iframe/css/common.css" />
+</head>
+
+<body class="app-row">
+	<div class="ii-preview">
+		<div class="ii-section-title"><i class="icon icon-image"></i>图像预览</div>
+		<div class="ii-preview-box" id="previewBox">
+			<div class="preview-placeholder">
+				<i class="icon icon-image"></i>
+				<p>请选择图像文件</p>
 			</div>
+			<img id="previewImage" class="hidden" alt="预览图像" />
+			<div id="gridPreview" class="grid-preview hidden"></div>
 		</div>
+	</div>
 
-		<div class="ii-controls">
-			<div class="ii-cols">
-				<div class="ii-col ii-inputs">
-					<button class="ii-btn-block" id="selectImageBtn">
-						<i class="icon icon-upload"></i>
-						选择/更换图像
-					</button>
-					<div class="ii-section-title">图像尺寸设置</div>
-					<div class="segmented">
-						<div class="unit-option" data-unit="mm">mm</div>
-						<div class="unit-option active" data-unit="mil">mil</div>
-					</div>
-					<div class="field-row">
-						<label for="widthInput">宽度</label>
-						<input type="number" id="widthInput" min="0" step="0.1" />
-					</div>
-					<div class="field-row">
-						<label for="heightInput">高度</label>
-						<input type="number" id="heightInput" min="0" step="0.1" />
-					</div>
-					<label class="ii-check">
-						<input type="checkbox" id="aspectRatioCheckbox" checked />
-						保持横纵比
-					</label>
-					<label class="ii-check">
-						<input type="checkbox" id="sliceimport" />
-						启用切片导入
-					</label>
-				</div>
-
-				<div class="ii-col ii-col-dpi">
-					<button class="btn-secondary ii-btn-block" id="placeImageBtn" disabled>
-						<i class="icon icon-export"></i>
-						放置到画布上
-					</button>
-					<div class="ii-section-title">DPI 快速选择</div>
-					<div class="ii-dpi-box">
-						<div class="ii-slider-wrap">
-							<input type="range" id="dpiSlider" min="0" max="5" step="1" value="2" />
-						</div>
-						<div class="ii-dpi-list" id="dpiValuesList">
-							<div class="ii-dpi-item" data-dpi="300">300 DPI</div>
-							<div class="ii-dpi-item" data-dpi="600">600 DPI</div>
-							<div class="ii-dpi-item" data-dpi="900">900 DPI</div>
-							<div class="ii-dpi-item" data-dpi="1200">1200 DPI</div>
-							<div class="ii-dpi-item" data-dpi="2400">2400 DPI</div>
-							<div class="ii-dpi-item" data-dpi="4800">4800 DPI</div>
-						</div>
-					</div>
-					<div class="field-row">
-						<input type="number" id="customDpiInput" min="1" placeholder="自定义 DPI 值" />
-					</div>
-				</div>
-			</div>
-
-			<div class="ii-col">
-				<div class="ii-section-title">放置图层</div>
+	<div class="ii-controls">
+		<div class="ii-cols">
+			<div class="ii-col ii-inputs">
+				<button class="ii-btn-block" id="selectImageBtn">
+					<i class="icon icon-upload"></i>
+					选择/更换图像
+				</button>
+				<div class="ii-section-title">图像尺寸设置</div>
 				<div class="segmented">
-					<div class="layer-option" data-layer="TS">顶层丝印</div>
-					<div class="layer-option" data-layer="BS">底层丝印</div>
-					<div class="layer-option active" data-layer="DOC">文档层</div>
+					<div class="unit-option" data-unit="mm">mm</div>
+					<div class="unit-option active" data-unit="mil">mil</div>
 				</div>
+				<div class="field-row">
+					<label for="widthInput">宽度</label>
+					<input type="number" id="widthInput" min="0" step="0.1" />
+				</div>
+				<div class="field-row">
+					<label for="heightInput">高度</label>
+					<input type="number" id="heightInput" min="0" step="0.1" />
+				</div>
+				<label class="ii-check">
+					<input type="checkbox" id="aspectRatioCheckbox" checked />
+					保持横纵比
+				</label>
+				<label class="ii-check">
+					<input type="checkbox" id="sliceimport" />
+					启用切片导入
+				</label>
 			</div>
 
-			<div class="ii-info">
-				<strong>使用说明：</strong><br />
-				1. 支持多选图片一次性导入，仅支持 PNG / JPG / BMP 格式<br />
-				2. 图像分辨率较大或超过 16384px，建议使用切片导入<br />
-				3. 导入图片会占用大量显存，显存不够可能会无法打开
+			<div class="ii-col ii-col-dpi">
+				<button class="btn-secondary ii-btn-block" id="placeImageBtn" disabled>
+					<i class="icon icon-export"></i>
+					放置到画布上
+				</button>
+				<div class="ii-section-title">DPI 快速选择</div>
+				<div class="ii-dpi-box">
+					<div class="ii-slider-wrap">
+						<input type="range" id="dpiSlider" min="0" max="5" step="1" value="2" />
+					</div>
+					<div class="ii-dpi-list" id="dpiValuesList">
+						<div class="ii-dpi-item" data-dpi="300">300 DPI</div>
+						<div class="ii-dpi-item" data-dpi="600">600 DPI</div>
+						<div class="ii-dpi-item" data-dpi="900">900 DPI</div>
+						<div class="ii-dpi-item" data-dpi="1200">1200 DPI</div>
+						<div class="ii-dpi-item" data-dpi="2400">2400 DPI</div>
+						<div class="ii-dpi-item" data-dpi="4800">4800 DPI</div>
+					</div>
+				</div>
+				<div class="field-row">
+					<input type="number" id="customDpiInput" min="1" placeholder="自定义 DPI 值" />
+				</div>
 			</div>
 		</div>
 
-		<script src="/iframe/js/app/ImportImage.js"></script>
-	</body>
+		<div class="ii-col">
+			<div class="ii-section-title">放置图层</div>
+			<div class="segmented">
+				<div class="layer-option" data-layer="TS">顶层丝印</div>
+				<div class="layer-option" data-layer="BS">底层丝印</div>
+				<div class="layer-option active" data-layer="DOC">文档层</div>
+			</div>
+		</div>
+
+		<div class="ii-info">
+			<strong>使用说明：</strong><br />
+			1. 支持多选图片一次性导入，仅支持 PNG / JPG / BMP 格式<br />
+			2. 图像分辨率较大或超过 16384px，建议使用切片导入<br />
+			3. 导入图片会占用大量显存，显存不够可能会无法打开
+		</div>
+	</div>
+
+	<script src="/iframe/js/app/ImportImage.js"></script>
+</body>
+
 </html>

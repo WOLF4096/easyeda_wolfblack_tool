@@ -38,16 +38,16 @@ docs/                    评估报告、格式记录、实施计划
 
 ## 常用命令
 
-| 命令 | 作用 |
-| :--- | :--- |
-| `npm run build:iframe` | 把 `iframe/js/src` 按页打包成 `iframe/js/app/<Page>.js`（约 1 秒） |
-| `npm run watch:iframe` | 改源码自动重打包 |
-| `npm test` | 单元测试；`pretest` 会先跑 `check:deps` + `check:js` |
-| `npm run test:samples` | 用真实 V2 / V3 / V4 工程跑格式回归（10 用例 / 3 样本） |
-| `npm run check:layout` | headless Chrome 逐页实测溢出与裁切，截图到 `temp/layout-check/` |
-| `node test/pages/run.mjs` | 页面冒烟（mock eda，18 页）；`--only About` 只跑单页 |
-| `npm run build` | 全量构建：页面打包 → 编译后端 → 出 `.eext` |
-| `npm run sign` | 给新增的文档末尾、代码开头补开发者署名（幂等；`-- --dry` 可预演） |
+| 命令                      | 作用                                                               |
+| :------------------------ | :----------------------------------------------------------------- |
+| `npm run build:iframe`    | 把 `iframe/js/src` 按页打包成 `iframe/js/app/<Page>.js`（约 1 秒） |
+| `npm run watch:iframe`    | 改源码自动重打包                                                   |
+| `npm test`                | 单元测试；`pretest` 会先跑 `check:deps` + `check:js`               |
+| `npm run test:samples`    | 用真实 V2 / V3 / V4 工程跑格式回归（10 用例 / 3 样本）             |
+| `npm run check:layout`    | headless Chrome 逐页实测溢出与裁切，截图到 `temp/layout-check/`    |
+| `node test/pages/run.mjs` | 页面冒烟（mock eda，18 页）；`--only About` 只跑单页               |
+| `npm run build`           | 全量构建：页面打包 → 编译后端 → 出 `.eext`                         |
+| `npm run sign`            | 给新增的文档末尾、代码开头补开发者署名（幂等；`-- --dry` 可预演）  |
 
 产物：`build/dist/wolfblack-tool_v<版本>.eext`。
 
@@ -67,23 +67,23 @@ docs/                    评估报告、格式记录、实施计划
 
 ## 改写的验证标准
 
-| 改动类型 | 最低验证 |
-| :--- | :--- |
-| 纯逻辑 / 算法 | 补单测；`npm test` 全绿 |
-| 写盘类（源码改写、坐标、属性覆盖顺序） | 逐字节对照旧实现；`npm run test:samples` 全绿 |
-| 图表 | 固定时钟 + 固定数据拍 `getOption()` 快照，拆分前后深度比对 |
-| 页面样式 / 版式 | `npm run check:layout` 0 溢出 + `node test/pages/run.mjs` 不新增报错 |
-| 任何页面 | `npm run build:iframe` 后重跑测试（产物不重新生成，测试与页面看到的是旧代码） |
+| 改动类型                               | 最低验证                                                                      |
+| :------------------------------------- | :---------------------------------------------------------------------------- |
+| 纯逻辑 / 算法                          | 补单测；`npm test` 全绿                                                       |
+| 写盘类（源码改写、坐标、属性覆盖顺序） | 逐字节对照旧实现；`npm run test:samples` 全绿                                 |
+| 图表                                   | 固定时钟 + 固定数据拍 `getOption()` 快照，拆分前后深度比对                    |
+| 页面样式 / 版式                        | `npm run check:layout` 0 溢出 + `node test/pages/run.mjs` 不新增报错          |
+| 任何页面                               | `npm run build:iframe` 后重跑测试（产物不重新生成，测试与页面看到的是旧代码） |
 
 > `test/pages/run.mjs` 会先 `rmSync(temp/pages-smoke)`。若目录里有几千个文件，某些环境会拦批量删除——把旧目录移走再跑即可。
 
 ## 版本号维护点
 
-| 位置 | 谁读 |
-| :--- | :--- |
-| `package.json` | 构建脚本、「关于」页显示的版本号（构建期注入 `__APP_VERSION__`） |
-| `extension.json` | 平台读它，决定安装版本 |
-| `CHANGELOG.md` / `CHANGELOG.dev.md` | 用户向摘要 / 技术档案 |
+| 位置                                | 谁读                                                             |
+| :---------------------------------- | :--------------------------------------------------------------- |
+| `package.json`                      | 构建脚本、「关于」页显示的版本号（构建期注入 `__APP_VERSION__`） |
+| `extension.json`                    | 平台读它，决定安装版本                                           |
+| `CHANGELOG.md` / `CHANGELOG.dev.md` | 用户向摘要 / 技术档案                                            |
 
 `package.json` 与 `extension.json` 的一致性由 `test/docConsistency.test.mjs` 核对。
 
@@ -102,4 +102,4 @@ npm run bridge:run -- --file tools/eda-bridge/probes/00-env.js
 
 > 开发者：WOLF4096
 > 辅助开发：DeepSeek-V4.1-Flash
-> 本工具为非官方第三方开源扩展，与嘉立创 / EasyEDA 官方无隶属关系
+> 本工具为非官方第三方开源扩展

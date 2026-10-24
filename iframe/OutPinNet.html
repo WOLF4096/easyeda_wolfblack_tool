@@ -2,42 +2,45 @@
 <!--
   开发者：WOLF4096
   辅助开发：DeepSeek-V4.1-Flash
-  本工具为非官方第三方开源扩展，与嘉立创 / EasyEDA 官方无隶属关系
+  本工具为非官方第三方开源扩展
 -->
 <html lang="zh-CN">
-	<head>
-		<meta charset="UTF-8" />
-		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-		<title>狼黑工具 - 导出引脚网络工具</title>
-		<link rel="stylesheet" href="/iframe/css/common.css" />
-	</head>
-	<body class="app">
-		<div class="toolbar">
-			<div class="toolbar-left">
-				<div class="opn-select-group">
-					<select id="typeSelect" title="类型">
-						<option value="FootprintName" selected>封装</option>
-						<option value="DeviceName">器件</option>
-					</select>
-				</div>
 
-				<div class="opn-select-group">
-					<select id="propSelect" title="属性">
-						<option value="ALL">所有</option>
-					</select>
-				</div>
+<head>
+	<meta charset="UTF-8" />
+	<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+	<title>狼黑工具 - 导出引脚网络工具</title>
+	<link rel="stylesheet" href="/iframe/css/common.css" />
+</head>
+
+<body class="app">
+	<div class="toolbar">
+		<div class="toolbar-left">
+			<div class="opn-select-group">
+				<select id="typeSelect" title="类型">
+					<option value="FootprintName" selected>封装</option>
+					<option value="DeviceName">器件</option>
+				</select>
 			</div>
 
-			<div class="button-group">
-				<button id="exportPinNetBtn" class="btn-secondary" title="导出当前视图为CSV">导出引脚网络</button>
-				<button id="exportAllNetBtn" title="导出全部网络列表">导出全部网络</button>
+			<div class="opn-select-group">
+				<select id="propSelect" title="属性">
+					<option value="ALL">所有</option>
+				</select>
 			</div>
 		</div>
 
-		<div class="table-wrap" id="tableContainer">
-			<table class="opn-table" id="netTable"></table>
+		<div class="button-group">
+			<button id="exportPinNetBtn" class="btn-secondary" title="导出当前视图为CSV">导出引脚网络</button>
+			<button id="exportAllNetBtn" title="导出全部网络列表">导出全部网络</button>
 		</div>
+	</div>
 
-		<script src="/iframe/js/app/OutPinNet.js"></script>
-	</body>
+	<div class="table-wrap" id="tableContainer">
+		<table class="opn-table" id="netTable"></table>
+	</div>
+
+	<script src="/iframe/js/app/OutPinNet.js"></script>
+</body>
+
 </html>

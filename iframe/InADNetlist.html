@@ -2,50 +2,53 @@
 <!--
   开发者：WOLF4096
   辅助开发：DeepSeek-V4.1-Flash
-  本工具为非官方第三方开源扩展，与嘉立创 / EasyEDA 官方无隶属关系
+  本工具为非官方第三方开源扩展
 -->
 <html lang="zh-CN">
-	<head>
-		<meta charset="UTF-8" />
-		<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
-		<title>狼黑工具 - 导入 AD 网表</title>
-		<link rel="stylesheet" href="/iframe/css/common.css" />
-	</head>
-	<body class="app">
-		<div class="toolbar">
-			<div class="toolbar-left">
-				<button id="selectFileBtn" class="btn-secondary">选择文件</button>
-				<button id="pasteNetlistBtn" class="btn-secondary">粘贴网表</button>
-			</div>
-			<button id="writeNetlistBtn">写入网表</button>
-		</div>
 
-		<div class="ian-info">
-			<div class="ian-status">
-				<span>当前网表已加载</span>
-				<span id="adStatus" class="badge">未导入AD网表</span>
-			</div>
-			<div id="parseFeedback" class="ian-feedback"></div>
-		</div>
+<head>
+	<meta charset="UTF-8" />
+	<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+	<title>狼黑工具 - 导入 AD 网表</title>
+	<link rel="stylesheet" href="/iframe/css/common.css" />
+</head>
 
-		<div class="table-wrap ian-table">
-			<table class="tbl" id="netCompareTable">
-				<thead>
-					<tr>
-						<th>位号</th>
-						<th>引脚</th>
-						<th>旧网络</th>
-						<th>新网络</th>
-					</tr>
-				</thead>
-				<tbody id="tableBody">
-					<tr class="empty-table-msg">
-						<td colspan="4">暂无网表对比数据，请先选择或粘贴AD格式网表</td>
-					</tr>
-				</tbody>
-			</table>
+<body class="app">
+	<div class="toolbar">
+		<div class="toolbar-left">
+			<button id="selectFileBtn" class="btn-secondary">选择文件</button>
+			<button id="pasteNetlistBtn" class="btn-secondary">粘贴网表</button>
 		</div>
+		<button id="writeNetlistBtn">写入网表</button>
+	</div>
 
-		<script src="/iframe/js/app/InADNetlist.js"></script>
-	</body>
+	<div class="ian-info">
+		<div class="ian-status">
+			<span>当前网表已加载</span>
+			<span id="adStatus" class="badge">未导入AD网表</span>
+		</div>
+		<div id="parseFeedback" class="ian-feedback"></div>
+	</div>
+
+	<div class="table-wrap ian-table">
+		<table class="tbl" id="netCompareTable">
+			<thead>
+				<tr>
+					<th>位号</th>
+					<th>引脚</th>
+					<th>旧网络</th>
+					<th>新网络</th>
+				</tr>
+			</thead>
+			<tbody id="tableBody">
+				<tr class="empty-table-msg">
+					<td colspan="4">暂无网表对比数据，请先选择或粘贴AD格式网表</td>
+				</tr>
+			</tbody>
+		</table>
+	</div>
+
+	<script src="/iframe/js/app/InADNetlist.js"></script>
+</body>
+
 </html>

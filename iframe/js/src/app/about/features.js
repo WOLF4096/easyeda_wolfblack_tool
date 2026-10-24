@@ -28,7 +28,7 @@
  *
  * 开发者：WOLF4096
  * 辅助开发：DeepSeek-V4.1-Flash
- * 本工具为非官方第三方开源扩展，与嘉立创 / EasyEDA 官方无隶属关系
+ * 本工具为非官方第三方开源扩展
  */
 export const featuresData = [
 	{
@@ -235,7 +235,7 @@ export const featuresData = [
 		name: '清空多余属性',
 		shortcut: '',
 		shortcutType: '',
-		brief: '一键清掉供应商编号这类用不上的器件属性',
+		brief: '一键清掉替换件用不上的器件属性',
 		scope: ['PCB', '原理图'],
 		version: 'V2.2.45 ~ 4',
 		demoUrl: 'https://www.jlc-bbs.com/platform/a/1221495',

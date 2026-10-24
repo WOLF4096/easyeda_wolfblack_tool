@@ -2,46 +2,49 @@
 <!--
   开发者：WOLF4096
   辅助开发：DeepSeek-V4.1-Flash
-  本工具为非官方第三方开源扩展，与嘉立创 / EasyEDA 官方无隶属关系
+  本工具为非官方第三方开源扩展
 -->
 <html lang="zh-CN">
-	<head>
-		<meta charset="UTF-8" />
-		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-		<title>狼黑工具 - 清除多余属性</title>
-		<link rel="stylesheet" href="/iframe/css/common.css" />
-	</head>
-	<body class="app">
-		<div class="toolbar">
-			<div class="title">清除多余属性</div>
-			<div class="button-group">
-				<button id="btnRefresh" class="btn-secondary">刷新数据</button>
-				<button id="btnClear" class="btn-danger">执行清空</button>
-			</div>
-		</div>
 
-		<div class="table-wrap">
-			<table class="tbl cep-table">
-				<thead>
-					<tr>
-						<th><input type="checkbox" id="cbAllRows" title="全选/取消全选" /></th>
-						<th class="sortable" data-sort="designator">位号<span class="sort-icon"></span></th>
-						<th class="sortable" data-sort="name">名称<span class="sort-icon"></span></th>
-						<th class="sortable" data-sort="footprint">封装<span class="sort-icon"></span></th>
-						<th class="sortable" data-sort="supplier">供应商<span class="sort-icon"></span></th>
-						<th class="col-cb-header" id="thAllBase" title="点击全选/取消全选基础属性">基础属性</th>
-						<th class="col-cb-header" id="thAllKey" title="点击全选/取消全选关键属性">关键属性</th>
-						<th class="col-cb-header" id="thAllMore" title="点击全选/取消全选更多属性">更多属性</th>
-					</tr>
-				</thead>
-				<tbody id="tableBody">
-					<tr class="empty-row">
-						<td colspan="8">请点击“刷新数据”获取网表</td>
-					</tr>
-				</tbody>
-			</table>
-		</div>
+<head>
+	<meta charset="UTF-8" />
+	<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+	<title>狼黑工具 - 清除多余属性</title>
+	<link rel="stylesheet" href="/iframe/css/common.css" />
+</head>
 
-		<script src="/iframe/js/app/ClearEmptyProperties.js"></script>
-	</body>
+<body class="app">
+	<div class="toolbar">
+		<div class="title">清除多余属性</div>
+		<div class="button-group">
+			<button id="btnRefresh" class="btn-secondary">刷新数据</button>
+			<button id="btnClear" class="btn-danger">执行清空</button>
+		</div>
+	</div>
+
+	<div class="table-wrap">
+		<table class="tbl cep-table">
+			<thead>
+				<tr>
+					<th><input type="checkbox" id="cbAllRows" title="全选/取消全选" /></th>
+					<th class="sortable" data-sort="designator">位号<span class="sort-icon"></span></th>
+					<th class="sortable" data-sort="name">名称<span class="sort-icon"></span></th>
+					<th class="sortable" data-sort="footprint">封装<span class="sort-icon"></span></th>
+					<th class="sortable" data-sort="supplier">供应商<span class="sort-icon"></span></th>
+					<th class="col-cb-header" id="thAllBase" title="点击全选/取消全选基础属性">基础属性</th>
+					<th class="col-cb-header" id="thAllKey" title="点击全选/取消全选关键属性">关键属性</th>
+					<th class="col-cb-header" id="thAllMore" title="点击全选/取消全选更多属性">更多属性</th>
+				</tr>
+			</thead>
+			<tbody id="tableBody">
+				<tr class="empty-row">
+					<td colspan="8">请点击“刷新数据”获取网表</td>
+				</tr>
+			</tbody>
+		</table>
+	</div>
+
+	<script src="/iframe/js/app/ClearEmptyProperties.js"></script>
+</body>
+
 </html>

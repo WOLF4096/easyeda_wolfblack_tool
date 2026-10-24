@@ -2,31 +2,34 @@
 <!--
   开发者：WOLF4096
   辅助开发：DeepSeek-V4.1-Flash
-  本工具为非官方第三方开源扩展，与嘉立创 / EasyEDA 官方无隶属关系
+  本工具为非官方第三方开源扩展
 -->
 <html lang="zh-CN">
-	<head>
-		<meta charset="UTF-8" />
-		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-		<title>狼黑工具 - API 基准测试</title>
-		<link rel="stylesheet" href="/iframe/css/common.css" />
-	</head>
-	<body class="app">
-		<div class="apitest-header">
-			<div class="apitest-header-info">
-				<strong>API 基准测试</strong>
-				<span class="version-tag" id="ver-info">EDA版本: 获取中...</span>
-			</div>
-			<div class="btn-group">
-				<button class="btn-secondary" onclick="executeBatch('create')">创建</button>
-				<button class="btn-secondary" onclick="executeBatch('get')">获取</button>
-				<button class="btn-secondary" onclick="autoCalibrateAll()">校准</button>
-				<button onclick="saveParams()">保存</button>
-			</div>
+
+<head>
+	<meta charset="UTF-8" />
+	<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+	<title>狼黑工具 - API 基准测试</title>
+	<link rel="stylesheet" href="/iframe/css/common.css" />
+</head>
+
+<body class="app">
+	<div class="apitest-header">
+		<div class="apitest-header-info">
+			<strong>API 基准测试</strong>
+			<span class="version-tag" id="ver-info">EDA版本: 获取中...</span>
 		</div>
+		<div class="btn-group">
+			<button class="btn-secondary" onclick="executeBatch('create')">创建</button>
+			<button class="btn-secondary" onclick="executeBatch('get')">获取</button>
+			<button class="btn-secondary" onclick="autoCalibrateAll()">校准</button>
+			<button onclick="saveParams()">保存</button>
+		</div>
+	</div>
 
-		<div class="apitest-list" id="main-list"></div>
+	<div class="apitest-list" id="main-list"></div>
 
-		<script src="/iframe/js/app/APITest.js"></script>
-	</body>
+	<script src="/iframe/js/app/APITest.js"></script>
+</body>
+
 </html>

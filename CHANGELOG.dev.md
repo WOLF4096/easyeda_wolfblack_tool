@@ -8,16 +8,18 @@
 ---
 
 已知问题与版本策略：
+
 - 适配目标为 EDA **V3 / V4**（V4 与 V3 文件格式同构，逐项差异见 `docs/FORMATLOG.md`）；**V2.2.45 已停止维护**，官方不再修复其缺失/残缺的 API，相关功能在 V2.2.45 下不保证可用
 - `生成物理网络` 在 V2.2.45 下经源码写入后，重开文档会丢失部分弧线导线 —— 早期 EDA V2.2.45 的平台缺陷，非插件逻辑问题
 - `批量替换器件` 在 V2.2.45 下替换完器件后网表取空、参数无法补全 —— 同上，V2.2.45 API 缺陷
 - `创建封装` 暂不支持 V3 / V4：底层源码写入 API 存在缺陷
-- V2.2.* 版本不支持快捷键功能（该 API 仅 V3+ 提供）
+- V2.2.\* 版本不支持快捷键功能（该 API 仅 V3+ 提供）
 - 已知的 V4 坐标差异：V4 的 PCB 坐标单位为 mil、网格尺寸 ×10 —— 实测同一份 PCB 在 V2.2.45.5 与 V4.1.78 下 LINE/POLY/CANVAS 的 `unit:"mil"`、栅格 5、数值完全一致，**坐标搬运不乘 10**（`docs/FORMATLOG.md` 里「V4 网格 ×10」的旧结论已作废）
 - **V4 三条写盘流程已人工验证通过**（2026-10-22，V4.1.78）：从 PCB 转原理图（符号与引脚完整）、生成物理网络三种写回、批量替换器件（器件真正替换、坐标角度不变、无临时件残留）。详见 `docs/V4回归记录.md`
 - ⚠️ **V4 待处理**：V4 下 `sys_FileManager.setDocumentSource()` 整份写回会丢掉 `POURED`（铜皮已计算填充）行 —— 实测同一份原文写回后 45,557 → 43,119 字节，`POUR` 本体仍在、填充缓存消失（V2.2.45 逐字节一致）。受影响：`生成物理网络`（源码方式）、`从PCB转原理图` 等整份重写源码的功能；重算铜皮可恢复。处理方案待定
 
 ## v1.23.1 `2026-10-24`
+
 > 四处交互缺陷修复 + 转换值可编辑 + 桥页去开关
 
 - **导入图片 DPI 点不动**（`app/import-image/index.js`）：`dpiValueItems` 的选择器写的是 `.dpi-value-item`，而 `ImportImage.html` 与 `common.css` 用的是 `.ii-dpi-item` → `querySelectorAll` 恒为空集合。后果不只是「点击没反应」：`syncDpiUi` 的高亮、`toggleAspectRatio` 的 `pointerEvents` 也全打在空集合上，只有滑块的 `input` 监听还在真实元素上，于是表现为「只能拖滑块」。改为 `.ii-dpi-item` 即恢复。实测（headless Chrome + mock eda，1200×600 探针图）：默认 1200 DPI → 1000×500 mil；点 600 → 2000×1000；点 4800 → 250；`active` 类、滑块 `value=0`、自定义框 `4800` 三处同步
@@ -31,6 +33,7 @@
 - 工程数据：`npm test` **857 用例全通过**（含 docConsistency 的 README × features.js 逐条一致）；`check:deps` 116 模块 / 226 条 import 无环；`check:js` 0 违规；`check:layout` CodeConvert 540×540 无溢出。版本 1.23.0 → 1.23.1（`package.json` / `extension.json` 同步）
 
 ## v1.23.0 `2026-10-24`
+
 > `创建导线` 拆成「两个来源 + 三个缓存维护入口」，网表缓存落在扩展用户配置
 
 - **菜单**：`extension.json` 的 `sch` 下新增父项 `CreateWire`（创建导线），五个子项 `AutoWirePlacerPCB` / `AutoWirePlacerNET` / `UpdateNetlistCacheFromPCB` / `UpdateNetlistCacheFromFile` / `ClearNetlistCache`。`AutoWirePlacerPCB` 的 `registerFn` 与实现**一行未改**（切 PCB → `pcb_SelectControl.getAllSelectedPrimitives()` 的老路径），只换了标题
@@ -43,6 +46,7 @@
 - **未验证**：V2.2.45 下的实机取数与菜单渲染（本机无 V2.2.45 环境）。`getNetlistFile` 在 PCB 文档下的返回结构按「与原理图 `.enet` 同构」处理；若某版本返回别的结构，`summarizeNetlist()` 会判为非法并中止写缓存，不会写入脏数据
 
 ## v1.22.1 `2026-10-24`
+
 > `从 PCB 转原理图` 的导线生成加「一个引脚只画一条」去重
 
 - 根因：`app/pcb-to-sch/wirePlan` 的 `planWires` 逐个 `comp.pins` 键出线，而 `comp.pins` 的键是 **PCB 焊盘编号**（`PAD_NET` 行的第 3 个字段）。一个符号引脚对应封装上 4 个焊盘时，焊盘编号 1~4 是 4 个不同的键，符号侧又是 4 个画在同一坐标的引脚号 → 同一个绝对坐标被画 4 次，生成 4 条**完全重合**的 `WIRE`（源码行数虚增、网表里是 4 条重复导线）
@@ -52,6 +56,7 @@
 - 跨仓同步：`PCB转原理图` 子工具的同名模块与主仓逐字节一致，`npm run build:iframe` 产物 `PcbToSch.js` 亦逐字节一致（48KB）
 
 ## v1.22.0 `2026-10-23`
+
 > 工时备份改为「含用户信息的紧凑格式 + HMAC 签名」，新增导入数据与个人信息面板
 
 - 备份格式重做（`backupFormat.js`）：放弃导出 `timeline` 明文，改存 `{ f, v, u, t, p, d }` —— `p` 是工程 uuid 字典（uuid 全文件只出现一次），`d` 是「日期 → [槽位下标, [[工程下标, 工作秒, 空闲秒]]]」，空槽/空天不写，`stats`/`totalWork` 这类派生字段一律不写（导入时由 `aggregate.buildDataset` 重算）。`expandBackupBody` 是 `buildBackupBody` 的严格逆函数
@@ -64,21 +69,23 @@
 - 个人信息卡去掉「账号 · 客户编号」那一行：删掉 `#profile-sub` 节点、`subtitleOf()` 与 `.wh-profile-sub` 样式（不做「留着再 `display:none`」，避免死代码）。卡片现在只有头像、昵称、累计工时、工程数
 - **安全边界实测**（2026-10-23，`zlib` + 真实 pack/unpack 走一遍）：
 
-  | 尝试 | 结果 |
-  | :--- | :--- |
-  | 拿到 JSON，只用 `base64 -d` + `gunzip` 读内容 | **成功**：348 B 明文全可读，含 `username`/`uuid`/每格秒数 |
-  | 改数字后直接导入（签名不动） | 拒绝：签名校验失败 |
-  | 改数字后用文件内的 `u` 重算签名 | **通过**：实测 900→60 秒，导入后总工时 2400 → 1560 |
-  | 另一个账号导入这份文件 | 拒绝：归属 uuid 不符 |
-  | 伪造一份 uuid 不同的文件 | 拒绝：同上 |
+    | 尝试                                          | 结果                                                      |
+    | :-------------------------------------------- | :-------------------------------------------------------- |
+    | 拿到 JSON，只用 `base64 -d` + `gunzip` 读内容 | **成功**：348 B 明文全可读，含 `username`/`uuid`/每格秒数 |
+    | 改数字后直接导入（签名不动）                  | 拒绝：签名校验失败                                        |
+    | 改数字后用文件内的 `u` 重算签名               | **通过**：实测 900→60 秒，导入后总工时 2400 → 1560        |
+    | 另一个账号导入这份文件                        | 拒绝：归属 uuid 不符                                      |
+    | 伪造一份 uuid 不同的文件                      | 拒绝：同上                                                |
 
-  结论：HMAC 只防「手改数字」，**不是加密也不防懂格式的伪造**——密钥材料（用户名 + uuid）本来就在文件里。「不能导入别人的数据」成立的前提是 uuid 没外泄（没有备份文件的人拿不到它）。该边界已固化成两条「已知边界」用例，防止后续文档过度承诺；真要防伪造需要另加**不在文件里**的备份口令来加密载荷（本轮未做）
+    结论：HMAC 只防「手改数字」，**不是加密也不防懂格式的伪造**——密钥材料（用户名 + uuid）本来就在文件里。「不能导入别人的数据」成立的前提是 uuid 没外泄（没有备份文件的人拿不到它）。该边界已固化成两条「已知边界」用例，防止后续文档过度承诺；真要防伪造需要另加**不在文件里**的备份口令来加密载荷（本轮未做）
+
 - 文档同步该边界：README 工时章节加「备份不是加密文件」提示，PRIVACY 注明备份仅压缩+签名、内容可读
 - 真实样本验证（`测试样本/全部工程耗时数据备份_20261023.json`，50213 B）：新文件 **2973 B（5.9%）**；259 个格子逐格比对 **0 不一致**；导入后重算总工时 31074 s 与样本一致、工程数 9 = 9
 - 工程数据：`npm test` **755 → 810 用例**（新增 `test/workingHoursBackup.test.mjs` 31 条；另 6 个新模块由 moduleHeader 自动纳入 24 条）；`check:deps` 114 个模块 / 222 条 import 无环；`check:js` 0 违规；`check:layout` WorkingHours 960×600 无溢出
 - 冒烟：`test/pages/run.mjs --only WorkingHours` 仍报 `drawImage ... width or height of 0`（周报「导出图片」在隐藏视图下 `getDataURL`）。已确认**与本版无关**：stash 掉本版改动后在同一 HEAD 上重跑，报同一条 —— 属既有 headless + 隐藏 canvas 的缺口
 
 ## v1.21.0 `2026-10-22`
+
 > 文档体系拆分：用户向 CHANGELOG 与技术档案分离、README 重写为详情文档、「关于」页改为使用步骤、补齐发布材料
 
 - 文档 **拆成两份**：`CHANGELOG.md` 只写用户可感知的新增/修复/优化/移除（技术根因与验证手法全部剥离）；本文件作为技术档案保留全部细节。两者版本号对应，但用户向日志**只列有使用者影响的版本**（v1.17.1 / v1.17.2 / v1.17.8 三个纯内部版本从用户向日志中删除）
@@ -92,7 +99,7 @@
 - 工程数据：`npm test` **750 → 755 用例**（新增 docConsistency 5 条）；`check:layout` 18 页 0 溢出；CSS 仅动 about 段（新增 `.about-sub` / `.howto-list` / `.note-tag`，删除 `.purpose-tag`）
 - 署名 **全项目统一注入**：新增 `tools/apply-signature.mjs`（`npm run sign`，`-- --dry` 预演，幂等），
   覆盖 **224 个文件**（文档末尾引用块、代码开头块注释、HTML 插在 `<!doctype>` 之后），内容为
-  「开发者：WOLF4096 / 辅助开发：DeepSeek-V4.1-Flash / 本工具为非官方第三方开源扩展，与嘉立创 / EasyEDA 官方无隶属关系」。
+  「开发者：WOLF4096 / 辅助开发：DeepSeek-V4.1-Flash / 本工具为非官方第三方开源扩展」。
   三条约束：`iframe/js/src/**` 必须仍以块注释开头（署名插进已有块注释内部，否则 `moduleHeader` 全红）；
   shebang 脚本插在 shebang 之后；`<!doctype html>` 留在第一行。
   产物侧由两处 banner 保证：`scripts/build-iframe.mjs` 的 `BANNER`（18 个页面产物）与
@@ -101,18 +108,20 @@
 - 顺带 **`.edaignore` 排除 `CHANGELOG.dev.md` / `README.dev.md`**：技术档案不进用户安装包（包内 md 只剩 README / CHANGELOG / PRIVACY）
 
 ## v1.20.0 `2026-10-22`
+
 > 修好「工时统计」从 v1.17.4 起就没生效过的离线报告；把该页 1729 行的图表层拆到 280 行；ESLint 存量基线清零
 
 - 修复 **`工时统计` 导出的报告在离线状态下图表全空**：原先用 `fetch('/iframe/js/echarts.min.js')` 内联本地库，但宿主把页面渲染成 `blob:` 文档，站内路径一律解析失败 → 静默回退 CDN。改为**构建期注入**：echarts 源码 gzip+base64（519KB，解压 1474KB）与 fflate 原文（32KB）经 esbuild `define` 编进 bundle，运行时用 `fflate.gunzipSync` 还原；并用 `dropLabels` 把 CDN 兜底分支从产物里裁掉，产物已 grep 不到 `cdn.jsdelivr.net`
-  > 验证方式：拦截全部外部请求的 headless Chrome 打开导出报告 → 2 个 canvas 有实际绘制、图例回填、无 error banner、外部 `src/href` 引用 0 条
+    > 验证方式：拦截全部外部请求的 headless Chrome 打开导出报告 → 2 个 canvas 有实际绘制、图例回填、无 error banner、外部 `src/href` 引用 0 条
 - 重构 **`工时统计` 的图表层**：`index.js` **1729 → 280 行**；6 个 ECharts 实例收进 `charts/chartView.js`，option 构建变成纯函数工厂（`charts/options/{timelineChart,heatmap,rhythm,weekly}.js`），缩放联动收敛到 `charts/zoomSync.js`，6 个 tab 的面板拆到 `views/*`，共享运行态集中到 `runtime.js`
-  > 验证方式：拆分**前**先用固定时钟 + 固定种子数据逐 tab `getOption()` 拍快照，拆分后重拍并深度比对 → **0 处差异**
+    > 验证方式：拆分**前**先用固定时钟 + 固定种子数据逐 tab `getOption()` 拍快照，拆分后重拍并深度比对 → **0 处差异**
 - 工程化 **ESLint 复杂度门禁从「带存量基线」变成硬 0**：`config/eslint-baseline.json` 的 counts 清空（109 → 0），37 个文件分四批重构，手法是分派表 / guard clause / 按阶段切函数，**零 `eslint-disable`**
-  > 验证方式：`git worktree` 取重构前快照，新旧同名模块跑同一批输入逐项 `deepEqual` → **50 154 次比对、0 处不一致**（19 个模块，含就地副作用与抛错文案）
+    > 验证方式：`git worktree` 取重构前快照，新旧同名模块跑同一批输入逐项 `deepEqual` → **50 154 次比对、0 处不一致**（19 个模块，含就地副作用与抛错文案）
 - 修复 **`npm run test:samples` 自 v1.19.0 起一直 ENOENT**：删掉 `common.js` 门面后，`test/samples/lib/product.mjs` 仍在用 `new Function` 注入那个文件；改为直接 import `core/sourceLine.js` + `core/layer.js` 拼出等价对象，恢复 10/10 用例、3/3 样本
 - 工程数据：源码模块 **82 → 108 个**（import 152 → 209，`check:deps` 无环）；`npm test` **599 → 750 用例全绿**；`check:layout` 18 页 0 溢出；冒烟 17/18（`工时统计` 的 canvas 0 尺寸告警是 mock 容器无布局的既有问题，非回归）；产物 `build/dist/wolfblack-tool_v1.20.0.eext`
 
 ## v1.19.0 `2026-10-22`
+
 > 前端模块化重构收口：18 个页面从「单文件脚本 + 全局门面」改为「ESM 源码 + 按页打包」，并加上三道自动化门禁
 
 - 重构 **18 个页面全部迁到 `iframe/js/src/`（82 个 ESM 模块）**：`core/*` 平台内核、`ui/*` 通用件、`sch|format|pcb/*` 基础能力、`app/<page>/index.js` 只做「取 DOM → 调模块 → 刷 UI」+ 同目录纯逻辑模型。产物仍是 `iframe/js/app/<Page>.js`（esbuild 按页打包成单文件 IIFE），**HTML 只删掉 `common.js` 那一行**
@@ -127,6 +136,7 @@
 - 工程化：`npm test` **599 用例全绿**（含 36 条内核、31 条通用件、61 条页面模型、18 页模块头契约）；`check:layout` 18 页 0 溢出；冒烟 17/18（`工时统计` 的 canvas 尺寸为 mock 缺口，与重构前一致）；产物 `build/dist/wolfblack-tool_v1.19.0.eext`
 
 ## v1.18.0 `2026-10-22`
+
 > 前端统一重构：18 个 iframe 页面的样式全部收敛到 `iframe/css/common.css` 一份文件，HTML 里不再有任何 CSS
 
 - 重构 **18 个页面移除 `<style>` 与 `style=""`**（含 `col` 宽度、`display:none` 初值等），样式统一由 `iframe/css/common.css` 提供；相同观感只定义一次（工具栏 / 按钮 / 输入框 / 表格 / 状态栏 / 图例 / 卡片 / 弹窗 / 加载态），一个文件被全部页面复用
@@ -141,6 +151,7 @@
 - 工程化 `npm test` 124 用例全绿；版式自检 18 个页面 0 溢出；页面冒烟与基线一致（2 项 mock 缺口，非本次引入）；产物 `build/dist/wolfblack-tool_v1.18.0.eext`
 
 ## v1.17.11 `2026-10-21`
+
 > 四个 **仅 V4 出现** 的问题，全部通过 EDA 桥（127.0.0.1 实连 V4.1.78）实测定位，详见 `docs/V4问题分析报告-v1.17.11.md`
 
 - 修复 **批量替换器件：V4 报「未能在库中找到对应的器件」** —— `lib_Device.getByLcscIds()` 传单个 C 编号时，V4 实测返回**器件对象**（类型声明写的是数组），旧代码 `t.length > 0` 恒为 false，整个分支被跳过 → placeCount=0。新增 `pickDevice()` / `pickPrimitiveId()` 归一两种返回形态
@@ -155,11 +166,13 @@
 - 工程化 `npm test` 124 用例全绿；产物 `build/dist/wolfblack-tool_v1.17.11.eext`
 
 ## v1.17.10 `2026-10-21`
+
 - 修复 **导入图片 / 导入二维码 放置时报 `PcbApiError: [VALUE_OUT_OF_RANGE] width: 图像宽度 width=2275.00 必须为正数`**：根因是把 `toFixed(2)` 的**字符串**当长度传给了 `pcb_PrimitiveObject.create` / `pcb_PrimitiveImage.create` / `pcb_MathPolygon.convertImageToComplexPolygon`，而这三个 API 的 `width`/`height` 声明是 `number`，V4 按严格类型校验会把 `"2275.00"` 判为非法值（V2.2.45 内部强转，所以历史上没暴露）。5 处调用点全部改为传数字
 - 新增 **`WolfCommon.toApiLength(value, digits)`**：把长度规整成 API 需要的 number（默认两位小数）；极小非零值（如 `0.001`）不会被舍成 `0` 再被判"非正数"，无法解析时返回 `NaN` 交给调用方校验。新增 4 个用例，`npm test` **120 → 124 全绿**
 - 优化 两个页面创建图元返回 `undefined` 时不再裸抛 `TypeError: Cannot read properties of undefined`，改为明确提示「创建图像图元失败（API 返回空）」/「图像转换为多边形失败」；顺带补上 `common.js` 缺失时的页面横幅提示
 
 ## v1.17.9 `2026-10-21`
+
 - 修复 **13 个页面缺 `common.js` 时整页白屏且无提示**：顶层解构前先判空，缺失时在页面上显示「公共模块 common.js 未加载，请重新安装扩展」并中止脚本（此前是 `TypeError: Cannot destructure property … of undefined`）
 - 修复 **网表读取的两种"空"没有区分**：`getNetlistFile()` 返回 `undefined`（当前文档没有网表）与文件内容为空，都会抛 `Cannot read properties of undefined`；现统一抛 **`获取的网表为空`**，JSON 解析失败也给出「网表格式无法解析（PCB/SCH）」而不是裸 `SyntaxError`
 - 新增 **统一日志出口**：前端 `WolfCommon.logger`、后端 `src/js/common/logger.js`（`debug/info/warn/error` + `setLevel`，默认 info、debug 静默，前缀统一 `[狼黑工具]`）
@@ -174,6 +187,7 @@
 - 工程化 `build/dist/` 出库：移除历史入库的 1 个旧包（v1.14.22）并把 `build/dist/` 加入 `.gitignore`（本地 60+ 个产物保留，仅不再入库）
 
 ## v1.17.8 `2026-10-21`
+
 - 重构 入口 `src/index.ts` 整理为五段式：**公共工具 / 生命周期 / 有界面的功能 / 无界面的功能 / 模块加载时执行**，26 个导出按「原理图 / PCB / 通用 / 转换 / 网表」分组，每段一句话说明用途
 - 清理 入口里的死代码：`PadToVia`、`ViaToPad`、`PolylinetoWire`、`WiretoPolyline`、`ImportGerber`、`ExportFile` 六段注释代码（前两对已被 `*Toggle` 取代，后两个页面文件根本不存在），以及重复的 `WorkingHours` 注释块
 - 优化 统一用 `openPage(name, w, h, id?)` 打开页面，去掉 17 处重复的 `openIFrame('/iframe/Xxx.html', …)`；`PcbToSch` 的历史 iframe 标识 `tosch` 单独注明
@@ -183,6 +197,7 @@
 - 说明 **纯重构，无行为变更**：`npm test` 108 用例全绿、样本 10/10 通过；构建后 `dist/index.js` 导出表 27 项与 `extension.json` 的 25 个 `registerFn` 一一对应
 
 ## v1.17.7 `2026-10-21`
+
 - 修复 **V4 下全部快捷键失效**：`src/index.ts` 的注册条件从 `editorVersion.startsWith('3.')` 改为「主版本号 ≥ 3」，V2.2.45 仍不注册（该版本没有快捷键 API）
 - 新增 **导线转线条自动合并连续段**：框选多段首尾相接的导线时合并成**一条连续折线**（此前是每段一条两点碎折线）。新增 `src/js/common/wireChain.js`（纯函数：拼链 / 反向 / 路径拼装），按 `layer + net + 线宽` 分组，支持弧线反向时角度取负
 - 修复 **导线⇄线条 Region 删不掉**：`_convertRegionToWire` 原用 `pcb_PrimitivePolyline.delete(regionId)`，实测返回 `true` 但图元仍在（转换后原区域残留）；改用 `pcb_PrimitiveRegion.delete`
@@ -195,8 +210,8 @@
 - 工程化 新增 `test/wireChain.test.mjs`（22 用例：拼链 / 反向 / 分组隔离 / 闭合环 / 容差 / 无效段）；`npm test` 86 → **108 用例全绿**
 - 实测 两个客户端（V2.2.45.5 / V4.1.78）用真实 `wireChain.js` + 真实 API 跑通「直-弧-直」三段合并：1 条链、路径逐字节回读一致、无残留图元
 
-
 ## v1.17.6 `2026-10-21`
+
 - 新增 **EDA 桥服务端**（`tools/eda-bridge/`，零依赖）：EDA 里的「EDA 桥」页面是 **WebSocket 客户端**，仓库内此前没有配套服务端，只能依赖外部「工作台」。现补齐 `server.mjs`（自实现 WebSocket 服务端 `ws://127.0.0.1:8233/ws/eda`，不引入 `ws` 依赖；同端口附 HTTP 控制面 `POST /__cmd` 下发指令并同步等结果、`GET /__status` 查看连接状态与当前选中对象）、`run.mjs`（命令行助手，`--file 探针.js` 直接下发代码并打印 JSON，免手写转义）、`probes/00-env.js`（环境体检探针，一次拿齐 EDA 版本 / 当前文档 / 源码是 V2 数组还是 V3-V4 日志格式 / 21 个关键 API 是否存在 / 选中集数量，供 V4 实机核对）
 - 增强 **EDA 桥页面 v2.1 → v2.2**：除原有 `import`（建图元）外新增 `ping`（探活 + 回版本）、`probe`（只探测 API 路径是否存在，不调用）、`eval`（在页面上下文执行代码，可用 `eda` / `arg`，用 `return` 回传），这样实测 27 个功能不必为每条用例改桥
 - 安全 EDA 桥新增「调试指令」勾选框，**默认关闭**：未勾选时 `eval` / `probe` 一律拒绝，避免产品默认携带「本地任意代码执行」入口
@@ -205,6 +220,7 @@
 - 工程化 `.edaignore` 排除 `tools/`（测试工具不进扩展包）
 
 ## v1.17.5 `2026-10-21`
+
 - 新增 **测试样本自动化测试工具**（`test/samples/`，`npm run test:samples`）：脱离 EDA 环境直接解包 `测试样本/` 下的 `.epro` / `.epro2`，自动识别 V2 / V3 / V4，逐文档、逐行跑 10 个用例（包结构、版本一致性、行解析、文档头、id 唯一性、ticket、图层合法性、**源码行改写往返**、行尾 `|` 保留、前后端图层常量一致性）；输出控制台四段式报告 + `build/test-report/samples-report.{json,md}`，失败时给出「文件 › 文档 › 行号 + 期望/实际」，退出码非 0。详见 `test/samples/README.md`
 - 重构 源码行切分/拼装抽到 `WolfCommon.splitSourceLine` / `joinSourceLine`，`生成物理网络` 的行改写改为复用它 —— 这样样本测试验证的就是产品代码，而不是测试里的平行实现
 - 修复 图层常量表补全：`PIN_SOLDERING(50)` / `PIN_FLOATING(51)` / `COMPONENT_MODEL(52)` / `SHELL_3D_*` / `*_STIFFENER` / `SUBSTRATE` 等此前缺失；并依据真实样本补上 `INNER_31(45) / INNER_32(46)`（官方表只列到内层 30）与基板层实际起始号 `361`
@@ -213,6 +229,7 @@
 - 工程化 `.edaignore` 排除 `测试样本/`：此前 3 个样本文件（约 56KB 的工程数据）被误打进 `.eext`
 
 ## v1.17.4 `2026-10-21`
+
 - 修复 版本族判断：新增 `getVersionFamily` / `isV4` / `isModern`。此前 `isV3()` 只认 `3.x`，**V4 会被误判为 V2 并按 V2 数组格式写入源码，可能写坏文档**；现所有「写源码 / 选解析器」分支统一走 `isModern()`（V3 与 V4 格式同构）
 - 优化 `导入BOM` 表格渲染转义：`formatCell` 原先直接把器件名/厂商/供应商拼进 `innerHTML`，含 `<` `&` 的值会被当作标签解析；现统一改用 `WolfCommon.escapeHtml`；同时修正 `title` 属性被多余转义、tooltip 会显示成 `&quot;` 的问题
 - 修复 `工作时间统计` 删除按钮把工程名拼进 `onclick` 的隐患：HTML 实体在 JS 字符串上下文会还原成引号，工程名含单引号即报错；改为从 `globalProjectMeta` 取名字
@@ -222,6 +239,7 @@
 - 工程化 `test/common.test.mjs` 增补版本族与图层常量用例，测试总数 74 → 82
 
 ## v1.17.3 `2026-10-21`
+
 - 优化 版本号读取加缓存：`WolfCommon.getEditorVersion()` 只穿透宿主一次（原来 `生成物理网络` 在逐行循环里判断版本，上万行源码会造成上万次跨 iframe 调用）
 - 优化 删除两个零引用第三方库 `jspdf.umd.min.js`(536KB) / `crypto-js.min.js`(50KB)，安装包由 1.16MB 降至约 1.01MB（-12.5%）
 - 优化 统一 HTML 转义：新增 `WolfCommon.escapeHtml`（`& < > " '` 全转义），替换 `从PCB转原理图` / `导入AD网表` / `工作时间统计` 中的 3 份各自实现；顺带修复 `从PCB转原理图` 原实现只转义双引号、且表格正文未转义的问题
@@ -230,6 +248,7 @@
 - 工程化 新增 `test/common.test.mjs`（16 个用例）覆盖公共模块的版本缓存、网表读写、容器识别与转义，测试总数 58 → 74
 
 ## v1.17.2 `2026-10-21`
+
 - 新增 引入 `node:test` 测试链路（`npm test`，零依赖）：58 个用例覆盖网表解析纯函数、API 校准配置读取、EDA 图元调用参数契约（`pcb_PrimitiveVia/Pad/Line/Arc/Polyline.create` 的实参个数、类型、顺序与缩放倍率）
 - 重构 18 个页面的 18 份独立 CSS 合并为 `iframe/css/common.css`（公共样式）+ 各页面内联 `<style>`（专属样式），删除 18 个 CSS 文件；`:root` 变量从 `--bg` / `--bg-color` / `--vscode-bg` 三套并存收敛为单套 `--vscode-*`，边框色由 4 种取值统一为 1 种，硬编码色值同步改写为变量引用
 - 重构 新增 `iframe/js/common.js` 公共模块（`getEda` / `hasEda` / `getEditorVersion` / `isV3` / `isV2` / `getComponentsContainer` / `getNetlist` / `setNetlist`），全量替换 12 个页面的重复「版本判断 + 网表读写」逻辑，18 个 HTML 统一引用
@@ -239,10 +258,12 @@
 - 说明 本次为内部重构，交互与功能行为保持不变；重构前后对 18 个页面做了逐页截图比对，仅存在变量取值统一带来的细微色值差异（如灰底按钮 `#3c3c3c → #3a3d41`、边框 `#333333 → #3c3c3c`）
 
 ## v1.17.1 `2026-10-20`
+
 - 重构 拆分全部 18 个 iframe 前端页面：内联 `<style>` 抽至 `iframe/css/`、内联 `<script>` 抽至 `iframe/js/app/`，HTML 仅保留结构 + 引用，最大页面由 2756 行缩减至 276 行
 - 工程化 新增 `scripts/split-iframe.js` 前端拆分脚本，沉淀可复用的拆分工具
 
 ## v1.17.0 `2026-10-20`
+
 - 重构 `工作时间统计` 导出机制：弃用 AES 加密，改为轻量防篡改（GZIP 压缩 + SHA-256 校验和），并移除反调试逻辑（控制台禁用、快捷键拦截、debugger 死循环）
 - 重构 消除重复代码：抽取公共 API 校准配置读取工具，统一焊盘⇄过孔、导线⇄线条转换器的缩放逻辑，补充配置缺键兜底
 - 重构 拆分 `从PCB创建导线` 模块为「主逻辑 / 网表解析 / 性能监控」三部分，提升可维护性
@@ -250,19 +271,24 @@
 - 工程化 统一版本号（`package.json` 与 `extension.json` 对齐）
 
 ## v1.16.0 `2026-10-13`
+
 - 加入 EDA 桥 功能
 
 ## v1.15.9 `2026-9-2`
+
 - 加入原理图符号引脚排序功能
 
 ## v1.15.8 `2026-8-3`
+
 - 加入导出引脚网络（带引脚名称）
 
 ## v1.15.7 `2026-7-3`
+
 - 增加周报输出
 - 重构消息提醒
 
 ## v1.15.5 `2026-6-20`
+
 - 重构 工作时间统计 前端UI
 - PCB转原理图 增加悬浮显示完整信息
 - 清除属性工具 优化滚动条样式
@@ -270,6 +296,7 @@
 - 导出全部网络 增加导出网络长度
 
 ## v1.14.22 `2026-5-20`
+
 - `批量替换器件` 增加进度条
 - 重构 `生成二维码`功能，支持几十种类型的码
 - 重构 `3D 模型批量更新` 功能
@@ -278,6 +305,7 @@
 - 更新logo
 
 ## v1.14.16 `2026-4-7`
+
 - 增加 `导入图片` 多选、切片导入、指定布局 功能
 - 增加 `基准测试` 功能
 - 增加 `刷新网表` 功能
@@ -285,7 +313,7 @@
 - 增加 `生成物理网络` 对异形焊盘的支持
 - 增加 `填充图片互转` 功能，贝塞尔曲线降级为多段直线处理
 - 优化 `丝印代码转换` 相同值折叠显示、按照数值排序
-- 优化 ` 导入 BOM `  相同值折叠显示、按照数值排序
+- 优化 `导入 BOM` 相同值折叠显示、按照数值排序
 - 优化 `工作时间统计` 的数据读取方式及图表显示范围
 - 修复 `从PCB转原理图` 元件重叠问题
 - 重构 `从PCB创建导线` 功能，弃用API创建导线，改用构建源码写入（创建1000条导线，性能提升20倍）
@@ -296,23 +324,26 @@
 - 统一前端UI风格
 
 ## v1.13.11 `2026-2-2`
+
 - 生成物理网络过滤非铜层
 
 ## v1.13.9 `2026-1-24`
+
 - 修复 导入图片 在V3客户端配色异常的问题
 - 放置导线 适配 V3.2.80
 - 导线线条互转 适配 V3.2.80
 - 过孔焊盘互转 适配 V3.2.80
 
 ## v1.13.7 `2026-1-22`
+
 - 增加快捷键
 
-|       快捷键       |      功能      |
-|   :------------:   |:------------: |
-|`Ctrl+Alt+W`    |  位号查重      |
-|`Ctrl+Shift+C`  |  导入图片      |
-|`Ctrl+Shift+G`  |  焊盘 ⇄ 过孔  |
-|`Ctrl+Shift+X`  |  导线 ⇄ 线条  |
+|     快捷键     |    功能     |
+| :------------: | :---------: |
+|  `Ctrl+Alt+W`  |  位号查重   |
+| `Ctrl+Shift+C` |  导入图片   |
+| `Ctrl+Shift+G` | 焊盘 ⇄ 过孔 |
+| `Ctrl+Shift+X` | 导线 ⇄ 线条 |
 
 ## v1.13.6 `2026-1-17`
 
@@ -478,4 +509,4 @@
 
 > 开发者：WOLF4096
 > 辅助开发：DeepSeek-V4.1-Flash
-> 本工具为非官方第三方开源扩展，与嘉立创 / EasyEDA 官方无隶属关系
+> 本工具为非官方第三方开源扩展

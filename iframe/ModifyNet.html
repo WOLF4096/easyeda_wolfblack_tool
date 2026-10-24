@@ -2,56 +2,52 @@
 <!--
   开发者：WOLF4096
   辅助开发：DeepSeek-V4.1-Flash
-  本工具为非官方第三方开源扩展，与嘉立创 / EasyEDA 官方无隶属关系
+  本工具为非官方第三方开源扩展
 -->
 <html lang="zh-CN">
-	<head>
-		<meta charset="UTF-8" />
-		<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
-		<title>狼黑工具 - 批量修改网络 与 引脚查询工具</title>
-		<link rel="stylesheet" href="/iframe/css/common.css" />
-	</head>
-	<body class="app">
-		<div class="toolbar">
-			<div class="toolbar-left">
-				<span class="title">网络修改 &amp; 查询工具</span>
-				<span id="verLabel" class="version-tag"></span>
-			</div>
-			<div class="button-group">
-				<label
-					class="inline"
-					title="替换时把新网络名里的英文字母转成大写（部分 EDA 版本对小写网络名支持不友好）"
-				>
-					<input type="checkbox" id="toUpper" checked />
-					转大写
-				</label>
-				<button id="executeBtn">执行替换</button>
-			</div>
+
+<head>
+	<meta charset="UTF-8" />
+	<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+	<title>狼黑工具 - 批量修改网络 与 引脚查询工具</title>
+	<link rel="stylesheet" href="/iframe/css/common.css" />
+</head>
+
+<body class="app">
+	<div class="toolbar">
+		<div class="toolbar-left">
+			<span class="title">网络修改 &amp; 查询工具</span>
+			<span id="verLabel" class="version-tag"></span>
+		</div>
+		<div class="button-group">
+			<label class="inline" title="替换时把新网络名里的英文字母转成大写（部分 EDA 版本对小写网络名支持不友好）">
+				<input type="checkbox" id="toUpper" checked />
+				转大写
+			</label>
+			<button id="executeBtn">执行替换</button>
+		</div>
+	</div>
+
+	<div class="mn-content">
+		<div>
+			<label class="mn-label" for="csvInput">替换规则，从 Excel 复制粘贴（旧网络名匹配不区分大小写）：</label>
+			<textarea id="csvInput" class="mn-csv" placeholder="旧网络名称	新网络名称&#10;(直接从Excel复制粘贴，使用Tab分隔)"></textarea>
 		</div>
 
-		<div class="mn-content">
-			<div>
-				<label class="mn-label" for="csvInput">替换规则，从 Excel 复制粘贴（旧网络名匹配不区分大小写）：</label>
-				<textarea id="csvInput" class="mn-csv" placeholder="旧网络名称	新网络名称&#10;(直接从Excel复制粘贴，使用Tab分隔)"></textarea>
+		<div class="mn-result">
+			<div class="mn-search">
+				<label for="designatorInput">查询引脚：</label>
+				<input type="text" id="designatorInput" placeholder="输入位号 (如 U1)" />
 			</div>
 
-			<div class="mn-result">
-				<div class="mn-search">
-					<label for="designatorInput">查询引脚：</label>
-					<input type="text" id="designatorInput" placeholder="输入位号 (如 U1)" />
-				</div>
-
-				<label class="mn-label" for="resultOutput">输出结果：</label>
-				<textarea
-					id="resultOutput"
-					class="mn-textarea"
-					readonly
-					placeholder="在此输入位号查看引脚网络，或点击执行查看替换结果..."
-				></textarea>
-				<div id="status" class="status"></div>
-			</div>
+			<label class="mn-label" for="resultOutput">输出结果：</label>
+			<textarea id="resultOutput" class="mn-textarea" readonly
+				placeholder="在此输入位号查看引脚网络，或点击执行查看替换结果..."></textarea>
+			<div id="status" class="status"></div>
 		</div>
+	</div>
 
-		<script src="/iframe/js/app/ModifyNet.js"></script>
-	</body>
+	<script src="/iframe/js/app/ModifyNet.js"></script>
+</body>
+
 </html>

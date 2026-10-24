@@ -2,50 +2,53 @@
 <!--
   开发者：WOLF4096
   辅助开发：DeepSeek-V4.1-Flash
-  本工具为非官方第三方开源扩展，与嘉立创 / EasyEDA 官方无隶属关系
+  本工具为非官方第三方开源扩展
 -->
 <html lang="zh-CN">
-	<head>
-		<meta charset="UTF-8" />
-		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-		<title>狼黑工具 - 丝印代码转换</title>
-		<link rel="stylesheet" href="/iframe/css/common.css" />
-	</head>
-	<body class="app">
-		<div class="cc-header">
-			<div class="cc-title">
-				丝印代码转换工具
-				<span id="versionTag" class="version-tag">检测中...</span>
-				<span class="cc-hint">只处理 C / R / L 开头的位号</span>
+
+<head>
+	<meta charset="UTF-8" />
+	<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+	<title>狼黑工具 - 丝印代码转换</title>
+	<link rel="stylesheet" href="/iframe/css/common.css" />
+</head>
+
+<body class="app">
+	<div class="cc-header">
+		<div class="cc-title">
+			丝印代码转换工具
+			<span id="versionTag" class="version-tag">检测中...</span>
+			<span class="cc-hint">只处理 C / R / L 开头的位号</span>
+		</div>
+		<div class="cc-controls">
+			<div class="select-all">
+				<input type="checkbox" id="selectAll" />
+				<label for="selectAll">全选</label>
 			</div>
-			<div class="cc-controls">
-				<div class="select-all">
-					<input type="checkbox" id="selectAll" />
-					<label for="selectAll">全选</label>
-				</div>
-				<button id="executeBtn">执行</button>
-			</div>
+			<button id="executeBtn">执行</button>
 		</div>
+	</div>
 
-		<div class="cc-table">
-			<table id="componentsTable" class="tbl">
-				<thead>
-					<tr>
-						<th class="checkbox-cell">修改</th>
-						<th>位号</th>
-						<th>封装</th>
-						<th>代码/名称</th>
-						<th title="可以直接改，点「执行」后按这里的值写回">转换值</th>
-					</tr>
-				</thead>
-				<tbody id="tableBody"></tbody>
-			</table>
-		</div>
+	<div class="cc-table">
+		<table id="componentsTable" class="tbl">
+			<thead>
+				<tr>
+					<th class="checkbox-cell">修改</th>
+					<th>位号</th>
+					<th>封装</th>
+					<th>代码/名称</th>
+					<th title="可以直接改，点「执行」后按这里的值写回">转换值</th>
+				</tr>
+			</thead>
+			<tbody id="tableBody"></tbody>
+		</table>
+	</div>
 
-		<div class="cc-status">
-			<div id="status" class="status"></div>
-		</div>
+	<div class="cc-status">
+		<div id="status" class="status"></div>
+	</div>
 
-		<script src="/iframe/js/app/CodeConvert.js"></script>
-	</body>
+	<script src="/iframe/js/app/CodeConvert.js"></script>
+</body>
+
 </html>

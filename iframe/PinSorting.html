@@ -2,45 +2,48 @@
 <!--
   开发者：WOLF4096
   辅助开发：DeepSeek-V4.1-Flash
-  本工具为非官方第三方开源扩展，与嘉立创 / EasyEDA 官方无隶属关系
+  本工具为非官方第三方开源扩展
 -->
 <html lang="zh-CN">
-	<head>
-		<meta charset="UTF-8" />
-		<title>引脚排序工具</title>
-		<link rel="stylesheet" href="/iframe/css/common.css" />
-	</head>
-	<body>
-		<div class="ps-form">
-			<div class="ps-row">
-				<span>选中引脚数量：</span>
-				<span id="pin-count" class="ps-count">0</span>
-			</div>
 
-			<div class="ps-row">
-				<span>排序对象：</span>
-				<div class="ps-group">
-					<label><input type="radio" name="sortTarget" value="pinName" checked />名称</label>
-					<label><input type="radio" name="sortTarget" value="pinNumber" />编号</label>
-				</div>
-			</div>
+<head>
+	<meta charset="UTF-8" />
+	<title>引脚排序工具</title>
+	<link rel="stylesheet" href="/iframe/css/common.css" />
+</head>
 
-			<div class="ps-row">
-				<label><input type="checkbox" id="splitSort" checked />拆分排序</label>
-				<span>间距：</span>
-				<input type="number" id="spacing" class="ps-spacing" value="10" />
-			</div>
+<body>
+	<div class="ps-form">
+		<div class="ps-row">
+			<span>选中引脚数量：</span>
+			<span id="pin-count" class="ps-count">0</span>
+		</div>
 
-			<div class="ps-row">
-				<label><input type="checkbox" id="endSort" />末尾排序</label>
-			</div>
-
-			<div class="ps-buttons">
-				<button id="btn-asc">升序</button>
-				<button id="btn-desc">降序</button>
+		<div class="ps-row">
+			<span>排序对象：</span>
+			<div class="ps-group">
+				<label><input type="radio" name="sortTarget" value="pinName" checked />名称</label>
+				<label><input type="radio" name="sortTarget" value="pinNumber" />编号</label>
 			</div>
 		</div>
 
-		<script src="/iframe/js/app/PinSorting.js"></script>
-	</body>
+		<div class="ps-row">
+			<label><input type="checkbox" id="splitSort" checked />拆分排序</label>
+			<span>间距：</span>
+			<input type="number" id="spacing" class="ps-spacing" value="10" />
+		</div>
+
+		<div class="ps-row">
+			<label><input type="checkbox" id="endSort" />末尾排序</label>
+		</div>
+
+		<div class="ps-buttons">
+			<button id="btn-asc">升序</button>
+			<button id="btn-desc">降序</button>
+		</div>
+	</div>
+
+	<script src="/iframe/js/app/PinSorting.js"></script>
+</body>
+
 </html>

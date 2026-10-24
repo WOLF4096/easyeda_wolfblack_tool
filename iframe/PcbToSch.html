@@ -2,75 +2,78 @@
 <!--
   开发者：WOLF4096
   辅助开发：DeepSeek-V4.1-Flash
-  本工具为非官方第三方开源扩展，与嘉立创 / EasyEDA 官方无隶属关系
+  本工具为非官方第三方开源扩展
 -->
 <html lang="zh-CN">
-	<head>
-		<meta charset="UTF-8" />
-		<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-		<title>狼黑工具 - PCB转原理图工具</title>
-		<script src="/iframe/js/jszip.min.js"></script>
-		<link rel="stylesheet" href="/iframe/css/common.css" />
-	</head>
-	<body class="app">
-		<div class="p2s-header">
-			<h1>
-				PCB转原理图工具
-				<span id="versionDisplay">检测 EDA 环境...</span>
-			</h1>
+
+<head>
+	<meta charset="UTF-8" />
+	<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+	<title>狼黑工具 - PCB转原理图工具</title>
+	<script src="/iframe/js/jszip.min.js"></script>
+	<link rel="stylesheet" href="/iframe/css/common.css" />
+</head>
+
+<body class="app">
+	<div class="p2s-header">
+		<h1>
+			PCB转原理图工具
+			<span id="versionDisplay">检测 EDA 环境...</span>
+		</h1>
+	</div>
+
+	<div class="p2s-list">
+		<div class="p2s-grid-head table-header">
+			<div class="header-cell">位号</div>
+			<div class="header-cell">名称</div>
+			<div class="header-cell">封装</div>
+			<div class="header-cell">器件</div>
+			<div class="header-cell">匹配符号</div>
+			<div class="header-cell">指定符号</div>
 		</div>
+		<div class="p2s-rows" id="tableRows"></div>
+	</div>
 
-		<div class="p2s-list">
-			<div class="p2s-grid-head table-header">
-				<div class="header-cell">位号</div>
-				<div class="header-cell">名称</div>
-				<div class="header-cell">封装</div>
-				<div class="header-cell">器件</div>
-				<div class="header-cell">匹配符号</div>
-				<div class="header-cell">指定符号</div>
-			</div>
-			<div class="p2s-rows" id="tableRows"></div>
-		</div>
-
-		<div class="p2s-bottom">
-			<div class="p2s-options">
-				<div class="p2s-option-group">
-					<div class="p2s-group-title">分类</div>
-					<div class="p2s-grid-2">
-						<label class="p2s-item"><input type="radio" name="classify" value="device" />按照器件分类</label>
-						<label class="p2s-item"><input type="radio" name="classify" value="ref" checked />按照位号分类</label>
-						<label class="p2s-item"><input type="radio" name="classify" value="pkg" />按照封装分类</label>
-						<label class="p2s-item"><input type="radio" name="classify" value="coord" />按照元件坐标</label>
-					</div>
-				</div>
-				<div class="p2s-option-group">
-					<div class="p2s-group-title">更多选项</div>
-					<div class="p2s-grid-2">
-						<label class="p2s-item"><input type="checkbox" id="genTitle" checked />显示分类标题</label>
-						<label class="p2s-item"><input type="checkbox" id="genWire" checked />尝试生成导线</label>
-						<label class="p2s-item"><input type="checkbox" id="yvalue" />启用 Y 值翻转</label>
-						<label class="p2s-item"><input type="checkbox" id="errors" />忽略符号错误</label>
-					</div>
+	<div class="p2s-bottom">
+		<div class="p2s-options">
+			<div class="p2s-option-group">
+				<div class="p2s-group-title">分类</div>
+				<div class="p2s-grid-2">
+					<label class="p2s-item"><input type="radio" name="classify" value="device" />按照器件分类</label>
+					<label class="p2s-item"><input type="radio" name="classify" value="ref" checked />按照位号分类</label>
+					<label class="p2s-item"><input type="radio" name="classify" value="pkg" />按照封装分类</label>
+					<label class="p2s-item"><input type="radio" name="classify" value="coord" />按照元件坐标</label>
 				</div>
 			</div>
-
-			<div class="p2s-actions">
-				<div class="p2s-buttons">
-					<button class="btn-secondary" id="refreshListBtn">加载数据</button>
-					<button class="btn-secondary" id="buildBtn" disabled>构建源码</button>
-					<button id="writeBtn" disabled>写入文档</button>
-					<button id="outfile" disabled>导出文件</button>
-					<button class="btn-secondary" id="exportCsvBtn" disabled>导出表格</button>
-					<button class="btn-secondary" id="exportNetBtn" disabled>导出网络</button>
+			<div class="p2s-option-group">
+				<div class="p2s-group-title">更多选项</div>
+				<div class="p2s-grid-2">
+					<label class="p2s-item"><input type="checkbox" id="genTitle" checked />显示分类标题</label>
+					<label class="p2s-item"><input type="checkbox" id="genWire" checked />尝试生成导线</label>
+					<label class="p2s-item"><input type="checkbox" id="yvalue" />启用 Y 值翻转</label>
+					<label class="p2s-item"><input type="checkbox" id="errors" />忽略符号错误</label>
 				</div>
-			</div>
-
-			<div class="status-bar accent" id="progressArea">
-				<div class="progress-bg" id="progressFill"></div>
-				<span class="status-text" id="progressText">就绪</span>
 			</div>
 		</div>
 
-		<script src="/iframe/js/app/PcbToSch.js"></script>
-	</body>
+		<div class="p2s-actions">
+			<div class="p2s-buttons">
+				<button class="btn-secondary" id="refreshListBtn">加载数据</button>
+				<button class="btn-secondary" id="buildBtn" disabled>构建源码</button>
+				<button id="writeBtn" disabled>写入文档</button>
+				<button id="outfile" disabled>导出文件</button>
+				<button class="btn-secondary" id="exportCsvBtn" disabled>导出表格</button>
+				<button class="btn-secondary" id="exportNetBtn" disabled>导出网络</button>
+			</div>
+		</div>
+
+		<div class="status-bar accent" id="progressArea">
+			<div class="progress-bg" id="progressFill"></div>
+			<span class="status-text" id="progressText">就绪</span>
+		</div>
+	</div>
+
+	<script src="/iframe/js/app/PcbToSch.js"></script>
+</body>
+
 </html>

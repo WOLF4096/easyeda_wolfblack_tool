@@ -2,48 +2,51 @@
 <!--
   开发者：WOLF4096
   辅助开发：DeepSeek-V4.1-Flash
-  本工具为非官方第三方开源扩展，与嘉立创 / EasyEDA 官方无隶属关系
+  本工具为非官方第三方开源扩展
 -->
 <html lang="zh-CN">
-	<head>
-		<meta charset="UTF-8" />
-		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-		<title>狼黑工具 - 导入BOM</title>
-		<link rel="stylesheet" href="/iframe/css/common.css" />
-	</head>
-	<body class="app">
-		<div class="toolbar">
-			<div class="toolbar-left">
-				<span class="title">导入BOM</span>
-				<span id="versionTag" class="version-tag">检测中...</span>
-				<span class="hint">按下列字段排列后从 Excel 复制粘贴</span>
-			</div>
-			<div class="button-group">
-				<button id="pasteBtn" class="btn-secondary">粘贴</button>
-				<button id="selectAll" class="btn-secondary">全选</button>
-				<button id="importBtn" disabled>导入</button>
-			</div>
+
+<head>
+	<meta charset="UTF-8" />
+	<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+	<title>狼黑工具 - 导入BOM</title>
+	<link rel="stylesheet" href="/iframe/css/common.css" />
+</head>
+
+<body class="app">
+	<div class="toolbar">
+		<div class="toolbar-left">
+			<span class="title">导入BOM</span>
+			<span id="versionTag" class="version-tag">检测中...</span>
+			<span class="hint">按下列字段排列后从 Excel 复制粘贴</span>
 		</div>
-
-		<div class="table-wrap">
-			<table id="bomTable" class="tbl ib-table">
-				<thead>
-					<tr>
-						<th><input type="checkbox" id="masterCheckbox" title="全选/取消全选" /></th>
-						<th class="sortable" data-key="designators">位号 <span class="sort-arrow"></span></th>
-						<th class="sortable" data-key="name">名称 <span class="sort-arrow"></span></th>
-						<th class="sortable" data-key="manufacturerPart">制造商编号 <span class="sort-arrow"></span></th>
-						<th class="sortable" data-key="manufacturer">制造商名称 <span class="sort-arrow"></span></th>
-						<th class="sortable" data-key="supplierPart">供应商编号 <span class="sort-arrow"></span></th>
-						<th class="sortable" data-key="supplier">供应商 <span class="sort-arrow"></span></th>
-					</tr>
-				</thead>
-				<tbody id="tableBody"></tbody>
-			</table>
+		<div class="button-group">
+			<button id="pasteBtn" class="btn-secondary">粘贴</button>
+			<button id="selectAll" class="btn-secondary">全选</button>
+			<button id="importBtn" disabled>导入</button>
 		</div>
+	</div>
 
-		<div class="status-bar" id="statusBar">准备就绪</div>
+	<div class="table-wrap">
+		<table id="bomTable" class="tbl ib-table">
+			<thead>
+				<tr>
+					<th><input type="checkbox" id="masterCheckbox" title="全选/取消全选" /></th>
+					<th class="sortable" data-key="designators">位号 <span class="sort-arrow"></span></th>
+					<th class="sortable" data-key="name">名称 <span class="sort-arrow"></span></th>
+					<th class="sortable" data-key="manufacturerPart">制造商编号 <span class="sort-arrow"></span></th>
+					<th class="sortable" data-key="manufacturer">制造商名称 <span class="sort-arrow"></span></th>
+					<th class="sortable" data-key="supplierPart">供应商编号 <span class="sort-arrow"></span></th>
+					<th class="sortable" data-key="supplier">供应商 <span class="sort-arrow"></span></th>
+				</tr>
+			</thead>
+			<tbody id="tableBody"></tbody>
+		</table>
+	</div>
 
-		<script src="/iframe/js/app/ImportBom.js"></script>
-	</body>
+	<div class="status-bar" id="statusBar">准备就绪</div>
+
+	<script src="/iframe/js/app/ImportBom.js"></script>
+</body>
+
 </html>

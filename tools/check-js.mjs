@@ -15,7 +15,7 @@
  *
  * 开发者：WOLF4096
  * 辅助开发：DeepSeek-V4.1-Flash
- * 本工具为非官方第三方开源扩展，与嘉立创 / EasyEDA 官方无隶属关系
+ * 本工具为非官方第三方开源扩展
  */
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
@@ -35,11 +35,12 @@ const BASELINE = path.join('config', 'eslint-baseline.json');
 function runEslint() {
 	let raw;
 	try {
-		raw = execFileSync(
-			process.platform === 'win32' ? 'npx.cmd' : 'npx',
-			['eslint', '--no-eslintrc', '--config', CONFIG, '-f', 'json', TARGET],
-			{ cwd: ROOT, encoding: 'utf8', maxBuffer: 32 * 1024 * 1024, shell: true }
-		);
+		raw = execFileSync(process.platform === 'win32' ? 'npx.cmd' : 'npx', ['eslint', '--no-eslintrc', '--config', CONFIG, '-f', 'json', TARGET], {
+			cwd: ROOT,
+			encoding: 'utf8',
+			maxBuffer: 32 * 1024 * 1024,
+			shell: true,
+		});
 	} catch (e) {
 		// ESLint 有 error 时退出码非 0，但 stdout 里仍有完整 JSON
 		raw = e.stdout || '';
@@ -119,12 +120,8 @@ if (process.argv.includes('--update')) {
 	const counts = Object.fromEntries([...current.entries()].sort((a, b) => (a[0] < b[0] ? -1 : 1)));
 	fs.writeFileSync(
 		path.join(ROOT, BASELINE),
-		JSON.stringify(
-			{ updatedAt: new Date().toISOString().slice(0, 10), note: '存量违规基线，只允许减少', counts: counts },
-			null,
-			2
-		) + '\n',
-		'utf8'
+		JSON.stringify({ updatedAt: new Date().toISOString().slice(0, 10), note: '存量违规基线，只允许减少', counts: counts }, null, 2) + '\n',
+		'utf8',
 	);
 	process.stdout.write(`check:js — 基线已更新：${violations.length} 条违规写入 ${BASELINE}\n`);
 	process.exit(0);
