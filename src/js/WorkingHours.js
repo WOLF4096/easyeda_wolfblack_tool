@@ -259,7 +259,15 @@ export function WorkingHours() {
 			}
 		},
 
-		check: (totalWorkSeconds, isCurrentlyIdle) => {
+		/**
+		 * 每 2 秒判一次提醒
+		 *
+		 * @param {number} totalWorkSeconds 今日累计工作秒数
+		 * @param {boolean} isCurrentlyIdle 当前是否处于挂机（鼠标 20 秒没动）
+		 * @param {number} idleMs 本次挂机已经持续多久（毫秒，只有「返回」那一拍才非 0）
+		 * @returns {void}
+		 */
+		check: (totalWorkSeconds, isCurrentlyIdle, idleMs = 0) => {
 			// 安全性检查：如果数据还未加载或被意外清空
 			if (!ReminderManager.data || !ReminderManager.data.durationRules) return;
 
@@ -291,8 +299,10 @@ export function WorkingHours() {
 			});
 
 			// 3. 挂机返回提醒
+			// idleMs 由主循环用「本次挂机起点」算好传进来。
+			// 这里不能再用 `Date.now() - session.lastMoveTime`：返回的那一拍 lastMoveTime 刚被
+			// 鼠标移动重置成 now，算出来永远是 0，提醒就再也不会弹（旧实现的 bug）。
 			if (ReminderManager.data.idleEnabled && ReminderManager.isLastTickIdle && !isCurrentlyIdle) {
-				const idleMs = Date.now() - session.lastMoveTime;
 				if (idleMs > (ReminderManager.data.idleThresholdMin || 10) * 60000) {
 					const template = ReminderManager.data.idleText || "距离上次离开经过了<time>";
 					const msg = template.replace("<time>", ReminderManager.formatTimeStr(idleMs));
@@ -339,6 +349,7 @@ export function WorkingHours() {
 		currentName: '未获取',
 		lastTick: Date.now(),
 		totalWorkToday: 0,
+		idleSince: 0, // 本次挂机的起点时间戳；0 = 当前是活动状态
 	};
 
 	let mainTimer = null;
@@ -376,6 +387,26 @@ export function WorkingHours() {
 		}).catch(() => {});
 	}
 
+	/**
+	 * 维护「本次挂机起点」，返回本次挂机已经持续多久
+	 *
+	 * 起点取「判定为空闲之前最后一次鼠标活动」的时间，而不是当前时间，
+	 * 这样从挂机回到活动的那一拍算出来的就是真实的离开时长。离开状态一结束就清掉起点。
+	 *
+	 * @param {boolean} isCurrentlyIdle 本拍是否挂机
+	 * @param {number} now 本拍时间戳
+	 * @returns {number} 挂机时长（毫秒）；活动状态下为 0
+	 */
+	function trackIdle(isCurrentlyIdle, now) {
+		if (isCurrentlyIdle) {
+			if (!session.idleSince) session.idleSince = session.lastMoveTime || now;
+			return now - session.idleSince;
+		}
+		const idleMs = session.idleSince ? now - session.idleSince : 0;
+		session.idleSince = 0;
+		return idleMs;
+	}
+
 	// ==========================================
 	// 4. 主循环逻辑 (去中心化：每个窗口独立统计)
 	// ==========================================
@@ -404,6 +435,7 @@ export function WorkingHours() {
 
 		let diff = (Date.now() - session.lastMoveTime) / 1000;
 		const isCurrentlyIdle = diff > CONFIG.idleThreshold;
+		const idleMs = trackIdle(isCurrentlyIdle, now);
 
 		// 判定状态 (阈值10秒)
 		if (isCurrentlyIdle) {
@@ -413,7 +445,7 @@ export function WorkingHours() {
 			session.totalWorkToday += delta;
 		}
 
-		ReminderManager.check(session.totalWorkToday, isCurrentlyIdle);
+		ReminderManager.check(session.totalWorkToday, isCurrentlyIdle, idleMs);
 
 		// 保存检查
 		if (now - lastSaveTime >= CONFIG.saveInterval * 1000) {

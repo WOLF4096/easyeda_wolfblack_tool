@@ -1,6 +1,6 @@
 /**
  * @//module/ app/eda-bridge/commands
- * @//description/ 桥的指令分发：ping / import / probe / eval（默认关闭远程执行，需勾选「调试指令」）
+ * @//description/ 桥的指令分发：ping / import / probe / eval（远程执行门禁由页面注入，桥页恒为放行）
  * @//exports/ execItems, probePaths, createCommandHandler
  * @//dependencies/ app/eda-bridge/protocol, core/eda, core/version, core/layer, core/netlist, core/sourceLine, core/length, core/util, core/log
  * @//example/ const { createCommandHandler } = await import('./commands.js')
@@ -220,7 +220,10 @@ function handlePing(cmd, ctx) {
 }
 
 /**
- * eval / probe：都要求「调试指令」已勾选
+ * eval / probe：远程执行门禁
+ *
+ * 页面上的「调试指令」勾选框已移除，桥页恒为放行；这里保留判断，方便以后需要收紧时
+ * 只改注入的 `debugAllowed`，不必再动指令分发。
  *
  * @param {object} cmd 指令
  * @param {object} ctx 处理上下文
@@ -229,7 +232,7 @@ function handlePing(cmd, ctx) {
  */
 async function handleDebug(cmd, ctx) {
 	if (!ctx.debugAllowed()) {
-		ctx.send({ id: cmd.id, ok: false, error: '调试指令未开启：请勾选「调试指令」后重试' });
+		ctx.send({ id: cmd.id, ok: false, error: '调试通道未开启：当前页面禁止远程执行代码' });
 		return;
 	}
 	if (cmd.cmd === 'eval') await handleEval(cmd, ctx);
@@ -264,7 +267,7 @@ async function handleImport(cmd, ctx) {
  * @param {() => object|null} deps.getHost 取宿主对象
  * @param {(payload: object) => void} deps.send 回传结果
  * @param {(msg: string) => void} [deps.log] 日志
- * @param {() => boolean} deps.debugAllowed 「调试指令」是否已勾选
+ * @param {() => boolean} deps.debugAllowed 是否允许远程执行（桥页恒为 true）
  * @param {string} deps.ver 桥协议版本
  * @returns {(cmd: object) => Promise<void>} 处理器
  * @sideEffects 依指令而定（eval 会执行任意代码、import 会建图元）

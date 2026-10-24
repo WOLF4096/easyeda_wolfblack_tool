@@ -90,6 +90,12 @@ iframe 页面是宿主拼的 **`blob:` 文档**（`location.href = blob:https://
   WorkingHours.js 因此 108KB → 659KB（字符串字面量直嵌是 1.90MB，echarts 有 24.5 万 tab 要转义）。
 - 图表视觉一致性验证：覆写 `window.Date` 固定时钟 + 固定 `STATS_` 种子数据，用
   `echarts.getInstanceByDom(el).getOption()` 拍 JSON 快照再深度比对（实例在 IIFE 里取不到）。
+- ⚠️ **计时与提醒跑在扩展后端 `src/js/WorkingHours.js`（`initializeOnce()` 启动），不在 iframe 页里**：
+  主循环 2s 一拍，`checkActivity()` 轮询 `getCurrentMousePosition()`（位置变才算活动），20s 不动判挂机，
+  60s 落盘一次。页面侧的 `app/working-hours/reminderApp.js` **只读写同一份 `USER_CONFIG_REMINDERS` 配置**。
+  「挂机返回」的时长必须用独立维护的 `session.idleSince`，**不能**用 `Date.now() - lastMoveTime`
+  （返回那拍 lastMoveTime 刚被重置成 now → 恒 0，v1.23.1 前该提醒从未弹过）。
+  验证手法：`temp/idle-sim.mjs`（假时钟/假 setInterval/假 eda 驱动真主循环）。
 
 
 ## 业务约束：导线⇄线条
@@ -102,8 +108,9 @@ iframe 页面是宿主拼的 **`blob:` 文档**（`location.href = blob:https://
 ## EDA 桥（实机测试通道）
 
 - EDA 内「EDA 桥」页是 **WS 客户端**，连 `ws://127.0.0.1:8233/ws/eda`；服务端 `tools/eda-bridge/server.mjs`
-  （自实现 WS，零依赖）→ **服务端不起就连不上**。`npm run bridge` 起服务，桥页勾「调试指令」才能用
-  `eval`/`probe`（默认关闭，产品不能自带远程执行入口）。`npm run bridge:run -- --file <probe>`。
+  （自实现 WS，零依赖）→ **服务端不起就连不上**。`npm run bridge` 起服务。v1.23.1 起页面上**没有**
+  「调试指令」勾选框：`debugAllowed()` 恒 true，`eval`/`probe` 直接可用（`commands.js` 的门禁留作防御分支）。
+  `npm run bridge:run -- --file <probe>`。
 - `/__status` 的 `ver` 是**桥协议版本**，EDA 版本问 `sys_Environment.getEditorCurrentVersion()`。
 - 排查"写入被拒"：先写基线源码 → `await 300ms` → 写变体，失败重试一次（V4 文档刚重建时会误返回 false）。
 - 探针 `tools/eda-bridge/probes/*.js` 顶层有 `return`，非法模块，已在 `.prettierignore`。

@@ -416,7 +416,7 @@
   }
   async function handleDebug(cmd, ctx) {
     if (!ctx.debugAllowed()) {
-      ctx.send({ id: cmd.id, ok: false, error: "调试指令未开启：请勾选「调试指令」后重试" });
+      ctx.send({ id: cmd.id, ok: false, error: "调试通道未开启：当前页面禁止远程执行代码" });
       return;
     }
     if (cmd.cmd === "eval") await handleEval(cmd, ctx);
@@ -492,8 +492,7 @@
     return !!ws && ws.readyState === 1;
   }
   function debugAllowed() {
-    const el = $("allowEval");
-    return !!(el && el.checked);
+    return true;
   }
   function send(payload) {
     if (!wsOpen()) {

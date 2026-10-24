@@ -17,6 +17,18 @@
 - **V4 三条写盘流程已人工验证通过**（2026-10-22，V4.1.78）：从 PCB 转原理图（符号与引脚完整）、生成物理网络三种写回、批量替换器件（器件真正替换、坐标角度不变、无临时件残留）。详见 `docs/V4回归记录.md`
 - ⚠️ **V4 待处理**：V4 下 `sys_FileManager.setDocumentSource()` 整份写回会丢掉 `POURED`（铜皮已计算填充）行 —— 实测同一份原文写回后 45,557 → 43,119 字节，`POUR` 本体仍在、填充缓存消失（V2.2.45 逐字节一致）。受影响：`生成物理网络`（源码方式）、`从PCB转原理图` 等整份重写源码的功能；重算铜皮可恢复。处理方案待定
 
+## v1.23.1 `2026-10-24`
+> 四处交互缺陷修复 + 转换值可编辑 + 桥页去开关
+
+- **导入图片 DPI 点不动**（`app/import-image/index.js`）：`dpiValueItems` 的选择器写的是 `.dpi-value-item`，而 `ImportImage.html` 与 `common.css` 用的是 `.ii-dpi-item` → `querySelectorAll` 恒为空集合。后果不只是「点击没反应」：`syncDpiUi` 的高亮、`toggleAspectRatio` 的 `pointerEvents` 也全打在空集合上，只有滑块的 `input` 监听还在真实元素上，于是表现为「只能拖滑块」。改为 `.ii-dpi-item` 即恢复。实测（headless Chrome + mock eda，1200×600 探针图）：默认 1200 DPI → 1000×500 mil；点 600 → 2000×1000；点 4800 → 250；`active` 类、滑块 `value=0`、自定义框 `4800` 三处同步
+- **挂机返回提醒永不触发**（`src/js/WorkingHours.js`）：判定条件本身没问题（`idleEnabled && isLastTickIdle && !isCurrentlyIdle`），坏在时长取值——`idleMs = Date.now() - session.lastMoveTime`，而进入「活动」这一拍 `lastMoveTime` 刚被 `checkActivity()` 的鼠标位移重置成 `now`，差值恒为 0，永远过不了 `idleThresholdMin * 60000`。修法是把「本次挂机起点」独立记在 `session.idleSince`（取判定空闲前最后一次活动时间），主循环用 `trackIdle()` 维护并在回到活动时算出 `idleMs` 传给 `ReminderManager.check()`，`check` 不再碰 `lastMoveTime`
+- 挂机逻辑的时序验证（一次性脚本：把该文件去掉 `logger` 的 import 后存成 `.mjs`，用假时钟 + 假 `setInterval` + 假 `eda` 驱动真主循环，主循环回调按 2 秒一拍手动推进）：同一脚本对新旧两版跑「活动 1 分钟 → 不动 11 分钟 → 动一下鼠标」。旧版 `toasts=[]`（确认缺陷），新版弹出 1 条 `距离上次离开经过了11分4秒`；低于阈值（离开 3 分钟）不弹；持续挂机 20 分钟不弹（只在返回那一拍判一次，无刷屏）
+- **转换值可编辑**（`app/code-convert/index.js`）：值列由 `td.textContent` 改为 `input.cc-value-input`。`shouldModify` 的口径从「换算前后文本不同」改为「框里的值 ≠ 原名且非空」，每次 `input` 事件重算并同步该行复选框（可改则启用、自动勾上；清空则取消勾选并禁用），`updateSelectAllCheckbox()` 同步全选三态。`applyConversion()` 一行未改：它本来就读 `group.value`
+- 该列样式拆成 `.cc-value-input`（透明底 + 透明边框，悬停/聚焦才显边框，`.is-modified` 绿字加粗），不再依赖 `td:last-child` 的行内样式；原 `valueCell.style.color` 行内写法删除
+- **3D 表头居中**（`common.css`）：删掉 `.nu-table th:nth-child(1~3) { text-align: left }`，换 `.nu-table thead th { text-align: center }`（同特异性、位置更靠后，覆盖 `.tbl thead th` 的 left）。实测 15 个表头 `text-align` 全为 `center`，表体仍左对齐
+- **桥页去「调试指令」开关**（`EDABridge.html` / `app/eda-bridge/index.js`）：删除勾选框与 `allowEval` 节点，`debugAllowed()` 恒返回 `true`。`commands.js` 的门禁分支保留为防御性代码（文案改成 `调试通道未开启：当前页面禁止远程执行代码`，以后要收紧只改注入的函数）；`docs/提示与报错清单.md` 第 36 行、`features.js` / README 的 EDA 桥步骤与注意事项同步
+- 工程数据：`npm test` **857 用例全通过**（含 docConsistency 的 README × features.js 逐条一致）；`check:deps` 116 模块 / 226 条 import 无环；`check:js` 0 违规；`check:layout` CodeConvert 540×540 无溢出。版本 1.23.0 → 1.23.1（`package.json` / `extension.json` 同步）
+
 ## v1.23.0 `2026-10-24`
 > `创建导线` 拆成「两个来源 + 三个缓存维护入口」，网表缓存落在扩展用户配置
 

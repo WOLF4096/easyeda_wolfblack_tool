@@ -1,6 +1,6 @@
 /**
  * @//module/ app/code-convert/index
- * @//description/ 页面编排：读网表 → 筛阻容感 → 换算分组 → 勾选写回 Name/Value → 关闭面板
+ * @//description/ 页面编排：读网表 → 筛阻容感 → 换算分组 → 勾选（转换值可手改）写回 Name/Value → 关闭面板
  * @//exports/ 无
  * @//dependencies/ core/eda, core/netlist, core/version, ui/statusBar, ui/table, app/code-convert/group
  * @//example/ 页面入口，由 iframe/CodeConvert.html 加载打包产物 app/CodeConvert.js
@@ -31,6 +31,95 @@ const versionTag = document.getElementById('versionTag');
 const bar = createStatusBar({ textEl: document.getElementById('status'), baseClass: 'status' });
 
 /**
+ * 该行是否可被写回：能换算出值（或用户改过值）且唯一 ID 没问题
+ *
+ * @param {object} group 分组
+ * @returns {boolean} 是否可勾选、可写回
+ * @sideEffects 无（纯函数）
+ */
+function isRowModifiable(group) {
+	return Boolean(group.shouldModify && !group.hasError);
+}
+
+/**
+ * 同步「转换值」输入框的视觉状态（绿字 = 执行时会写回）
+ *
+ * @param {HTMLInputElement} input 输入框
+ * @param {object} group 分组
+ * @returns {void}
+ * @sideEffects DOM（改 class）
+ */
+function syncValueStyle(input, group) {
+	input.classList.toggle('is-modified', group.shouldModify);
+}
+
+/**
+ * 文本框改动后重算这一行：值与原名不同就算「需要修改」，并自动勾上
+ *
+ * 这样即使某行原本没换算出来（比如名称是个认不出的写法），手动把值填对也能照样写回。
+ *
+ * @param {object} group 分组
+ * @param {HTMLInputElement} checkbox 该行的「修改」复选框
+ * @param {HTMLInputElement} input 该行的「转换值」输入框
+ * @returns {void}
+ * @sideEffects 就地改 group、DOM
+ */
+function applyEditedValue(group, checkbox, input) {
+	if (!group) return;
+	const text = input.value.trim();
+	group.value = text;
+	group.shouldModify = text !== '' && text !== group.name;
+	group.modified = isRowModifiable(group);
+	checkbox.disabled = !isRowModifiable(group);
+	checkbox.checked = group.modified;
+	syncValueStyle(input, group);
+	updateSelectAllCheckbox();
+}
+
+/**
+ * 建「转换值」文本输入框（可改，执行时按框里的值写回）
+ *
+ * @param {object} group 分组
+ * @param {HTMLInputElement} checkbox 该行的「修改」复选框
+ * @param {number} index 分组下标
+ * @returns {HTMLInputElement} 输入框
+ * @sideEffects DOM（创建元素、绑事件）
+ */
+function createValueInput(group, checkbox, index) {
+	const input = document.createElement('input');
+	input.type = 'text';
+	input.className = 'cc-value-input';
+	input.spellcheck = false;
+	input.value = group.value == null ? '' : group.value;
+	input.title = '可以直接改，点「执行」按这里的值写回';
+	syncValueStyle(input, group);
+	input.addEventListener('input', () => applyEditedValue(grouped[index], checkbox, input));
+	return input;
+}
+
+/**
+ * 建「修改」复选框
+ *
+ * @param {object} group 分组
+ * @param {number} index 分组下标
+ * @returns {HTMLInputElement} 复选框
+ * @sideEffects DOM（创建元素、绑事件）
+ */
+function createModifyCheckbox(group, index) {
+	const checkbox = document.createElement('input');
+	checkbox.type = 'checkbox';
+	checkbox.checked = group.modified;
+	checkbox.disabled = !isRowModifiable(group);
+	checkbox.dataset.index = index;
+	checkbox.style.transform = 'scale(1)';
+	checkbox.addEventListener('change', () => {
+		grouped[index].modified = checkbox.checked;
+		updateSelectAllCheckbox();
+	});
+	return checkbox;
+}
+
+/**
  * 渲染折叠后的表格
  *
  * @returns {void}
@@ -44,16 +133,7 @@ function renderTable() {
 
 		const modifyCell = document.createElement('td');
 		modifyCell.className = 'checkbox-cell';
-		const checkbox = document.createElement('input');
-		checkbox.type = 'checkbox';
-		checkbox.checked = group.modified;
-		checkbox.disabled = group.hasError;
-		checkbox.dataset.index = index;
-		checkbox.style.transform = 'scale(1)';
-		checkbox.addEventListener('change', function () {
-			if (!group.hasError) grouped[index].modified = this.checked;
-			updateSelectAllCheckbox();
-		});
+		const checkbox = createModifyCheckbox(group, index);
 		modifyCell.appendChild(checkbox);
 		row.appendChild(modifyCell);
 
@@ -65,11 +145,7 @@ function renderTable() {
 		row.appendChild(nameCell);
 
 		const valueCell = document.createElement('td');
-		valueCell.textContent = group.value;
-		if (group.shouldModify) {
-			valueCell.style.color = '#4CAF50';
-			valueCell.style.fontWeight = 'bold';
-		}
+		valueCell.appendChild(createValueInput(group, checkbox, index));
 		row.appendChild(valueCell);
 
 		tableBody.appendChild(row);

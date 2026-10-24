@@ -38,7 +38,7 @@ const placeImageBtn = $('placeImageBtn');
 const layerOptions = document.querySelectorAll('.layer-option');
 const selectImageBtn = $('selectImageBtn');
 const customDpiInput = $('customDpiInput');
-const dpiValueItems = document.querySelectorAll('.dpi-value-item');
+const dpiValueItems = document.querySelectorAll('.ii-dpi-item');
 const sliceimportCheckbox = $('sliceimport');
 const aspectRatioCheckbox = $('aspectRatioCheckbox');
 

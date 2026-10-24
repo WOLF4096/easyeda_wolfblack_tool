@@ -74,14 +74,16 @@ function wsOpen() {
 }
 
 /**
- * 「调试指令」开关是否打开
+ * 「调试指令」是否可用
  *
- * @returns {boolean} 是否允许 eval / probe
- * @sideEffects 无（读 DOM）
+ * 页面上已不再提供勾选框：这条桥本来就是开发者自测通道，开关留在界面上只会
+ * 让普通用户误点。命令分发侧的 `debugAllowed()` 依赖契约保留，恒为允许。
+ *
+ * @returns {boolean} 恒为 true
+ * @sideEffects 无
  */
 function debugAllowed() {
-	const el = $('allowEval');
-	return !!(el && el.checked);
+	return true;
 }
 
 /**

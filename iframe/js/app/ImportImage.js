@@ -297,7 +297,7 @@
   var layerOptions = document.querySelectorAll(".layer-option");
   var selectImageBtn = $("selectImageBtn");
   var customDpiInput = $("customDpiInput");
-  var dpiValueItems = document.querySelectorAll(".dpi-value-item");
+  var dpiValueItems = document.querySelectorAll(".ii-dpi-item");
   var sliceimportCheckbox = $("sliceimport");
   var aspectRatioCheckbox = $("aspectRatioCheckbox");
   var currentUnit = "mil";

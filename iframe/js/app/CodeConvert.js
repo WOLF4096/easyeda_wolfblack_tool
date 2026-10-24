@@ -649,22 +649,54 @@
   var executeBtn = document.getElementById("executeBtn");
   var versionTag = document.getElementById("versionTag");
   var bar = createStatusBar({ textEl: document.getElementById("status"), baseClass: "status" });
+  function isRowModifiable(group) {
+    return Boolean(group.shouldModify && !group.hasError);
+  }
+  function syncValueStyle(input, group) {
+    input.classList.toggle("is-modified", group.shouldModify);
+  }
+  function applyEditedValue(group, checkbox, input) {
+    if (!group) return;
+    const text = input.value.trim();
+    group.value = text;
+    group.shouldModify = text !== "" && text !== group.name;
+    group.modified = isRowModifiable(group);
+    checkbox.disabled = !isRowModifiable(group);
+    checkbox.checked = group.modified;
+    syncValueStyle(input, group);
+    updateSelectAllCheckbox();
+  }
+  function createValueInput(group, checkbox, index) {
+    const input = document.createElement("input");
+    input.type = "text";
+    input.className = "cc-value-input";
+    input.spellcheck = false;
+    input.value = group.value == null ? "" : group.value;
+    input.title = "可以直接改，点「执行」按这里的值写回";
+    syncValueStyle(input, group);
+    input.addEventListener("input", () => applyEditedValue(grouped[index], checkbox, input));
+    return input;
+  }
+  function createModifyCheckbox(group, index) {
+    const checkbox = document.createElement("input");
+    checkbox.type = "checkbox";
+    checkbox.checked = group.modified;
+    checkbox.disabled = !isRowModifiable(group);
+    checkbox.dataset.index = index;
+    checkbox.style.transform = "scale(1)";
+    checkbox.addEventListener("change", () => {
+      grouped[index].modified = checkbox.checked;
+      updateSelectAllCheckbox();
+    });
+    return checkbox;
+  }
   function renderTable() {
     tableBody.innerHTML = "";
     grouped.forEach((group, index) => {
       const row = document.createElement("tr");
       const modifyCell = document.createElement("td");
       modifyCell.className = "checkbox-cell";
-      const checkbox = document.createElement("input");
-      checkbox.type = "checkbox";
-      checkbox.checked = group.modified;
-      checkbox.disabled = group.hasError;
-      checkbox.dataset.index = index;
-      checkbox.style.transform = "scale(1)";
-      checkbox.addEventListener("change", function() {
-        if (!group.hasError) grouped[index].modified = this.checked;
-        updateSelectAllCheckbox();
-      });
+      const checkbox = createModifyCheckbox(group, index);
       modifyCell.appendChild(checkbox);
       row.appendChild(modifyCell);
       row.appendChild(ellipsisCell(group.designators.join(","), 150));
@@ -673,11 +705,7 @@
       nameCell.textContent = group.name;
       row.appendChild(nameCell);
       const valueCell = document.createElement("td");
-      valueCell.textContent = group.value;
-      if (group.shouldModify) {
-        valueCell.style.color = "#4CAF50";
-        valueCell.style.fontWeight = "bold";
-      }
+      valueCell.appendChild(createValueInput(group, checkbox, index));
       row.appendChild(valueCell);
       tableBody.appendChild(row);
     });
