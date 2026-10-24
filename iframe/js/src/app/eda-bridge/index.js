@@ -10,9 +10,8 @@
  *
  * 开发者：WOLF4096
  * 辅助开发：DeepSeek-V4.1-Flash
- * 本工具为非官方第三方开源扩展，与嘉立创 / EasyEDA 官方无隶属关系
+ * 本工具为非官方第三方开源扩展
  */
-
 import { getEda } from '../../core/eda.js';
 import { createCommandHandler } from './commands.js';
 import { parseAddr } from './protocol.js';
@@ -42,7 +41,7 @@ let lastSel = null; // 最近一次「选中对象」参数；未选中时保留
  */
 function log(...args) {
 	try {
-		console.log('[EDA 桥]', ...args);
+		console.log('[EDA桥]', ...args);
 	} catch (e) {
 		/* 控制台不可用时忽略 */
 	}
@@ -123,7 +122,13 @@ const handleCommand = createCommandHandler({
  * @sideEffects 无
  */
 function hasObjectApi(host) {
-	return !!(host && host.pcb_SelectControl && host.pcb_SelectControl.getAllSelectedPrimitives_PrimitiveId && host.pcb_PrimitiveObject && host.pcb_PrimitiveObject.get);
+	return !!(
+		host &&
+		host.pcb_SelectControl &&
+		host.pcb_SelectControl.getAllSelectedPrimitives_PrimitiveId &&
+		host.pcb_PrimitiveObject &&
+		host.pcb_PrimitiveObject.get
+	);
 }
 
 /**
@@ -337,10 +342,11 @@ function disconnect() {
 	setStatus('未连接', false);
 }
 
-if ($('conn')) $('conn').onclick = () => {
-	disconnect();
-	connectWS();
-};
+if ($('conn'))
+	$('conn').onclick = () => {
+		disconnect();
+		connectWS();
+	};
 if ($('disc')) $('disc').onclick = disconnect;
 
 /* 状态自校对：每 500ms 让界面与真实 socket 状态一致，杜绝「已断开但显示已连接」 */
@@ -352,7 +358,7 @@ setInterval(() => {
 
 setStatus('未连接', false);
 const initial = parseAddr($('addr') ? $('addr').value : '');
-if ($('bar')) $('bar').title = 'EDA 桥 v' + VER + '（仅 WebSocket）';
-log('EDA 桥 v' + VER + ' 已就绪（只使用 WebSocket），正在自动连接 ' + initial.host + ':' + initial.port);
+if ($('bar')) $('bar').title = 'EDA桥 v' + VER + '（仅 WebSocket）';
+log('EDA桥 v' + VER + ' 已就绪（只使用 WebSocket），正在自动连接 ' + initial.host + ':' + initial.port);
 if (!getEda()) log('提示：未检测到 EDA API —— 请确认本页面在立创EDA专业版环境中打开');
 connectWS();

@@ -11,7 +11,7 @@
  *
  * 开发者：WOLF4096
  * 辅助开发：DeepSeek-V4.1-Flash
- * 本工具为非官方第三方开源扩展，与嘉立创 / EasyEDA 官方无隶属关系
+ * 本工具为非官方第三方开源扩展
  */
 (function () {
 	const smoke = { errors: [], unhandled: [], missing: [], dialogs: [], actions: [], calls: 0 };
@@ -181,7 +181,22 @@
 	};
 
 	// 已 mock 的 primitive / library 命名空间统一返回「可创建对象」
-	for (const ns of ['pcb_PrimitiveVia', 'pcb_PrimitivePad', 'pcb_PrimitiveLine', 'pcb_PrimitiveArc', 'pcb_PrimitivePolyline', 'pcb_PrimitiveRegion', 'pcb_PrimitiveFill', 'pcb_PrimitiveText', 'pcb_PrimitiveImage', 'pcb_PrimitiveComponent', 'sch_PrimitiveComponent', 'sch_PrimitiveWire', 'sch_PrimitiveLine', 'sch_PrimitiveText']) {
+	for (const ns of [
+		'pcb_PrimitiveVia',
+		'pcb_PrimitivePad',
+		'pcb_PrimitiveLine',
+		'pcb_PrimitiveArc',
+		'pcb_PrimitivePolyline',
+		'pcb_PrimitiveRegion',
+		'pcb_PrimitiveFill',
+		'pcb_PrimitiveText',
+		'pcb_PrimitiveImage',
+		'pcb_PrimitiveComponent',
+		'sch_PrimitiveComponent',
+		'sch_PrimitiveWire',
+		'sch_PrimitiveLine',
+		'sch_PrimitiveText',
+	]) {
 		known[ns] = {
 			create: async () => created(),
 			delete: ok,
@@ -190,7 +205,17 @@
 			update: ok,
 		};
 	}
-	for (const ns of ['lib_LibrariesList', 'lib_Device', 'lib_Footprint', 'lib_Symbol', 'dmt_Project', 'dmt_Folder', 'sch_Netlist', 'pcb_Document', 'sch_Document']) {
+	for (const ns of [
+		'lib_LibrariesList',
+		'lib_Device',
+		'lib_Footprint',
+		'lib_Symbol',
+		'dmt_Project',
+		'dmt_Folder',
+		'sch_Netlist',
+		'pcb_Document',
+		'sch_Document',
+	]) {
 		known[ns] = known[ns] || { getAll: async () => [], get: async () => null, create: async () => created(), delete: ok };
 	}
 
@@ -291,7 +316,13 @@
 				const btn = buttons[i++];
 				try {
 					btn.click();
-					actions.push('click:' + (btn.id || String(btn.textContent || '').trim().slice(0, 8)));
+					actions.push(
+						'click:' +
+							(btn.id ||
+								String(btn.textContent || '')
+									.trim()
+									.slice(0, 8)),
+					);
 				} catch (e) {
 					smoke.errors.push({ type: 'click-error', msg: String((e && e.message) || e) });
 				}

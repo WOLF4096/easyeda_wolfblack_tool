@@ -11,12 +11,11 @@
  *
  * 开发者：WOLF4096
  * 辅助开发：DeepSeek-V4.1-Flash
- * 本工具为非官方第三方开源扩展，与嘉立创 / EasyEDA 官方无隶属关系
+ * 本工具为非官方第三方开源扩展
  */
-
-import { formatDuration, formatFullDateTime } from './time.js';
-import { getProjectTitleString } from './projectSummary.js';
 import { collectDaily } from './charts/options/heatmap.js';
+import { getProjectTitleString } from './projectSummary.js';
+import { formatDuration, formatFullDateTime } from './time.js';
 
 /**
  * 导出用的热力图数据（不含隐藏过滤，去掉空白天）

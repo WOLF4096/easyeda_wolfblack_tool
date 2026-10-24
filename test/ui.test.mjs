@@ -16,7 +16,7 @@
  *
  * 开发者：WOLF4096
  * 辅助开发：DeepSeek-V4.1-Flash
- * 本工具为非官方第三方开源扩展，与嘉立创 / EasyEDA 官方无隶属关系
+ * 本工具为非官方第三方开源扩展
  */
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
@@ -283,17 +283,17 @@ describe('ui/table', () => {
 		const asc = sortRows(rows, { key: 'd', asc: true, value: getter });
 		assert.deepEqual(
 			asc.map((r) => r.d),
-			['R1', 'R2', 'R10']
+			['R1', 'R2', 'R10'],
 		);
 		const desc = sortRows(rows, { key: 'd', asc: false, value: getter });
 		assert.deepEqual(
 			desc.map((r) => r.d),
-			['R10', 'R2', 'R1']
+			['R10', 'R2', 'R1'],
 		);
 		assert.deepEqual(
 			rows.map((r) => r.d),
 			['R10', 'R2', 'R1'],
-			'原数组不能被改动'
+			'原数组不能被改动',
 		);
 		assert.equal(sortRows(rows, { key: null }).length, 3, '无排序列时返回副本');
 	});
@@ -301,15 +301,30 @@ describe('ui/table', () => {
 	it('selectionSummary 的口径：全选 / 半选 / 全不选 / 空表', async () => {
 		const { selectionSummary } = await import('../iframe/js/src/ui/table.js');
 		const flags = [true, true];
-		assert.deepEqual(selectionSummary(flags.map((f) => ({ f })), (i) => i.f), { count: 2, total: 2, isAll: true, isIndeterminate: false });
+		assert.deepEqual(
+			selectionSummary(
+				flags.map((f) => ({ f })),
+				(i) => i.f,
+			),
+			{ count: 2, total: 2, isAll: true, isIndeterminate: false },
+		);
 
 		const mixed = [{ f: true }, { f: false }];
-		assert.deepEqual(selectionSummary(mixed, (i) => i.f), { count: 1, total: 2, isAll: false, isIndeterminate: true });
+		assert.deepEqual(
+			selectionSummary(mixed, (i) => i.f),
+			{ count: 1, total: 2, isAll: false, isIndeterminate: true },
+		);
 
 		const none = [{ f: false }];
-		assert.deepEqual(selectionSummary(none, (i) => i.f), { count: 0, total: 1, isAll: false, isIndeterminate: false });
+		assert.deepEqual(
+			selectionSummary(none, (i) => i.f),
+			{ count: 0, total: 1, isAll: false, isIndeterminate: false },
+		);
 
-		assert.deepEqual(selectionSummary([], (i) => i.f), { count: 0, total: 0, isAll: false, isIndeterminate: false });
+		assert.deepEqual(
+			selectionSummary([], (i) => i.f),
+			{ count: 0, total: 0, isAll: false, isIndeterminate: false },
+		);
 	});
 
 	it('全选与反选', async () => {
@@ -317,23 +332,23 @@ describe('ui/table', () => {
 		const items = [{ f: false }, { f: false }];
 		assert.equal(
 			setAllSelected(items, (i, v) => (i.f = v), true),
-			2
+			2,
 		);
 		assert.deepEqual(
 			items.map((i) => i.f),
-			[true, true]
+			[true, true],
 		);
 		assert.equal(
 			invertSelected(
 				items,
 				(i) => i.f,
-				(i, v) => (i.f = v)
+				(i, v) => (i.f = v),
 			),
-			0
+			0,
 		);
 		assert.deepEqual(
 			items.map((i) => i.f),
-			[false, false]
+			[false, false],
 		);
 	});
 });
@@ -462,7 +477,13 @@ describe('ui/download', () => {
 
 	it('toCsv 转义分隔符、引号与换行', async () => {
 		const { toCsv } = await import('../iframe/js/src/ui/download.js');
-		assert.equal(toCsv([['a', 'b'], ['1', '2']]), 'a,b\r\n1,2');
+		assert.equal(
+			toCsv([
+				['a', 'b'],
+				['1', '2'],
+			]),
+			'a,b\r\n1,2',
+		);
 		assert.equal(toCsv([['a,b', 'say "hi"']]), '"a,b","say ""hi"""');
 		assert.equal(toCsv([['换\n行']]), '"换\n行"');
 		assert.equal(toCsv([['a', 'b']], { delimiter: '\t' }), 'a\tb');

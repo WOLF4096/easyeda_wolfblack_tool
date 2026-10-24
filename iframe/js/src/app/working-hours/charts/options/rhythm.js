@@ -11,9 +11,8 @@
  *
  * 开发者：WOLF4096
  * 辅助开发：DeepSeek-V4.1-Flash
- * 本工具为非官方第三方开源扩展，与嘉立创 / EasyEDA 官方无隶属关系
+ * 本工具为非官方第三方开源扩展
  */
-
 import { formatDuration } from '../../time.js';
 
 /** 每格分钟数 */
@@ -240,10 +239,12 @@ export function buildRhythmOption(data, theme, opts) {
 				name: '工作时间',
 				stack: 'time-stack',
 				barCategoryGap: '0%',
-				itemStyle: { color: opts.makeGradient([
-					{ offset: 0, color: '#007acc' },
-					{ offset: 1, color: '#3ba272' },
-				]) },
+				itemStyle: {
+					color: opts.makeGradient([
+						{ offset: 0, color: '#007acc' },
+						{ offset: 1, color: '#3ba272' },
+					]),
+				},
 			},
 			{
 				type: 'bar',

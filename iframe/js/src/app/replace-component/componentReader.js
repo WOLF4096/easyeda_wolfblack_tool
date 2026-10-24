@@ -11,7 +11,7 @@
  *
  * 开发者：WOLF4096
  * 辅助开发：DeepSeek-V4.1-Flash
- * 本工具为非官方第三方开源扩展，与嘉立创 / EasyEDA 官方无隶属关系
+ * 本工具为非官方第三方开源扩展
  */
 
 /**
@@ -288,8 +288,7 @@ function applyFootprint3d(otherProperty, fpInfo) {
 	if (!fpInfo || !fpInfo.model_3d) return;
 
 	const libUuid = fpInfo.creator ? fpInfo.creator.uuid : '';
-	otherProperty['3D Model'] =
-		otherProperty['3D Model'] || (libUuid ? `${fpInfo.model_3d.uri}|${libUuid}` : fpInfo.model_3d.uri);
+	otherProperty['3D Model'] = otherProperty['3D Model'] || (libUuid ? `${fpInfo.model_3d.uri}|${libUuid}` : fpInfo.model_3d.uri);
 	otherProperty['3D Model Title'] = otherProperty['3D Model Title'] || fpInfo.model_3d.title;
 	otherProperty['3D Model Transform'] = otherProperty['3D Model Transform'] || fpInfo.model_3d.transform;
 }

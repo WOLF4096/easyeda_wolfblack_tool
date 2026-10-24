@@ -12,9 +12,8 @@
  *
  * 开发者：WOLF4096
  * 辅助开发：DeepSeek-V4.1-Flash
- * 本工具为非官方第三方开源扩展，与嘉立创 / EasyEDA 官方无隶属关系
+ * 本工具为非官方第三方开源扩展
  */
-
 import { formatDuration } from '../../time.js';
 
 /** 一天毫秒数 */
@@ -135,14 +134,19 @@ export function buildWeeklyBarOption(data, theme) {
 			formatter: (params) => {
 				let h = `<b style="color:#fff;">${params[0].name}</b><br/>`;
 				params.forEach((p) => {
-					if (p.value > 0) h += `${p.marker} ${p.seriesName}: <span style="float:right; font-weight:bold; margin-left:15px; color:#fff;">${formatDuration(p.value)}</span><br/>`;
+					if (p.value > 0)
+						h += `${p.marker} ${p.seriesName}: <span style="float:right; font-weight:bold; margin-left:15px; color:#fff;">${formatDuration(p.value)}</span><br/>`;
 				});
 				return h;
 			},
 		},
 		grid: { top: 30, left: 70, right: 10, bottom: 30 },
 		xAxis: { type: 'category', data: DAY_LABELS, axisLabel: { color: '#858585' } },
-		yAxis: { type: 'value', axisLabel: { color: '#858585', formatter: (value) => formatDuration(value) }, splitLine: { lineStyle: { color: '#333' } } },
+		yAxis: {
+			type: 'value',
+			axisLabel: { color: '#858585', formatter: (value) => formatDuration(value) },
+			splitLine: { lineStyle: { color: '#333' } },
+		},
 		series: series,
 	};
 }

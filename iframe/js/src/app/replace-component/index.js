@@ -13,17 +13,16 @@
  *
  * 开发者：WOLF4096
  * 辅助开发：DeepSeek-V4.1-Flash
- * 本工具为非官方第三方开源扩展，与嘉立创 / EasyEDA 官方无隶属关系
+ * 本工具为非官方第三方开源扩展
  */
-
+import { DEFAULT_CHUNK_SIZE, mapInChunks } from '../../core/concurrency.js';
 import { hasEda } from '../../core/eda.js';
-import { getNetlist, setNetlist, getComponentsContainer } from '../../core/netlist.js';
-import { isModern } from '../../core/version.js';
 import { logger } from '../../core/log.js';
+import { getComponentsContainer, getNetlist, setNetlist } from '../../core/netlist.js';
 import { naturalCompare } from '../../core/util.js';
-import { mapInChunks, DEFAULT_CHUNK_SIZE } from '../../core/concurrency.js';
+import { isModern } from '../../core/version.js';
 import { createStatusBar } from '../../ui/statusBar.js';
-import { nextSortState, sortIndicatorOf, sortRows, selectionSummary } from '../../ui/table.js';
+import { nextSortState, selectionSummary, sortIndicatorOf, sortRows } from '../../ui/table.js';
 import {
 	buildGroupKey,
 	enrichComponentData,
@@ -36,9 +35,9 @@ import {
 	pickPrimitiveId,
 	resolveDynamicString,
 } from './componentReader.js';
+import { applyTargetProps } from './netlistSync.js';
 import { applyTargetSupplierIds, flattenGroups, parseClipboard, regroupGroups } from './pastePlan.js';
 import { rewriteSource } from './sourceRewrite.js';
-import { applyTargetProps } from './netlistSync.js';
 
 /** 临时器件投放点（画布外，用户看不见） */
 const TEMP_X = -10000;
@@ -372,14 +371,7 @@ async function placeTempComponents(supplierIds, sysLibUuid) {
 				// V4：单个编号返回的是器件对象而不是数组，必须用 pickDevice 归一
 				const dev = pickDevice(await eda.lib_Device.getByLcscIds(supplierId));
 				if (dev && dev.uuid) {
-					const handle = await eda.pcb_PrimitiveComponent.create(
-						{ libraryUuid: sysLibUuid, uuid: dev.uuid },
-						1,
-						TEMP_X,
-						TEMP_Y,
-						0,
-						false
-					);
+					const handle = await eda.pcb_PrimitiveComponent.create({ libraryUuid: sysLibUuid, uuid: dev.uuid }, 1, TEMP_X, TEMP_Y, 0, false);
 					const createdId = pickPrimitiveId(handle);
 					if (createdId) autoFetchMap.set(supplierId, createdId);
 					else manualPendingIds.add(supplierId);
@@ -391,7 +383,7 @@ async function placeTempComponents(supplierIds, sysLibUuid) {
 				placeCount += 1;
 			}
 		},
-		{ onProgress: (done, total, supplierId) => status.setProgress(done, total, supplierId) }
+		{ onProgress: (done, total, supplierId) => status.setProgress(done, total, supplierId) },
 	);
 
 	return { autoFetchMap: autoFetchMap, manualPendingIds: manualPendingIds, placeCount: placeCount };
@@ -427,7 +419,7 @@ async function readAutoFetched(autoFetchMap) {
 				logger.warn('读取器件属性失败，已跳过该器件', getErr);
 			}
 		},
-		{ onProgress: (done, total, entry) => status.setProgress(done, total, `获取属性: ${entry[0]}`) }
+		{ onProgress: (done, total, entry) => status.setProgress(done, total, `获取属性: ${entry[0]}`) },
 	);
 
 	// V3/V4：器件定义跟着临时器件走，先留着，等源码写回后再删（见文件头约束 1）
@@ -454,9 +446,7 @@ async function readAutoFetched(autoFetchMap) {
  */
 function pollManualSelection(manualPendingIds, fetchStart) {
 	logger.debug(`由于API限制，有 ${manualPendingIds.size} 种器件需要手动辅助。\n请在画布中将它们【全部框选】，工具将自动提取参数并删除！`);
-	statusBar.text(
-		`由于API限制，需手动辅助，请在画布(-10000,-10000)中【框选】新增的 ${manualPendingIds.size} 个器件，工具将自动提取参数并删除！`
-	);
+	statusBar.text(`由于API限制，需手动辅助，请在画布(-10000,-10000)中【框选】新增的 ${manualPendingIds.size} 个器件，工具将自动提取参数并删除！`);
 
 	fetchPollInterval = setInterval(async () => {
 		if (pollBusy) return;
@@ -490,10 +480,7 @@ async function applyManualSelection(selectedItems, manualPendingIds, fetchStart)
 	let validMatchCount = 0;
 
 	await mapInChunks(selectedItems, DEFAULT_CHUNK_SIZE, async (sel) => {
-		const selSupplierId =
-			sel.supplierId ||
-			(sel.otherProperty && (sel.otherProperty['Supplier Part'] || sel.otherProperty.supplierId)) ||
-			'';
+		const selSupplierId = sel.supplierId || (sel.otherProperty && (sel.otherProperty['Supplier Part'] || sel.otherProperty.supplierId)) || '';
 		if (!selSupplierId || !manualPendingIds.has(selSupplierId)) return;
 
 		validMatchCount += 1;
@@ -547,10 +534,7 @@ async function handleFetch() {
 		return;
 	}
 
-	const { autoFetchMap, manualPendingIds, placeCount } = await placeTempComponents(
-		Array.from(pendingSupplierIds),
-		sysLibUuid
-	);
+	const { autoFetchMap, manualPendingIds, placeCount } = await placeTempComponents(Array.from(pendingSupplierIds), sysLibUuid);
 
 	if (placeCount === 0) {
 		statusBar.text('未能在库中找到对应的器件');

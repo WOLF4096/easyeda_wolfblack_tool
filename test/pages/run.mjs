@@ -21,12 +21,12 @@
  *
  * 开发者：WOLF4096
  * 辅助开发：DeepSeek-V4.1-Flash
- * 本工具为非官方第三方开源扩展，与嘉立创 / EasyEDA 官方无隶属关系
+ * 本工具为非官方第三方开源扩展
  */
+import { spawn } from 'node:child_process';
 import fs from 'node:fs';
 import http from 'node:http';
 import path from 'node:path';
-import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');
@@ -57,7 +57,13 @@ function buildPatchedPages(filter) {
 /* ------------------------------ 静态服务 ------------------------------ */
 
 function serveForever() {
-	const types = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.png': 'image/png', '.json': 'application/json' };
+	const types = {
+		'.html': 'text/html; charset=utf-8',
+		'.js': 'text/javascript; charset=utf-8',
+		'.css': 'text/css; charset=utf-8',
+		'.png': 'image/png',
+		'.json': 'application/json',
+	};
 	http.createServer((req, res) => {
 		// 页面冒烟结果回传
 		if (req.method === 'POST' && req.url === '/__smoke') {
@@ -240,7 +246,9 @@ async function main() {
 		for (const r of rows.filter((x) => x.missing.length)) out.push(`  ${pad(r.page, 30)} ${r.missing.join(', ')}`);
 	}
 	out.push('');
-	out.push(`结论: ${failed.length === 0 ? '全部页面初始化无异常' : failed.length + ' / ' + rows.length + ' 个页面初始化异常'}${timeout.length ? `（${timeout.length} 个超时）` : ''}`);
+	out.push(
+		`结论: ${failed.length === 0 ? '全部页面初始化无异常' : failed.length + ' / ' + rows.length + ' 个页面初始化异常'}${timeout.length ? `（${timeout.length} 个超时）` : ''}`,
+	);
 	process.stdout.write(out.join('\n') + '\n');
 	return failed.length === 0 ? 0 : 1;
 }

@@ -12,9 +12,8 @@
  *
  * 开发者：WOLF4096
  * 辅助开发：DeepSeek-V4.1-Flash
- * 本工具为非官方第三方开源扩展，与嘉立创 / EasyEDA 官方无隶属关系
+ * 本工具为非官方第三方开源扩展
  */
-
 import { isInnerLayer } from '../../core/layer.js';
 import { logger } from '../../core/log.js';
 import { LAYER_MULTI, expandArcLines, getPolyVertices, getRotatedRectVertices } from './geometry.js';
@@ -226,7 +225,7 @@ function v2Arc(item, state) {
 			y2: Number(item[8]),
 			angle: Number(item[9]),
 			w: Number(item[10]) || 0.15,
-		})
+		}),
 	);
 }
 
@@ -392,7 +391,7 @@ function onArc(item, state) {
 			y2: item.endY,
 			angle: item.angle,
 			w: item.width,
-		})
+		}),
 	);
 }
 

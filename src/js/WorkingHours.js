@@ -1,9 +1,8 @@
 /*
  * 开发者：WOLF4096
  * 辅助开发：DeepSeek-V4.1-Flash
- * 本工具为非官方第三方开源扩展，与嘉立创 / EasyEDA 官方无隶属关系
+ * 本工具为非官方第三方开源扩展
  */
-
 import { logger } from './common/logger.js';
 
 export function WorkingHours() {
@@ -98,7 +97,7 @@ export function WorkingHours() {
 						let raw = await eda.sys_Storage.getExtensionUserConfig(targetKey);
 						try {
 							currentData = raw ? JSON.parse(raw) : { meta: {}, slots: {} };
-						} catch(e) {
+						} catch (e) {
 							currentData = { meta: {}, slots: {} };
 						}
 
@@ -184,13 +183,13 @@ export function WorkingHours() {
 					}
 					// 在特定版本EDA会出现BUG，表现为无法保存，系API变更导致
 					try {
-						const save = await eda.sys_Storage.setExtensionUserConfig(currentKey, JSON.stringify(currentData));// 持久化存储
+						const save = await eda.sys_Storage.setExtensionUserConfig(currentKey, JSON.stringify(currentData)); // 持久化存储
 						if (globalThis.__WORKING_HOURS_DEBUG__) {
 							console.log(`[工作时间统计-DEBUG] 保存结果: ${save ? '成功' : '失败'}`);
 						}
 					} catch (error) {
 						eda.sys_Message.showToastMessage('保存失败', 'error');
-						if (error.includes("Cannot create property")) {
+						if (error.includes('Cannot create property')) {
 							eda.sys_Message.showToastMessage('EDA底层数据写入异常，无法保存，建议重启EDA', 'error');
 						}
 					}
@@ -212,10 +211,10 @@ export function WorkingHours() {
 			intervalRules: [],
 			welcomeEnabled: true,
 			idleEnabled: true,
-			welcomeText: "距离上次打开EDA经过了<time>",
-			idleText: "距离上次离开经过了<time>",
+			welcomeText: '距离上次打开EDA经过了<time>',
+			idleText: '距离上次离开经过了<time>',
 			idleThresholdMin: 10,
-			lastHb: 0
+			lastHb: 0,
 		},
 		lastTriggeredMin: -1,
 		lastIntervalTriggered: {}, // 记录每个规则上次触发的绝对分钟数
@@ -246,7 +245,7 @@ export function WorkingHours() {
 			const h = Math.floor(totalSec / 3600);
 			const m = Math.floor((totalSec % 3600) / 60);
 			const s = totalSec % 60;
-			let res = "";
+			let res = '';
 			if (h > 0) res += `${h}时`;
 			if (m > 0 || h > 0) res += `${m}分`;
 			res += `${s}秒`;
@@ -254,7 +253,7 @@ export function WorkingHours() {
 		},
 
 		triggerToast: (msg, count = 1) => {
-			for(let i=0; i<count; i++) {
+			for (let i = 0; i < count; i++) {
 				setTimeout(() => eda.sys_Message.showToastMessage(msg, 'info'), i * 150);
 			}
 		},
@@ -277,16 +276,16 @@ export function WorkingHours() {
 
 			// 1. 工作时长提醒 (每日累计)
 			if (workTodayMin !== ReminderManager.lastTriggeredMin) {
-				const matches = ReminderManager.data.durationRules.filter(r => r.m === workTodayMin);
+				const matches = ReminderManager.data.durationRules.filter((r) => r.m === workTodayMin);
 				if (globalThis.__WORKING_HOURS_DEBUG__ && matches.length > 0) {
 					console.log(`[工作时间统计-DEBUG] 触发工作时长提醒: ${workTodayMin}m`, matches);
 				}
-				matches.forEach(r => ReminderManager.triggerToast(r.msg, r.count));
+				matches.forEach((r) => ReminderManager.triggerToast(r.msg, r.count));
 				ReminderManager.lastTriggeredMin = workTodayMin;
 			}
 
 			// 2. 固定间隔提醒 (启动后循环)
-			ReminderManager.data.intervalRules.forEach(rule => {
+			ReminderManager.data.intervalRules.forEach((rule) => {
 				if (upTimeMin > 0 && upTimeMin % rule.m === 0) {
 					if (ReminderManager.lastIntervalTriggered[rule.m] !== upTimeMin) {
 						if (globalThis.__WORKING_HOURS_DEBUG__) {
@@ -304,8 +303,8 @@ export function WorkingHours() {
 			// 鼠标移动重置成 now，算出来永远是 0，提醒就再也不会弹（旧实现的 bug）。
 			if (ReminderManager.data.idleEnabled && ReminderManager.isLastTickIdle && !isCurrentlyIdle) {
 				if (idleMs > (ReminderManager.data.idleThresholdMin || 10) * 60000) {
-					const template = ReminderManager.data.idleText || "距离上次离开经过了<time>";
-					const msg = template.replace("<time>", ReminderManager.formatTimeStr(idleMs));
+					const template = ReminderManager.data.idleText || '距离上次离开经过了<time>';
+					const msg = template.replace('<time>', ReminderManager.formatTimeStr(idleMs));
 					eda.sys_Message.showToastMessage(msg, 'success');
 				}
 			}
@@ -316,7 +315,7 @@ export function WorkingHours() {
 			ReminderManager.data.lastHb = Date.now();
 			try {
 				await eda.sys_Storage.setExtensionUserConfig(CONFIG.reminderKey, JSON.stringify(ReminderManager.data));
-			} catch(e) {
+			} catch (e) {
 				logger.warn('保存提醒配置失败', e);
 			}
 		},
@@ -329,14 +328,14 @@ export function WorkingHours() {
 			// 保护机制：离开时间少于 1 分钟不显示（防止刷新插件时弹出）
 			if (diffMs < 60000) return;
 
-			const template = ReminderManager.data.welcomeText || "距离上次打开EDA已经经过了<time>";
-			const msg = template.replace("<time>", ReminderManager.formatTimeStr(diffMs));
+			const template = ReminderManager.data.welcomeText || '距离上次打开EDA已经经过了<time>';
+			const msg = template.replace('<time>', ReminderManager.formatTimeStr(diffMs));
 
 			// 延迟 2 秒弹出，确保 EDA UI 完全加载
 			setTimeout(() => {
 				eda.sys_Message.showToastMessage(msg, 'success');
 			}, 2000);
-		}
+		},
 	};
 
 	let session = {
@@ -371,20 +370,23 @@ export function WorkingHours() {
 		if (!apiObj) return;
 
 		// 只监测坐标，提高灵敏度
-		apiObj.getCurrentMousePosition().then((pos) => {
-			if (!pos) return;
-			const posStr = JSON.stringify(pos);
-			const lastKey = type === 'pcb' ? 'lastPcb' : 'lastSch';
+		apiObj
+			.getCurrentMousePosition()
+			.then((pos) => {
+				if (!pos) return;
+				const posStr = JSON.stringify(pos);
+				const lastKey = type === 'pcb' ? 'lastPcb' : 'lastSch';
 
-			// 如果坐标变了，视为在操作
-			if (posStr !== session[lastKey]) {
-				if (globalThis.__WORKING_HOURS_DEBUG__) {
-					console.log(`[工作时间统计-DEBUG] 检测到活动(${type}): 坐标=${posStr}`);
+				// 如果坐标变了，视为在操作
+				if (posStr !== session[lastKey]) {
+					if (globalThis.__WORKING_HOURS_DEBUG__) {
+						console.log(`[工作时间统计-DEBUG] 检测到活动(${type}): 坐标=${posStr}`);
+					}
+					session.lastMoveTime = Date.now();
+					session[lastKey] = posStr;
 				}
-				session.lastMoveTime = Date.now();
-				session[lastKey] = posStr;
-			}
-		}).catch(() => {});
+			})
+			.catch(() => {});
 	}
 
 	/**
@@ -438,8 +440,8 @@ export function WorkingHours() {
 		// [Debug] 同步 Debug 标志
 		try {
 			const debugFlag = await eda.sys_Storage.getExtensionUserConfig('WORKING_HOURS_DEBUG_ENABLED');
-			globalThis.__WORKING_HOURS_DEBUG__ = (debugFlag === 'true');
-		} catch(e) {
+			globalThis.__WORKING_HOURS_DEBUG__ = debugFlag === 'true';
+		} catch (e) {
 			logger.debug('读取调试开关失败', e);
 		}
 

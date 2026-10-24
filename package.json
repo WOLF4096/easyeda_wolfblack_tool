@@ -1,10 +1,14 @@
 {
-	"name": "pro-api-sdk",
-	"version": "1.23.1",
-	"description": "嘉立创EDA & EasyEDA 专业版扩展 API 开发工具",
-	"author": "JLCEDA <support@lceda.cn>",
+	"name": "wolfblack-tool",
+	"version": "1.23.2",
+	"description": "画板工具集：PCB转原理图、改网络、换器件、记工时",
+	"author": "WOLF4096",
 	"license": "Apache-2.0",
-	"homepage": "https://pro.lceda.cn/",
+	"homepage": "https://github.com/WOLF4096/easyeda_wolfblack_tool",
+	"repository": {
+		"type": "github",
+		"url": "https://github.com/WOLF4096/easyeda_wolfblack_tool"
+	},
 	"scripts": {
 		"compile": "rimraf ./dist/ && ts-node ./config/esbuild.prod.ts",
 		"build:iframe": "node scripts/build-iframe.mjs",

@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 /**
- * EDA 桥服务端（本地测试用）
+ * EDA桥服务端（本地测试用）
  *
- * EDA 里的「EDA 桥」页面是 **WebSocket 客户端**，主动连到本服务 `ws://127.0.0.1:8233/ws/eda`。
+ * EDA 里的「EDA桥」页面是 **WebSocket 客户端**，主动连到本服务 `ws://127.0.0.1:8233/ws/eda`。
  * 本服务提供两件事：
  *   1. WebSocket 通道：向桥下发指令、接收执行结果与「当前选中对象」采样；
  *   2. HTTP 控制面（同一端口）：让命令行/Agent 用 curl 直接下发指令并同步拿结果。
@@ -17,7 +17,7 @@
  *
  * 开发者：WOLF4096
  * 辅助开发：DeepSeek-V4.1-Flash
- * 本工具为非官方第三方开源扩展，与嘉立创 / EasyEDA 官方无隶属关系
+ * 本工具为非官方第三方开源扩展
  */
 import crypto from 'node:crypto';
 import http from 'node:http';
@@ -128,7 +128,7 @@ function sendToBridge(obj) {
 function dispatch(command) {
 	return new Promise((resolve) => {
 		if (!sock) {
-			resolve({ ok: false, error: 'EDA 桥未连接：请先在 EDA 里打开「EDA 桥」页面并点连接' });
+			resolve({ ok: false, error: 'EDA桥未连接：请先在 EDA 里打开「EDA桥」页面并点连接' });
 			return;
 		}
 		const id = 'c' + ++seq;
@@ -215,7 +215,7 @@ const server = http.createServer((req, res) => {
 	}
 
 	res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
-	res.end('EDA 桥服务端：用 POST /__cmd 下发指令，GET /__status 查看状态');
+	res.end('EDA桥服务端：用 POST /__cmd 下发指令，GET /__status 查看状态');
 });
 
 server.on('upgrade', (req, socket, head) => {

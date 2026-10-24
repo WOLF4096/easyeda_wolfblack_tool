@@ -12,9 +12,8 @@
  *
  * 开发者：WOLF4096
  * 辅助开发：DeepSeek-V4.1-Flash
- * 本工具为非官方第三方开源扩展，与嘉立创 / EasyEDA 官方无隶属关系
+ * 本工具为非官方第三方开源扩展
  */
-
 import { getEda } from '../core/eda.js';
 
 /** 兜底提示框的固定 id（重复调用时复用同一个节点） */

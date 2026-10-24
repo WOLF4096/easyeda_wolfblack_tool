@@ -7,9 +7,8 @@
  *
  * 开发者：WOLF4096
  * 辅助开发：DeepSeek-V4.1-Flash
- * 本工具为非官方第三方开源扩展，与嘉立创 / EasyEDA 官方无隶属关系
+ * 本工具为非官方第三方开源扩展
  */
-
 import { hasEda } from '../../core/eda.js';
 import { detectContainer, getNetlist, setNetlist } from '../../core/netlist.js';
 import { escapeHtml } from '../../core/util.js';
@@ -85,9 +84,7 @@ function renderCompareTable() {
 
 	if (rows.length === 0) {
 		const message =
-			currentNetlistRaw && adNetMap.size > 0
-				? '解析后的AD网表无有效引脚连接，请检查文件内容'
-				: '暂无网表对比数据，请先选择或粘贴AD格式网表';
+			currentNetlistRaw && adNetMap.size > 0 ? '解析后的AD网表无有效引脚连接，请检查文件内容' : '暂无网表对比数据，请先选择或粘贴AD格式网表';
 		tableBody.innerHTML = `<tr class="empty-table-msg"><td colspan="4">${message}</td></tr>`;
 		adStatusSpan.innerText = adNetMap.size === 0 ? '未导入AD网表' : 'AD网表无有效连接';
 		return;
@@ -130,7 +127,8 @@ function processAdContent(adContent) {
 	if (netMap.size === 0) {
 		adNetMap = new Map();
 		adStatusSpan.innerText = 'AD网表无有效连接';
-		tableBody.innerHTML = '<tr class="empty-table-msg"><td colspan="4">未解析到任何引脚-网络关系，请确认网表格式（括号分段，位号-引脚）</td></tr>';
+		tableBody.innerHTML =
+			'<tr class="empty-table-msg"><td colspan="4">未解析到任何引脚-网络关系，请确认网表格式（括号分段，位号-引脚）</td></tr>';
 		return false;
 	}
 

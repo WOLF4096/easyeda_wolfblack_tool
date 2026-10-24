@@ -18,16 +18,16 @@
  *
  * 开发者：WOLF4096
  * 辅助开发：DeepSeek-V4.1-Flash
- * 本工具为非官方第三方开源扩展，与嘉立创 / EasyEDA 官方无隶属关系
+ * 本工具为非官方第三方开源扩展
  */
 import assert from 'node:assert/strict';
-import zlib from 'node:zlib';
 import { describe, it } from 'node:test';
+import zlib from 'node:zlib';
 
 import { buildDataset } from '../iframe/js/src/app/working-hours/aggregate.js';
-import { BACKUP_FORMAT, BACKUP_VERSION, buildBackupBody, expandBackupBody } from '../iframe/js/src/app/working-hours/backupFormat.js';
-import { base64ToBytes, bytesToBase64, createSignature } from '../iframe/js/src/app/working-hours/backupCrypto.js';
 import { packBackup, unpackBackup } from '../iframe/js/src/app/working-hours/backupCodec.js';
+import { base64ToBytes, bytesToBase64, createSignature } from '../iframe/js/src/app/working-hours/backupCrypto.js';
+import { BACKUP_FORMAT, BACKUP_VERSION, buildBackupBody, expandBackupBody } from '../iframe/js/src/app/working-hours/backupFormat.js';
 import { planMerge } from '../iframe/js/src/app/working-hours/backupMerge.js';
 import { sumWorkSeconds } from '../iframe/js/src/app/working-hours/views/profilePanel.js';
 
@@ -81,7 +81,7 @@ const CONFIGS = {
 			95: { [P1]: [120, 780] },
 			12: { [P2]: [900, 0] },
 		},
-		{ [P1]: '测试_260618', [P2]: '测试1' }
+		{ [P1]: '测试_260618', [P2]: '测试1' },
 	),
 	STATS_2026_10_03: dayConfig({}),
 };
@@ -122,7 +122,7 @@ describe('工时备份：紧凑结构（去重）', () => {
 		assert.equal(body.p.length, 2);
 		assert.deepEqual(
 			body.p.map((item) => item[0]),
-			[P1, P2]
+			[P1, P2],
 		);
 		const firstDay = body.d.find((entry) => entry[0] === '2026_10_01');
 		assert.deepEqual(firstDay[1][0], [0, [[0, 900, 0]]]);

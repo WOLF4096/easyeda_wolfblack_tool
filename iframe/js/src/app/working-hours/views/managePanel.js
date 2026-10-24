@@ -11,16 +11,15 @@
  *
  * 开发者：WOLF4096
  * 辅助开发：DeepSeek-V4.1-Flash
- * 本工具为非官方第三方开源扩展，与嘉立创 / EasyEDA 官方无隶属关系
+ * 本工具为非官方第三方开源扩展
  */
-
+import { buildTimelineOption } from '../charts/options/timelineChart.js';
+import { bindRightDrag } from '../charts/rightDrag.js';
+import { linkZoom } from '../charts/zoomSync.js';
 import { getDayAlignedIndices } from '../dayRange.js';
 import { getProjectTitleString } from '../projectSummary.js';
 import { chartData, resetChartCache } from '../runtime.js';
 import { renderManageTable, sortProjectList } from './manageTable.js';
-import { buildTimelineOption } from '../charts/options/timelineChart.js';
-import { bindRightDrag } from '../charts/rightDrag.js';
-import { linkZoom } from '../charts/zoomSync.js';
 
 /**
  * 创建工程管理面板控制器
@@ -67,7 +66,7 @@ export function createManagePanel(ctx) {
 				getClusterSize: () => ui.manageClusterSize,
 				getActiveTab: () => ui.activeTab,
 				getCurrentUuid: () => ui.currentUuid,
-			})
+			}),
 		);
 		bindRightDrag(view, { getMaxIndex: () => data.timeline.length - 1 });
 		zoomLink = linkZoom([{ id: 'manage', view: view, onZoom: ctx.zoomer.handleManage }], { sourceId: 'manage' });

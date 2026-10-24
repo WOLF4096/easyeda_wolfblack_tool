@@ -5,60 +5,58 @@
   本工具为非官方第三方开源扩展
 -->
 <html lang="zh-CN">
+	<head>
+		<meta charset="UTF-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+		<title>狼黑工具 - 生成物理网络</title>
+		<link rel="stylesheet" href="/iframe/css/common.css" />
+	</head>
 
-<head>
-	<meta charset="UTF-8" />
-	<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-	<title>狼黑工具 - 物理网络生成</title>
-	<link rel="stylesheet" href="/iframe/css/common.css" />
-</head>
-
-<body class="app">
-	<div class="gn-header">
-		<div class="gn-header-left">
-			<span>通过</span>
-			<select id="method-select">
-				<option value="netlist">网表</option>
-				<option value="source">源码</option>
-				<option value="api">API</option>
-			</select>
-			<span>更新物理网络</span>
-			<span class="gn-warning" id="api-warning">(此操作可能无法撤销)</span>
-		</div>
-		<div class="gn-header-right">
-			<button id="btn-refresh" class="btn-secondary">计算拓扑</button>
-			<button id="btn-execute" disabled>写入</button>
-		</div>
-	</div>
-
-	<div class="gn-body">
-		<div class="grid-header grid-row-layout" id="grid-header">
-			<div>图元ID</div>
-			<div>类型</div>
-			<div>旧网络</div>
-			<div>新网络</div>
-			<div>状态</div>
+	<body class="app">
+		<div class="gn-header">
+			<div class="gn-header-left">
+				<span>通过</span>
+				<select id="method-select">
+					<option value="netlist">网表</option>
+					<option value="source">源码</option>
+					<option value="api">API</option>
+				</select>
+				<span>更新物理网络</span>
+				<span class="gn-warning" id="api-warning">(此操作可能无法撤销)</span>
+			</div>
+			<div class="gn-header-right">
+				<button id="btn-refresh" class="btn-secondary">计算拓扑</button>
+				<button id="btn-execute" disabled>写入</button>
+			</div>
 		</div>
 
-		<div class="gn-rows" id="result-list"></div>
+		<div class="gn-body">
+			<div class="grid-header grid-row-layout" id="grid-header">
+				<div>图元ID</div>
+				<div>类型</div>
+				<div>旧网络</div>
+				<div>新网络</div>
+				<div>状态</div>
+			</div>
 
-		<div class="mask" id="loading-mask">
-			<div class="spinner"></div>
-			<div id="loading-text"></div>
+			<div class="gn-rows" id="result-list"></div>
+
+			<div class="mask" id="loading-mask">
+				<div class="spinner"></div>
+				<div id="loading-text"></div>
+			</div>
 		</div>
-	</div>
 
-	<footer class="gn-footer">
-		<div class="gn-progress-track">
-			<div class="gn-progress-fill" id="progress-bar"></div>
-		</div>
-		<div class="gn-footer-info">
-			<span id="status-left">就绪</span>
-			<span id="status-right">-- / --</span>
-		</div>
-	</footer>
+		<footer class="gn-footer">
+			<div class="gn-progress-track">
+				<div class="gn-progress-fill" id="progress-bar"></div>
+			</div>
+			<div class="gn-footer-info">
+				<span id="status-left">就绪</span>
+				<span id="status-right">-- / --</span>
+			</div>
+		</footer>
 
-	<script src="/iframe/js/app/GenerateNet.js"></script>
-</body>
-
+		<script src="/iframe/js/app/GenerateNet.js"></script>
+	</body>
 </html>

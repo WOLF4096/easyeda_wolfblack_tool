@@ -2,8 +2,8 @@
 	"name": "wolfblack-tool",
 	"uuid": "345f2952d65b1a5ca2f11721b90309c9",
 	"displayName": "狼黑工具",
-	"description": "画板工具集：反推原理图、改网络、换器件、记工时",
-	"version": "1.23.1",
+	"description": "画板工具集：PCB转原理图、改网络、换器件、记工时",
+	"version": "1.23.2",
 	"publisher": "wolfblack",
 	"engines": {
 		"eda": ">=2.2.45"
@@ -35,6 +35,11 @@
 						"registerFn": "WorkingHours"
 					},
 					{
+						"id": "EDABridge",
+						"title": "EDA桥",
+						"registerFn": "EDABridge"
+					},
+					{
 						"id": "About",
 						"title": "关于",
 						"registerFn": "About"
@@ -51,6 +56,11 @@
 						"id": "WorkingHours",
 						"title": "工作时间统计",
 						"registerFn": "WorkingHours"
+					},
+					{
+						"id": "EDABridge",
+						"title": "EDA桥",
+						"registerFn": "EDABridge"
 					},
 					{
 						"id": "About",
@@ -76,6 +86,11 @@
 						"registerFn": "WorkingHours"
 					},
 					{
+						"id": "EDABridge",
+						"title": "EDA桥",
+						"registerFn": "EDABridge"
+					},
+					{
 						"id": "About",
 						"title": "关于",
 						"registerFn": "About"
@@ -90,7 +105,7 @@
 				"menuItems": [
 					{
 						"id": "PcbToSch",
-						"title": "从PCB转原理图",
+						"title": "PCB转原理图",
 						"registerFn": "PcbToSch"
 					},
 					{
@@ -135,7 +150,7 @@
 							},
 							{
 								"id": "ClearEmptySupplierProperties",
-								"title": "清空多余属性",
+								"title": "清除多余属性",
 								"registerFn": "ClearEmptySupplierProperties"
 							},
 							{
@@ -154,6 +169,11 @@
 						"id": "WorkingHours",
 						"title": "工作时间统计",
 						"registerFn": "WorkingHours"
+					},
+					{
+						"id": "EDABridge",
+						"title": "EDA桥",
+						"registerFn": "EDABridge"
 					},
 					{
 						"id": "About",
@@ -205,7 +225,7 @@
 							},
 							{
 								"id": "ClearEmptySupplierProperties",
-								"title": "清空多余属性",
+								"title": "清除多余属性",
 								"registerFn": "ClearEmptySupplierProperties"
 							},
 							{
@@ -225,7 +245,7 @@
 							},
 							{
 								"id": "NetlistUpdate3DModels",
-								"title": "模型批量更新",
+								"title": "3D 模型批量更新",
 								"registerFn": "NetlistUpdate3DModels"
 							}
 						]
@@ -251,7 +271,7 @@
 							},
 							{
 								"id": "APITest",
-								"title": "基准测试",
+								"title": "校准API误差",
 								"registerFn": "APITest"
 							}
 						]

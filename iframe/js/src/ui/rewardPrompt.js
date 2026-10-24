@@ -1,6 +1,6 @@
 /**
  * @//module/ ui/rewardPrompt
- * @//description/ 「从 PCB 转原理图」的使用计数与「感觉不错？」触发（计数不对前端展示，只打控制台）
+ * @//description/ 「PCB转原理图」的使用计数与「感觉不错？」触发（计数不对前端展示，只打控制台）
  * @//exports/ recordUsage, getUsageCount, shouldPrompt
  * @//dependencies/ core/eda, core/log, ui/rewardDialog
  * @//example/ const { recordUsage } = await import('./ui/rewardPrompt.js')
@@ -18,12 +18,12 @@
  * 避免两次并发点击都读到同一个旧值、各自 +1 后互相覆盖。
  *
  * 存储用 `sys_Storage.getExtensionUserConfig / setExtensionUserConfig` 的键值接口
- * （与工时统计、基准测试一致），不用 `getExtensionAllUserConfigs` 的全量读写——
+ * （与工时统计、校准API误差一致），不用 `getExtensionAllUserConfigs` 的全量读写——
  * 前者不会因为别的配置项变化而互相覆盖。
  *
  * 开发者：WOLF4096
  * 辅助开发：DeepSeek-V4.1-Flash
- * 本工具为非官方第三方开源扩展，与嘉立创 / EasyEDA 官方无隶属关系
+ * 本工具为非官方第三方开源扩展
  */
 import { getEda } from '../core/eda.js';
 import { logger } from '../core/log.js';
@@ -172,7 +172,7 @@ async function recordOnce(showDialog) {
 }
 
 /**
- * 记一次「从 PCB 转原理图」的成功操作，满 10 次时弹赞赏引导
+ * 记一次「PCB转原理图」的成功操作，满 10 次时弹赞赏引导
  *
  * 允许连点：所有调用排进同一条队列，逐个「读 → 加一 → 写」，
  * 连点 N 次就是 +N，不会因为两次点击读到同一个旧值而丢计数。

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * 向 EDA 桥下发一条指令（命令行助手）
+ * 向 EDA桥下发一条指令（命令行助手）
  *
  * 服务端是 `tools/eda-bridge/server.mjs`，本脚本只是把「读代码 → POST /__cmd → 打印结果」
  * 包装一下，避免在 shell 里手写 JSON 转义。
@@ -15,7 +15,7 @@
  *
  * 开发者：WOLF4096
  * 辅助开发：DeepSeek-V4.1-Flash
- * 本工具为非官方第三方开源扩展，与嘉立创 / EasyEDA 官方无隶属关系
+ * 本工具为非官方第三方开源扩展
  */
 import fs from 'node:fs';
 

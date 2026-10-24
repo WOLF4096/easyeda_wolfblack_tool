@@ -9,15 +9,14 @@
  *
  * 开发者：WOLF4096
  * 辅助开发：DeepSeek-V4.1-Flash
- * 本工具为非官方第三方开源扩展，与嘉立创 / EasyEDA 官方无隶属关系
+ * 本工具为非官方第三方开源扩展
  */
-
 import { getEda } from '../../core/eda.js';
 import { LAYER } from '../../core/layer.js';
 import { toApiLength } from '../../core/length.js';
 import { createFollowPlacer } from '../../pcb/placement.js';
 import { toast } from '../../ui/toast.js';
-import { COMMON_CODES, UNCOMMON_CODES, TWO_D_CODES_NO_TEXT, QR_CODES_WITH_ECL, buildOptions, computeDpi } from './barcode.js';
+import { COMMON_CODES, QR_CODES_WITH_ECL, TWO_D_CODES_NO_TEXT, UNCOMMON_CODES, buildOptions, computeDpi } from './barcode.js';
 
 /** 1 mm = 39.37007874015748 mil */
 const MM_TO_MIL = 39.37007874015748;
@@ -366,10 +365,13 @@ function createThrottledColorUpdate() {
 			return;
 		}
 		clearTimeout(timer);
-		timer = setTimeout(() => {
-			generateBarcode();
-			last = Date.now();
-		}, 200 - (now - last));
+		timer = setTimeout(
+			() => {
+				generateBarcode();
+				last = Date.now();
+			},
+			200 - (now - last),
+		);
 	};
 }
 

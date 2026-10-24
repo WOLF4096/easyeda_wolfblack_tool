@@ -11,30 +11,29 @@
  *
  * 开发者：WOLF4096
  * 辅助开发：DeepSeek-V4.1-Flash
- * 本工具为非官方第三方开源扩展，与嘉立创 / EasyEDA 官方无隶属关系
+ * 本工具为非官方第三方开源扩展
  */
-
 import { logger } from '../../core/log.js';
 import { buildDataset, getTodayWorkHours as todayWorkHours } from './aggregate.js';
-import { data, ui, chartData, applyDataset, resetChartCache } from './runtime.js';
-import { getDayAlignedIndices } from './dayRange.js';
-import { createReminderApp } from './reminderApp.js';
-import { createExporter } from './exportReport.js';
 import { createChartView } from './charts/chartView.js';
-import { bindRightDrag } from './charts/rightDrag.js';
-import { linkZoom } from './charts/zoomSync.js';
-import { createZoomApplier } from './charts/zoomApply.js';
-import { buildTimelineOption } from './charts/options/timelineChart.js';
 import { buildHeatmapOption } from './charts/options/heatmap.js';
-import { initLegendPanel } from './views/legendPanel.js';
-import { createManagePanel } from './views/managePanel.js';
-import { createRhythmPanel } from './views/rhythmPanel.js';
-import { createWeeklyPanel } from './views/weeklyPanel.js';
-import { createTabRouter } from './views/tabRouter.js';
+import { buildTimelineOption } from './charts/options/timelineChart.js';
+import { bindRightDrag } from './charts/rightDrag.js';
+import { createZoomApplier } from './charts/zoomApply.js';
+import { linkZoom } from './charts/zoomSync.js';
+import { getDayAlignedIndices } from './dayRange.js';
+import { createExporter } from './exportReport.js';
+import { createReminderApp } from './reminderApp.js';
+import { applyDataset, chartData, data, resetChartCache, ui } from './runtime.js';
 import { createDataAdmin } from './views/dataAdmin.js';
 import { createDataImport } from './views/dataImport.js';
+import { initLegendPanel } from './views/legendPanel.js';
+import { createManagePanel } from './views/managePanel.js';
 import { createProfilePanel } from './views/profilePanel.js';
+import { createRhythmPanel } from './views/rhythmPanel.js';
+import { createTabRouter } from './views/tabRouter.js';
 import { exportWeeklyReport } from './views/weeklyExport.js';
+import { createWeeklyPanel } from './views/weeklyPanel.js';
 
 // ==========================================
 // [1] 六个图表视图（统一生命周期，见 charts/chartView.js）
@@ -160,7 +159,7 @@ function renderHeatmap() {
 			filterUuid: ui.activeTab === 'project' ? ui.selectedDetailUuid : null,
 			hiddenSeries: ui.hiddenSeries,
 			projectMeta: data.projectMeta,
-		})
+		}),
 	);
 }
 
@@ -213,7 +212,7 @@ function initChartCore() {
 			getClusterSize: () => ui.mainClusterSize,
 			getActiveTab: () => ui.activeTab,
 			getCurrentUuid: () => ui.currentUuid,
-		})
+		}),
 	);
 	bindRightDrag(mainView, { getMaxIndex: () => data.timeline.length - 1 });
 	linkZoom([{ id: 'main', view: mainView, onZoom: zoomer.handleMain }], { sourceId: 'main' });

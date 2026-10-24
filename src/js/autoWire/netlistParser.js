@@ -17,7 +17,7 @@
  *
  * 开发者：WOLF4096
  * 辅助开发：DeepSeek-V4.1-Flash
- * 本工具为非官方第三方开源扩展，与嘉立创 / EasyEDA 官方无隶属关系
+ * 本工具为非官方第三方开源扩展
  */
 
 /**
@@ -32,72 +32,72 @@
  * @returns {Array<{uniqueId: string, designator: string, pin: string, netName: string}>}
  */
 function formatSchematicNetlist(netlistData, selectedComponents) {
-    const formatted = [];
-    const parsedData = JSON.parse(netlistData);
+	const formatted = [];
+	const parsedData = JSON.parse(netlistData);
 
-    // V3 兼容处理：确定组件数据源
-    let componentsMap = parsedData;
-    let isV3 = false;
+	// V3 兼容处理：确定组件数据源
+	let componentsMap = parsedData;
+	let isV3 = false;
 
-    // 如果存在 components 字段，说明是 V3 格式
-    if (parsedData.components) {
-        componentsMap = parsedData.components;
-        isV3 = true;
-        console.log('识别为 V3 格式网表');
-    } else {
-        console.log('识别为 V2 格式网表');
-    }
+	// 如果存在 components 字段，说明是 V3 格式
+	if (parsedData.components) {
+		componentsMap = parsedData.components;
+		isV3 = true;
+		console.log('识别为 V3 格式网表');
+	} else {
+		console.log('识别为 V2 格式网表');
+	}
 
-    // 处理单个或多个选中器件
-    const componentsArray = Array.isArray(selectedComponents) ? selectedComponents : [selectedComponents];
+	// 处理单个或多个选中器件
+	const componentsArray = Array.isArray(selectedComponents) ? selectedComponents : [selectedComponents];
 
-    for (const component of componentsArray) {
-        const uniqueId = component.uniqueId;
+	for (const component of componentsArray) {
+		const uniqueId = component.uniqueId;
 
-        // 直接获取该器件在网表中的数据
-        const componentData = componentsMap[uniqueId];
+		// 直接获取该器件在网表中的数据
+		const componentData = componentsMap[uniqueId];
 
-        if (!componentData) {
-            console.warn(`⚠️ 未在网表中找到器件 ${uniqueId}`);
-            continue;
-        }
+		if (!componentData) {
+			console.warn(`⚠️ 未在网表中找到器件 ${uniqueId}`);
+			continue;
+		}
 
-        const props = componentData.props;
-        if (!props) {
-            console.warn(`⚠️ 器件 ${uniqueId} 属性数据不完整`);
-            continue;
-        }
+		const props = componentData.props;
+		if (!props) {
+			console.warn(`⚠️ 器件 ${uniqueId} 属性数据不完整`);
+			continue;
+		}
 
-        // 提取引脚数据 - 区分 V2 和 V3 结构
-        if (isV3 && componentData.pinInfoMap) {
-            // V3 逻辑: 使用 pinInfoMap, 结构为 { "1": { "net": "GND" }, ... }
-            const pinEntries = Object.entries(componentData.pinInfoMap);
-            for (const [pinNumber, pinInfo] of pinEntries) {
-                formatted.push({
-                    uniqueId: uniqueId,
-                    designator: props.Designator,
-                    pin: pinNumber,
-                    netName: pinInfo && pinInfo.net ? pinInfo.net : '',
-                });
-            }
-        } else if (componentData.pins) {
-            // V2 逻辑: 使用 pins, 结构为 { "1": "GND", ... }
-            const pinEntries = Object.entries(componentData.pins);
-            for (const [pinNumber, netName] of pinEntries) {
-                formatted.push({
-                    uniqueId: uniqueId,
-                    designator: props.Designator,
-                    pin: pinNumber,
-                    netName: netName || '',
-                });
-            }
-        } else {
-            console.warn(`⚠️ 器件 ${uniqueId} 没有找到 pins 或 pinInfoMap 数据`);
-        }
-    }
+		// 提取引脚数据 - 区分 V2 和 V3 结构
+		if (isV3 && componentData.pinInfoMap) {
+			// V3 逻辑: 使用 pinInfoMap, 结构为 { "1": { "net": "GND" }, ... }
+			const pinEntries = Object.entries(componentData.pinInfoMap);
+			for (const [pinNumber, pinInfo] of pinEntries) {
+				formatted.push({
+					uniqueId: uniqueId,
+					designator: props.Designator,
+					pin: pinNumber,
+					netName: pinInfo && pinInfo.net ? pinInfo.net : '',
+				});
+			}
+		} else if (componentData.pins) {
+			// V2 逻辑: 使用 pins, 结构为 { "1": "GND", ... }
+			const pinEntries = Object.entries(componentData.pins);
+			for (const [pinNumber, netName] of pinEntries) {
+				formatted.push({
+					uniqueId: uniqueId,
+					designator: props.Designator,
+					pin: pinNumber,
+					netName: netName || '',
+				});
+			}
+		} else {
+			console.warn(`⚠️ 器件 ${uniqueId} 没有找到 pins 或 pinInfoMap 数据`);
+		}
+	}
 
-    console.log(`共提取 ${formatted.length} 个引脚信息`);
-    return formatted;
+	console.log(`共提取 ${formatted.length} 个引脚信息`);
+	return formatted;
 }
 
 /**
@@ -110,35 +110,35 @@ function formatSchematicNetlist(netlistData, selectedComponents) {
  * @returns {Array<{uniqueId: string, designator: string, pin: string, netName: string}>}
  */
 function formatPCBNetlist(pcbData) {
-    const formatted = [];
+	const formatted = [];
 
-    // PCB 数据可能是单个器件对象，也可能是数组
-    const components = Array.isArray(pcbData) ? pcbData : [pcbData];
+	// PCB 数据可能是单个器件对象，也可能是数组
+	const components = Array.isArray(pcbData) ? pcbData : [pcbData];
 
-    for (const component of components) {
-        // 检查是否是器件类型
-        if (component.primitiveType !== 'Component') {
-            continue;
-        }
+	for (const component of components) {
+		// 检查是否是器件类型
+		if (component.primitiveType !== 'Component') {
+			continue;
+		}
 
-        // 提取器件基本信息
-        const uniqueId = component.uniqueId;
-        const designator = component.designator;
+		// 提取器件基本信息
+		const uniqueId = component.uniqueId;
+		const designator = component.designator;
 
-        // 处理引脚数据
-        if (component.pads && Array.isArray(component.pads)) {
-            for (const pad of component.pads) {
-                formatted.push({
-                    uniqueId: uniqueId,
-                    designator: designator,
-                    pin: pad.num,
-                    netName: pad.net || '',
-                });
-            }
-        }
-    }
+		// 处理引脚数据
+		if (component.pads && Array.isArray(component.pads)) {
+			for (const pad of component.pads) {
+				formatted.push({
+					uniqueId: uniqueId,
+					designator: designator,
+					pin: pad.num,
+					netName: pad.net || '',
+				});
+			}
+		}
+	}
 
-    return formatted;
+	return formatted;
 }
 
 /**
@@ -151,7 +151,7 @@ function formatPCBNetlist(pcbData) {
  * @returns {Array<{uniqueId: string, designator: string, pin: string, netName: string}>}
  */
 function formatFileNetlist(fileData, selectedComponents) {
-    return formatSchematicNetlist(fileData, selectedComponents);
+	return formatSchematicNetlist(fileData, selectedComponents);
 }
 
 /**
@@ -171,34 +171,34 @@ function formatFileNetlist(fileData, selectedComponents) {
  * @returns {Array<{componentId: string, uniqueId: string, designator: string, pin: string, netName: string}>}
  */
 function processNetlistData(componentIds, uniqueId, designator, schematicNetlist, pcbNetlist) {
-    const result = [];
+	const result = [];
 
-    // 只处理当前选中的器件
-    const relevantPCBPins = pcbNetlist.filter((item) => item.uniqueId === uniqueId);
-    const relevantSchematicPins = schematicNetlist.filter((item) => item.uniqueId === uniqueId);
+	// 只处理当前选中的器件
+	const relevantPCBPins = pcbNetlist.filter((item) => item.uniqueId === uniqueId);
+	const relevantSchematicPins = schematicNetlist.filter((item) => item.uniqueId === uniqueId);
 
-    for (const pcbPin of relevantPCBPins) {
-        // 在原理图网表中查找对应的引脚
-        const schematicPin = relevantSchematicPins.find((item) => item.pin === pcbPin.pin);
+	for (const pcbPin of relevantPCBPins) {
+		// 在原理图网表中查找对应的引脚
+		const schematicPin = relevantSchematicPins.find((item) => item.pin === pcbPin.pin);
 
-        // 如果原理图中该引脚没有网络名称，但PCB中有网络名称，则需要放置导线
-        const hasSchematicNet = schematicPin && schematicPin.netName && schematicPin.netName.trim() !== '';
-        const hasPCBNet = pcbPin.netName && pcbPin.netName.trim() !== '';
+		// 如果原理图中该引脚没有网络名称，但PCB中有网络名称，则需要放置导线
+		const hasSchematicNet = schematicPin && schematicPin.netName && schematicPin.netName.trim() !== '';
+		const hasPCBNet = pcbPin.netName && pcbPin.netName.trim() !== '';
 
-        if (!hasSchematicNet && hasPCBNet) {
-            // 为每个图元ID都创建引脚数据
-            for (const componentId of componentIds) {
-                result.push({
-                    componentId: componentId,
-                    uniqueId: uniqueId,
-                    designator: designator,
-                    pin: pcbPin.pin,
-                    netName: pcbPin.netName,
-                });
-            }
-        }
-    }
-    return result;
+		if (!hasSchematicNet && hasPCBNet) {
+			// 为每个图元ID都创建引脚数据
+			for (const componentId of componentIds) {
+				result.push({
+					componentId: componentId,
+					uniqueId: uniqueId,
+					designator: designator,
+					pin: pcbPin.pin,
+					netName: pcbPin.netName,
+				});
+			}
+		}
+	}
+	return result;
 }
 
 /**
@@ -218,31 +218,31 @@ function processNetlistData(componentIds, uniqueId, designator, schematicNetlist
  *          内容不是合法网表 JSON、或没有任何器件时返回 null
  */
 function summarizeNetlist(netlistData) {
-    let parsedData;
-    try {
-        parsedData = JSON.parse(netlistData);
-    } catch (error) {
-        return null;
-    }
-    const componentsMap = parsedData && parsedData.components ? parsedData.components : parsedData;
-    if (!componentsMap || typeof componentsMap !== 'object') return null;
+	let parsedData;
+	try {
+		parsedData = JSON.parse(netlistData);
+	} catch (error) {
+		return null;
+	}
+	const componentsMap = parsedData && parsedData.components ? parsedData.components : parsedData;
+	if (!componentsMap || typeof componentsMap !== 'object') return null;
 
-    let componentCount = 0;
-    let pinCount = 0;
-    const netNames = new Set();
+	let componentCount = 0;
+	let pinCount = 0;
+	const netNames = new Set();
 
-    for (const componentData of Object.values(componentsMap)) {
-        if (!componentData || typeof componentData !== 'object' || !componentData.props) continue;
-        componentCount++;
-        for (const netName of extractPinNets(componentData)) {
-            pinCount++;
-            const trimmed = typeof netName === 'string' ? netName.trim() : '';
-            if (trimmed) netNames.add(trimmed);
-        }
-    }
+	for (const componentData of Object.values(componentsMap)) {
+		if (!componentData || typeof componentData !== 'object' || !componentData.props) continue;
+		componentCount++;
+		for (const netName of extractPinNets(componentData)) {
+			pinCount++;
+			const trimmed = typeof netName === 'string' ? netName.trim() : '';
+			if (trimmed) netNames.add(trimmed);
+		}
+	}
 
-    if (componentCount === 0) return null;
-    return { componentCount, pinCount, netCount: netNames.size };
+	if (componentCount === 0) return null;
+	return { componentCount, pinCount, netCount: netNames.size };
 }
 
 /**
@@ -252,11 +252,11 @@ function summarizeNetlist(netlistData) {
  * @returns {Array<string>} 网络名（可能为空串）
  */
 function extractPinNets(componentData) {
-    if (componentData.pinInfoMap) {
-        return Object.values(componentData.pinInfoMap).map((pinInfo) => (pinInfo && pinInfo.net) || '');
-    }
-    if (componentData.pins) return Object.values(componentData.pins);
-    return [];
+	if (componentData.pinInfoMap) {
+		return Object.values(componentData.pinInfoMap).map((pinInfo) => (pinInfo && pinInfo.net) || '');
+	}
+	if (componentData.pins) return Object.values(componentData.pins);
+	return [];
 }
 
 export { formatSchematicNetlist, formatPCBNetlist, formatFileNetlist, processNetlistData, summarizeNetlist };

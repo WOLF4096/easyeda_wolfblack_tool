@@ -8,12 +8,18 @@
  *
  * 开发者：WOLF4096
  * 辅助开发：DeepSeek-V4.1-Flash
- * 本工具为非官方第三方开源扩展，与嘉立创 / EasyEDA 官方无隶属关系
+ * 本工具为非官方第三方开源扩展
  */
 import assert from 'node:assert/strict';
 import { afterEach, beforeEach, describe, it } from 'node:test';
 
-import { formatFileNetlist, formatPCBNetlist, formatSchematicNetlist, processNetlistData, summarizeNetlist } from '../src/js/autoWire/netlistParser.js';
+import {
+	formatFileNetlist,
+	formatPCBNetlist,
+	formatSchematicNetlist,
+	processNetlistData,
+	summarizeNetlist,
+} from '../src/js/autoWire/netlistParser.js';
 
 /** 静音被测模块内部的 console 输出（解析过程会打日志） */
 let originLog;

@@ -17,9 +17,8 @@
  *
  * 开发者：WOLF4096
  * 辅助开发：DeepSeek-V4.1-Flash
- * 本工具为非官方第三方开源扩展，与嘉立创 / EasyEDA 官方无隶属关系
+ * 本工具为非官方第三方开源扩展
  */
-
 import { GROUP_GAP, layoutGroup } from './layout.js';
 import { planWires } from './wirePlan.js';
 
@@ -174,9 +173,7 @@ function emitHeaderModern(ctx) {
 	const client = 'client_' + stamp + '_' + rand();
 	const uuid = 'uuid_' + stamp + '_' + rand();
 
-	ctx.lines.push(
-		`{"type":"DOCHEAD"}||{"docType":"SCH_PAGE","client":"${client}","uuid":"${uuid}","updateTime":${stamp},"version":${stamp}}|`
-	);
+	ctx.lines.push(`{"type":"DOCHEAD"}||{"docType":"SCH_PAGE","client":"${client}","uuid":"${uuid}","updateTime":${stamp},"version":${stamp}}|`);
 	ctx.lines.push(`{"type":"CANVAS","ticket":${ctx.nextId()},"id":"CANVAS"}||{"originX":0,"originY":0}|`);
 }
 
@@ -210,9 +207,7 @@ function emitV2Component(ctx, part) {
 	const compId = 'e' + ctx.nextId();
 	const outY = ctx.options.yvalue ? -part.y : part.y;
 
-	ctx.lines.push(
-		`["COMPONENT","${compId}",${q(partNameOf(ctx.symbolDb, comp, part.partIdx))},${part.x},${outY},0,0,{},0]`
-	);
+	ctx.lines.push(`["COMPONENT","${compId}",${q(partNameOf(ctx.symbolDb, comp, part.partIdx))},${part.x},${outY},0,0,{},0]`);
 	ctx.lines.push(v2AttrLine(ctx, compId, 'Device', comp.deviceUuid || '', true));
 	ctx.lines.push(v2AttrLine(ctx, compId, 'Symbol', comp.symbolUuid || '', true));
 	ctx.lines.push(v2AttrLine(ctx, compId, 'Designator', comp.designator || '', false));

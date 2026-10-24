@@ -16,7 +16,7 @@
  *
  * 开发者：WOLF4096
  * 辅助开发：DeepSeek-V4.1-Flash
- * 本工具为非官方第三方开源扩展，与嘉立创 / EasyEDA 官方无隶属关系
+ * 本工具为非官方第三方开源扩展
  */
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
@@ -85,7 +85,7 @@ describe('app/code-convert/group', () => {
 		const list = processComponents(makeNetlist());
 		assert.deepEqual(
 			list.map((item) => item.designator),
-			['R1', 'C1']
+			['R1', 'C1'],
 		);
 		assert.equal(list[0].value, '10kΩ');
 		assert.equal(list[1].value, '100nF');
@@ -199,12 +199,12 @@ describe('app/clear-empty-properties/propsModel', () => {
 		assert.equal(toggleColumn(rows, 'clearKey'), true);
 		assert.deepEqual(
 			rows.map((r) => r.clearKey),
-			[true, true, false]
+			[true, true, false],
 		);
 		assert.equal(toggleColumn(rows, 'clearKey'), false);
 		assert.deepEqual(
 			rows.map((r) => r.clearKey),
-			[false, false, false]
+			[false, false, false],
 		);
 		assert.equal(toggleColumn([{ selected: false, clearKey: false }], 'clearKey'), false);
 	});
@@ -303,7 +303,7 @@ describe('app/out-pin-net/matrix', () => {
 		assert.deepEqual(matrix.pins, ['1', '2', '3']);
 		assert.deepEqual(
 			matrix.rows.map((r) => r.designator),
-			['R2', 'R10']
+			['R2', 'R10'],
 		);
 		assert.deepEqual(matrix.rows[0].cells, ['VCC', '', 'SIG']);
 		assert.equal(matrix.corner, '所有封装');
@@ -376,7 +376,7 @@ describe('app/modify-net/replacePlan', () => {
 		const list = listPinsOf({ pins: { 10: 'B', 2: 'A', 1: '' } });
 		assert.deepEqual(
 			list.map((p) => p.pin),
-			['1', '2', '10']
+			['1', '2', '10'],
 		);
 		assert.equal(list[0].net, '');
 	});
@@ -471,7 +471,7 @@ describe('app/in-ad-netlist', () => {
 		const rows = buildCompareRows(netMap, container);
 		assert.deepEqual(
 			rows.map((r) => `${r.refDes}|${r.pinNo}`),
-			['R1|2', 'U2|1', 'U2|9', 'U10|1']
+			['R1|2', 'U2|1', 'U2|9', 'U10|1'],
 		);
 		assert.equal(rows[0].warning, true, 'R1 不存在');
 		assert.equal(rows[0].oldNet, '⚠️ 未找到元件');
@@ -554,7 +554,7 @@ describe('app/pin-sorting/sortKey', () => {
 		const plan = planLayout(pins, { prop: 'name', spacing: 10, endSort: false, splitSort: true, order: 'asc' });
 		assert.deepEqual(
 			plan.sorted.map((p) => p.name),
-			['A', 'B']
+			['A', 'B'],
 		);
 		assert.deepEqual(plan.targets[0], { x: 100, y: 50, rotation: 180 });
 		assert.deepEqual(plan.targets[1], { x: 100, y: 40, rotation: 180 });
@@ -574,7 +574,11 @@ describe('app/eda-bridge/protocol', () => {
 	it('safeJson 处理函数 / 循环引用 / Promise / 深度', async () => {
 		const { safeJson } = await import('../iframe/js/src/app/eda-bridge/protocol.js');
 		assert.equal(safeJson(undefined), null);
-		assert.equal(safeJson(() => 1), '[Function anonymous]', '匿名函数降级成占位串');
+		assert.equal(
+			safeJson(() => 1),
+			'[Function anonymous]',
+			'匿名函数降级成占位串',
+		);
 		assert.equal(safeJson(Promise.resolve(1)), '[Promise]');
 		assert.equal(safeJson(10n), '10');
 
@@ -615,7 +619,7 @@ describe('app/import-image/{pixel,layout}', () => {
 		assert.deepEqual(
 			ordered.map((f) => f.name),
 			['T2.png', 'B1.png', 'T1.png', 'L2.png', 'L1.png'],
-			'T/B 降序、按行优先交叉排列；L 左列升序、右列降序'
+			'T/B 降序、按行优先交叉排列；L 左列升序、右列降序',
 		);
 		assert.deepEqual(layoutMap.get(0), { col: 'left', row: 0 });
 		assert.deepEqual(layoutMap.get(1), { col: 'right', row: 0 });
@@ -654,12 +658,16 @@ describe('app/import-image/{pixel,layout}', () => {
 		assert.deepEqual(special[1], { x: 110, y: -30 }, '右列偏移一个图宽，行号越大 Y 越小');
 
 		const grid = computeOrigins({ totalImages: 4, imgWidth: 100, imgHeight: 50, originX: 0, originY: 0, layoutMap: null, useSpecial: false });
-		assert.deepEqual(grid, [
-			{ x: 0, y: 0 },
-			{ x: 100, y: 0 },
-			{ x: 0, y: -100 },
-			{ x: 100, y: -100 },
-		], '网格间距取长边');
+		assert.deepEqual(
+			grid,
+			[
+				{ x: 0, y: 0 },
+				{ x: 100, y: 0 },
+				{ x: 0, y: -100 },
+				{ x: 100, y: -100 },
+			],
+			'网格间距取长边',
+		);
 	});
 });
 
@@ -726,7 +734,18 @@ describe('app/api-test/{calibration,sourceProbe}', () => {
 describe('app/{import-qrcode/create-footprint}', () => {
 	it('bwip-js 选项：纠错级别与「包含文本」按码型开关', async () => {
 		const { buildOptions, computeDpi } = await import('../iframe/js/src/app/import-qrcode/barcode.js');
-		const base = { bcid: 'qrcode', text: 'A1', scale: 4, padding: 2, outputType: 'image', inverted: false, fore: '#112233', back: '#ffffff', eclevel: 'H', includeText: true };
+		const base = {
+			bcid: 'qrcode',
+			text: 'A1',
+			scale: 4,
+			padding: 2,
+			outputType: 'image',
+			inverted: false,
+			fore: '#112233',
+			back: '#ffffff',
+			eclevel: 'H',
+			includeText: true,
+		};
 		const qr = buildOptions(base);
 		assert.equal(qr.eclevel, 'H');
 		assert.equal(qr.includetext, undefined, '二维码不提供「包含文本」');
@@ -787,7 +806,13 @@ describe('app/replace-component/pastePlan', () => {
 			{ designator: 'C1', target: { supplierId: 'C100', name: '旧名', footprint: '0805', uuid: 'u1' }, selected: false },
 			{ designator: 'C2', target: { supplierId: 'C200' }, selected: false },
 		];
-		const count = applyTargetSupplierIds(items, new Map([['C1', 'C999'], ['C2', 'C200']]));
+		const count = applyTargetSupplierIds(
+			items,
+			new Map([
+				['C1', 'C999'],
+				['C2', 'C200'],
+			]),
+		);
 		assert.equal(count, 1, '只有 C1 真的变了');
 		assert.equal(items[0].selected, true);
 		assert.equal(items[0].target.name, null, '缓存名称必须清空，否则会拿旧属性替换');
@@ -796,9 +821,7 @@ describe('app/replace-component/pastePlan', () => {
 	});
 
 	it('展平→打标→重分组：目标编号不同的必须拆行', async () => {
-		const { flattenGroups, applyTargetSupplierIds, regroupGroups } = await import(
-			'../iframe/js/src/app/replace-component/pastePlan.js'
-		);
+		const { flattenGroups, applyTargetSupplierIds, regroupGroups } = await import('../iframe/js/src/app/replace-component/pastePlan.js');
 		const groups = [
 			{
 				designators: ['C1', 'C10', 'C2'],
@@ -812,7 +835,14 @@ describe('app/replace-component/pastePlan', () => {
 		];
 		const items = flattenGroups(groups);
 		assert.equal(items.length, 3);
-		applyTargetSupplierIds(items, new Map([['C1', 'C900'], ['C2', 'C900'], ['C10', 'C800']]));
+		applyTargetSupplierIds(
+			items,
+			new Map([
+				['C1', 'C900'],
+				['C2', 'C900'],
+				['C10', 'C800'],
+			]),
+		);
 		const regrouped = regroupGroups(items);
 		assert.equal(regrouped.length, 2, 'C10 目标不同 → 必须拆成独立一行');
 		const byTarget = regrouped.map((g) => g.target.supplierId).sort();
@@ -901,7 +931,7 @@ describe('app/replace-component/{componentReader,netlistSync}', () => {
 		assert.equal(getDeviceNameJson({ component: { uuid: 'u-1' } }), null, 'V2 不需要改 COMPONENT 行');
 		assert.equal(
 			getDeviceNameJson({ component: { uuid: { name: 'R', source: 'sys', uuid: 'u-2' } } }),
-			'{"name":"R","source":"sys","uuid":"u-2"}'
+			'{"name":"R","source":"sys","uuid":"u-2"}',
 		);
 	});
 
@@ -983,7 +1013,7 @@ describe('core/concurrency', () => {
 				inFlight -= 1;
 				return n * 2;
 			},
-			{ yieldMs: 0 }
+			{ yieldMs: 0 },
 		);
 		assert.deepEqual(out.slice(0, 3), [0, 2, 4]);
 		assert.equal(out[22], 44, '结果必须与入参同序');
@@ -997,10 +1027,15 @@ describe('core/concurrency', () => {
 		assert.deepEqual(seen, ['1/3', '2/3', '3/3']);
 
 		await assert.rejects(
-			mapInChunks([1, 2, 3], 2, async (n) => {
-				if (n === 2) throw new Error('boom');
-				return n;
-			}, { yieldMs: 0 })
+			mapInChunks(
+				[1, 2, 3],
+				2,
+				async (n) => {
+					if (n === 2) throw new Error('boom');
+					return n;
+				},
+				{ yieldMs: 0 },
+			),
 		);
 	});
 });
@@ -1050,8 +1085,28 @@ describe('app/pcb-to-sch/model', () => {
 			footprints: { fp1: { title: '0603' } },
 		};
 		const comps = [
-			{ designator: 'R1', name: '10K', deviceUuid: 'dev1', footprintUuid: 'fp1', symbolUuid: '', symbolName: '', deviceName: '', footprintName: '', supplierPart: 'C1' },
-			{ designator: 'R2', name: '10K', deviceUuid: 'dev1', footprintUuid: 'fp1', symbolUuid: '', symbolName: '', deviceName: '', footprintName: '', supplierPart: '' },
+			{
+				designator: 'R1',
+				name: '10K',
+				deviceUuid: 'dev1',
+				footprintUuid: 'fp1',
+				symbolUuid: '',
+				symbolName: '',
+				deviceName: '',
+				footprintName: '',
+				supplierPart: 'C1',
+			},
+			{
+				designator: 'R2',
+				name: '10K',
+				deviceUuid: 'dev1',
+				footprintUuid: 'fp1',
+				symbolUuid: '',
+				symbolName: '',
+				deviceName: '',
+				footprintName: '',
+				supplierPart: '',
+			},
 			{ designator: 'U1', name: '', deviceUuid: 'missing', footprintUuid: 'missing' },
 		];
 		enrichWithSymbol(comps, project);
@@ -1155,7 +1210,7 @@ describe('app/pcb-to-sch/layout', () => {
 			[
 				{ x: 100, y: 200 },
 				{ x: 100, y: 210 },
-			]
+			],
 		);
 		assert.equal(comp.y, 200, '绝不能改入参（原 V3 实现会累积漂移）');
 	});
@@ -1183,7 +1238,7 @@ describe('app/pcb-to-sch/sourceBuilder', () => {
 		assert.equal(groups[0].name, 'R');
 		assert.deepEqual(
 			groups[0].items.map((c) => c.designator),
-			['R2', 'R10']
+			['R2', 'R10'],
 		);
 		assert.equal(classifyGroups(comps, 'coord')[0].name, '坐标布局');
 		assert.equal(classifyGroups([{ designator: '1', deviceName: '' }], 'device')[0].name, '未知器件');
@@ -1221,7 +1276,10 @@ describe('app/pcb-to-sch/sourceBuilder', () => {
 		const attrs = lines.filter((l) => l.includes('"type":"ATTR"')).map((l) => JSON.parse(l.replace(/\|$/, '').split('||')[1]));
 		const channelIds = attrs.filter((a) => a.key === 'Channel ID');
 		assert.equal(channelIds.length, 2, '每个器件都要有 Channel ID，否则整份拒写');
-		assert.ok(attrs.every((a) => 'zIndex' in a && 'parentId' in a && 'fillColor' in a), 'ATTR 字段必须齐全');
+		assert.ok(
+			attrs.every((a) => 'zIndex' in a && 'parentId' in a && 'fillColor' in a),
+			'ATTR 字段必须齐全',
+		);
 	});
 
 	it('现代格式：开了 genWire 才生成导线，空网络不生成', async () => {
@@ -1292,17 +1350,11 @@ describe('app/pcb-to-sch/sourceBuilder', () => {
 
 	it('V2 格式：头部 6 行、ATTR 的 y 位置分 0/null、Designator 在 Name 之前', async () => {
 		const { buildSchSource } = await import('../iframe/js/src/app/pcb-to-sch/sourceBuilder.js');
-		const lines = buildSchSource({ components: [comps[0]], symbolDb, format: 'v2', options: { classify: 'ref' } }).split(
-			'\n'
+		const lines = buildSchSource({ components: [comps[0]], symbolDb, format: 'v2', options: { classify: 'ref' } }).split('\n');
+		assert.deepEqual(
+			lines.slice(0, 6).map((l) => JSON.parse(l)[0]),
+			['DOCTYPE', 'HEAD', 'FONTSTYLE', 'FONTSTYLE', 'LINESTYLE', 'LINESTYLE'],
 		);
-		assert.deepEqual(lines.slice(0, 6).map((l) => JSON.parse(l)[0]), [
-			'DOCTYPE',
-			'HEAD',
-			'FONTSTYLE',
-			'FONTSTYLE',
-			'LINESTYLE',
-			'LINESTYLE',
-		]);
 		const comp = JSON.parse(lines[6]);
 		assert.equal(comp[0], 'COMPONENT');
 		assert.equal(comp[2], 'R.1');
@@ -1310,16 +1362,8 @@ describe('app/pcb-to-sch/sourceBuilder', () => {
 		// 注意与 PCB 的 ATTR（parentId 在 3、key 在 7）不是同一套下标，别串用
 		const keys = lines.slice(7, 12).map((l) => JSON.parse(l)[3]);
 		assert.deepEqual(keys, ['Device', 'Symbol', 'Designator', 'Name', 'Unique ID']);
-		assert.deepEqual(
-			[JSON.parse(lines[8])[5], JSON.parse(lines[8])[6]],
-			[0, 0],
-			'Device 的 x/y 都写 0'
-		);
-		assert.deepEqual(
-			[JSON.parse(lines[9])[5], JSON.parse(lines[9])[6]],
-			[null, 0],
-			'Designator 的 x 写 null、y 写 0'
-		);
+		assert.deepEqual([JSON.parse(lines[8])[5], JSON.parse(lines[8])[6]], [0, 0], 'Device 的 x/y 都写 0');
+		assert.deepEqual([JSON.parse(lines[9])[5], JSON.parse(lines[9])[6]], [null, 0], 'Designator 的 x 写 null、y 写 0');
 	});
 
 	it('genFrame 生成组标题，y 位置随「Y 翻转」改变', async () => {
@@ -1347,7 +1391,7 @@ describe('app/pcb-to-sch/sourceBuilder', () => {
 				.split('\n')
 				.find((l) => l.includes('"type":"TEXT"'))
 				.replace(/\|$/, '')
-				.split('||')[1]
+				.split('||')[1],
 		);
 		assert.notEqual(flippedBody.y, body.y, 'Y 翻转后标题位置必须跟着变');
 	});
@@ -1355,9 +1399,7 @@ describe('app/pcb-to-sch/sourceBuilder', () => {
 
 describe('app/generate-net/geometry', () => {
 	it('线段交叉：十字相交 true，平行/错开 false', async () => {
-		const { segmentsIntersect, isTwoLinesTouching, distToSegmentSquared } = await import(
-			'../iframe/js/src/app/generate-net/geometry.js'
-		);
+		const { segmentsIntersect, isTwoLinesTouching, distToSegmentSquared } = await import('../iframe/js/src/app/generate-net/geometry.js');
 		assert.equal(segmentsIntersect(0, 0, 100, 0, 50, -50, 50, 50), true);
 		assert.equal(segmentsIntersect(0, 0, 100, 0, 0, 10, 100, 10), false);
 		assert.equal(distToSegmentSquared(50, 10, 0, 0, 100, 0), 100);
@@ -1378,9 +1420,7 @@ describe('app/generate-net/geometry', () => {
 	});
 
 	it('层不同不连通；MULTI 与任意层连通；盲埋孔按层栈翻译', async () => {
-		const { areLayersConnected, getRealLayerIdsFromRange, getStackIds } = await import(
-			'../iframe/js/src/app/generate-net/geometry.js'
-		);
+		const { areLayersConnected, getRealLayerIdsFromRange, getStackIds } = await import('../iframe/js/src/app/generate-net/geometry.js');
 		assert.equal(areLayersConnected({ layer: 1 }, { layer: 2 }), false);
 		assert.equal(areLayersConnected({ layer: 1 }, { layer: 12 }), true);
 		assert.equal(areLayersConnected({ layer: 1, blindLayers: [1, 15] }, { layer: 15 }), true);
@@ -1474,22 +1514,15 @@ describe('app/generate-net/{connectivity,netNamer,plan}', () => {
 			{ id: 'l3', type: 'LINE', net: 'B', layer: 2, shape: 'line', x1: 0, y1: 0, x2: 100, y2: 0, w: 6 },
 		];
 		const clusters = computeClusters(prims, [], [], {});
-		const sizes = Object.values(clusters).map((g) => g.length).sort((a, b) => b - a);
+		const sizes = Object.values(clusters)
+			.map((g) => g.length)
+			.sort((a, b) => b - a);
 		assert.deepEqual(sizes, [2, 1], 'l1 与 l2 合并，l3 因层不同独立');
 	});
 
 	it('定名：票数优先于名字长短（GND 覆铜不会被 1 个 DP 焊盘改名）', async () => {
-		const { voteNets, rankNetCandidates, createNetNamer, isGenericNet } = await import(
-			'../iframe/js/src/app/generate-net/netNamer.js'
-		);
-		const group = [
-			{ net: 'GND' },
-			{ net: 'GND' },
-			{ net: 'GND' },
-			{ net: 'DP' },
-			{ net: '' },
-			{ net: 'null' },
-		];
+		const { voteNets, rankNetCandidates, createNetNamer, isGenericNet } = await import('../iframe/js/src/app/generate-net/netNamer.js');
+		const group = [{ net: 'GND' }, { net: 'GND' }, { net: 'GND' }, { net: 'DP' }, { net: '' }, { net: 'null' }];
 		const votes = voteNets(group);
 		assert.equal(votes.get('GND'), 3);
 		assert.equal(votes.has(''), false, '空网络不计票');
@@ -1527,7 +1560,7 @@ describe('app/generate-net/{connectivity,netNamer,plan}', () => {
 		assert.deepEqual(
 			ops.map((o) => `${o.id}:${o.oldNet}->${o.newNet}`),
 			['l2:—->VCC'],
-			'网络名未变的不产生操作；孤立图元跳过'
+			'网络名未变的不产生操作；孤立图元跳过',
 		);
 	});
 
@@ -1685,7 +1718,7 @@ describe('app/working-hours/aggregate', () => {
 				STATS_2026_10_22_broken: 'not json',
 				OTHER_KEY: 'x',
 			},
-			{ now }
+			{ now },
 		);
 		assert.deepEqual(ds.sortedProjectIds, ['b', 'a']);
 		assert.equal(ds.pidColorMap.b, COLOR_PALETTE[0]);

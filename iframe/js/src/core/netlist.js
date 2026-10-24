@@ -9,9 +9,8 @@
  *
  * 开发者：WOLF4096
  * 辅助开发：DeepSeek-V4.1-Flash
- * 本工具为非官方第三方开源扩展，与嘉立创 / EasyEDA 官方无隶属关系
+ * 本工具为非官方第三方开源扩展
  */
-
 import { NETLIST_KEY, getEda } from './eda.js';
 import { logger } from './log.js';
 
@@ -136,7 +135,9 @@ export function getComponentsContainer(netlistObj) {
  * @sideEffects 无（纯函数）
  */
 export function findComponentByDesignator(container, designator) {
-	const target = String(designator || '').trim().toUpperCase();
+	const target = String(designator || '')
+		.trim()
+		.toUpperCase();
 	if (!target || !container || typeof container !== 'object') return null;
 	for (const key in container) {
 		const comp = container[key];

@@ -17,9 +17,8 @@
  *
  * 开发者：WOLF4096
  * 辅助开发：DeepSeek-V4.1-Flash
- * 本工具为非官方第三方开源扩展，与嘉立创 / EasyEDA 官方无隶属关系
+ * 本工具为非官方第三方开源扩展
  */
-
 import { BACKUP_VERSION } from './backupFormat.js';
 
 /** 密钥前缀（换掉它等于让所有旧备份失效，改动需谨慎） */

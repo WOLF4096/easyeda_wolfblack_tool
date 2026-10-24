@@ -9,9 +9,8 @@
  *
  * 开发者：WOLF4096
  * 辅助开发：DeepSeek-V4.1-Flash
- * 本工具为非官方第三方开源扩展，与嘉立创 / EasyEDA 官方无隶属关系
+ * 本工具为非官方第三方开源扩展
  */
-
 import { getEda } from '../core/eda.js';
 
 /**
@@ -67,7 +66,8 @@ function banner(doc, text, timeoutMs) {
 	if (!bar) {
 		bar = doc.createElement('div');
 		bar.id = BANNER_ID;
-		bar.style.cssText = 'position:fixed;left:0;right:0;top:0;padding:8px 12px;background:#5a1d1d;color:#fff;font:13px/1.5 sans-serif;z-index:9999';
+		bar.style.cssText =
+			'position:fixed;left:0;right:0;top:0;padding:8px 12px;background:#5a1d1d;color:#fff;font:13px/1.5 sans-serif;z-index:9999';
 		doc.body.appendChild(bar);
 	}
 	bar.textContent = text;

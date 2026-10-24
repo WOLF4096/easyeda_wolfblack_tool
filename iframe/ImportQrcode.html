@@ -5,132 +5,130 @@
   本工具为非官方第三方开源扩展
 -->
 <html lang="zh-CN">
+	<head>
+		<meta charset="UTF-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+		<title>狼黑工具 - 导入二维码</title>
+		<script src="/iframe/js/bwip-js-min.js"></script>
+		<link rel="stylesheet" href="/iframe/css/common.css" />
+	</head>
 
-<head>
-	<meta charset="UTF-8" />
-	<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-	<title>狼黑工具 - 各种码生成器</title>
-	<script src="/iframe/js/bwip-js-min.js"></script>
-	<link rel="stylesheet" href="/iframe/css/common.css" />
-</head>
-
-<body class="app-row">
-	<div class="qr-preview">
-		<div class="qr-canvas-wrap" id="canvas-wrapper" title="单击条码放置到选定图层">
-			<canvas id="barcode-canvas"></canvas>
-		</div>
-		<div id="error-message" class="qr-error"></div>
-		<div class="qr-hint" id="place-hint">单击码可放置到 PCB 画布</div>
-		<div id="status-message" class="qr-toast"></div>
-	</div>
-
-	<div class="qr-panel">
-		<div class="qr-panel-header">属性面板</div>
-
-		<div class="qr-group">
-			<div class="qr-item">
-				<label for="barcode-type">码类型</label>
-				<select id="barcode-type"></select>
+	<body class="app-row">
+		<div class="qr-preview">
+			<div class="qr-canvas-wrap" id="canvas-wrapper" title="单击条码放置到选定图层">
+				<canvas id="barcode-canvas"></canvas>
 			</div>
-
-			<div class="qr-item">
-				<label for="barcode-data">数据内容</label>
-				<textarea id="barcode-data">JLCJLCJLCJLC</textarea>
-			</div>
-
-			<div class="qr-item hidden" id="group-eclevel">
-				<label for="barcode-eclevel">容错级别</label>
-				<select id="barcode-eclevel">
-					<option value="L">L - 7%</option>
-					<option value="M" selected>M - 15%</option>
-					<option value="Q">Q - 25%</option>
-					<option value="H">H - 30%</option>
-				</select>
-			</div>
-
-			<div class="qr-item hidden" id="group-include-text">
-				<label class="qr-check">
-					<input type="checkbox" id="barcode-include-text" checked />
-					显示文本信息
-				</label>
-			</div>
+			<div id="error-message" class="qr-error"></div>
+			<div class="qr-hint" id="place-hint">单击码可放置到 PCB 画布</div>
+			<div id="status-message" class="qr-toast"></div>
 		</div>
 
-		<div class="qr-group">
-			<div class="qr-item">
-				<div class="qr-label-row">
-					<label for="barcode-scale">码元尺寸</label>
-					<span class="qr-value" id="scale-value">32</span>
+		<div class="qr-panel">
+			<div class="qr-panel-header">属性面板</div>
+
+			<div class="qr-group">
+				<div class="qr-item">
+					<label for="barcode-type">码类型</label>
+					<select id="barcode-type"></select>
 				</div>
-				<input type="range" id="barcode-scale" value="32" min="1" max="50" step="1" />
+
+				<div class="qr-item">
+					<label for="barcode-data">数据内容</label>
+					<textarea id="barcode-data">JLCJLCJLCJLC</textarea>
+				</div>
+
+				<div class="qr-item hidden" id="group-eclevel">
+					<label for="barcode-eclevel">容错级别</label>
+					<select id="barcode-eclevel">
+						<option value="L">L - 7%</option>
+						<option value="M" selected>M - 15%</option>
+						<option value="Q">Q - 25%</option>
+						<option value="H">H - 30%</option>
+					</select>
+				</div>
+
+				<div class="qr-item hidden" id="group-include-text">
+					<label class="qr-check">
+						<input type="checkbox" id="barcode-include-text" checked />
+						显示文本信息
+					</label>
+				</div>
 			</div>
 
-			<div class="qr-item">
-				<div class="qr-label-row">
-					<label for="barcode-padding">码元边距</label>
-					<span class="qr-value" id="padding-value">1</span>
+			<div class="qr-group">
+				<div class="qr-item">
+					<div class="qr-label-row">
+						<label for="barcode-scale">码元尺寸</label>
+						<span class="qr-value" id="scale-value">32</span>
+					</div>
+					<input type="range" id="barcode-scale" value="32" min="1" max="50" step="1" />
 				</div>
-				<input type="range" id="barcode-padding" value="1" min="0" max="16" step="1" />
+
+				<div class="qr-item">
+					<div class="qr-label-row">
+						<label for="barcode-padding">码元边距</label>
+						<span class="qr-value" id="padding-value">1</span>
+					</div>
+					<input type="range" id="barcode-padding" value="1" min="0" max="16" step="1" />
+				</div>
+
+				<div class="qr-item">
+					<label for="qr-size">物理尺寸</label>
+					<div class="qr-size-row">
+						<input type="number" id="qr-size" value="1000" min="0.1" />
+						<div class="segmented">
+							<div id="unit-mm">mm</div>
+							<div id="unit-mil" class="active">mil</div>
+						</div>
+					</div>
+				</div>
+
+				<div class="qr-item">
+					<div id="resolution-info" class="qr-res">尺寸: 0 × 0 px | 0 DPI</div>
+				</div>
 			</div>
 
-			<div class="qr-item">
-				<label for="qr-size">物理尺寸</label>
-				<div class="qr-size-row">
-					<input type="number" id="qr-size" value="1000" min="0.1" />
+			<div class="qr-group is-last">
+				<div class="qr-item">
+					<label>显示类型</label>
 					<div class="segmented">
-						<div id="unit-mm">mm</div>
-						<div id="unit-mil" class="active">mil</div>
+						<div class="active" id="type-image">图片</div>
+						<div id="type-vector">矢量</div>
 					</div>
+				</div>
+
+				<div class="qr-item" id="image-controls">
+					<div class="qr-colors">
+						<div>
+							<label for="color-fore">前景色</label>
+							<input type="color" id="color-fore" value="#000000" />
+						</div>
+						<div>
+							<label for="color-back">背景色</label>
+							<input type="color" id="color-back" value="#ffffff" />
+						</div>
+					</div>
+				</div>
+
+				<div class="qr-item hidden" id="vector-controls">
+					<label class="qr-check">
+						<input type="checkbox" id="invert-image" />
+						反向图像 (黑底白码)
+					</label>
+				</div>
+
+				<div class="qr-item">
+					<label for="layer-select">放置图层</label>
+					<select id="layer-select"></select>
 				</div>
 			</div>
 
-			<div class="qr-item">
-				<div id="resolution-info" class="qr-res">尺寸: 0 × 0 px | 0 DPI</div>
+			<div class="qr-actions">
+				<button id="generate-btn">重新生成</button>
+				<button id="save-btn" class="btn-secondary">保存图片</button>
 			</div>
 		</div>
 
-		<div class="qr-group is-last">
-			<div class="qr-item">
-				<label>显示类型</label>
-				<div class="segmented">
-					<div class="active" id="type-image">图片</div>
-					<div id="type-vector">矢量</div>
-				</div>
-			</div>
-
-			<div class="qr-item" id="image-controls">
-				<div class="qr-colors">
-					<div>
-						<label for="color-fore">前景色</label>
-						<input type="color" id="color-fore" value="#000000" />
-					</div>
-					<div>
-						<label for="color-back">背景色</label>
-						<input type="color" id="color-back" value="#ffffff" />
-					</div>
-				</div>
-			</div>
-
-			<div class="qr-item hidden" id="vector-controls">
-				<label class="qr-check">
-					<input type="checkbox" id="invert-image" />
-					反向图像 (黑底白码)
-				</label>
-			</div>
-
-			<div class="qr-item">
-				<label for="layer-select">放置图层</label>
-				<select id="layer-select"></select>
-			</div>
-		</div>
-
-		<div class="qr-actions">
-			<button id="generate-btn">重新生成</button>
-			<button id="save-btn" class="btn-secondary">保存图片</button>
-		</div>
-	</div>
-
-	<script src="/iframe/js/app/ImportQrcode.js"></script>
-</body>
-
+		<script src="/iframe/js/app/ImportQrcode.js"></script>
+	</body>
 </html>

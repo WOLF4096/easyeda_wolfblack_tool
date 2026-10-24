@@ -5,24 +5,22 @@
   本工具为非官方第三方开源扩展
 -->
 <html lang="zh-CN">
+	<head>
+		<meta charset="UTF-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+		<meta http-equiv="Cache-Control" content="no-store" />
+		<title>EDA桥</title>
+		<link rel="stylesheet" href="/iframe/css/common.css" />
+	</head>
 
-<head>
-	<meta charset="UTF-8" />
-	<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-	<meta http-equiv="Cache-Control" content="no-store" />
-	<title>EDA 桥</title>
-	<link rel="stylesheet" href="/iframe/css/common.css" />
-</head>
+	<body>
+		<div class="bridge-bar" id="bar">
+			<span><span class="bridge-dot" id="dot"></span><span id="st">未连接</span></span>
+			<input id="addr" type="text" value="127.0.0.1:8233" spellcheck="false" title="后端地址，格式 IP:端口" />
+			<button id="conn">连接</button>
+			<button class="btn-secondary" id="disc">断开</button>
+		</div>
 
-<body>
-	<div class="bridge-bar" id="bar">
-		<span><span class="bridge-dot" id="dot"></span><span id="st">未连接</span></span>
-		<input id="addr" type="text" value="127.0.0.1:8233" spellcheck="false" title="后端地址，格式 IP:端口" />
-		<button id="conn">连接</button>
-		<button class="btn-secondary" id="disc">断开</button>
-	</div>
-
-	<script src="/iframe/js/app/EDABridge.js"></script>
-</body>
-
+		<script src="/iframe/js/app/EDABridge.js"></script>
+	</body>
 </html>

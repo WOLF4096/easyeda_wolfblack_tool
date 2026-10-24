@@ -1,9 +1,8 @@
 /*
  * 开发者：WOLF4096
  * 辅助开发：DeepSeek-V4.1-Flash
- * 本工具为非官方第三方开源扩展，与嘉立创 / EasyEDA 官方无隶属关系
+ * 本工具为非官方第三方开源扩展
  */
-
 /* eslint-disable complexity */
 /**
  * 导线(Primitive Line/Arc) 与 线条(Polyline)/区域(Region) 互转工具
@@ -331,15 +330,30 @@ export const WireConverter = {
 				const p7_end = rotatePoint(x, y - r);
 
 				if (w > 2 * r) await eda.pcb_PrimitiveLine.create(net, layer, p1_start.x, p1_start.y, p1_end.x, p1_end.y, targetWidth, false);
-				if (r > 0) await eda.pcb_PrimitiveArc.create(net, layer, p1_end.x, p1_end.y, p2_end.x, p2_end.y, -90 * angleScale, targetWidth, 1, false);
+				if (r > 0)
+					await eda.pcb_PrimitiveArc.create(net, layer, p1_end.x, p1_end.y, p2_end.x, p2_end.y, -90 * angleScale, targetWidth, 1, false);
 				if (Math.abs(h_vector) > 2 * r)
 					await eda.pcb_PrimitiveLine.create(net, layer, p2_end.x, p2_end.y, p3_end.x, p3_end.y, targetWidth, false);
-				if (r > 0) await eda.pcb_PrimitiveArc.create(net, layer, p3_end.x, p3_end.y, p4_end.x, p4_end.y, -90 * angleScale, targetWidth, 1, false);
+				if (r > 0)
+					await eda.pcb_PrimitiveArc.create(net, layer, p3_end.x, p3_end.y, p4_end.x, p4_end.y, -90 * angleScale, targetWidth, 1, false);
 				if (w > 2 * r) await eda.pcb_PrimitiveLine.create(net, layer, p4_end.x, p4_end.y, p5_end.x, p5_end.y, targetWidth, false);
-				if (r > 0) await eda.pcb_PrimitiveArc.create(net, layer, p5_end.x, p5_end.y, p6_end.x, p6_end.y, -90 * angleScale, targetWidth, 1, false);
+				if (r > 0)
+					await eda.pcb_PrimitiveArc.create(net, layer, p5_end.x, p5_end.y, p6_end.x, p6_end.y, -90 * angleScale, targetWidth, 1, false);
 				if (Math.abs(h_vector) > 2 * r)
 					await eda.pcb_PrimitiveLine.create(net, layer, p6_end.x, p6_end.y, p7_end.x, p7_end.y, targetWidth, false);
-				if (r > 0) await eda.pcb_PrimitiveArc.create(net, layer, p7_end.x, p7_end.y, p1_start.x, p1_start.y, -90 * angleScale, targetWidth, 1, false);
+				if (r > 0)
+					await eda.pcb_PrimitiveArc.create(
+						net,
+						layer,
+						p7_end.x,
+						p7_end.y,
+						p1_start.x,
+						p1_start.y,
+						-90 * angleScale,
+						targetWidth,
+						1,
+						false,
+					);
 			}
 		} catch (e) {
 			console.error('区域转导线失败，正在恢复原区域:', e);

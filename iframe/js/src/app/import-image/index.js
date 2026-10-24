@@ -10,16 +10,15 @@
  *
  * 开发者：WOLF4096
  * 辅助开发：DeepSeek-V4.1-Flash
- * 本工具为非官方第三方开源扩展，与嘉立创 / EasyEDA 官方无隶属关系
+ * 本工具为非官方第三方开源扩展
  */
-
 import { getEda } from '../../core/eda.js';
 import { LAYER } from '../../core/layer.js';
 import { toApiLength } from '../../core/length.js';
 import { createFollowPlacer } from '../../pcb/placement.js';
 import { toast } from '../../ui/toast.js';
 import { computeOrigins, gridSize, parseFileNameOrder } from './layout.js';
-import { DPI_PRESETS, MM_TO_MIL, MIL_TO_MM, dpiFromSize, sizeFromDpi, toMilSize } from './pixel.js';
+import { DPI_PRESETS, MIL_TO_MM, MM_TO_MIL, dpiFromSize, sizeFromDpi, toMilSize } from './pixel.js';
 
 /** 切片像素尺寸（正方形） */
 const TILE_SIZE = 1800;
@@ -297,7 +296,7 @@ function cropToBase64(img, sx, sy, sw, sh) {
 				reader.readAsDataURL(blob);
 			},
 			'image/jpeg',
-			JPEG_QUALITY
+			JPEG_QUALITY,
 		);
 	});
 }
@@ -343,7 +342,7 @@ async function generateTiles(file, pcbWidth, pcbHeight) {
 					relY: (sy / pxHeight) * pcbHeight,
 					width: (sw / pxWidth) * pcbWidth,
 					height: (sh / pxHeight) * pcbHeight,
-				}))
+				})),
 			);
 		}
 	}
@@ -388,7 +387,18 @@ const placer = createFollowPlacer({
 async function startPlaceTile(tile) {
 	const host = getEda();
 	try {
-		const created = await host.pcb_PrimitiveObject.create(currentLayerId(), 0, 0, tile.base64, toApiLength(tile.width), toApiLength(tile.height), 0, false, 'img', false);
+		const created = await host.pcb_PrimitiveObject.create(
+			currentLayerId(),
+			0,
+			0,
+			tile.base64,
+			toApiLength(tile.width),
+			toApiLength(tile.height),
+			0,
+			false,
+			'img',
+			false,
+		);
 		if (!created) throw new Error('创建图像图元失败（API 返回空）');
 		currentPlacedId = created.getState_PrimitiveId();
 		placer.start(async (point) => {
@@ -449,7 +459,7 @@ async function finishCurrentPlaceAndContinue() {
 				0,
 				false,
 				'img',
-				false
+				false,
 			);
 		} catch (err) {
 			console.error(`创建 tile 失败 (imgIndex=${tile.imgIndex}):`, err);

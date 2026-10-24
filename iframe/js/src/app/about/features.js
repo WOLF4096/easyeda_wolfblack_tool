@@ -32,7 +32,7 @@
  */
 export const featuresData = [
 	{
-		name: '基准测试',
+		name: '校准API误差',
 		shortcut: '首次必运行',
 		shortcutType: 'warning',
 		brief: '校准插件在新版 EDA 上的坐标与尺寸偏差',
@@ -41,7 +41,7 @@ export const featuresData = [
 		demoUrl: 'https://www.jlc-bbs.com/platform/a/1447593',
 		steps: [
 			'新建并打开一个空白 PCB 文档',
-			'菜单「狼黑工具 → 转换 → 基准测试」，点「创建」，画布上会生成一组测试图元',
+			'菜单「狼黑工具 → 转换 → 校准API误差」，点「创建」，画布上会生成一组测试图元',
 			'全选刚生成的图元，点「获取」，读回它们的实际坐标',
 			'点「校准」自动算出补偿值，确认无误后点「保存」',
 		],
@@ -94,7 +94,7 @@ export const featuresData = [
 			'「导出图表」存当前图，「导出总趋势图表」存全量趋势，「导出备份数据」备份原始记录',
 			'换电脑后在「更多选项 → 导入数据」选回备份即可恢复；面板顶部显示当前账号与累计工时',
 		],
-		note: '记录只存在本机，不会上传。备份含账号信息与签名，只能导入自己账号导出的文件，被改过的会被拒绝。',
+		note: '菜单在每个页面都有，随时能打开看数据；但时长只在 PCB / 原理图画布操作时累计。记录只存在本机，不会上传。备份含账号信息与签名，只能导入自己账号导出的文件，被改过的会被拒绝。',
 	},
 	{
 		name: '焊盘 ⇄ 过孔',
@@ -147,8 +147,8 @@ export const featuresData = [
 	},
 	{
 		name: '位号查重',
-		shortcut: 'Ctrl+Alt+W',
-		shortcutType: 'sch',
+		shortcut: '',
+		shortcutType: '',
 		brief: '找出 PCB 里重复的位号，点一下直接跳过去',
 		scope: ['PCB'],
 		version: 'V2.2.45 ~ 4',
@@ -232,14 +232,14 @@ export const featuresData = [
 		note: '换算值以 Ω / pF / uH 为单位；认不出的代码会原样留在表里，改文本框就能手动纠正。',
 	},
 	{
-		name: '清空多余属性',
+		name: '清除多余属性',
 		shortcut: '',
 		shortcutType: '',
 		brief: '一键清掉替换件用不上的器件属性',
 		scope: ['PCB', '原理图'],
 		version: 'V2.2.45 ~ 4',
 		demoUrl: 'https://www.jlc-bbs.com/platform/a/1221495',
-		steps: ['菜单「器件 → 清空多余属性」，先点「刷新数据」', '在基础属性 / 关键属性 / 更多属性里勾选要保留的项', '点「执行清空」'],
+		steps: ['菜单「器件 → 清除多余属性」，先点「刷新数据」', '在基础属性 / 关键属性 / 更多属性里勾选要保留的项', '点「执行清空」'],
 		note: '借用别人的封装时最有用，可以去掉原器件带来的供应商编号等信息。',
 	},
 	{
@@ -248,7 +248,7 @@ export const featuresData = [
 		shortcutType: '',
 		brief: '重新读一遍网表再写回，清掉属性里的占位符',
 		scope: ['PCB', '原理图'],
-		version: 'V2.2.45 ~ 4',
+		version: 'V2.2.45 ~ 3',
 		demoUrl: 'https://www.jlc-bbs.com/platform/a/1447654',
 		steps: ['菜单「器件 → 刷新网表」', '插件自动读取网表并重新写入', '核对预览结果，确认后应用'],
 		note: '属性值里出现大量 ={Value} 字样时用它。',
@@ -286,7 +286,7 @@ export const featuresData = [
 		note: '使用前务必备份，并确保位号不重复。V2.2.45 上需要按提示手动选中临时器件取参数。',
 	},
 	{
-		name: '模型批量更新',
+		name: '3D 模型批量更新',
 		shortcut: '',
 		shortcutType: '',
 		brief: '批量调整模型大小角度位置，或从旧网表恢复模型',
@@ -294,7 +294,7 @@ export const featuresData = [
 		version: 'V2.2.45 ~ 4',
 		demoUrl: 'https://www.jlc-bbs.com/platform/a/1221572',
 		steps: [
-			'菜单「器件 → 模型批量更新」',
+			'菜单「器件 → 3D 模型批量更新」',
 			'要恢复模型时，「读取网表」选早期备份的工程文件；只调参数时点「获取当前数据」',
 			'调大小、旋转角度和各方向偏移，可切换单位',
 			'点「执行更新」',
@@ -302,7 +302,7 @@ export const featuresData = [
 		note: '3D 模型意外丢失时，用早期备份的网表通常能恢复回来。',
 	},
 	{
-		name: '从 PCB 转原理图',
+		name: 'PCB转原理图',
 		shortcut: '',
 		shortcutType: '',
 		brief: '拿 PCB 上的器件和位置，反向生成一张原理图',
@@ -311,7 +311,7 @@ export const featuresData = [
 		demoUrl: 'https://www.jlc-bbs.com/platform/a/1221620',
 		steps: [
 			'新建一个已绑定目标 PCB 的空白原理图，并切到原理图页',
-			'菜单「从 PCB 转原理图」，点「加载数据」',
+			'菜单「PCB转原理图」，点「加载数据」',
 			'选分类方式，必要时用「匹配符号」「指定符号」修正个别器件',
 			'点「构建源码」，核对无误后点「写入文档」',
 			'需要留档时可用「导出表格」「导出网络」',
@@ -332,7 +332,7 @@ export const featuresData = [
 			'点「创建导线 → 来自网表」，按缓存里的网络补齐导线；想按 PCB 上选中的器件补，就用「来自PCB」',
 			'缓存换了就重新更新一次；「清空网表缓存」可以随时清掉',
 		],
-		note: '两个来源的缓存只存一份，后更新的覆盖前一份。「来自PCB」需要 PCB 已打开（左右分屏会导致取不到数据），一般配合「从 PCB 转原理图」使用：先出符号，再补导线。',
+		note: '两个来源的缓存只存一份，后更新的覆盖前一份。「来自PCB」需要 PCB 已打开（左右分屏会导致取不到数据），一般配合「PCB转原理图」使用：先出符号，再补导线。',
 	},
 	{
 		name: '引脚排序',
@@ -351,7 +351,7 @@ export const featuresData = [
 		note: '只对选中的引脚生效，没选中的不会动。',
 	},
 	{
-		name: 'EDA 桥',
+		name: 'EDA桥',
 		shortcut: '',
 		shortcutType: '',
 		brief: '让外部程序把图形送进画布，也可作为调试通道',
@@ -360,7 +360,7 @@ export const featuresData = [
 		demoUrl: '',
 		steps: [
 			'在电脑上启动配套的桥服务（仓库 tools/eda-bridge 内提供）',
-			'打开「EDA 桥」页面，确认地址为 127.0.0.1:8233，点「连接」',
+			'打开「EDA桥」页面，确认地址为 127.0.0.1:8233，点「连接」',
 			'外部程序即可通过桥把识别好的图形（例如从图片识别出的导线、焊盘）送进当前画布',
 			'需要执行调试指令时，由桥服务直接下发（页面上不再另设开关）',
 		],

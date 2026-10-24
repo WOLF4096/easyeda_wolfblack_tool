@@ -13,9 +13,8 @@
  *
  * 开发者：WOLF4096
  * 辅助开发：DeepSeek-V4.1-Flash
- * 本工具为非官方第三方开源扩展，与嘉立创 / EasyEDA 官方无隶属关系
+ * 本工具为非官方第三方开源扩展
  */
-
 import { LAYER } from '../../core/layer.js';
 
 /** 多层（通孔焊盘 / 过孔落在这一层） */
@@ -323,12 +322,7 @@ export function getEdges(shape) {
 		for (let i = 0; i < N; i++) {
 			const a1 = (i / N) * Math.PI * 2;
 			const a2 = ((i + 1) / N) * Math.PI * 2;
-			lines.push([
-				shape.x + r0 * Math.cos(a1),
-				shape.y + r0 * Math.sin(a1),
-				shape.x + r0 * Math.cos(a2),
-				shape.y + r0 * Math.sin(a2),
-			]);
+			lines.push([shape.x + r0 * Math.cos(a1), shape.y + r0 * Math.sin(a1), shape.x + r0 * Math.cos(a2), shape.y + r0 * Math.sin(a2)]);
 		}
 		return lines;
 	}

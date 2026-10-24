@@ -1,6 +1,6 @@
 /**
  * @//module/ app/api-test/index
- * @//description/ 页面编排：基准测试卡片渲染、创建/获取 5 类图元、自动校准、参数持久化
+ * @//description/ 页面编排：校准API误差卡片渲染、创建/获取 5 类图元、自动校准、参数持久化
  * @//exports/ 无
  * @//dependencies/ core/eda, core/version, ui/toast, app/api-test/{projects,calibration,sourceProbe}
  * @//example/ 页面入口，由 iframe/APITest.html 加载打包产物 app/APITest.js
@@ -10,13 +10,12 @@
  *
  * 开发者：WOLF4096
  * 辅助开发：DeepSeek-V4.1-Flash
- * 本工具为非官方第三方开源扩展，与嘉立创 / EasyEDA 官方无隶属关系
+ * 本工具为非官方第三方开源扩展
  */
-
 import { getEda } from '../../core/eda.js';
 import { getEditorVersion } from '../../core/version.js';
 import { toast } from '../../ui/toast.js';
-import { applyCal, applyCalStr, calToMultiplier, compare, ratioToCalInput, MULTIPLIER_MAX, MULTIPLIER_MIN } from './calibration.js';
+import { MULTIPLIER_MAX, MULTIPLIER_MIN, applyCal, applyCalStr, calToMultiplier, compare, ratioToCalInput } from './calibration.js';
 import { PROJECTS, RAW_SOURCE } from './projects.js';
 import { defaultsOf, extractFromApi, findSourceLine, normalizeFromSource } from './sourceProbe.js';
 
@@ -60,7 +59,7 @@ function render() {
                                     <td><input class="val-input" id="cal_${project.id}_${i}" placeholder="*1"></td>
                                     <td class="row-status" id="res_${project.id}_${i}">-</td>
                                 </tr>
-                            `
+                            `,
 								)
 								.join('')}
                         </tbody>
@@ -208,7 +207,7 @@ const CREATORS = {
 			true,
 			0,
 			[],
-			{ topSolderMask: solderMask, bottomSolderMask: solderMask, topPasteMask: solderMask, bottomPasteMask: solderMask }
+			{ topSolderMask: solderMask, bottomSolderMask: solderMask, topPasteMask: solderMask, bottomPasteMask: solderMask },
 		);
 		return r.primitiveId;
 	},

@@ -7,9 +7,8 @@
  *
  * 开发者：WOLF4096
  * 辅助开发：DeepSeek-V4.1-Flash
- * 本工具为非官方第三方开源扩展，与嘉立创 / EasyEDA 官方无隶属关系
+ * 本工具为非官方第三方开源扩展
  */
-
 import { getEda } from '../../core/eda.js';
 import { getComponentsContainer, getNetlist } from '../../core/netlist.js';
 import { escapeHtml } from '../../core/util.js';
@@ -184,7 +183,7 @@ async function initApp() {
 				e.preventDefault();
 				tableContainer.scrollLeft += e.deltaY;
 			},
-			{ passive: false }
+			{ passive: false },
 		);
 	} catch (error) {
 		netTable.innerHTML = `<div class="loading-message" style="color:#b33;">加载失败: ${escapeHtml(error.message)}</div>`;

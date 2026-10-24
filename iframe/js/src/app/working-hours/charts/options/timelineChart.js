@@ -13,9 +13,8 @@
  *
  * 开发者：WOLF4096
  * 辅助开发：DeepSeek-V4.1-Flash
- * 本工具为非官方第三方开源扩展，与嘉立创 / EasyEDA 官方无隶属关系
+ * 本工具为非官方第三方开源扩展
  */
-
 import { escapeHtml } from '../../../../core/util.js';
 import { formatDuration, formatFullDateTime } from '../../time.js';
 
@@ -133,7 +132,9 @@ function workRows(data, opts, work) {
 		if (data.hiddenSeries.has(name)) continue;
 		const val = work[pid] || 0;
 		if (val <= 0) continue;
-		parts.push(`<div style="margin: 4px 0; font-size:12px;"><span class="color-block" style="background:${data.pidColorMap[pid] || 'var(--vscode-link)'};"></span> ${escapeHtml(name)}: <span style="float:right; font-weight:bold; margin-left: 15px; color:#fff;">${formatDuration(val)}</span></div>`);
+		parts.push(
+			`<div style="margin: 4px 0; font-size:12px;"><span class="color-block" style="background:${data.pidColorMap[pid] || 'var(--vscode-link)'};"></span> ${escapeHtml(name)}: <span style="float:right; font-weight:bold; margin-left: 15px; color:#fff;">${formatDuration(val)}</span></div>`,
+		);
 	}
 	return { html: parts.join(''), hasData: parts.length > 0 };
 }
@@ -240,8 +241,24 @@ export function buildTimelineOption(data, theme, opts) {
 			},
 		],
 		series: [
-			{ type: 'bar', data: Array.from(dummyData), itemStyle: { color: 'rgba(0,0,0,0)' }, barGap: '-100%', large: true, progressive: 0, progressiveThreshold: 999999 },
-			{ type: 'custom', clip: true, progressive: 0, progressiveThreshold: 999999, renderItem: makeRenderItem(data), encode: { x: 0, y: [1, 2] }, data: [] },
+			{
+				type: 'bar',
+				data: Array.from(dummyData),
+				itemStyle: { color: 'rgba(0,0,0,0)' },
+				barGap: '-100%',
+				large: true,
+				progressive: 0,
+				progressiveThreshold: 999999,
+			},
+			{
+				type: 'custom',
+				clip: true,
+				progressive: 0,
+				progressiveThreshold: 999999,
+				renderItem: makeRenderItem(data),
+				encode: { x: 0, y: [1, 2] },
+				data: [],
+			},
 		],
 	};
 }

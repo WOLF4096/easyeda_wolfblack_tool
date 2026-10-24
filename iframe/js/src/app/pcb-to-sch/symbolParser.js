@@ -13,7 +13,7 @@
  *
  * 开发者：WOLF4096
  * 辅助开发：DeepSeek-V4.1-Flash
- * 本工具为非官方第三方开源扩展，与嘉立创 / EasyEDA 官方无隶属关系
+ * 本工具为非官方第三方开源扩展
  */
 
 /** 引脚包围盒相对引脚坐标的外扩量（mil） */
@@ -52,9 +52,7 @@ function finishPart(part, pinById) {
 	}
 
 	part.pins = pinsByNumber;
-	part.pinBbox = hasPin
-		? [minX - PIN_MARGIN, minY - PIN_MARGIN, maxX + PIN_MARGIN, maxY + PIN_MARGIN]
-		: DEFAULT_BBOX.slice();
+	part.pinBbox = hasPin ? [minX - PIN_MARGIN, minY - PIN_MARGIN, maxX + PIN_MARGIN, maxY + PIN_MARGIN] : DEFAULT_BBOX.slice();
 	return part;
 }
 

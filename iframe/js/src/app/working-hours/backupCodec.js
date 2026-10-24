@@ -16,9 +16,8 @@
  *
  * 开发者：WOLF4096
  * 辅助开发：DeepSeek-V4.1-Flash
- * 本工具为非官方第三方开源扩展，与嘉立创 / EasyEDA 官方无隶属关系
+ * 本工具为非官方第三方开源扩展
  */
-
 import { base64ToBytes, bytesToBase64, checkSignature, createSignature } from './backupCrypto.js';
 import { BACKUP_FORMAT, BACKUP_VERSION, buildBackupBody, expandBackupBody } from './backupFormat.js';
 

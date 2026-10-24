@@ -11,10 +11,10 @@
  *
  * 开发者：WOLF4096
  * 辅助开发：DeepSeek-V4.1-Flash
- * 本工具为非官方第三方开源扩展，与嘉立创 / EasyEDA 官方无隶属关系
+ * 本工具为非官方第三方开源扩展
  */
 import assert from 'node:assert/strict';
-import { describe, it, beforeEach, afterEach } from 'node:test';
+import { afterEach, beforeEach, describe, it } from 'node:test';
 
 import { PadViaConverter } from '../src/js/PadViaConverter.js';
 import { WireConverter } from '../src/js/WireConverter.js';
@@ -75,7 +75,7 @@ function createEdaMock(options = {}) {
 		},
 	};
 
-	return { calls, logs, toasts, setSelections: (s) => (selections.length = 0, selections.push(...s)) };
+	return { calls, logs, toasts, setSelections: (s) => ((selections.length = 0), selections.push(...s)) };
 }
 
 /** 取某 API 某方法的全部调用实参 */
@@ -555,7 +555,18 @@ describe('pcb_PrimitivePolyline.create - 导线转线条', () => {
 
 	it('删除旧图元时区分 Line / Arc 的 API', async () => {
 		const line = { primitiveType: 'Line', primitiveId: 'e500', net: '', layer: 1, startX: 0, startY: 0, endX: 1, endY: 1, lineWidth: 0.1 };
-		const arc = { primitiveType: 'Arc', primitiveId: 'e501', net: '', layer: 1, startX: 0, startY: 0, endX: 1, endY: 1, arcAngle: 90, lineWidth: 0.1 };
+		const arc = {
+			primitiveType: 'Arc',
+			primitiveId: 'e501',
+			net: '',
+			layer: 1,
+			startX: 0,
+			startY: 0,
+			endX: 1,
+			endY: 1,
+			arcAngle: 90,
+			lineWidth: 0.1,
+		};
 		const { calls } = createEdaMock({ selections: [line, arc] });
 		await WireConverter.toPolyline();
 		assert.deepEqual(pick(calls, 'pcb_PrimitiveLine', 'delete'), [['e500']]);
@@ -595,7 +606,18 @@ describe('pcb_PrimitivePolyline.create - 导线转线条', () => {
 
 	it('反向的弧线 → 合并时角度取负（扫掠方向相反）', async () => {
 		const line = { primitiveType: 'Line', primitiveId: 'e1', net: '', layer: 1, startX: 0, startY: 0, endX: 10, endY: 0, lineWidth: 0.2 };
-		const arc = { primitiveType: 'Arc', primitiveId: 'e2', net: '', layer: 1, startX: 20, startY: 0, endX: 10, endY: 0, arcAngle: 90, lineWidth: 0.2 };
+		const arc = {
+			primitiveType: 'Arc',
+			primitiveId: 'e2',
+			net: '',
+			layer: 1,
+			startX: 20,
+			startY: 0,
+			endX: 10,
+			endY: 0,
+			arcAngle: 90,
+			lineWidth: 0.2,
+		};
 		const { calls } = createEdaMock({ selections: [line, arc] });
 		await WireConverter.toPolyline();
 
@@ -605,7 +627,17 @@ describe('pcb_PrimitivePolyline.create - 导线转线条', () => {
 	});
 
 	it('不同网络 / 图层 / 线宽不合并', async () => {
-		const mk = (id, net, layer, width) => ({ primitiveType: 'Line', primitiveId: id, net, layer, startX: 0, startY: 0, endX: 1, endY: 0, lineWidth: width });
+		const mk = (id, net, layer, width) => ({
+			primitiveType: 'Line',
+			primitiveId: id,
+			net,
+			layer,
+			startX: 0,
+			startY: 0,
+			endX: 1,
+			endY: 0,
+			lineWidth: width,
+		});
 		const { calls } = createEdaMock({ selections: [mk('e1', 'GND', 1, 0.2), mk('e2', 'VCC', 1, 0.2)] });
 		await WireConverter.toPolyline();
 		assert.equal(pick(calls, 'pcb_PrimitivePolyline').length, 2, '不同网络各自成线');

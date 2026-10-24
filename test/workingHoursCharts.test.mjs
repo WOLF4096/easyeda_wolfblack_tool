@@ -13,20 +13,26 @@
  *
  * 开发者：WOLF4096
  * 辅助开发：DeepSeek-V4.1-Flash
- * 本工具为非官方第三方开源扩展，与嘉立创 / EasyEDA 官方无隶属关系
+ * 本工具为非官方第三方开源扩展
  */
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
 import { buildDataset } from '../iframe/js/src/app/working-hours/aggregate.js';
-import { getDayAlignedIndices } from '../iframe/js/src/app/working-hours/dayRange.js';
-import { buildTimelineOption } from '../iframe/js/src/app/working-hours/charts/options/timelineChart.js';
-import { buildHeatmapOption, collectDaily, dayKey } from '../iframe/js/src/app/working-hours/charts/options/heatmap.js';
-import { aggregateRhythm, computeAxisMax, buildRhythmOption } from '../iframe/js/src/app/working-hours/charts/options/rhythm.js';
-import { getWeekInfo, aggregateWeekly, pickTopProject, buildWeeklyBarOption, buildWeeklyPieOption } from '../iframe/js/src/app/working-hours/charts/options/weekly.js';
-import { computeZoomWindow, computeVisibleMax, finalizeYMax } from '../iframe/js/src/app/working-hours/charts/zoomModel.js';
-import { buildClusterSeries, buildHourIntervalFormatter } from '../iframe/js/src/app/working-hours/charts/seriesData.js';
 import { buildLegendHtml } from '../iframe/js/src/app/working-hours/charts/legendHtml.js';
+import { buildHeatmapOption, collectDaily, dayKey } from '../iframe/js/src/app/working-hours/charts/options/heatmap.js';
+import { aggregateRhythm, buildRhythmOption, computeAxisMax } from '../iframe/js/src/app/working-hours/charts/options/rhythm.js';
+import { buildTimelineOption } from '../iframe/js/src/app/working-hours/charts/options/timelineChart.js';
+import {
+	aggregateWeekly,
+	buildWeeklyBarOption,
+	buildWeeklyPieOption,
+	getWeekInfo,
+	pickTopProject,
+} from '../iframe/js/src/app/working-hours/charts/options/weekly.js';
+import { buildClusterSeries, buildHourIntervalFormatter } from '../iframe/js/src/app/working-hours/charts/seriesData.js';
+import { computeVisibleMax, computeZoomWindow, finalizeYMax } from '../iframe/js/src/app/working-hours/charts/zoomModel.js';
+import { getDayAlignedIndices } from '../iframe/js/src/app/working-hours/dayRange.js';
 import { buildTotalTrendPayload, collectHeatmapForExport, findDataRange } from '../iframe/js/src/app/working-hours/exportPayload.js';
 import { stripProjectFromDay } from '../iframe/js/src/app/working-hours/views/dataAdmin.js';
 
@@ -171,7 +177,10 @@ describe('工时图表：热力图 option', () => {
 	it('导出用的热力图去掉空白天', () => {
 		const rows = collectHeatmapForExport(DS.timeline, null);
 		assert.equal(rows.length, 3);
-		assert.equal(rows.some((r) => r[0] === '2026-10-22'), false);
+		assert.equal(
+			rows.some((r) => r[0] === '2026-10-22'),
+			false,
+		);
 	});
 
 	it('只看某个工程时只统计该工程', () => {
@@ -186,9 +195,9 @@ describe('工时图表：节律极坐标', () => {
 		const agg = aggregateRhythm(DS.timeline, { mode: 'time' });
 		assert.equal(agg.work.length, 96);
 		/* 三天 × 每天 12 格，每格 p1 600/p2 300，但 p1 每天 +di*60 递增 */
-		const slot36 = (600 + 0) + 300 + (600 + 60) + 300 + (600 + 120) + 300;
+		const slot36 = 600 + 0 + 300 + (600 + 60) + 300 + (600 + 120) + 300;
 		assert.equal(agg.work[36], slot36);
-		assert.equal(agg.rest[36], 3 * 12 * 120 / 12);
+		assert.equal(agg.rest[36], (3 * 12 * 120) / 12);
 	});
 
 	it('时间窗口之外的格子不计入', () => {
@@ -202,7 +211,10 @@ describe('工时图表：节律极坐标', () => {
 		const one = aggregateRhythm(DS.timeline, { mode: 'project', targetUuid: 'p2' });
 		assert.equal(one.work[36], 3 * 300);
 		const none = aggregateRhythm(DS.timeline, { mode: 'project' });
-		assert.equal(none.work.reduce((a, b) => a + b, 0), 0);
+		assert.equal(
+			none.work.reduce((a, b) => a + b, 0),
+			0,
+		);
 	});
 
 	it('半径上限按「工作+空闲」叠加后的最大值等比放大，留 4% 余量', () => {
@@ -218,11 +230,9 @@ describe('工时图表：节律极坐标', () => {
 	it('option：96 个类目、两根堆叠柱、隐藏的 series 用 0 填充', () => {
 		const work = new Float64Array(96).fill(10);
 		const rest = new Float64Array(96).fill(5);
-		const option = buildRhythmOption(
-			{ work: work, rest: rest, showWork: true, showRest: false, axisMax: 20 },
-			'dark',
-			{ makeGradient: (stops) => ({ gradient: stops }) }
-		);
+		const option = buildRhythmOption({ work: work, rest: rest, showWork: true, showRest: false, axisMax: 20 }, 'dark', {
+			makeGradient: (stops) => ({ gradient: stops }),
+		});
 		assert.equal(option.angleAxis.data.length, 96);
 		assert.equal(option.angleAxis.data[0], '00:00');
 		assert.equal(option.angleAxis.data[95], '23:45');
@@ -344,21 +354,33 @@ describe('工时图表：聚簇数据', () => {
 		assert.deepEqual(rows[2], [36, 900, 1020, 'REST', 1]);
 		/* yMax 恰好等于工作总和时，REST 被夹掉 —— 与拆分前一致 */
 		const tight = buildClusterSeries(dataBundle(), { clusterSize: 1, yMax: 900, filterPid: null });
-		assert.equal(tight.some((r) => r[3] === 'REST'), false);
+		assert.equal(
+			tight.some((r) => r[3] === 'REST'),
+			false,
+		);
 	});
 
 	it('超出画布上限时被夹住，不会画出轴外', () => {
 		const rows = buildClusterSeries(dataBundle(), { clusterSize: 1, yMax: 500, filterPid: null });
 		const workRow = rows.find((r) => r[3] === 'p1');
 		assert.deepEqual(workRow, [36, 0, 500, 'p1', 1]);
-		assert.equal(rows.some((r) => r[3] === 'p2'), false);
-		assert.equal(rows.some((r) => r[3] === 'REST'), false);
+		assert.equal(
+			rows.some((r) => r[3] === 'p2'),
+			false,
+		);
+		assert.equal(
+			rows.some((r) => r[3] === 'REST'),
+			false,
+		);
 	});
 
 	it('只看单个工程', () => {
 		const rows = buildClusterSeries(dataBundle(), { clusterSize: 1, yMax: 900, filterPid: 'p2' });
 		assert.deepEqual(rows[0], [36, 0, 300, 'p2', 1]);
-		assert.equal(rows.some((r) => r[3] === 'p1'), false);
+		assert.equal(
+			rows.some((r) => r[3] === 'p1'),
+			false,
+		);
 	});
 
 	it('X 轴刻度：整点才显示，跨度大时按间隔跳', () => {

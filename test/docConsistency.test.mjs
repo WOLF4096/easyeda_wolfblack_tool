@@ -23,9 +23,9 @@ const MAX_BRIEF = 32;
 /**
  * 读取 README 的功能表
  *
- * 只解析「## 功能清单」标题下的第一张表，按行拆出「名称 / 一句话说明」两列。
+ * 只解析「## 功能清单」标题下的第一张表，按行拆出「名称 / 一句话说明 / 在哪用 / 版本」四列。
  *
- * @returns {Array<{name: string, brief: string}>} 表格行
+ * @returns {Array<{name: string, brief: string, scope: string, version: string}>} 表格行
  * @sideEffects 读文件
  */
 function readReadmeTable() {
@@ -43,7 +43,8 @@ function readReadmeTable() {
 		// 形如 ['', 名称, 一句话, 在哪用, 版本, 演示, '']，跳过分隔行与表头
 		if (cells.length < 4) continue;
 		if (/^:?-+:?$/.test(cells[1]) || cells[1] === '功能') continue;
-		rows.push({ name: cells[1], brief: cells[2] });
+		// 版本列允许 Markdown 加粗（例如 `**仅 V2.2.45**`），比较前统一去掉 `*`
+		rows.push({ name: cells[1], brief: cells[2], scope: cells[3], version: cells[4].replaceAll('*', '') });
 	}
 	return rows;
 }
@@ -69,11 +70,29 @@ describe('文档一致性', () => {
 		);
 	});
 
-	it('每个功能都有步骤，且版本标注只有两种', async () => {
+	it('README 功能表的「在哪用」「适用版本」与 features.js 一致', async () => {
+		const { featuresData } = await import('../iframe/js/src/app/about/features.js');
+		const rows = readReadmeTable();
+		featuresData.forEach((item, i) => {
+			assert.equal(rows[i].scope, item.scope.join(' / '), `「${item.name}」的「在哪用」不一致`);
+			assert.equal(rows[i].version, item.version, `「${item.name}」的适用版本不一致`);
+		});
+	});
+
+	it('「功能说明」小节顺序与功能表一致', async () => {
+		const { featuresData } = await import('../iframe/js/src/app/about/features.js');
+		const names = featuresData.map((item) => item.name);
+		const text = fs.readFileSync(path.join(ROOT, 'README.md'), 'utf8');
+		// 三级标题里既有功能小节，也有安装章节（V3 / V4、V2.2.45），只取功能名命中的那些
+		const headings = [...text.matchAll(/^### (.+)$/gm)].map((m) => m[1].trim()).filter((name) => names.includes(name));
+		assert.deepEqual(headings, names, '功能说明的小节顺序与功能表不一致');
+	});
+
+	it('每个功能都有步骤，且版本标注只有三种', async () => {
 		const { featuresData } = await import('../iframe/js/src/app/about/features.js');
 		for (const item of featuresData) {
 			assert.ok(Array.isArray(item.steps) && item.steps.length >= 2, `「${item.name}」缺少使用步骤`);
-			assert.ok(['V2.2.45 ~ 4', '仅 V2.2.45'].includes(item.version), `「${item.name}」版本标注异常：${item.version}`);
+			assert.ok(['V2.2.45 ~ 4', 'V2.2.45 ~ 3', '仅 V2.2.45'].includes(item.version), `「${item.name}」版本标注异常：${item.version}`);
 		}
 		const onlyV22 = featuresData.filter((item) => item.version === '仅 V2.2.45').map((item) => item.name);
 		assert.deepEqual(onlyV22, ['创建封装'], '只有「创建封装」允许标注为仅 V2.2.45');

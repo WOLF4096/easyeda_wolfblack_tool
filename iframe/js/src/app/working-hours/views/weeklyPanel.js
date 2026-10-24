@@ -11,11 +11,10 @@
  *
  * 开发者：WOLF4096
  * 辅助开发：DeepSeek-V4.1-Flash
- * 本工具为非官方第三方开源扩展，与嘉立创 / EasyEDA 官方无隶属关系
+ * 本工具为非官方第三方开源扩展
  */
-
+import { aggregateWeekly, buildWeeklyBarOption, buildWeeklyPieOption, getWeekInfo, pickTopProject } from '../charts/options/weekly.js';
 import { formatDuration } from '../time.js';
-import { getWeekInfo, aggregateWeekly, pickTopProject, buildWeeklyBarOption, buildWeeklyPieOption } from '../charts/options/weekly.js';
 
 /**
  * 创建周报面板控制器
@@ -53,11 +52,14 @@ export function createWeeklyPanel(ctx) {
 		ctx.barView.setOption(
 			buildWeeklyBarOption(
 				{ weekData: agg.weekData, projectMeta: data.projectMeta, pidColorMap: data.pidColorMap, sortedProjectIds: data.sortedProjectIds },
-				'dark'
+				'dark',
 			),
-			true
+			true,
 		);
-		ctx.pieView.setOption(buildWeeklyPieOption({ projectTotals: agg.projectTotals, projectMeta: data.projectMeta, pidColorMap: data.pidColorMap }, 'dark'), true);
+		ctx.pieView.setOption(
+			buildWeeklyPieOption({ projectTotals: agg.projectTotals, projectMeta: data.projectMeta, pidColorMap: data.pidColorMap }, 'dark'),
+			true,
+		);
 	}
 
 	/**

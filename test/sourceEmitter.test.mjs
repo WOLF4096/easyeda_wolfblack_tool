@@ -14,13 +14,13 @@
  *
  * 开发者：WOLF4096
  * 辅助开发：DeepSeek-V4.1-Flash
- * 本工具为非官方第三方开源扩展，与嘉立创 / EasyEDA 官方无隶属关系
+ * 本工具为非官方第三方开源扩展
  */
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
-import { createSchWireLines } from '../src/js/common/sourceEmitter.js';
 import { createSchWireLines as createSchWireLinesFrontend } from '../iframe/js/src/sch/emitter.js';
+import { createSchWireLines } from '../src/js/common/sourceEmitter.js';
 
 /**
  * 取前端实现
@@ -73,10 +73,7 @@ describe('createSchWireLines - V3/V4 日志格式', () => {
 		const lines = createSchWireLines({ ...sample, isModern: true, nextRow: counterAllocator() });
 		assert.equal(lines.length, 3);
 		assert.equal(lines[0], '{"type":"WIRE","ticket":100,"id":"e10"}||{"zIndex":1}|');
-		assert.equal(
-			lines[1],
-			'{"type":"LINE","ticket":101,"id":"e11"}||{"lineGroup":"e10","startX":10,"startY":20,"endX":110,"endY":20}|',
-		);
+		assert.equal(lines[1], '{"type":"LINE","ticket":101,"id":"e11"}||{"lineGroup":"e10","startX":10,"startY":20,"endX":110,"endY":20}|');
 		assert.equal(
 			lines[2],
 			'{"type":"ATTR","ticket":102,"id":"e12"}||{"parentId":"e10","key":"NET","value":"GND","x":60,"y":20,"rotation":0,"keyVisible":false,"valueVisible":true}|',
@@ -106,7 +103,11 @@ describe('前后端两份实现逐字节一致', () => {
 			for (const rotation of [0, 90]) {
 				for (const attrStyle of ['st1', 'st2']) {
 					const args = () => ({ ...sample, rotation, isModern, attrStyle, nextRow: counterAllocator() });
-					assert.deepEqual(frontend(args()), createSchWireLines(args()), `isModern=${isModern} rotation=${rotation} attrStyle=${attrStyle}`);
+					assert.deepEqual(
+						frontend(args()),
+						createSchWireLines(args()),
+						`isModern=${isModern} rotation=${rotation} attrStyle=${attrStyle}`,
+					);
 				}
 			}
 		}

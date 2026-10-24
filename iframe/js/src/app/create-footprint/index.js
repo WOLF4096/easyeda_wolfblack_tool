@@ -9,9 +9,8 @@
  *
  * 开发者：WOLF4096
  * 辅助开发：DeepSeek-V4.1-Flash
- * 本工具为非官方第三方开源扩展，与嘉立创 / EasyEDA 官方无隶属关系
+ * 本工具为非官方第三方开源扩展
  */
-
 import { getEda } from '../../core/eda.js';
 import { getEditorVersion, isModern } from '../../core/version.js';
 import { toast } from '../../ui/toast.js';
@@ -230,7 +229,7 @@ async function createLibraryElements(host, libraryUuid, names) {
 			footprint: { uuid: fpUuid, libraryUuid: libraryUuid },
 		},
 		undefined,
-		{ addIntoBom: true, addIntoPcb: true, designator: names.finalDesignator, name: names.deviceName }
+		{ addIntoBom: true, addIntoPcb: true, designator: names.finalDesignator, name: names.deviceName },
 	);
 	return { fpUuid: fpUuid, symUuid: symUuid, devUuid: devUuid };
 }
@@ -247,8 +246,16 @@ async function createLibraryElements(host, libraryUuid, names) {
  * @sideEffects eda API（updateDocumentSource）
  */
 async function writeSources(host, libraryUuid, primitives, names, created) {
-	await host.lib_Footprint.updateDocumentSource(created.fpUuid, libraryUuid, buildFootprintSource(primitives, { uuid: created.fpUuid, deviceName: names.deviceName, originX: names.originX, originY: names.originY }));
-	await host.lib_Symbol.updateDocumentSource(created.symUuid, libraryUuid, buildSymbolSource({ deviceName: names.deviceName, pinNumbers: names.padNumbers }));
+	await host.lib_Footprint.updateDocumentSource(
+		created.fpUuid,
+		libraryUuid,
+		buildFootprintSource(primitives, { uuid: created.fpUuid, deviceName: names.deviceName, originX: names.originX, originY: names.originY }),
+	);
+	await host.lib_Symbol.updateDocumentSource(
+		created.symUuid,
+		libraryUuid,
+		buildSymbolSource({ deviceName: names.deviceName, pinNumbers: names.padNumbers }),
+	);
 }
 
 /**
@@ -266,7 +273,14 @@ async function placeDevice(host, libraryUuid, devUuid, names) {
 	// 2.2.43 特有行为：先用 pcb API 建一次再删掉，否则原理图符号会出问题；
 	// 判断的是**具体补丁版本**，不能用 isV2() 代替（原实现注释如此）。
 	if (getEditorVersion().startsWith('2.2.43')) {
-		const created = await host.pcb_PrimitiveComponent.create({ libraryUuid: libraryUuid, uuid: devUuid }, host.EPCB_LayerId ? host.EPCB_LayerId.TOP : 1, names.originX, names.originY, 0, false);
+		const created = await host.pcb_PrimitiveComponent.create(
+			{ libraryUuid: libraryUuid, uuid: devUuid },
+			host.EPCB_LayerId ? host.EPCB_LayerId.TOP : 1,
+			names.originX,
+			names.originY,
+			0,
+			false,
+		);
 		if (created && created.primitiveId) await host.pcb_PrimitiveComponent.delete(created.primitiveId);
 	}
 	await host.sch_PrimitiveComponent.create({ libraryUuid: libraryUuid, uuid: devUuid }, 0, 0, '', 0, false, true, true);

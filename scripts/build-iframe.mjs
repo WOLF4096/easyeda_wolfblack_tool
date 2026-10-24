@@ -20,11 +20,12 @@
  *
  * 开发者：WOLF4096
  * 辅助开发：DeepSeek-V4.1-Flash
- * 本工具为非官方第三方开源扩展，与嘉立创 / EasyEDA 官方无隶属关系
+ * 本工具为非官方第三方开源扩展
  */
 import esbuild from 'esbuild';
 import fs from 'node:fs';
 import path from 'node:path';
+
 import { encodeLibGzip } from '../tools/lib-embed.mjs';
 
 const ROOT = path.resolve(import.meta.dirname, '..');
@@ -62,7 +63,7 @@ const PAGES = {
 const BANNER = `/*!
  * 开发者：WOLF4096
  * 辅助开发：DeepSeek-V4.1-Flash
- * 本工具为非官方第三方开源扩展，与嘉立创 / EasyEDA 官方无隶属关系
+ * 本工具为非官方第三方开源扩展
  *
  * 由 npm run build:iframe 从 iframe/js/src 生成，请勿直接修改本文件
  */`;

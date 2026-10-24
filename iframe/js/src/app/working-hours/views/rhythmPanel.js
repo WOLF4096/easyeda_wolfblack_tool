@@ -12,10 +12,9 @@
  *
  * 开发者：WOLF4096
  * 辅助开发：DeepSeek-V4.1-Flash
- * 本工具为非官方第三方开源扩展，与嘉立创 / EasyEDA 官方无隶属关系
+ * 本工具为非官方第三方开源扩展
  */
-
-import { aggregateRhythm, computeAxisMax, buildRhythmOption } from '../charts/options/rhythm.js';
+import { aggregateRhythm, buildRhythmOption, computeAxisMax } from '../charts/options/rhythm.js';
 
 /** 快捷时间段 → 起始偏移天数（Infinity / 未命中表示不限） */
 export const PRESETS = {
@@ -131,8 +130,8 @@ export function createRhythmPanel(ctx) {
 					axisMax: computeAxisMax(agg.work, agg.rest, showWork, showRest),
 				},
 				'dark',
-				{ makeGradient: (stops) => new echarts.graphic.LinearGradient(0, 0, 0, 1, stops) }
-			)
+				{ makeGradient: (stops) => new echarts.graphic.LinearGradient(0, 0, 0, 1, stops) },
+			),
 		);
 	}
 

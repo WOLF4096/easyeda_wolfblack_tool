@@ -16,7 +16,7 @@
  *
  * 开发者：WOLF4096
  * 辅助开发：DeepSeek-V4.1-Flash
- * 本工具为非官方第三方开源扩展，与嘉立创 / EasyEDA 官方无隶属关系
+ * 本工具为非官方第三方开源扩展
  */
 import * as extensionConfig from '../extension.json';
 
@@ -62,7 +62,7 @@ export function About(): void {
 	openPage('About', 860, 720);
 }
 
-/** 从 PCB 转原理图 */
+/** PCB转原理图 */
 export function PcbToSch(): void {
 	// 该页面的 iframe 标识沿用历史的 'tosch'（页面内部按此标识关闭自己）
 	openPage('PcbToSch', 640, 540, 'tosch');
@@ -78,7 +78,7 @@ export function CodeConvert(): void {
 	openPage('CodeConvert', 540, 540);
 }
 
-/** 清空多余属性（供应商 / 厂商等空属性） */
+/** 清除多余属性（供应商 / 厂商等空属性） */
 export function ClearEmptySupplierProperties(): void {
 	openPage('ClearEmptyProperties', 800, 480);
 }
@@ -128,12 +128,12 @@ export function ModifyNet(): void {
 	openPage('ModifyNet', 540, 540);
 }
 
-/** API 基准测试（坐标 / 尺寸校准，转换类功能的倍率来源） */
+/** 校准API误差（坐标 / 尺寸校准，转换类功能的倍率来源） */
 export function APITest(): void {
 	openPage('APITest', 512, 640);
 }
 
-/** EDA 桥（本地调试通道，见 tools/eda-bridge） */
+/** EDA桥（本地调试通道，见 tools/eda-bridge） */
 export function EDABridge(): void {
 	openPage('EDABridge', 300, 37);
 }

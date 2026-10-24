@@ -10,9 +10,8 @@
  *
  * 开发者：WOLF4096
  * 辅助开发：DeepSeek-V4.1-Flash
- * 本工具为非官方第三方开源扩展，与嘉立创 / EasyEDA 官方无隶属关系
+ * 本工具为非官方第三方开源扩展
  */
-
 import { getEda } from '../../core/eda.js';
 import { getNetlist } from '../../core/netlist.js';
 import { toast } from '../../ui/toast.js';
@@ -50,8 +49,7 @@ function renderTable() {
 	tbody.innerHTML = renderData
 		.map((item) => {
 			const statusClass = STATUS_CLASS[item.status] || 'status-ready';
-			const title =
-				item.modelTitle === '没有找到 3D 模型' ? `<span class="text-error">${item.modelTitle}</span>` : item.modelTitle;
+			const title = item.modelTitle === '没有找到 3D 模型' ? `<span class="text-error">${item.modelTitle}</span>` : item.modelTitle;
 			return `<tr>
 					<td title="${item.designator}">${item.designator}</td>
 					<td title="${item.footprint}">${item.footprint}</td>
@@ -113,9 +111,33 @@ function parseNetlist(netlistData) {
 function mockDataLoad() {
 	parseNetlist({
 		components: {
-			comp1: { props: { Designator: 'R1', '3D Model': 'uuid1', '3D Model Title': 'RES_0603', '3D Model Transform': '387,200,300,90,0,45.500,10,20.000,0', Footprint: 'R0603' } },
-			comp2: { props: { Designator: 'C1', '3D Model': 'uuid2', '3D Model Title': 'CAP_0402', '3D Model Transform': '50,50,50,0,0,0,0,0,0', Footprint: 'C0402' } },
-			comp3: { props: { Designator: 'U1', '3D Model': 'uuid3', '3D Model Title': 'ESP32-WROOM', '3D Model Transform': '700.00,1000,120,0,0,90,-50,20,10', Footprint: 'MODULE-38P' } },
+			comp1: {
+				props: {
+					Designator: 'R1',
+					'3D Model': 'uuid1',
+					'3D Model Title': 'RES_0603',
+					'3D Model Transform': '387,200,300,90,0,45.500,10,20.000,0',
+					Footprint: 'R0603',
+				},
+			},
+			comp2: {
+				props: {
+					Designator: 'C1',
+					'3D Model': 'uuid2',
+					'3D Model Title': 'CAP_0402',
+					'3D Model Transform': '50,50,50,0,0,0,0,0,0',
+					Footprint: 'C0402',
+				},
+			},
+			comp3: {
+				props: {
+					Designator: 'U1',
+					'3D Model': 'uuid3',
+					'3D Model Title': 'ESP32-WROOM',
+					'3D Model Transform': '700.00,1000,120,0,0,90,-50,20,10',
+					Footprint: 'MODULE-38P',
+				},
+			},
 		},
 	});
 }

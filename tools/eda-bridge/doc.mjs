@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * 文档源码备份 / 还原（配合 EDA 桥）
+ * 文档源码备份 / 还原（配合 EDA桥）
  *
  * 做写入类实测前必须先备份：桥的 `eval` 能直接 `setDocumentSource`，写坏了要能一键回滚。
  * 注意**两个 EDA 版本的源码序列化格式不同**（V2 数组 / V3-V4 日志），因此备份文件
@@ -15,7 +15,7 @@
  *
  * 开发者：WOLF4096
  * 辅助开发：DeepSeek-V4.1-Flash
- * 本工具为非官方第三方开源扩展，与嘉立创 / EasyEDA 官方无隶属关系
+ * 本工具为非官方第三方开源扩展
  */
 import fs from 'node:fs';
 import path from 'node:path';
@@ -102,8 +102,6 @@ if (cmd === 'restore') {
 const v = await evalInEda(`return String(await eda.sys_FileManager.getDocumentSource() || '');`);
 const same = normalize(v) === normalize(text);
 process.stdout.write(
-	same
-		? `✓ 当前源码与备份一致（归一化后比对，${text.length} 字符）\n`
-		: `✗ 不一致：当前 ${v.length} 字符 / 备份 ${text.length} 字符\n`,
+	same ? `✓ 当前源码与备份一致（归一化后比对，${text.length} 字符）\n` : `✗ 不一致：当前 ${v.length} 字符 / 备份 ${text.length} 字符\n`,
 );
 process.exit(same ? 0 : 1);

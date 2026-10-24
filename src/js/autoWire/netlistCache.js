@@ -18,7 +18,7 @@
  *
  * 开发者：WOLF4096
  * 辅助开发：DeepSeek-V4.1-Flash
- * 本工具为非官方第三方开源扩展，与嘉立创 / EasyEDA 官方无隶属关系
+ * 本工具为非官方第三方开源扩展
  */
 
 /** 网表正文的配置键（两个来源共用，只存一份） */
@@ -34,7 +34,7 @@ const META_KEY = 'AUTOWIRE_NETLIST_CACHE_META';
  *          空元信息
  */
 function emptyMeta() {
-    return { source: '', sourceLabel: '', fileName: '', savedAt: 0, bytes: 0, summary: null };
+	return { source: '', sourceLabel: '', fileName: '', savedAt: 0, bytes: 0, summary: null };
 }
 
 /**
@@ -47,23 +47,23 @@ function emptyMeta() {
  * @sideEffects 写 `eda.sys_Storage`
  */
 export async function saveNetlistCache(text, info = {}) {
-    const meta = {
-        ...emptyMeta(),
-        source: info.source || '',
-        sourceLabel: info.sourceLabel || '',
-        fileName: info.fileName || '',
-        summary: info.summary || null,
-        savedAt: Date.now(),
-        bytes: text.length,
-    };
-    const ok = await eda.sys_Storage.setExtensionUserConfig(CACHE_KEY, text);
-    // 元信息只是辅助提示，写失败不影响缓存可用性
-    try {
-        await eda.sys_Storage.setExtensionUserConfig(META_KEY, JSON.stringify(meta));
-    } catch (error) {
-        console.warn('网表缓存元信息写入失败（正文已保存）', error);
-    }
-    return { ok: ok !== false, meta };
+	const meta = {
+		...emptyMeta(),
+		source: info.source || '',
+		sourceLabel: info.sourceLabel || '',
+		fileName: info.fileName || '',
+		summary: info.summary || null,
+		savedAt: Date.now(),
+		bytes: text.length,
+	};
+	const ok = await eda.sys_Storage.setExtensionUserConfig(CACHE_KEY, text);
+	// 元信息只是辅助提示，写失败不影响缓存可用性
+	try {
+		await eda.sys_Storage.setExtensionUserConfig(META_KEY, JSON.stringify(meta));
+	} catch (error) {
+		console.warn('网表缓存元信息写入失败（正文已保存）', error);
+	}
+	return { ok: ok !== false, meta };
 }
 
 /**
@@ -73,14 +73,14 @@ export async function saveNetlistCache(text, info = {}) {
  * @sideEffects 读 `eda.sys_Storage`
  */
 async function loadMeta() {
-    try {
-        const raw = await eda.sys_Storage.getExtensionUserConfig(META_KEY);
-        if (!raw) return null;
-        return { ...emptyMeta(), ...JSON.parse(raw) };
-    } catch (error) {
-        console.warn('网表缓存元信息解析失败', error);
-        return null;
-    }
+	try {
+		const raw = await eda.sys_Storage.getExtensionUserConfig(META_KEY);
+		if (!raw) return null;
+		return { ...emptyMeta(), ...JSON.parse(raw) };
+	} catch (error) {
+		console.warn('网表缓存元信息解析失败', error);
+		return null;
+	}
 }
 
 /**
@@ -90,14 +90,14 @@ async function loadMeta() {
  * @sideEffects 读 `eda.sys_Storage`
  */
 export async function loadNetlistCache() {
-    try {
-        const text = await eda.sys_Storage.getExtensionUserConfig(CACHE_KEY);
-        if (!text || typeof text !== 'string') return null;
-        return { text, meta: await loadMeta() };
-    } catch (error) {
-        console.warn('读取网表缓存失败', error);
-        return null;
-    }
+	try {
+		const text = await eda.sys_Storage.getExtensionUserConfig(CACHE_KEY);
+		if (!text || typeof text !== 'string') return null;
+		return { text, meta: await loadMeta() };
+	} catch (error) {
+		console.warn('读取网表缓存失败', error);
+		return null;
+	}
 }
 
 /**
@@ -110,13 +110,13 @@ export async function loadNetlistCache() {
  * @sideEffects 写 / 删 `eda.sys_Storage`
  */
 export async function clearNetlistCache() {
-    for (const key of [CACHE_KEY, META_KEY]) {
-        try {
-            await eda.sys_Storage.deleteExtensionUserConfig(key);
-        } catch (error) {
-            await eda.sys_Storage.setExtensionUserConfig(key, '');
-        }
-    }
+	for (const key of [CACHE_KEY, META_KEY]) {
+		try {
+			await eda.sys_Storage.deleteExtensionUserConfig(key);
+		} catch (error) {
+			await eda.sys_Storage.setExtensionUserConfig(key, '');
+		}
+	}
 }
 
 export { CACHE_KEY, META_KEY, describeCacheMeta };
@@ -128,7 +128,7 @@ export { CACHE_KEY, META_KEY, describeCacheMeta };
  * @returns {string} 补零后的字符串
  */
 function pad2(value) {
-    return String(value).padStart(2, '0');
+	return String(value).padStart(2, '0');
 }
 
 /**
@@ -138,9 +138,9 @@ function pad2(value) {
  * @returns {string} 展示用时间
  */
 function formatSavedAt(timestamp) {
-    const date = new Date(timestamp);
-    const day = `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}`;
-    return `${day} ${pad2(date.getHours())}:${pad2(date.getMinutes())}`;
+	const date = new Date(timestamp);
+	const day = `${date.getFullYear()}-${pad2(date.getMonth() + 1)}-${pad2(date.getDate())}`;
+	return `${day} ${pad2(date.getHours())}:${pad2(date.getMinutes())}`;
 }
 
 /**
@@ -150,9 +150,9 @@ function formatSavedAt(timestamp) {
  * @returns {string} 形如 `来自 PCB · 2026-10-24 15:30`；元信息缺失时返回 `来源未知`
  */
 function describeCacheMeta(meta) {
-    if (!meta) return '来源未知';
-    const label = meta.sourceLabel || { PCB: 'PCB', FILE: '文件' }[meta.source] || '未知来源';
-    const fileName = meta.fileName ? ` ${meta.fileName}` : '';
-    const savedAt = meta.savedAt ? formatSavedAt(meta.savedAt) : '';
-    return savedAt ? `来自 ${label}${fileName} · ${savedAt}` : `来自 ${label}${fileName}`;
+	if (!meta) return '来源未知';
+	const label = meta.sourceLabel || { PCB: 'PCB', FILE: '文件' }[meta.source] || '未知来源';
+	const fileName = meta.fileName ? ` ${meta.fileName}` : '';
+	const savedAt = meta.savedAt ? formatSavedAt(meta.savedAt) : '';
+	return savedAt ? `来自 ${label}${fileName} · ${savedAt}` : `来自 ${label}${fileName}`;
 }
