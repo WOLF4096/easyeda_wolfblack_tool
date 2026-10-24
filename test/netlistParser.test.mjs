@@ -13,7 +13,7 @@
 import assert from 'node:assert/strict';
 import { afterEach, beforeEach, describe, it } from 'node:test';
 
-import { formatFileNetlist, formatPCBNetlist, formatSchematicNetlist, processNetlistData } from '../src/js/autoWire/netlistParser.js';
+import { formatFileNetlist, formatPCBNetlist, formatSchematicNetlist, processNetlistData, summarizeNetlist } from '../src/js/autoWire/netlistParser.js';
 
 /** 静音被测模块内部的 console 输出（解析过程会打日志） */
 let originLog;
@@ -216,5 +216,38 @@ describe('processNetlistData', () => {
 		const result = processNetlistData(['e10'], 'u1', 'R1', schematic, mixedPcb);
 		assert.ok(result.every((r) => r.uniqueId === 'u1'));
 		assert.equal(result.length, 1);
+	});
+});
+
+describe('summarizeNetlist（网表缓存写入前的体检）', () => {
+	it('V3 格式：统计器件 / 引脚 / 去重后的非空网络', () => {
+		const netlist = JSON.stringify({
+			components: {
+				u1: { props: { Designator: 'R1' }, pinInfoMap: { '1': { net: 'GND' }, '2': { net: 'VCC' } } },
+				u2: { props: { Designator: 'C1' }, pinInfoMap: { '1': { net: 'GND' }, '2': { net: '' } } },
+			},
+		});
+		assert.deepEqual(summarizeNetlist(netlist), { componentCount: 2, pinCount: 4, netCount: 2 });
+	});
+
+	it('V2 格式：取裸对象 + pins', () => {
+		const netlist = JSON.stringify({ u1: { props: { Designator: 'R1' }, pins: { '1': 'GND', '2': '  ' } } });
+		assert.deepEqual(summarizeNetlist(netlist), { componentCount: 1, pinCount: 2, netCount: 1 });
+	});
+
+	it('没有 props 的键不算器件（版本号之类的杂项）', () => {
+		const netlist = JSON.stringify({ components: { u1: { props: {}, pins: {} }, version: '2.0.0' } });
+		const summary = summarizeNetlist(netlist);
+		assert.equal(summary.componentCount, 1);
+		assert.equal(summary.pinCount, 0);
+	});
+
+	it('非法 JSON → null', () => {
+		assert.equal(summarizeNetlist('not json'), null);
+	});
+
+	it('一个器件都没有 → null（防止把空网表 / 取错的文档写进缓存）', () => {
+		assert.equal(summarizeNetlist('{"bad":1}'), null);
+		assert.equal(summarizeNetlist('{}'), null);
 	});
 });

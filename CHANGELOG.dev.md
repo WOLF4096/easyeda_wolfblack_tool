@@ -17,6 +17,18 @@
 - **V4 三条写盘流程已人工验证通过**（2026-10-22，V4.1.78）：从 PCB 转原理图（符号与引脚完整）、生成物理网络三种写回、批量替换器件（器件真正替换、坐标角度不变、无临时件残留）。详见 `docs/V4回归记录.md`
 - ⚠️ **V4 待处理**：V4 下 `sys_FileManager.setDocumentSource()` 整份写回会丢掉 `POURED`（铜皮已计算填充）行 —— 实测同一份原文写回后 45,557 → 43,119 字节，`POUR` 本体仍在、填充缓存消失（V2.2 逐字节一致）。受影响：`生成物理网络`（源码方式）、`从PCB转原理图` 等整份重写源码的功能；重算铜皮可恢复。处理方案待定
 
+## v1.23.0 `2026-10-24`
+> `创建导线` 拆成「两个来源 + 三个缓存维护入口」，网表缓存落在扩展用户配置
+
+- **菜单**：`extension.json` 的 `sch` 下新增父项 `CreateWire`（创建导线），五个子项 `AutoWirePlacerPCB` / `AutoWirePlacerNET` / `UpdateNetlistCacheFromPCB` / `UpdateNetlistCacheFromFile` / `ClearNetlistCache`。`AutoWirePlacerPCB` 的 `registerFn` 与实现**一行未改**（切 PCB → `pcb_SelectControl.getAllSelectedPrimitives()` 的老路径），只换了标题
+- **数据来源**：`AutoWirePlacerNET` 原先每次弹 `openReadFileDialog`，现改为读缓存。缓存键 `AUTOWIRE_NETLIST_CACHE`（正文，原样存 `.enet` 文本）+ `AUTOWIRE_NETLIST_CACHE_META`（来源 / 时间 / 文件名 / 摘要）。**两个来源共用一个键**，天然只保留最新一份；正文不再套 JSON 外层，避免大文本被二次转义
+- **从 PCB 取整板网表**：PCB 文档下同样调 `eda.sch_ManufactureData.getNetlistFile('JLCEDA')`，返回的 `File` 就是整块板的 `.enet`，**不需要选中任何器件**。流程是「切 PCB → 取文件 → 写缓存 → 切回原理图」，切回放在 `finally`；切页失败整条中止 —— 否则会把原理图自己的网表当成 PCB 网表写进缓存（来源造假）
+- **模块拆分**（`src/js/autoWire/`）：`docSwitch.js`（切页 + `lastSchematicTabId`，从 `index.js` 抽出）、`netlistCache.js`（存储层）、`netlistSync.js`（三个菜单动作 + 交互 + toast）；`index.js` 只留编排。`netlistParser.js` 新增纯函数 `summarizeNetlist()`（器件 / 引脚 / 去重网络数）
+- **返回值变更**：`switchToPCB()` 由「无返回值」改为 `boolean`。`placeWires('PCB')` 不检查它（保持原行为：分屏时 PCB 可能本来就在前台，后续 `getPCBSelection()` 会自己失败），缓存更新路径必须检查
+- **兼容**：`deleteExtensionUserConfig` 不是所有版本都有 → `clearNetlistCache()` 逐 key `try/catch`，异常退化为写空串（读回空值即视为无缓存），保证「清空」一定生效。文件读取沿用 `FileReader`（原 `importNetlistFromFile` 的做法），PCB 网表文件沿用 `File.text()`（原 `getSchematicNetlist` 的做法），两侧读取方式均未改变
+- **文档**：`features.js` 由 24 条合并为 23 条（「从 PCB 创建导线」+「从网表创建导线」→「创建导线」，含五入口说明），README 表格 / 章节 / 首页条数同步；`test/docConsistency.test.mjs` 通过
+- **未验证**：V2.2 下的实机取数与菜单渲染（本机无 V2.2 环境）。`getNetlistFile` 在 PCB 文档下的返回结构按「与原理图 `.enet` 同构」处理；若某版本返回别的结构，`summarizeNetlist()` 会判为非法并中止写缓存，不会写入脏数据
+
 ## v1.22.1 `2026-10-24`
 > `从 PCB 转原理图` 的导线生成加「一个引脚只画一条」去重
 

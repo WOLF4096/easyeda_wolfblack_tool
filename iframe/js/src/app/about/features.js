@@ -1,10 +1,10 @@
 /**
  * @//module/ app/about/features
- * @//description/ 「关于」页的功能清单数据（24 条，纯数据、无逻辑）
+ * @//description/ 「关于」页的功能清单数据（23 条，纯数据、无逻辑）
  * @//exports/ featuresData
  * @//dependencies/ 无
  * @//example/ const { featuresData } = await import('./features.js')
- *            featuresData.length // 24
+ *            featuresData.length // 23
  *
  * 本文件是**功能说明的唯一事实源**：README 的功能表与「关于」页都从这里来，
  * `test/docConsistency.test.mjs` 会核对 README 与本文条的条目、顺序、简述是否一致。
@@ -314,30 +314,20 @@ export const featuresData = [
 		note: '写入前请保持在原理图页。写完会清点器件数，为 0 时会明确提示，不会假报成功。一个引脚只画一条导线，多焊盘的引脚不会重复叠线。',
 	},
 	{
-		name: '从 PCB 创建导线',
+		name: '创建导线',
 		shortcut: '',
 		shortcutType: '',
-		brief: '比对 PCB 网络，给原理图里缺失的引脚补导线',
+		brief: '按 PCB 或网表给原理图里缺失的引脚补导线',
 		scope: ['原理图'],
 		version: 'V2.2 ~ 4',
 		demoUrl: 'https://www.jlc-bbs.com/platform/a/1221655',
 		steps: [
-			'把 PCB 与原理图同时打开（左右分屏会导致取不到数据）',
-			'切到原理图页，菜单「从 PCB 创建导线」',
-			'插件读取 PCB 网络后，为缺少连接的引脚画上带网络名的短线',
+			'先把网表存进缓存：「创建导线 → 从PCB更新网表缓存」，或用「从文件更新网表缓存」选一个 .enet 文件',
+			'在原理图里选中要补线的器件',
+			'点「创建导线 → 来自网表」，按缓存里的网络补齐导线；想按 PCB 上选中的器件补，就用「来自PCB」',
+			'缓存换了就重新更新一次；「清空网表缓存」可以随时清掉',
 		],
-		note: '一般配合「从 PCB 转原理图」使用：先出符号，再补导线。',
-	},
-	{
-		name: '从网表创建导线',
-		shortcut: '',
-		shortcutType: '',
-		brief: '直接按网表给原理图补导线，不依赖 PCB 打开',
-		scope: ['原理图'],
-		version: 'V2.2 ~ 4',
-		demoUrl: '',
-		steps: ['打开要补导线的原理图', '菜单「从网表创建导线」', '插件读取当前工程网表，补齐缺失的导线'],
-		note: '与「从 PCB 创建导线」的区别只在数据来源：一个读 PCB，一个读网表。',
+		note: '两个来源的缓存只存一份，后更新的覆盖前一份。「来自PCB」需要 PCB 已打开（左右分屏会导致取不到数据），一般配合「从 PCB 转原理图」使用：先出符号，再补导线。',
 	},
 	{
 		name: '引脚排序',

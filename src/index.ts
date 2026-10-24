@@ -174,16 +174,34 @@ export async function CheckDesignators(): Promise<void> {
 	await checkDuplicateDesignators();
 }
 
-/** 从 PCB 创建导线 */
+/** 创建导线 · 来自 PCB（原来「从PCB创建导线」的逻辑：切到 PCB 读选中器件） */
 export async function AutoWirePlacerPCB(): Promise<void> {
 	const { placeWires } = await import('./js/autoWire/index');
 	await placeWires('PCB');
 }
 
-/** 从网表创建导线 */
+/** 创建导线 · 来自网表（读用户配置里的网表缓存，没有缓存会明确提示） */
 export async function AutoWirePlacerNET(): Promise<void> {
 	const { placeWires } = await import('./js/autoWire/index');
 	await placeWires('NET');
+}
+
+/** 创建导线 · 从 PCB 更新网表缓存（切到 PCB 取整份 .enet，写完切回原理图） */
+export async function UpdateNetlistCacheFromPCB(): Promise<void> {
+	const { updateCachedNetlistFromPCB } = await import('./js/autoWire/netlistSync');
+	await updateCachedNetlistFromPCB();
+}
+
+/** 创建导线 · 从文件更新网表缓存（弹文件框选 .enet，不动当前文档） */
+export async function UpdateNetlistCacheFromFile(): Promise<void> {
+	const { updateCachedNetlistFromFile } = await import('./js/autoWire/netlistSync');
+	await updateCachedNetlistFromFile();
+}
+
+/** 创建导线 · 清空网表缓存 */
+export async function ClearNetlistCache(): Promise<void> {
+	const { clearCachedNetlist } = await import('./js/autoWire/netlistSync');
+	await clearCachedNetlist();
 }
 
 // ---------------------------- 后台任务（不挂菜单） ----------------------------

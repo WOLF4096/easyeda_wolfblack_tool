@@ -2,7 +2,7 @@
  * 网表解析工具（V2/V3 兼容）
  *
  * 从原理图/PCB/文件网表中提取引脚与网络映射关系，
- * 供「从PCB创建导线」功能比对差异、生成缺失网络的导线。
+ * 供「创建导线」功能比对差异、生成缺失网络的导线。
  * 以下函数均为纯函数，不依赖模块级状态，便于单独测试。
  *
  * --- 模块边界 ---
@@ -201,4 +201,62 @@ function processNetlistData(componentIds, uniqueId, designator, schematicNetlist
     return result;
 }
 
-export { formatSchematicNetlist, formatPCBNetlist, formatFileNetlist, processNetlistData };
+/**
+ * 统计网表的规模（器件数 / 引脚数 / 网络数）
+ *
+ * 只用于「更新网表缓存」后的提示文案：让用户一眼看出这份缓存是空的还是真的有料，
+ * 不用去数日志。统计口径与 `formatSchematicNetlist` 一致（V3 取 `components` + `pinInfoMap`，
+ * V2 取裸对象 + `pins`），没有 `props` 的键（版本号之类的杂项）不计入器件。
+ *
+ * 网络数量按**去重后的非空网络名**统计，空网络表示「该引脚未连接」。
+ *
+ * 一个器件都解析不出来时返回 null：这既可能是 JSON 坏了，也可能是取错了文档
+ * （例如把原理图自己的网表当成 PCB 的），两者都不该写进缓存。
+ *
+ * @param {string} netlistData - 网表 JSON 字符串
+ * @returns {{componentCount: number, pinCount: number, netCount: number}|null} 统计结果；
+ *          内容不是合法网表 JSON、或没有任何器件时返回 null
+ */
+function summarizeNetlist(netlistData) {
+    let parsedData;
+    try {
+        parsedData = JSON.parse(netlistData);
+    } catch (error) {
+        return null;
+    }
+    const componentsMap = parsedData && parsedData.components ? parsedData.components : parsedData;
+    if (!componentsMap || typeof componentsMap !== 'object') return null;
+
+    let componentCount = 0;
+    let pinCount = 0;
+    const netNames = new Set();
+
+    for (const componentData of Object.values(componentsMap)) {
+        if (!componentData || typeof componentData !== 'object' || !componentData.props) continue;
+        componentCount++;
+        for (const netName of extractPinNets(componentData)) {
+            pinCount++;
+            const trimmed = typeof netName === 'string' ? netName.trim() : '';
+            if (trimmed) netNames.add(trimmed);
+        }
+    }
+
+    if (componentCount === 0) return null;
+    return { componentCount, pinCount, netCount: netNames.size };
+}
+
+/**
+ * 取一个器件在网表里的所有引脚网络名（只取值，不管引脚号）
+ *
+ * @param {object} componentData - 网表中的器件节点
+ * @returns {Array<string>} 网络名（可能为空串）
+ */
+function extractPinNets(componentData) {
+    if (componentData.pinInfoMap) {
+        return Object.values(componentData.pinInfoMap).map((pinInfo) => (pinInfo && pinInfo.net) || '');
+    }
+    if (componentData.pins) return Object.values(componentData.pins);
+    return [];
+}
+
+export { formatSchematicNetlist, formatPCBNetlist, formatFileNetlist, processNetlistData, summarizeNetlist };

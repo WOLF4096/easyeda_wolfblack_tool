@@ -7,9 +7,10 @@
 //
 // 此代码已兼容 V2 和 V3 版本
 //
-// 「从PCB创建导线」主逻辑
-// 职责：编排选中器件 → 获取网表 → 比对差异 → 生成导线源码 → 批量写入
-// 依赖：performanceMonitor.js（性能统计）、netlistParser.js（网表解析）
+// 「创建导线」主逻辑（菜单：来自PCB / 来自网表）
+// 职责：编排选中器件 → 获取网表（PCB 选中 / 网表缓存）→ 比对差异 → 生成导线源码 → 批量写入
+// 依赖：performanceMonitor.js（性能统计）、netlistParser.js（网表解析）、
+//       docSwitch.js（原理图⇄PCB 切页）、netlistCache.js（网表缓存读取）
 //
 // --- 模块边界 ---
 // 本文件是「编排层 + EDA 调用层」：所有 `eda.*` 调用都集中在这里，
@@ -25,6 +26,8 @@ import { PerformanceMonitor } from './performanceMonitor.js';
 import { formatSchematicNetlist, formatPCBNetlist, formatFileNetlist, processNetlistData } from './netlistParser.js';
 import { logger } from '../common/logger.js';
 import { createSchWireLines } from '../common/sourceEmitter.js';
+import { switchToPCB, switchToSchematic } from './docSwitch.js';
+import { loadNetlistCache, describeCacheMeta } from './netlistCache.js';
 
 // 导线长度
 const WIRE_LENGTH = 40;
@@ -69,8 +72,18 @@ export async function placeWires(importMethod) {
             // 添加短暂延迟，避免操作过快
             await delay(1000);
         } else if (importMethod === 'NET') {
-            const fileData = await importNetlistFromFile();
-            pcbNetlist = formatFileNetlist(fileData, selectedComponents);
+            // 网表来源改为「用户配置里的缓存」：只读不弹框，缓存由菜单里的
+            // 「从PCB更新网表缓存」「从文件更新网表缓存」两个入口维护（两个来源只存一份）
+            const cachedNetlist = await loadNetlistCache();
+            if (!cachedNetlist) {
+                await eda.sys_Message.showToastMessage(
+                    '网表缓存是空的，请先执行「创建导线 → 从PCB更新网表缓存」或「从文件更新网表缓存」',
+                    2
+                );
+                throw new Error('网表缓存为空');
+            }
+            eda.sys_Log.add(`使用网表缓存（${describeCacheMeta(cachedNetlist.meta)}）`, 'info');
+            pcbNetlist = formatFileNetlist(cachedNetlist.text, selectedComponents);
         } else {
             eda.sys_Log.add(`不支持的导入方式: ${importMethod}`, 'error');
             eda.sys_PanelControl.openBottomPanel('log');
@@ -211,53 +224,7 @@ export async function placeWires(importMethod) {
     }
 }
 
-// 全局变量，用于记录跳转前的原理图Tab ID
-let _lastSchematicTabId = null;
-
-// 1. 切换到当前板子对应的PCB界面
-async function switchToPCB() {
-    try {
-        // A. 记录当前原理图信息 (如果当前是在原理图界面)
-        const curDoc = await eda.dmt_SelectControl.getCurrentDocumentInfo();
-        logger.debug(curDoc);
-        if (curDoc && curDoc.documentType === 1) {
-            // 1 代表原理图
-            _lastSchematicTabId = curDoc.uuid + '@' + curDoc.parentProjectUuid;
-            logger.debug(_lastSchematicTabId);
-            logger.debug(curDoc.tabId);
-        }
-
-        // B. 获取当前板子对应的 PCB UUID
-        const boardInfo = await eda.dmt_Board.getCurrentBoardInfo();
-        logger.debug(boardInfo);
-        if (!boardInfo || !boardInfo.pcb) throw new Error('未获取到板子信息');
-        const targetPcbUuid = boardInfo.pcb.uuid;
-
-        // C. 在分屏树中查找 匹配该UUID 的 PCB Tab
-        const splitData = await eda.dmt_EditorControl.getSplitScreenTree();
-        // TabId 通常格式为 "UUID@ProjectID"，所以使用 includes 匹配
-        const pcbTab = splitData.tabs.find((tab) => tab.tabId.includes(targetPcbUuid));
-        logger.debug(pcbTab);
-        if (pcbTab) {
-            await eda.dmt_EditorControl.activateDocument(pcbTab.tabId);
-        } else {
-            await eda.sys_Message.showToastMessage('未找到当前板子对应的PCB窗口，请确认PCB已打开', 2);
-        }
-    } catch (error) {
-        logger.error('切换PCB失败:', error);
-    }
-}
-
-// 2. 切换回原来的原理图界面
-async function switchToSchematic() {
-    // 没有记录到原理图页签时直接中止：否则后续 getDocumentSource() 读到的是 PCB 源码，
-    // 再把原理图导线行拼进去写回，等于往 PCB 文档里塞错误格式（系统会报「格式错误」）。
-    if (!_lastSchematicTabId) {
-        await eda.sys_Message.showToastMessage('未能定位原理图页签，已中止（避免写入错误文档）', 2);
-        throw new Error('未能定位原理图页签');
-    }
-    await eda.dmt_EditorControl.activateDocument(_lastSchematicTabId);
-}
+// 原理图 ⇄ PCB 的页签切换在 docSwitch.js（「从PCB更新网表缓存」也用它）
 
 // 获取原理图网表
 async function getSchematicNetlist() {
@@ -373,35 +340,7 @@ async function getPCBSelection() {
     }
 }
 
-// 从文件导入网表
-async function importNetlistFromFile() {
-    try {
-        const fileData = await eda.sys_FileSystem.openReadFileDialog(['.enet'], false);
-
-        if (!fileData) {
-            throw new Error('未选择文件');
-        }
-        const fileContent = await readFileAsText(fileData);
-        return fileContent;
-    } catch (error) {
-        logger.error('导入网表文件失败:', error);
-        throw new Error('导入网表文件失败');
-    }
-}
-
-// 读取File对象为文本字符串
-function readFileAsText(file) {
-    return new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = function (event) {
-            resolve(event.target.result);
-        };
-        reader.onerror = function (error) {
-            reject(error);
-        };
-        reader.readAsText(file);
-    });
-}
+// 从文件读网表已移到 netlistSync.js（「从文件更新网表缓存」），本文件只从缓存取
 
 // 批量获取多个引脚的位置信息
 async function getMultiplePinPositions(pinsData) {
