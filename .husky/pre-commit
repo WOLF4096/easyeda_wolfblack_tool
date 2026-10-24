@@ -1,3 +1,5 @@
 #!/bin/sh
-npm install
+# 只跑 lint-staged。这里不要加 `npm install`：
+# 它会让每次提交都重装一遍依赖（几十秒），还可能顺手改动 package-lock.json，
+# 把与本次提交无关的 diff 混进来。依赖由开发者自己按需 `npm ci` 安装。
 npx lint-staged

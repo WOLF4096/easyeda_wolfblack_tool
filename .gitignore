@@ -27,12 +27,10 @@ debug.log
 /.workbuddy/
 
 # ---- 文档
-# 只留 docs/FORMATLOG.md：它是 V3/V4 源码格式的技术规格，被 src/js 与 iframe/js/src
-# 的多处注释直接引用；其余文档仅作参考，不入库。
 /docs/*
-!/docs/FORMATLOG.md
-/README.dev.md
-/CHANGELOG.dev.md
+# README.dev.md（二次开发 / 构建 / 测试指引）必须入库：README.md 的「开发与构建」小节直接链过去，
+# 而页面产物 iframe/js/app/ 又不入库 —— 新克隆者没有这份文档就无从构建，链接也会变成 404。
+
 # 注意：README.md / CHANGELOG.md / PRIVACY.md / LICENSE / images/ / locales/
 # 是扩展广场的展示资源（详情、更新日志、详情图片、许可证、多语言），EDA 会读，必须入库。
 
