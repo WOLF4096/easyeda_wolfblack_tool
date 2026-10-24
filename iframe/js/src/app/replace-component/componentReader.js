@@ -6,7 +6,7 @@
  * @//example/ const { extractProps } = await import('./componentReader.js')
  *            const props = extractProps(comp) // { name, footprint, supplierId }
  *
- * 这个模块集中了「V4 与 V2.2 取值不一样」的全部坑，每个函数上方都写了实测结论。
+ * 这个模块集中了「V4 与 V2.2.45 取值不一样」的全部坑，每个函数上方都写了实测结论。
  * 改动前务必先在两个客户端上对照，不要按类型声明推断。
  *
  * 开发者：WOLF4096
@@ -147,7 +147,7 @@ export function resolveDynamicString(str, properties, fallbackDevice = '') {
 /**
  * 从画布图元中提取「名称 / 封装 / 立创编号」
  *
- * V2.2 器件名在 `otherProperty.Device`；
+ * V2.2.45 器件名在 `otherProperty.Device`；
  * V4 的 `otherProperty` 里没有 `Device`/`DeviceName`，器件名在 `comp.component.uuid.name`。
  *
  * @param {object} comp PCB 图元

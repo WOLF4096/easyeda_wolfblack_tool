@@ -5,7 +5,7 @@
  * @//dependencies/ core/eda, core/version, ui/toast, app/create-footprint/sourceBuilder
  * @//example/ 页面入口，由 iframe/CreateFootprint.html 加载打包产物 app/CreateFootprint.js
  *
- * 只支持 V2.2 客户端：V3 起库源码写入 API 有缺陷，页面整体拦截（原实现同样如此）。
+ * 只支持 V2.2.45 客户端：V3 起库源码写入 API 有缺陷，页面整体拦截（原实现同样如此）。
  *
  * 开发者：WOLF4096
  * 辅助开发：DeepSeek-V4.1-Flash

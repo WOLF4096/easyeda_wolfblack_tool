@@ -170,6 +170,36 @@ describe('版本族与 V4 兼容（V3→V4 文件格式同构）', () => {
 	});
 });
 
+describe('版本适配区间（2.2.45 ~ 4.*.*）', () => {
+	it('2.2.45 ~ 4.*.* 都算可用', () => {
+		const WC = loadCommon();
+		for (const v of ['2.2.45', '2.2.45.5', '3.0.0', '3.2.1', '4.0.3', '4.1.78', '4.99.99']) {
+			assert.equal(WC.classifyVersionSupport(v), 'supported', `${v} 应判为可用`);
+		}
+	});
+
+	it('低于 2.2.45 → tooOld（建议更新）', () => {
+		const WC = loadCommon();
+		for (const v of ['1.9.0', '2.0.0', '2.2.1', '2.2.44', '2.2.44.9']) {
+			assert.equal(WC.classifyVersionSupport(v), 'tooOld', `${v} 应判为过旧`);
+		}
+	});
+
+	it('主版本大于 4 → tooNew（暂未适配）', () => {
+		const WC = loadCommon();
+		for (const v of ['5.0.0', '5.1.2', '10.0.0']) {
+			assert.equal(WC.classifyVersionSupport(v), 'tooNew', `${v} 应判为未适配`);
+		}
+	});
+
+	it('解析不出来的版本 → 不给结论', () => {
+		const WC = loadCommon();
+		for (const v of ['', 'abc', '4.x', null, undefined]) {
+			assert.equal(WC.classifyVersionSupport(v), '', `${String(v)} 不该给结论`);
+		}
+	});
+});
+
 describe('图层常量与判定', () => {
 	it('关键图层号与官方定义一致', () => {
 		const WC = loadCommon();

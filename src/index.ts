@@ -278,7 +278,7 @@ function bindShortcut(keys: string[], title: string, run: () => void, docTypes: 
 /**
  * 注册快捷键
  *
- * 版本策略：快捷键 API 从 V3 起提供，**V2.2 没有**（调用会抛错），所以按主版本号判断。
+ * 版本策略：快捷键 API 从 V3 起提供，**V2.2.45 没有**（调用会抛错），所以按主版本号判断。
  * 注意不要写成 `startsWith('3.')` —— V4 的版本号是 4.x，会被误判成「不支持」而一个都不注册。
  */
 function registerShortcuts(): void {

@@ -1,10 +1,11 @@
 /**
  * @//module/ core/version
  * @//description/ 编辑器版本号与「版本族」判定（V2 / V2.2 / V3 / V4），带穿透缓存
- * @//exports/ getEditorVersion, getVersionFamily, isV2, isV3, isV4, isModern, resetVersionCache
+ * @//exports/ getEditorVersion, getVersionFamily, isV2, isV3, isV4, isModern, classifyVersionSupport, resetVersionCache
  * @//dependencies/ core/eda
- * @//example/ const { isModern, getVersionFamily } = await import('./core/version.js')
+ * @//example/ const { isModern, getVersionFamily, classifyVersionSupport } = await import('./core/version.js')
  *            isModern() // true 表示 V3/V4，应走日志式源码格式
+ *            classifyVersionSupport('2.2.44') // 'tooOld'
  *
  * 开发者：WOLF4096
  * 辅助开发：DeepSeek-V4.1-Flash
@@ -133,4 +134,78 @@ export function isV2() {
 export function resetVersionCache() {
 	// 缓存用 null 表示「尚未取过」（undefined 会被当成已缓存）
 	cachedVersion = null;
+}
+
+/* ===== 版本适配区间 ===== */
+
+/**
+ * 适配的最低版本
+ *
+ * 2.2.45 之前缺少本工具依赖的几个 API（`sch_ManufactureData.getNetlistFile`、
+ * 快捷键、部分源码写入能力），所以下限卡在这里，而不是笼统的「V2.2」。
+ *
+ * @type {string}
+ */
+const MIN_SUPPORTED_VERSION = '2.2.45';
+
+/**
+ * 适配过的最高主版本
+ *
+ * 4.*.* 都算适配过；5 及以后没测过，不该向用户承诺「可用」。
+ *
+ * @type {number}
+ */
+const MAX_SUPPORTED_MAJOR = 4;
+
+/**
+ * 把版本号拆成数字段
+ *
+ * @param {string} version 版本号（如 `4.1.78` / `2.2.45.5`）
+ * @returns {number[]|null} 数字段；含非数字段或为空时为 null
+ */
+function parseVersionParts(version) {
+	const text = String(version === null || version === undefined ? '' : version).trim();
+	if (!text) return null;
+	const parts = text.split('.').map((segment) => Number.parseInt(segment, 10));
+	if (parts.some((value) => !Number.isFinite(value))) return null;
+	return parts;
+}
+
+/**
+ * 比较两个版本（按段补零后逐段比较）
+ *
+ * @param {number[]} left 版本段
+ * @param {number[]} right 版本段
+ * @returns {number} left 大于 right 为 1，小于为 -1，相等为 0
+ */
+function compareVersionParts(left, right) {
+	const length = Math.max(left.length, right.length);
+	for (let i = 0; i < length; i++) {
+		const a = left[i] || 0;
+		const b = right[i] || 0;
+		if (a !== b) return a > b ? 1 : -1;
+	}
+	return 0;
+}
+
+/**
+ * 判断某个版本号是否在适配区间内
+ *
+ * 三档结论（界面据此显示不同提示）：
+ *   - `tooOld`   低于 2.2.45 → 建议更新 EDA
+ *   - `supported` 2.2.45 ~ 4.*.* → 功能可用
+ *   - `tooNew`   主版本大于 4 → 暂未做适配
+ *
+ * 版本号解析不出来（空串、`abc`、不在 EDA 环境）时返回空字符串，由调用方自己决定怎么显示。
+ *
+ * @param {string} version 版本号字符串
+ * @returns {'tooOld'|'supported'|'tooNew'|''} 适配结论
+ */
+export function classifyVersionSupport(version) {
+	const parts = parseVersionParts(version);
+	if (!parts) return '';
+	const minParts = parseVersionParts(MIN_SUPPORTED_VERSION);
+	if (compareVersionParts(parts, minParts) < 0) return 'tooOld';
+	if (parts[0] > MAX_SUPPORTED_MAJOR) return 'tooNew';
+	return 'supported';
 }

@@ -19,7 +19,7 @@
  *   - shortcutType 快捷键标签配色：sch / pcb / global
  *   - brief        一句话说明，**不超过 32 个字符**（README 表格与主行共用）
  *   - scope        适用范围：PCB / 原理图 / 符号 / 全局
- *   - version      适用版本：除「创建封装」外统一为 V2.2 ~ 4
+ *   - version      适用版本：除「创建封装」外统一为 V2.2.45 ~ 4
  *   - demoUrl      演示链接（可为空）
  *   - steps        使用方法，按步骤顺序列出（纯文本，渲染成有序列表）
  *   - note         注意事项（纯文本，没有则为空串）
@@ -37,7 +37,7 @@ export const featuresData = [
 		shortcutType: 'warning',
 		brief: '校准插件在新版 EDA 上的坐标与尺寸偏差',
 		scope: ['PCB'],
-		version: 'V2.2 ~ 4',
+		version: 'V2.2.45 ~ 4',
 		demoUrl: 'https://www.jlc-bbs.com/platform/a/1447593',
 		steps: [
 			'新建并打开一个空白 PCB 文档',
@@ -53,7 +53,7 @@ export const featuresData = [
 		shortcutType: 'pcb',
 		brief: '导入 PNG / JPG 图片，尺寸按毫米或 DPI 精确控制',
 		scope: ['PCB'],
-		version: 'V2.2 ~ 4',
+		version: 'V2.2.45 ~ 4',
 		demoUrl: 'https://www.jlc-bbs.com/platform/a/1220989',
 		steps: [
 			'菜单「导入 → 图片」，点「选择图片」，可以一次选多张',
@@ -69,7 +69,7 @@ export const featuresData = [
 		shortcutType: '',
 		brief: '在 PCB 上生成二维码，支持多种码制与矢量输出',
 		scope: ['PCB'],
-		version: 'V2.2 ~ 4',
+		version: 'V2.2.45 ~ 4',
 		demoUrl: 'https://www.jlc-bbs.com/platform/a/1221020',
 		steps: [
 			'在「数据内容」里输入要编码的文字或网址',
@@ -85,7 +85,7 @@ export const featuresData = [
 		shortcutType: '',
 		brief: '自动记录每天画板时长，按工程、周、时段出图表',
 		scope: ['PCB', '原理图'],
-		version: 'V2.2 ~ 4',
+		version: 'V2.2.45 ~ 4',
 		demoUrl: 'https://www.jlc-bbs.com/platform/a/1221046',
 		steps: [
 			'插件在后台自动计时，不需要手动开始或结束',
@@ -102,7 +102,7 @@ export const featuresData = [
 		shortcutType: 'pcb',
 		brief: '通孔焊盘和过孔互相转换，尺寸与阻焊保持不变',
 		scope: ['PCB'],
-		version: 'V2.2 ~ 4',
+		version: 'V2.2.45 ~ 4',
 		demoUrl: 'https://www.jlc-bbs.com/platform/a/1221301',
 		steps: ['在 PCB 上框选或点选要转换的过孔 / 通孔焊盘', '菜单「转换 → 焊盘 ⇄ 过孔」', '所选对象原地转换，坐标、孔径、阻焊扩展都不变'],
 		note: '过孔转成通孔焊盘后，可以单独设置内层铜环，也能被「禁止铺铜」约束管住。',
@@ -113,7 +113,7 @@ export const featuresData = [
 		shortcutType: 'pcb',
 		brief: '带电的导线和不带电的线条互相转换',
 		scope: ['PCB'],
-		version: 'V2.2 ~ 4',
+		version: 'V2.2.45 ~ 4',
 		demoUrl: 'https://www.jlc-bbs.com/platform/a/1221325',
 		steps: ['选中导线或线条', '菜单「转换 → 导线 ⇄ 线条」', '多段首尾相接的导线会合并成一条连续折线'],
 		note: '转换失败会自动还原原对象，不会出现两头都丢掉的情况。',
@@ -124,7 +124,7 @@ export const featuresData = [
 		shortcutType: 'pcb',
 		brief: '填充区域和图片对象互相转换，转换后能自由缩放',
 		scope: ['PCB'],
-		version: 'V2.2 ~ 4',
+		version: 'V2.2.45 ~ 4',
 		demoUrl: 'https://www.jlc-bbs.com/platform/a/1447607',
 		steps: ['选中填充区域，或插件生成的图片对象', '菜单「转换 → 填充 ⇄ 图片」', '转成图片后可用控制柄拉伸缩放；转回填充后可继续编辑轮廓'],
 		note: '二维码这类复杂轮廓也能转，但图元数量会比较多，大图转换需要等几秒。',
@@ -135,7 +135,7 @@ export const featuresData = [
 		shortcutType: '',
 		brief: '把画布上散着的图元打包成一个封装存进个人库',
 		scope: ['PCB'],
-		version: '仅 V2.2',
+		version: '仅 V2.2.45',
 		demoUrl: 'https://www.jlc-bbs.com/platform/a/1221362',
 		steps: [
 			'用焊盘、丝印等图元在 PCB 上画好封装外形',
@@ -143,7 +143,7 @@ export const featuresData = [
 			'菜单「器件 → 创建封装」，选存放的库，填名称与位号',
 			'点「创建封装」，完成后封装会出现在个人库里',
 		],
-		note: '仅支持 V2.2。V3 / V4 缺少可用的封装写入能力，这个功能用不了，请改用官方封装编辑器。',
+		note: '仅支持 V2.2.45。V3 / V4 缺少可用的封装写入能力，这个功能用不了，请改用官方封装编辑器。',
 	},
 	{
 		name: '位号查重',
@@ -151,7 +151,7 @@ export const featuresData = [
 		shortcutType: 'sch',
 		brief: '找出 PCB 里重复的位号，点一下直接跳过去',
 		scope: ['PCB'],
-		version: 'V2.2 ~ 4',
+		version: 'V2.2.45 ~ 4',
 		demoUrl: 'https://www.jlc-bbs.com/platform/a/1221381',
 		steps: ['菜单「器件 → 位号查重」', '有重复时，结果会列在日志面板里', '点日志条目，视角自动跳过去并高亮对应器件'],
 		note: '批量替换器件、导入 BOM 之前建议先查一次，位号重复会让结果对不上。',
@@ -162,7 +162,7 @@ export const featuresData = [
 		shortcutType: '',
 		brief: '没有原理图也能按铜皮接触关系反推出整板网络',
 		scope: ['PCB'],
-		version: 'V2.2 ~ 4',
+		version: 'V2.2.45 ~ 4',
 		demoUrl: 'https://www.jlc-bbs.com/platform/a/1221422',
 		steps: [
 			'菜单「网络 → 生成物理网络」',
@@ -178,7 +178,7 @@ export const featuresData = [
 		shortcutType: '',
 		brief: '把 Altium Designer 的网表导入当前 PCB',
 		scope: ['PCB'],
-		version: 'V2.2 ~ 4',
+		version: 'V2.2.45 ~ 4',
 		demoUrl: 'https://www.jlc-bbs.com/platform/a/1230646',
 		steps: [
 			'在 Altium Designer 里导出 .net 网表',
@@ -194,7 +194,7 @@ export const featuresData = [
 		shortcutType: '',
 		brief: '把器件引脚与网络的对应关系导出成表格',
 		scope: ['PCB'],
-		version: 'V2.2 ~ 4',
+		version: 'V2.2.45 ~ 4',
 		demoUrl: 'https://www.jlc-bbs.com/platform/a/1447636',
 		steps: ['框选要导出的器件', '菜单「网络 → 导出引脚网络」', '「导出引脚网络」只导所选器件，「导出全部网络」导整板', '保存后用 Excel 打开'],
 		note: '阵列式器件（驱动器、继电器）批量改网络名时，配合 Excel 自动填充最快。',
@@ -205,7 +205,7 @@ export const featuresData = [
 		shortcutType: '',
 		brief: '用 Excel 两列数据批量改名，还能反查引脚',
 		scope: ['PCB'],
-		version: 'V2.2 ~ 4',
+		version: 'V2.2.45 ~ 4',
 		demoUrl: 'https://www.jlc-bbs.com/platform/a/1221464',
 		steps: [
 			'在 Excel 准备两列：旧网络名、新网络名',
@@ -221,7 +221,7 @@ export const featuresData = [
 		shortcutType: '',
 		brief: '把 01C 这类丝印代码换算成 10kΩ 并写回',
 		scope: ['PCB', '原理图'],
-		version: 'V2.2 ~ 4',
+		version: 'V2.2.45 ~ 4',
 		demoUrl: 'https://www.jlc-bbs.com/platform/a/1221485',
 		steps: ['菜单「器件 → 丝印代码转换」', '可勾选「只处理 C / R / L 开头的位号」缩小范围', '点「执行」，面板会列出每条换算结果与对账明细'],
 		note: '适用于电阻、电容、电感的常见代码；认不出的代码会原样保留，不会被改坏。',
@@ -232,7 +232,7 @@ export const featuresData = [
 		shortcutType: '',
 		brief: '一键清掉供应商编号这类用不上的器件属性',
 		scope: ['PCB', '原理图'],
-		version: 'V2.2 ~ 4',
+		version: 'V2.2.45 ~ 4',
 		demoUrl: 'https://www.jlc-bbs.com/platform/a/1221495',
 		steps: ['菜单「器件 → 清空多余属性」，先点「刷新数据」', '在基础属性 / 关键属性 / 更多属性里勾选要保留的项', '点「执行清空」'],
 		note: '借用别人的封装时最有用，可以去掉原器件带来的供应商编号等信息。',
@@ -243,7 +243,7 @@ export const featuresData = [
 		shortcutType: '',
 		brief: '重新读一遍网表再写回，清掉属性里的占位符',
 		scope: ['PCB', '原理图'],
-		version: 'V2.2 ~ 4',
+		version: 'V2.2.45 ~ 4',
 		demoUrl: 'https://www.jlc-bbs.com/platform/a/1447654',
 		steps: ['菜单「器件 → 刷新网表」', '插件自动读取网表并重新写入', '核对预览结果，确认后应用'],
 		note: '属性值里出现大量 ={Value} 字样时用它。',
@@ -254,7 +254,7 @@ export const featuresData = [
 		shortcutType: '',
 		brief: '从 Excel 粘贴 BOM，批量回填器件参数',
 		scope: ['PCB', '原理图'],
-		version: 'V2.2 ~ 4',
+		version: 'V2.2.45 ~ 4',
 		demoUrl: 'https://www.jlc-bbs.com/platform/a/1221515',
 		steps: [
 			'在 Excel 里整理好数据，第一行写列名，其中必须有「位号」',
@@ -270,7 +270,7 @@ export const featuresData = [
 		shortcutType: '',
 		brief: '按位号批量换成立创器件，位置角度不变',
 		scope: ['PCB'],
-		version: 'V2.2 ~ 4',
+		version: 'V2.2.45 ~ 4',
 		demoUrl: 'https://www.jlc-bbs.com/platform/a/1221533',
 		steps: [
 			'在 Excel 准备两列：位号、立创 C 编号，复制',
@@ -278,7 +278,7 @@ export const featuresData = [
 			'点「获取」，拉取新器件的参数',
 			'点「替换」，等待进度条走完',
 		],
-		note: '使用前务必备份，并确保位号不重复。V2.2 上需要按提示手动选中临时器件取参数。',
+		note: '使用前务必备份，并确保位号不重复。V2.2.45 上需要按提示手动选中临时器件取参数。',
 	},
 	{
 		name: '模型批量更新',
@@ -286,7 +286,7 @@ export const featuresData = [
 		shortcutType: '',
 		brief: '批量调整模型大小角度位置，或从旧网表恢复模型',
 		scope: ['PCB'],
-		version: 'V2.2 ~ 4',
+		version: 'V2.2.45 ~ 4',
 		demoUrl: 'https://www.jlc-bbs.com/platform/a/1221572',
 		steps: [
 			'菜单「器件 → 模型批量更新」',
@@ -302,7 +302,7 @@ export const featuresData = [
 		shortcutType: '',
 		brief: '拿 PCB 上的器件和位置，反向生成一张原理图',
 		scope: ['原理图'],
-		version: 'V2.2 ~ 4',
+		version: 'V2.2.45 ~ 4',
 		demoUrl: 'https://www.jlc-bbs.com/platform/a/1221620',
 		steps: [
 			'新建一个已绑定目标 PCB 的空白原理图，并切到原理图页',
@@ -319,7 +319,7 @@ export const featuresData = [
 		shortcutType: '',
 		brief: '按 PCB 或网表给原理图里缺失的引脚补导线',
 		scope: ['原理图'],
-		version: 'V2.2 ~ 4',
+		version: 'V2.2.45 ~ 4',
 		demoUrl: 'https://www.jlc-bbs.com/platform/a/1221655',
 		steps: [
 			'先把网表存进缓存：「创建导线 → 从PCB更新网表缓存」，或用「从文件更新网表缓存」选一个 .enet 文件',
@@ -335,7 +335,7 @@ export const featuresData = [
 		shortcutType: '',
 		brief: '给符号引脚按编号或名称排序，可设间距',
 		scope: ['符号'],
-		version: 'V2.2 ~ 4',
+		version: 'V2.2.45 ~ 4',
 		demoUrl: '',
 		steps: [
 			'打开符号编辑器，选中要排序的引脚',
@@ -351,7 +351,7 @@ export const featuresData = [
 		shortcutType: '',
 		brief: '让外部程序把图形送进画布，也可作为调试通道',
 		scope: ['全局'],
-		version: 'V2.2 ~ 4',
+		version: 'V2.2.45 ~ 4',
 		demoUrl: '',
 		steps: [
 			'在电脑上启动配套的桥服务（仓库 tools/eda-bridge 内提供）',

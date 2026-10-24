@@ -5,7 +5,7 @@
  * @//dependencies/ core/eda, core/netlist, core/version, core/log, core/concurrency, core/util, ui/statusBar, ui/table, app/replace-component/componentReader, app/replace-component/pastePlan, app/replace-component/sourceRewrite, app/replace-component/netlistSync
  * @//example/ 由 iframe/ReplaceComponent.html 以 <script src="/iframe/js/app/ReplaceComponent.js"></script> 加载
  *
- * ⚠️ 三条平台约束（来自 V2.2 / V4 实测，改顺序会写坏用户文档）：
+ * ⚠️ 三条平台约束（来自 V2.2.45 / V4 实测，改顺序会写坏用户文档）：
  *   1. **先写源码、后删临时器件** —— V4 删临时器件会连带销毁器件定义，
  *      顺序反了会让源码里的 DeviceName 指向不存在的 uuid；
  *   2. V4 只改 ATTR `Device` 换不掉器件，必须同时改 COMPONENT 行 `attrs.DeviceName`；
@@ -647,7 +647,7 @@ async function syncNetlist(targetMap) {
 	const desigMap = new Map();
 	for (const action of targetMap.values()) desigMap.set(action.designator, action);
 
-	// 已知缺陷（V2.2 平台）：替换后 getNetlist 可能返回 {} → 这里失败只记日志，不影响替换结果
+	// 已知缺陷（V2.2.45 平台）：替换后 getNetlist 可能返回 {} → 这里失败只记日志，不影响替换结果
 	const jsonData = (await getNetlist('PCB')).json;
 	applyTargetProps(getComponentsContainer(jsonData), desigMap);
 	await setNetlist('PCB', JSON.stringify(jsonData, null, 2));

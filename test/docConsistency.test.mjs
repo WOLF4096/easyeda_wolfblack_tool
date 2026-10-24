@@ -73,10 +73,10 @@ describe('文档一致性', () => {
 		const { featuresData } = await import('../iframe/js/src/app/about/features.js');
 		for (const item of featuresData) {
 			assert.ok(Array.isArray(item.steps) && item.steps.length >= 2, `「${item.name}」缺少使用步骤`);
-			assert.ok(['V2.2 ~ 4', '仅 V2.2'].includes(item.version), `「${item.name}」版本标注异常：${item.version}`);
+			assert.ok(['V2.2.45 ~ 4', '仅 V2.2.45'].includes(item.version), `「${item.name}」版本标注异常：${item.version}`);
 		}
-		const onlyV22 = featuresData.filter((item) => item.version === '仅 V2.2').map((item) => item.name);
-		assert.deepEqual(onlyV22, ['创建封装'], '只有「创建封装」允许标注为仅 V2.2');
+		const onlyV22 = featuresData.filter((item) => item.version === '仅 V2.2.45').map((item) => item.name);
+		assert.deepEqual(onlyV22, ['创建封装'], '只有「创建封装」允许标注为仅 V2.2.45');
 	});
 
 	it('package.json 与 extension.json 版本号一致', () => {

@@ -13,26 +13,17 @@
  * 辅助开发：DeepSeek-V4.1-Flash
  * 本工具为非官方第三方开源扩展，与嘉立创 / EasyEDA 官方无隶属关系
  */
-
-import { getEditorVersion, isV2 } from '../../core/version.js';
 import { logger } from '../../core/log.js';
 import { escapeHtml } from '../../core/util.js';
-import { createStatusBar } from '../../ui/statusBar.js';
-import { createProgressTicker } from '../../ui/progressTicker.js';
+import { classifyVersionSupport, getEditorVersion, isV2 } from '../../core/version.js';
 import { downloadText } from '../../ui/download.js';
-import { toast } from '../../ui/toast.js';
+import { createProgressTicker } from '../../ui/progressTicker.js';
 import { recordUsage } from '../../ui/rewardPrompt.js';
-import {
-	enrichWithSymbol,
-	findUuids,
-	mergeComponentsForDisplay,
-	parsePcbContent,
-	pcbFilePath,
-	projectTitleOf,
-	symbolFilePath,
-} from './model.js';
-import { parseSymbolSource } from './symbolParser.js';
+import { createStatusBar } from '../../ui/statusBar.js';
+import { toast } from '../../ui/toast.js';
+import { enrichWithSymbol, findUuids, mergeComponentsForDisplay, parsePcbContent, pcbFilePath, projectTitleOf, symbolFilePath } from './model.js';
 import { buildSchSource } from './sourceBuilder.js';
+import { parseSymbolSource } from './symbolParser.js';
 
 // ---------- 状态 ----------
 let zip = null;
@@ -86,13 +77,26 @@ function delay(ms) {
 	return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+/**
+ * 版本提示的三档文案与配色
+ *
+ * 适配区间是 2.2.45 ~ 4.*.*（下限改用具体版本号：2.2.45 之前缺本工具依赖的 API）。
+ */
+const VERSION_HINTS = {
+	supported: { text: '功能可用', color: '#8f8' },
+	tooOld: { text: '建议更新EDA', color: '#fb8' },
+	tooNew: { text: '暂未做适配', color: '#fb8' },
+};
+
 /** 版本检测：不在 EDA 环境时禁用全部按钮 */
 function initVersion() {
 	try {
 		version = getEditorVersion();
 		if (!version) throw new Error('未检测到 EDA 环境');
-		versionSpan.textContent = `当前EDA版本：${version} 功能可用`;
-		versionSpan.style.color = '#8f8';
+		const hint = VERSION_HINTS[classifyVersionSupport(version)];
+		// 版本号解析不出来时只显示版本号，不硬贴一个「可用」
+		versionSpan.textContent = hint ? `当前EDA版本：${version} ${hint.text}` : `当前EDA版本：${version}`;
+		versionSpan.style.color = hint ? hint.color : '#ccc';
 		// V2 的电气坐标向上为正，V3/V4 向下为正 → 默认翻转值不同
 		yvalueCheck.checked = !isV2();
 	} catch (e) {
@@ -350,7 +354,7 @@ async function onBuild() {
 				if (rowElement) rowElement.classList.add('row-error');
 			});
 			if (!ignoreMissing) {
-				throw new Error('未生成源码，部分元件格式错误，已标红，需要做完 器件标准化 才能转换！！！');
+				throw new Error('部分元件没有符号！！！解决方法：可忽略错误 或者 在EDA器件标准化面板替换器件');
 			}
 			logger.debug(`忽略 ${missingSymbols.length} 组缺失符号的元件，它们将不会出现在生成的源码中`);
 			updateProgress(10, `忽略 ${missingSymbols.length} 组缺失符号元件`);
@@ -358,9 +362,7 @@ async function onBuild() {
 		await delay(100);
 
 		// 勾了「忽略符号错误」时，没有符号的器件直接不写进源码
-		const componentsToBuild = ignoreMissing
-			? components.filter((comp) => comp.symbolUuid && comp.symbolUuid.trim() !== '')
-			: components;
+		const componentsToBuild = ignoreMissing ? components.filter((comp) => comp.symbolUuid && comp.symbolUuid.trim() !== '') : components;
 
 		updateProgress(20, '检测多部件符号中');
 		await enrichPartCounts(componentsToBuild);
@@ -457,9 +459,7 @@ function onExportCsv() {
 		return;
 	}
 
-	const headers = Array.from(document.querySelectorAll('.table-header .header-cell')).map((cell) =>
-		cell.innerText.trim()
-	);
+	const headers = Array.from(document.querySelectorAll('.table-header .header-cell')).map((cell) => cell.innerText.trim());
 	const rows = [];
 	document.querySelectorAll('.grid-row').forEach((row) => {
 		const cells = row.querySelectorAll('.row-cell');

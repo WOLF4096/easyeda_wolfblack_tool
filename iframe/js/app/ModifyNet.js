@@ -355,7 +355,7 @@
         return;
       }
       try {
-        verLabel.textContent = (getVersionFamily() || "V2.2") + "模式";
+        verLabel.textContent = (getVersionFamily() || "V2.2.45") + "模式";
       } catch (e) {
         verLabel.textContent = "Error";
       }

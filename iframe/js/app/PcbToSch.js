@@ -7,50 +7,6 @@
  */
 "use strict";
 (() => {
-  // iframe/js/src/core/eda.js
-  function getEda() {
-    try {
-      if (typeof eda !== "undefined" && eda) return eda;
-    } catch (e) {
-    }
-    try {
-      if (globalThis.parent && globalThis.parent !== globalThis && globalThis.parent.eda) return globalThis.parent.eda;
-    } catch (e) {
-    }
-    return globalThis.eda || null;
-  }
-
-  // iframe/js/src/core/version.js
-  var cachedVersion = null;
-  function getEditorVersion() {
-    if (cachedVersion !== null) return cachedVersion;
-    try {
-      const edaObj = getEda();
-      if (!edaObj || !edaObj.sys_Environment || typeof edaObj.sys_Environment.getEditorCurrentVersion !== "function") {
-        return "";
-      }
-      const version2 = edaObj.sys_Environment.getEditorCurrentVersion();
-      const text = version2 === null || version2 === void 0 ? "" : String(version2).trim();
-      if (text) cachedVersion = text;
-      return text;
-    } catch (e) {
-      return "";
-    }
-  }
-  function getVersionFamily() {
-    const version2 = getEditorVersion();
-    if (!version2) return "";
-    if (version2.startsWith("4")) return "V4";
-    if (version2.startsWith("3")) return "V3";
-    if (version2.startsWith("2.2")) return "V2.2";
-    if (version2.startsWith("2")) return "V2";
-    return "";
-  }
-  function isV2() {
-    const family = getVersionFamily();
-    return family === "V2" || family === "V2.2";
-  }
-
   // iframe/js/src/core/log.js
   var LOG_LEVELS = { debug: 10, info: 20, warn: 30, error: 40 };
   var currentLogLevel = LOG_LEVELS.info;
@@ -118,58 +74,102 @@
     return String(value).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#039;");
   }
 
-  // iframe/js/src/ui/statusBar.js
-  var LEVEL_CLASS = Object.freeze({
-    "": "",
-    info: "info",
-    ok: "success",
-    success: "success",
-    warn: "warning",
-    warning: "warning",
-    err: "error",
-    error: "error"
-  });
-  var ACCENT = "accent";
-  function percentOf(done, total) {
-    const d = Number(done);
-    const t = Number(total);
-    if (!Number.isFinite(d) || !Number.isFinite(t) || t <= 0) return 0;
-    return Math.max(0, Math.min(100, Math.floor(d / t * 100)));
+  // iframe/js/src/core/eda.js
+  function getEda() {
+    try {
+      if (typeof eda !== "undefined" && eda) return eda;
+    } catch (e) {
+    }
+    try {
+      if (globalThis.parent && globalThis.parent !== globalThis && globalThis.parent.eda) return globalThis.parent.eda;
+    } catch (e) {
+    }
+    return globalThis.eda || null;
   }
-  function classOf(base, level) {
-    const suffix = LEVEL_CLASS[level === void 0 ? "" : level];
-    if (suffix === void 0) return base;
-    return suffix ? base + " " + suffix : base;
+
+  // iframe/js/src/core/version.js
+  var cachedVersion = null;
+  function getEditorVersion() {
+    if (cachedVersion !== null) return cachedVersion;
+    try {
+      const edaObj = getEda();
+      if (!edaObj || !edaObj.sys_Environment || typeof edaObj.sys_Environment.getEditorCurrentVersion !== "function") {
+        return "";
+      }
+      const version2 = edaObj.sys_Environment.getEditorCurrentVersion();
+      const text = version2 === null || version2 === void 0 ? "" : String(version2).trim();
+      if (text) cachedVersion = text;
+      return text;
+    } catch (e) {
+      return "";
+    }
   }
-  function createStatusBar(options = {}) {
-    const textEl = options.textEl || null;
-    const barEl = options.barEl || null;
-    const baseClass = options.baseClass || "status";
-    const barBaseClass = options.barBaseClass || "status-bar";
-    const widthProp = options.widthProp || "width";
-    function text(message, level) {
-      if (!textEl) return;
-      textEl.textContent = message === null || message === void 0 ? "" : String(message);
-      textEl.className = classOf(baseClass, level);
+  function getVersionFamily() {
+    const version2 = getEditorVersion();
+    if (!version2) return "";
+    if (version2.startsWith("4")) return "V4";
+    if (version2.startsWith("3")) return "V3";
+    if (version2.startsWith("2.2")) return "V2.2";
+    if (version2.startsWith("2")) return "V2";
+    return "";
+  }
+  function isV2() {
+    const family = getVersionFamily();
+    return family === "V2" || family === "V2.2";
+  }
+  var MIN_SUPPORTED_VERSION = "2.2.45";
+  var MAX_SUPPORTED_MAJOR = 4;
+  function parseVersionParts(version2) {
+    const text = String(version2 === null || version2 === void 0 ? "" : version2).trim();
+    if (!text) return null;
+    const parts = text.split(".").map((segment) => Number.parseInt(segment, 10));
+    if (parts.some((value) => !Number.isFinite(value))) return null;
+    return parts;
+  }
+  function compareVersionParts(left, right) {
+    const length = Math.max(left.length, right.length);
+    for (let i = 0; i < length; i++) {
+      const a = left[i] || 0;
+      const b = right[i] || 0;
+      if (a !== b) return a > b ? 1 : -1;
     }
-    function width(percent, level) {
-      if (!barEl) return;
-      const p = Math.max(0, Math.min(100, Number(percent) || 0));
-      barEl.style[widthProp] = p + "%";
-      const suffix = level === void 0 ? ACCENT : LEVEL_CLASS[level];
-      barEl.className = suffix ? barBaseClass + " " + suffix : barBaseClass;
-    }
-    function progress(done, total, suffix, level) {
-      const p = percentOf(done, total);
-      text(`${done} / ${total} ${p}%${suffix ? "　" + suffix : ""}`, level);
-      width(p, level);
-      return p;
-    }
-    function reset() {
-      text("", "");
-      width(0, "");
-    }
-    return { text, progress, width, reset };
+    return 0;
+  }
+  function classifyVersionSupport(version2) {
+    const parts = parseVersionParts(version2);
+    if (!parts) return "";
+    const minParts = parseVersionParts(MIN_SUPPORTED_VERSION);
+    if (compareVersionParts(parts, minParts) < 0) return "tooOld";
+    if (parts[0] > MAX_SUPPORTED_MAJOR) return "tooNew";
+    return "supported";
+  }
+
+  // iframe/js/src/ui/download.js
+  function canDownload(doc, urlApi) {
+    return Boolean(doc && typeof doc.createElement === "function" && urlApi && typeof urlApi.createObjectURL === "function");
+  }
+  function mountAndClick(doc, a) {
+    if (doc.body && typeof doc.body.appendChild === "function") doc.body.appendChild(a);
+    if (typeof a.click === "function") a.click();
+    if (typeof a.remove === "function") a.remove();
+  }
+  function downloadBlob(fileName, blob, options = {}) {
+    const doc = options.doc || globalThis.document;
+    const urlApi = options.urlApi || globalThis.URL;
+    if (!canDownload(doc, urlApi)) return false;
+    const href = urlApi.createObjectURL(blob);
+    const a = doc.createElement("a");
+    a.href = href;
+    a.download = fileName;
+    mountAndClick(doc, a);
+    if (typeof urlApi.revokeObjectURL === "function") urlApi.revokeObjectURL(href);
+    return true;
+  }
+  function downloadText(fileName, text, options = {}) {
+    const mime = options.mime || "text/plain";
+    const body = options.bom ? "\uFEFF" + String(text) : String(text);
+    const blob = new Blob([body], { type: mime + ";charset=utf-8" });
+    return downloadBlob(fileName, blob, options);
   }
 
   // iframe/js/src/ui/progressTicker.js
@@ -212,82 +212,6 @@
       return handle !== null;
     }
     return { start, stop, value, running };
-  }
-
-  // iframe/js/src/ui/download.js
-  function canDownload(doc, urlApi) {
-    return Boolean(doc && typeof doc.createElement === "function" && urlApi && typeof urlApi.createObjectURL === "function");
-  }
-  function mountAndClick(doc, a) {
-    if (doc.body && typeof doc.body.appendChild === "function") doc.body.appendChild(a);
-    if (typeof a.click === "function") a.click();
-    if (typeof a.remove === "function") a.remove();
-  }
-  function downloadBlob(fileName, blob, options = {}) {
-    const doc = options.doc || globalThis.document;
-    const urlApi = options.urlApi || globalThis.URL;
-    if (!canDownload(doc, urlApi)) return false;
-    const href = urlApi.createObjectURL(blob);
-    const a = doc.createElement("a");
-    a.href = href;
-    a.download = fileName;
-    mountAndClick(doc, a);
-    if (typeof urlApi.revokeObjectURL === "function") urlApi.revokeObjectURL(href);
-    return true;
-  }
-  function downloadText(fileName, text, options = {}) {
-    const mime = options.mime || "text/plain";
-    const body = options.bom ? "\uFEFF" + String(text) : String(text);
-    const blob = new Blob([body], { type: mime + ";charset=utf-8" });
-    return downloadBlob(fileName, blob, options);
-  }
-
-  // iframe/js/src/ui/toast.js
-  var TOAST_LEVEL = Object.freeze({
-    info: "info",
-    success: "success",
-    warn: "warning",
-    error: "error",
-    warning: "warning",
-    legacy: 2
-  });
-  var BANNER_ID = "__wolf_notice";
-  function normalizeLevel(level) {
-    if (typeof level === "number") return Number.isFinite(level) ? level : TOAST_LEVEL.info;
-    if (typeof level !== "string") return TOAST_LEVEL.info;
-    const key = level.trim().toLowerCase();
-    return Object.prototype.hasOwnProperty.call(TOAST_LEVEL, key) ? TOAST_LEVEL[key] : level;
-  }
-  function banner(doc, text, timeoutMs) {
-    if (!doc || !doc.body || typeof doc.createElement !== "function") return false;
-    let bar = doc.getElementById(BANNER_ID);
-    if (!bar) {
-      bar = doc.createElement("div");
-      bar.id = BANNER_ID;
-      bar.style.cssText = "position:fixed;left:0;right:0;top:0;padding:8px 12px;background:#5a1d1d;color:#fff;font:13px/1.5 sans-serif;z-index:9999";
-      doc.body.appendChild(bar);
-    }
-    bar.textContent = text;
-    setTimeout(() => {
-      if (typeof bar.remove === "function") bar.remove();
-    }, timeoutMs);
-    return true;
-  }
-  function showOnHost(host, text, type) {
-    try {
-      if (!host || !host.sys_Message || typeof host.sys_Message.showToastMessage !== "function") return false;
-      host.sys_Message.showToastMessage(text, type);
-      return true;
-    } catch (e) {
-      return false;
-    }
-  }
-  function toast(message, level = TOAST_LEVEL.info, opts = {}) {
-    const doc = opts.doc || globalThis.document;
-    const host = opts.host === void 0 ? getEda() : opts.host;
-    const text = message === null || message === void 0 ? "" : String(message);
-    if (showOnHost(host, text, normalizeLevel(level))) return "host";
-    return banner(doc, text, opts.timeoutMs === void 0 ? 3e3 : opts.timeoutMs) ? "dom" : "none";
   }
 
   // iframe/js/src/ui/rewardDialog.js
@@ -482,6 +406,108 @@ a.rw-btn { text-decoration: none; }
     const task = queue.then(() => recordOnce(showDialog));
     queue = task.catch(() => void 0);
     return task;
+  }
+
+  // iframe/js/src/ui/statusBar.js
+  var LEVEL_CLASS = Object.freeze({
+    "": "",
+    info: "info",
+    ok: "success",
+    success: "success",
+    warn: "warning",
+    warning: "warning",
+    err: "error",
+    error: "error"
+  });
+  var ACCENT = "accent";
+  function percentOf(done, total) {
+    const d = Number(done);
+    const t = Number(total);
+    if (!Number.isFinite(d) || !Number.isFinite(t) || t <= 0) return 0;
+    return Math.max(0, Math.min(100, Math.floor(d / t * 100)));
+  }
+  function classOf(base, level) {
+    const suffix = LEVEL_CLASS[level === void 0 ? "" : level];
+    if (suffix === void 0) return base;
+    return suffix ? base + " " + suffix : base;
+  }
+  function createStatusBar(options = {}) {
+    const textEl = options.textEl || null;
+    const barEl = options.barEl || null;
+    const baseClass = options.baseClass || "status";
+    const barBaseClass = options.barBaseClass || "status-bar";
+    const widthProp = options.widthProp || "width";
+    function text(message, level) {
+      if (!textEl) return;
+      textEl.textContent = message === null || message === void 0 ? "" : String(message);
+      textEl.className = classOf(baseClass, level);
+    }
+    function width(percent, level) {
+      if (!barEl) return;
+      const p = Math.max(0, Math.min(100, Number(percent) || 0));
+      barEl.style[widthProp] = p + "%";
+      const suffix = level === void 0 ? ACCENT : LEVEL_CLASS[level];
+      barEl.className = suffix ? barBaseClass + " " + suffix : barBaseClass;
+    }
+    function progress(done, total, suffix, level) {
+      const p = percentOf(done, total);
+      text(`${done} / ${total} ${p}%${suffix ? "　" + suffix : ""}`, level);
+      width(p, level);
+      return p;
+    }
+    function reset() {
+      text("", "");
+      width(0, "");
+    }
+    return { text, progress, width, reset };
+  }
+
+  // iframe/js/src/ui/toast.js
+  var TOAST_LEVEL = Object.freeze({
+    info: "info",
+    success: "success",
+    warn: "warning",
+    error: "error",
+    warning: "warning",
+    legacy: 2
+  });
+  var BANNER_ID = "__wolf_notice";
+  function normalizeLevel(level) {
+    if (typeof level === "number") return Number.isFinite(level) ? level : TOAST_LEVEL.info;
+    if (typeof level !== "string") return TOAST_LEVEL.info;
+    const key = level.trim().toLowerCase();
+    return Object.prototype.hasOwnProperty.call(TOAST_LEVEL, key) ? TOAST_LEVEL[key] : level;
+  }
+  function banner(doc, text, timeoutMs) {
+    if (!doc || !doc.body || typeof doc.createElement !== "function") return false;
+    let bar = doc.getElementById(BANNER_ID);
+    if (!bar) {
+      bar = doc.createElement("div");
+      bar.id = BANNER_ID;
+      bar.style.cssText = "position:fixed;left:0;right:0;top:0;padding:8px 12px;background:#5a1d1d;color:#fff;font:13px/1.5 sans-serif;z-index:9999";
+      doc.body.appendChild(bar);
+    }
+    bar.textContent = text;
+    setTimeout(() => {
+      if (typeof bar.remove === "function") bar.remove();
+    }, timeoutMs);
+    return true;
+  }
+  function showOnHost(host, text, type) {
+    try {
+      if (!host || !host.sys_Message || typeof host.sys_Message.showToastMessage !== "function") return false;
+      host.sys_Message.showToastMessage(text, type);
+      return true;
+    } catch (e) {
+      return false;
+    }
+  }
+  function toast(message, level = TOAST_LEVEL.info, opts = {}) {
+    const doc = opts.doc || globalThis.document;
+    const host = opts.host === void 0 ? getEda() : opts.host;
+    const text = message === null || message === void 0 ? "" : String(message);
+    if (showOnHost(host, text, normalizeLevel(level))) return "host";
+    return banner(doc, text, opts.timeoutMs === void 0 ? 3e3 : opts.timeoutMs) ? "dom" : "none";
   }
 
   // iframe/js/src/app/pcb-to-sch/model.js
@@ -1128,12 +1154,18 @@ a.rw-btn { text-decoration: none; }
   function delay(ms) {
     return new Promise((resolve) => setTimeout(resolve, ms));
   }
+  var VERSION_HINTS = {
+    supported: { text: "功能可用", color: "#8f8" },
+    tooOld: { text: "建议更新EDA", color: "#fb8" },
+    tooNew: { text: "暂未做适配", color: "#fb8" }
+  };
   function initVersion() {
     try {
       version = getEditorVersion();
       if (!version) throw new Error("未检测到 EDA 环境");
-      versionSpan.textContent = `当前EDA版本：${version} 功能可用`;
-      versionSpan.style.color = "#8f8";
+      const hint = VERSION_HINTS[classifyVersionSupport(version)];
+      versionSpan.textContent = hint ? `当前EDA版本：${version} ${hint.text}` : `当前EDA版本：${version}`;
+      versionSpan.style.color = hint ? hint.color : "#ccc";
       yvalueCheck.checked = !isV2();
     } catch (e) {
       versionSpan.textContent = "当前不在EDA环境，当前版本不支持转换";
@@ -1314,7 +1346,7 @@ a.rw-btn { text-decoration: none; }
           if (rowElement) rowElement.classList.add("row-error");
         });
         if (!ignoreMissing) {
-          throw new Error("未生成源码，部分元件格式错误，已标红，需要做完 器件标准化 才能转换！！！");
+          throw new Error("部分元件没有符号！！！解决方法：可忽略错误 或者 在EDA器件标准化面板替换器件");
         }
         logger.debug(`忽略 ${missingSymbols.length} 组缺失符号的元件，它们将不会出现在生成的源码中`);
         updateProgress(10, `忽略 ${missingSymbols.length} 组缺失符号元件`);
@@ -1398,9 +1430,7 @@ a.rw-btn { text-decoration: none; }
       updateProgress(0, "请先加载数据");
       return;
     }
-    const headers = Array.from(document.querySelectorAll(".table-header .header-cell")).map(
-      (cell) => cell.innerText.trim()
-    );
+    const headers = Array.from(document.querySelectorAll(".table-header .header-cell")).map((cell) => cell.innerText.trim());
     const rows = [];
     document.querySelectorAll(".grid-row").forEach((row) => {
       const cells = row.querySelectorAll(".row-cell");

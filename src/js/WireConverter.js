@@ -27,7 +27,7 @@ import { buildPolygonPath, buildWireChains, isValidSegment } from './common/wire
 
 // 默认 API 配置兜底（防止解析失败导致崩溃）
 // 注意：`圆弧角度` 保留键名只为兼容历史校准数据，**已不再参与计算** ——
-// 实测 V2.2 与 V4 的 `pcb_PrimitiveArc.create/get` 与多边形路径 `ARC` 全是角度制，
+// 实测 V2.2.45 与 V4 的 `pcb_PrimitiveArc.create/get` 与多边形路径 `ARC` 全是角度制，
 // 再乘一个「获取弧线.圆弧角度」会把 90° 压成 1.57°（详见 docs/测试报告-v1.17.6.md P1-3）。
 const DEFAULT_API_CONFIG = {
 	创建折线: { 坐标: 1, 线宽: 1 },
@@ -110,7 +110,7 @@ export const WireConverter = {
 	/**
 	 * 角度校准系数（单侧）
 	 *
-	 * 为什么只取一侧：多边形路径的 `ARC` 角度是**统一基准**（实测 V2.2 / V4 都是角度制），
+	 * 为什么只取一侧：多边形路径的 `ARC` 角度是**统一基准**（实测 V2.2.45 / V4 都是角度制），
 	 * 只有 `pcb_PrimitiveArc` 的 get / create 在个别 EDA 版本里会与基准不同（角度/弧度混用）。
 	 * 所以：
 	 *   - 读弧线 → 基准：乘 `获取弧线.圆弧角度`（该版本 get 返回弧度时填 57.2958）

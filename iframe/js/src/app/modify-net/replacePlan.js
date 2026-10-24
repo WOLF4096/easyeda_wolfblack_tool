@@ -8,7 +8,7 @@
  *            const { count, lines } = applyRenames(componentsContainer, map)
  *
  * 原实现把「解析 / 建表 / 两种结构各写一遍遍历」全塞在一个 click 回调里，
- * 连 `isModern()` 都被当成数据结构判断（V2.2 里也可能有 pinInfoMap）。这里改成结构驱动。
+ * 连 `isModern()` 都被当成数据结构判断（V2.2.45 里也可能有 pinInfoMap）。这里改成结构驱动。
  *
  * 开发者：WOLF4096
  * 辅助开发：DeepSeek-V4.1-Flash
