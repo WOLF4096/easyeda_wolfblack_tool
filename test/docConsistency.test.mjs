@@ -119,7 +119,7 @@ describe('文档一致性', () => {
 
 	it('「关于」页保留 5 个入口链接', () => {
 		const html = fs.readFileSync(path.join(ROOT, 'iframe', 'About.html'), 'utf8');
-		for (const label of ['Github 主页', '更新日志', '嘉立创EDA扩展广场', '联系开发者', '请开发者喝咖啡']) {
+		for (const label of ['Github 主页', '更新日志', '嘉立创EDA扩展广场', '联系开发者', '请开发者喝蜜雪']) {
 			assert.ok(html.includes(label), `「关于」页缺少入口：${label}`);
 		}
 		assert.ok(html.includes('id="appVersion"'), '「关于」页缺少版本号占位');
