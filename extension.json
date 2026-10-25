@@ -18,7 +18,7 @@
 	"images": {
 		"logo": "./images/logo.png"
 	},
-	"homepage": "https://github.com/WOLF4096/easyeda_wolfblack_tool",
+	"homepage": "https://github.com/WOLF4096",
 	"bugs": "https://github.com/WOLF4096/easyeda_wolfblack_tool/issues",
 	"activationEvents": {},
 	"entry": "./dist/index",
