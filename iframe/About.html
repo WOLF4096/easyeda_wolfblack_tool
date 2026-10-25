@@ -5,95 +5,95 @@
   本工具为非官方第三方开源扩展
 -->
 <html lang="zh-CN">
-	<head>
-		<meta charset="UTF-8" />
-		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-		<title>狼黑工具 - 关于</title>
-		<link rel="stylesheet" href="/iframe/css/common.css" />
-	</head>
 
-	<body class="page-scroll">
-		<div class="about-container">
-			<div class="about-header">
-				<img src="/images/logo.png" alt="Logo" class="logo" />
-				<div>
-					<h1>狼黑工具 (WolfBlack Tool)</h1>
-					<div class="about-sub"><span id="appVersion"></span> · 嘉立创 EDA 专业版辅助扩展 · 开源免费</div>
-				</div>
-			</div>
+<head>
+	<meta charset="UTF-8" />
+	<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+	<title>狼黑工具 - 关于</title>
+	<link rel="stylesheet" href="/iframe/css/common.css" />
+</head>
 
-			<div class="links-container">
-				<a href="https://github.com/WOLF4096/easyeda_wolfblack_tool" target="_blank" class="link-card">
-					<span class="link-icon icon-github"></span>Github 主页
-				</a>
-				<a href="https://github.com/WOLF4096/easyeda_wolfblack_tool/blob/main/CHANGELOG.md" target="_blank" class="link-card">
-					<span class="link-icon icon-doc"></span>更新日志
-				</a>
-				<a href="https://ext.lceda.cn/item/darksteel/wolfblack-tool" target="_blank" class="link-card">
-					<span class="link-icon icon-link"></span>嘉立创EDA扩展广场
-				</a>
-				<a href="#" class="link-card popup-trigger" data-img="../images/wx.png"> <span class="link-icon icon-link"></span>联系开发者 </a>
-				<a href="#" class="link-card popup-trigger" data-img="../images/reward_qrcode.png">
-					<span class="link-icon icon-link"></span>请开发者喝咖啡
-				</a>
-			</div>
-
-			<h2>这是什么</h2>
-			<p>
-				狼黑工具是一款嘉立创 EDA 专业版的辅助扩展，把画板过程中反复出现的琐碎操作做成了一键功能：导入图片和二维码、批量改网络、批量换器件、从
-				PCB 反推原理图、统计画板工时等，共 23 项。
-			</p>
-			<p>适用于嘉立创 EDA 专业版 V2.2.45 ~ V4。基于 V2.2.45 开发、全部功能可用、只是早期 API 可能有 bug、建议使用 EDA V3版本。</p>
-			<p>功能全部在本机运行，不采集也不上传你的工程数据。每个功能的用法，点开下表即可查看。</p>
-
-			<div class="notice-box">
-				<strong>提示：</strong> 初次安装后，建议新建一个空白 PCB 并运行一次「校准API误差」，校准坐标与尺寸，后续转换类功能会更准。
-			</div>
-
-			<h2>功能列表</h2>
-
-			<table id="featureTable">
-				<thead>
-					<tr>
-						<th class="col-name">功能名称</th>
-						<th>一句话说明</th>
-						<th class="col-scope">适用对象与版本</th>
-						<th class="col-demo">演示</th>
-					</tr>
-				</thead>
-				<tbody></tbody>
-			</table>
-
-			<div class="danger-box">
-				<h2>数据安全与免责</h2>
-				<ol>
-					<li>
-						<strong>先备份</strong
-						>：插件里有若干功能会改写当前工程的连接关系或器件（如生成物理网络、批量替换器件、PCB转原理图）。执行这类操作前，请先另存一份工程，或使用
-						EDA 自带的版本记录。
-					</li>
-					<li><strong>先在测试工程上试</strong>：EDA 各版本的行为存在差异，建议先用一块测试板熟悉效果，再用于正式项目。</li>
-					<li>
-						<strong>数据都在本机</strong
-						>：工时记录、校准参数只保存在本机的扩展存储里，不会上传；卸载扩展或清除数据后不可恢复，重要数据请先用「导出备份数据」备份。
-					</li>
-					<li>
-						<strong>免责声明</strong>：本扩展按「现状」免费提供，不对因使用本插件导致的数据损坏、工程丢失或生产损失承担连带责任。<strong
-							>开始使用即表示你已知晓并自担风险。</strong
-						>
-					</li>
-					<li><strong>非官方</strong>：本工具是第三方开源扩展，也不代表官方立场。</li>
-				</ol>
+<body class="page-scroll">
+	<div class="about-container">
+		<div class="about-header">
+			<img src="/images/logo.png" alt="Logo" class="logo" />
+			<div>
+				<h1>狼黑工具 (WolfBlack Tool)</h1>
+				<div class="about-sub"><span id="appVersion"></span> · 嘉立创 EDA 专业版辅助扩展 · 开源免费</div>
 			</div>
 		</div>
 
-		<div id="imageModal" class="modal">
-			<div class="modal-card about-modal">
-				<span class="close-btn">&times;</span>
-				<img id="modalImage" src="" alt="二维码/图片" />
-			</div>
+		<div class="links-container">
+			<a href="https://github.com/WOLF4096/easyeda_wolfblack_tool" target="_blank" class="link-card">
+				<span class="link-icon icon-github"></span>Github 主页
+			</a>
+			<a href="https://github.com/WOLF4096/easyeda_wolfblack_tool/blob/main/CHANGELOG.md" target="_blank"
+				class="link-card">
+				<span class="link-icon icon-doc"></span>更新日志
+			</a>
+			<a href="https://ext.lceda.cn/item/darksteel/wolfblack-tool" target="_blank" class="link-card">
+				<span class="link-icon icon-link"></span>嘉立创EDA扩展广场
+			</a>
+			<a href="#" class="link-card popup-trigger" data-img="../images/wx.png"> <span
+					class="link-icon icon-link"></span>联系开发者 </a>
+			<a href="#" class="link-card popup-trigger" data-img="../images/reward_qrcode.png">
+				<span class="link-icon icon-link"></span>请开发者喝咖啡
+			</a>
 		</div>
 
-		<script src="/iframe/js/app/About.js"></script>
-	</body>
+		<h2>这是什么</h2>
+		<p>
+			狼黑工具是一款嘉立创 EDA 专业版的辅助扩展，把画板过程中反复出现的琐碎操作做成了一键功能：导入图片和二维码、批量改网络、批量换器件、从
+			PCB 反推原理图、统计画板工时等。
+		</p>
+		<p>适用于嘉立创 EDA 专业版 V2.2.45 ~ V4。基于 V2.2.45 开发、全部功能可用、只是早期 API 可能有 bug、建议使用 EDA V3版本。</p>
+		<p>功能全部在本机运行，不采集也不上传你的工程数据。每个功能的用法，点开下表即可查看。</p>
+
+		<div class="notice-box">
+			<strong>提示：</strong> 初次安装后，建议新建一个空白 PCB 并运行一次「校准API误差」，校准坐标与尺寸，后续转换类功能会更准。
+		</div>
+
+		<h2>功能列表</h2>
+
+		<table id="featureTable">
+			<thead>
+				<tr>
+					<th class="col-name">功能名称</th>
+					<th>一句话说明</th>
+					<th class="col-scope">适用对象与版本</th>
+					<th class="col-demo">演示</th>
+				</tr>
+			</thead>
+			<tbody></tbody>
+		</table>
+
+		<div class="danger-box">
+			<h2>数据安全与免责</h2>
+			<ol>
+				<li>
+					<strong>先备份</strong>：插件里有若干功能会改写当前工程的连接关系或器件（如生成物理网络、批量替换器件、PCB转原理图）。执行这类操作前，请先另存一份工程，或使用
+					EDA 自带的版本记录。
+				</li>
+				<li><strong>先在测试工程上试</strong>：EDA 各版本的行为存在差异，建议先用一块测试板熟悉效果，再用于正式项目。</li>
+				<li>
+					<strong>数据都在本机</strong>：工时记录、校准参数只保存在本机的扩展存储里，不会上传；卸载扩展或清除数据后不可恢复，重要数据请先用「导出备份数据」备份。
+				</li>
+				<li>
+					<strong>免责声明</strong>：本扩展按「现状」免费提供，不对因使用本插件导致的数据损坏、工程丢失或生产损失承担连带责任。<strong>开始使用即表示你已知晓并自担风险。</strong>
+				</li>
+				<li><strong>非官方</strong>：本工具是第三方开源扩展，也不代表官方立场。</li>
+			</ol>
+		</div>
+	</div>
+
+	<div id="imageModal" class="modal">
+		<div class="modal-card about-modal">
+			<span class="close-btn">&times;</span>
+			<img id="modalImage" src="" alt="二维码/图片" />
+		</div>
+	</div>
+
+	<script src="/iframe/js/app/About.js"></script>
+</body>
+
 </html>

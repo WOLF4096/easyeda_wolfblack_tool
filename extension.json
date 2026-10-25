@@ -4,7 +4,7 @@
 	"displayName": "狼黑工具",
 	"description": "画板工具集：PCB转原理图、改网络、换器件、记工时",
 	"version": "1.23.2",
-	"publisher": "wolfblack",
+	"publisher": "狼黑",
 	"engines": {
 		"eda": ">=2.2.45"
 	},
