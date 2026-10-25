@@ -418,20 +418,20 @@ v1.20.0 起报告已内置图表库，断网也能看。如果是旧版本导出
 
 ---
 
-## 反馈与支持
-
-- 项目主页：[狼黑工具](https://github.com/WOLF4096/easyeda_wolfblack_tool)
-- 问题与建议：[GitHub Issues](https://github.com/WOLF4096/easyeda_wolfblack_tool/issues)
-- 扩展主页：[嘉立创 EDA 扩展广场](https://ext.lceda.cn/item/darksteel/wolfblack-tool)
-
----
-
 ## 免责声明
 
 本扩展按「现状」免费提供。它源于实际工作中的需求，并非经过完整商业化测试的通用产品。EDA 各版本行为存在差异，建议先在测试工程上验证效果。开发者不对因使用本插件导致的工程损坏、数据丢失或生产损失承担连带责任。开始使用即表示你已知晓并自担风险。
 
 ---
 
-> 开发者：WOLF4096 | 狼黑  
-> 辅助开发：DeepSeek-V4.1-Flash  
-> 本工具为非官方第三方开源扩展
+## 反馈与支持
+
+| 项目     | 信息                                                                     |
+| -------- | ------------------------------------------------------------------------ |
+| 作者主页 | [狼黑](https://github.com/WOLF4096)                                      |
+| 项目主页 | [狼黑工具](https://github.com/WOLF4096/easyeda_wolfblack_tool)           |
+| 问题反馈 | [提交 Issue](https://github.com/WOLF4096/easyeda_wolfblack_tool/issues)  |
+| 扩展主页 | [嘉立创 EDA 扩展广场](https://jlc-ext.com/item/darksteel/wolfblack-tool) |
+| 开源许可 | Apache-2.0                                                               |
+
+> 本工具为 **非官方** 第三方开源扩展。
