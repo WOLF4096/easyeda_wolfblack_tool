@@ -50,7 +50,7 @@ export const ALLOW_RULES = [
 	// 广场展示资源：README=详情、CHANGELOG=更新日志、LICENSE=许可证、PRIVACY=隐私政策
 	{ name: '广场展示资源', test: (rel) => /^(LICENSE|README\.md|CHANGELOG\.md|PRIVACY\.md)$/.test(rel) },
 	{ name: '扩展入口', test: (rel) => rel === 'dist/index.js' },
-	{ name: '详情图片', test: (rel) => /^images\/[^/]+\.png$/.test(rel) },
+	{ name: '详情图片', test: (rel) => /^images\/[^/]+\.(png|jpe?g|webp|gif)$/i.test(rel) },
 	{ name: '多语言', test: (rel) => /^locales\/.+\.json$/.test(rel) },
 	{ name: '页面', test: (rel) => /^iframe\/[^/]+\.html$/.test(rel) },
 	{ name: '页面样式', test: (rel) => rel === 'iframe/css/common.css' },
@@ -64,10 +64,10 @@ export const ALLOW_RULES = [
 export const CORE_REQUIRED = ['extension.json', 'dist/index.js', 'LICENSE', 'README.md', 'CHANGELOG.md', 'PRIVACY.md', 'iframe/css/common.css'];
 
 /** 详情图 / 关于页图片：JS 里可能用运行时拼路径，静态扫描不到，这里显式点名 */
-export const REQUIRED_IMAGES = ['images/logo.png', 'images/info.png', 'images/reward_qrcode.png', 'images/wx.png'];
+export const REQUIRED_IMAGES = ['images/logo.png', 'images/info.png', 'images/reward_qrcode.png', 'images/wx.png', 'images/az.jpg'];
 
 /** 静态资源后缀（HTML 里引用这些才需要校验文件存在） */
-const ASSET_EXT = /\.(js|css|png|json)$/i;
+const ASSET_EXT = /\.(js|css|png|jpe?g|webp|gif|json)$/i;
 
 /**
  * 匹配一个文件属于哪个允许类别
