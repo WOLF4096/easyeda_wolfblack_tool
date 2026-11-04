@@ -41,20 +41,44 @@ export function planPrimitiveOperations(clusters, allUsedNetNames) {
 		if (!hasMultiple(group)) continue;
 
 		const finalNetName = namer.nameFor(voteNets(group));
-		for (const item of group) {
-			if (item.net === finalNetName) continue;
-			operations.push({
-				id: item.id,
-				ticket: item.ticket,
-				type: item.type,
-				oldNet: item.net || '—',
-				newNet: finalNetName,
-				status: 'pending',
-			});
-		}
+		pushGroupOperations(operations, group, finalNetName);
 	}
 
 	return operations;
+}
+
+/**
+ * 单个分量内：按「真实图元 id」出操作
+ *
+ * 圆弧在解析阶段被拆成多段折线（`e7_1`、`e7_2`…，见 `expandArcLines`），段的 id 只用于
+ * 连通计算，源码里并没有这个 id。所以这里取 `parentId`：
+ *   1. 写回源码时才能命中 `["ARC","e7",0,"",…]` 这一行（用段 id 永远查不到）；
+ *   2. 一条弧只出一条操作，预览表与计数不会按段数翻倍。
+ *
+ * 判断顺序不能反：先比网络名再登记 `seen`，否则「第一段已是目标网络」会让整条弧漏写。
+ *
+ * @param {Array<object>} operations 操作列表（就地追加）
+ * @param {Array<object>} group 一个连通分量
+ * @param {string} finalNetName 该分量的网络名
+ * @returns {void}
+ * @sideEffects **就地追加** `operations`
+ */
+function pushGroupOperations(operations, group, finalNetName) {
+	const seen = new Set();
+	for (const item of group) {
+		if (item.net === finalNetName) continue;
+		const opId = item.parentId || item.id;
+		if (seen.has(opId)) continue;
+		seen.add(opId);
+		operations.push({
+			id: opId,
+			ticket: item.ticket,
+			type: item.type,
+			oldNet: item.net || '—',
+			newNet: finalNetName,
+			status: 'pending',
+		});
+	}
 }
 
 /**

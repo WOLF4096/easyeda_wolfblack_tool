@@ -1564,6 +1564,30 @@ describe('app/generate-net/{connectivity,netNamer,plan}', () => {
 		);
 	});
 
+	it('图元模式：圆弧拆出的多段只出一条操作，id 用真实图元 id', async () => {
+		const { expandArcLines } = await import('../iframe/js/src/app/generate-net/geometry.js');
+		const { planPrimitiveOperations } = await import('../iframe/js/src/app/generate-net/plan.js');
+		// 45° 弧 → 2 段折线，段 id 形如 e7_1 / e7_2，源码里只有 e7
+		const segs = expandArcLines({ id: 'e7', type: 'ARC', net: '', layer: 1, x1: 302.3223, y1: 382.3223, x2: 417.4264, y2: 430, angle: -45, w: 10 });
+		assert.ok(segs.length > 1, '45° 弧必须拆成多段');
+		assert.ok(
+			segs.every((s) => s.parentId === 'e7'),
+			'每段都要带真实图元 id',
+		);
+		assert.equal(new Set(segs.map((s) => s.id)).size, segs.length, '段 id 仍要逐段唯一（并查集依赖它）');
+
+		const clusters = {
+			r1: [
+				{ id: 'e0', type: 'PAD', net: 'NET1', layer: 1, _pinInfo: { des: 'R1', pin: '1' } },
+				...segs,
+				{ id: 'e1', type: 'PAD', net: 'NET1', layer: 1, _pinInfo: { des: 'R1', pin: '2' } },
+			],
+		};
+		const ops = planPrimitiveOperations(clusters, new Set());
+		assert.equal(ops.length, 1, '一条弧只出一条操作，不能按段数翻倍');
+		assert.deepEqual(ops[0], { id: 'e7', type: 'ARC', oldNet: '—', newNet: 'NET1', ticket: undefined, status: 'pending' });
+	});
+
 	it('网表模式：按位号+引脚产出，旧网络从两种结构读', async () => {
 		const { planNetlistOperations } = await import('../iframe/js/src/app/generate-net/plan.js');
 		const clusters = {
@@ -1618,6 +1642,17 @@ describe('app/generate-net/sourceRewrite', () => {
 
 		const untouched = '["LINE","e9",0,"A",1,0,0,1,0,6]';
 		assert.equal(rewrite(untouched).line, untouched, '未命中的行必须逐字节不变');
+	});
+
+	it('V2：ARC 行按真实 id 命中，网络写进第 4 项', async () => {
+		const { createLineRewriter } = await import('../iframe/js/src/app/generate-net/sourceRewrite.js');
+		const rewrite = createLineRewriter(new Map([['e7', 'NET1']]), true);
+		const line = '["ARC","e7",0,"",1,302.3223,382.3223,417.4264,430,-45,10,0]';
+		const out = rewrite(line);
+		assert.equal(out.changedId, 'e7');
+		assert.equal(JSON.parse(out.line)[3], 'NET1', '弧的网络名必须写进去');
+		assert.deepEqual(JSON.parse(out.line).slice(0, 3), ['ARC', 'e7', 0], '除网络名外其它字段不动');
+		assert.equal(JSON.parse(out.line)[9], -45, '角度不能被改掉');
 	});
 
 	it('V3：改 netName / padNet，行尾 | 保持原样', async () => {

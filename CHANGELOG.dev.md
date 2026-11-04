@@ -29,7 +29,11 @@
 - **`deleteTargets` 同步化**：去掉逐条 `await`，改为 `warnOnReject(remove(...), '删除临时图元失败')` 一次性下发。理由同上——交互放置态下若后续 API 被挂起，串行等待会第二次卡死。单条同步异常仍逐条 try/catch 告警；`DELETE_HANDLERS` 与旧版一一对应（`Region → pcb_PrimitivePour.delete`；异形焊盘 2.2.45 已知删不掉，属既有缺陷）
 - 2.2.43 分支的 `pcb_PrimitiveComponent.create`（带坐标、非交互）保持 `await` 不变，`placeDevice` 仍是 `async`；`onRunClick` 里 `await placeDevice(...)` 保留
 - **`finishSuccess` 不再隐藏面板**（同版本内按需求追加）：去掉 `sys_IFrame.hideIFrame('CreateFootprint')`，改为清空 `#fooNameInput` 与 `#desNameInput`、**保留** `#libSelect` 的选中值。连续做封装时不用反复从菜单开窗口；`host` 参数随之移除（函数内已无宿主调用），调用点改为 `finishSuccess(names.deviceName)`。注意副作用：面板常驻后，重复点按钮而画布上没有新选中时，`readSelection` 会抛「请先在 PCB 中选中图元！」——这是预期的防错，不会误建库元素
-- 验证：`npm test` **871 用例全通过**（pretest 重建产物，`iframe/js/app/CreateFootprint.js` 中已是 `warnOnReject(host.sch_PrimitiveComponent.create(...))`，不再有 await；`finishSuccess` 已无 hideIFrame）；`check:js` 0 违规、`check:deps` 无环
+- **弧线网络写不进去**（`app/generate-net/`）：`expandArcLines()` 为连通判定把弧拆成 ≤12 段，段 id 是 `prim.id + '_' + k`（`e7_1` / `e7_2`…），而 `planPrimitiveOperations()` 直接把段 id 当操作 id → `writeSource()` 的 netMap 键成了 `e7_1`，`sourceRewrite` 拿源码行的 `e7` 去查必然 miss，ARC 行原样返回（第 4 项仍是 `""`）。同一份假 id 也让 API 方式去调 `pcb_PrimitiveArc.modify('e7_1')` → 指向不存在的图元。V2 / V3 V4 两套解析器都走 `expandArcLines`，所以三版通病
+- 修法：`expandArcLines()` 产出段时补 `parentId: prim.id`（段 `id` 仍保持逐段唯一 —— 并查集与网格去重都依赖它）；`plan.js` 拆出 `pushGroupOperations()`，用 `parentId || id` 出操作并按该 id 去重：一条弧只出一条，预览表与进度计数不再按段数翻倍。判断顺序是先比网络名再登记去重，否则「第一段已是目标网络」会让整条弧漏写
+- 实测（用户给的 5 行样本：45° 弧 + 两条线 + 两个焊盘）：修复前 `ops = [e7_1, e7_2]`、ARC 行不变；修复后 `ops = [{id:'e7', type:'ARC', newNet:'NET1'}]`，改写结果 `["ARC","e7",0,"NET1",1,302.3223,382.3223,417.4264,430,-45,10,0]`，除第 4 项外逐字节不变
+- 新增 2 个用例（`test/pageModels.test.mjs`）：① 弧段必须带 `parentId`、段 id 唯一，同簇只产出一条 `id:'e7'` 的操作；② ARC 行按真实 id 命中、只改第 4 项且角度不被改
+- 验证：`npm test` **873 用例全通过**（原 871 + 新增 2；pretest 重建产物，`iframe/js/app/CreateFootprint.js` 中已是 `warnOnReject(host.sch_PrimitiveComponent.create(...))`，不再有 await；`finishSuccess` 已无 hideIFrame）；`check:js` 0 违规、`check:deps` 无环
 - **实机未验证**：本机无 V2.2.45 环境。需在 V2.2.45 上跑一次「选中图元 → 创建封装」，确认原图元清空、库中封装/符号/器件齐全、面板保持打开且名称/位号已清空、库选项仍是刚才选的那个；再选一批新图元连做第二个，确认不残留上一次状态
 
 ## v1.23.1 `2026-10-24`

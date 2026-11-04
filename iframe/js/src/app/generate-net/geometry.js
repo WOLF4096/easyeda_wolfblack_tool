@@ -245,7 +245,7 @@ export function getRotatedRectVertices(x, y, w, h, rotation, radius = 0, segment
  * 隔开却判相接。必须按角度采样。
  *
  * @param {object} prim 弧图元（`x1/y1/x2/y2/angle/w`）
- * @returns {Array<object>} 折线段（`shape: 'line'`）
+ * @returns {Array<object>} 折线段（`shape: 'line'`，`id` 逐段唯一、`parentId` 为真实图元 id）
  * @sideEffects 无（纯函数）
  */
 export function expandArcLines(prim) {
@@ -280,7 +280,21 @@ export function expandArcLines(prim) {
 		const a = a0 + sweep * (k / N);
 		const qx = cx + r * Math.cos(a);
 		const qy = cy + r * Math.sin(a);
-		out.push({ id: prim.id + '_' + k, type: 'ARC', net: prim.net, layer: prim.layer, shape: 'line', x1: px, y1: py, x2: qx, y2: qy, w: w });
+		// `id` 必须逐段唯一（并查集与网格去重都拿它当键）；
+		// `parentId` 才是源码里的真实图元 id —— 写回网络时只能用它，用段 id 永远对不上源码行。
+		out.push({
+			id: prim.id + '_' + k,
+			parentId: prim.id,
+			type: 'ARC',
+			net: prim.net,
+			layer: prim.layer,
+			shape: 'line',
+			x1: px,
+			y1: py,
+			x2: qx,
+			y2: qy,
+			w: w,
+		});
 		px = qx;
 		py = qy;
 	}
