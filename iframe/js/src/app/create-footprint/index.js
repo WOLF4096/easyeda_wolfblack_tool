@@ -283,7 +283,29 @@ async function placeDevice(host, libraryUuid, devUuid, names) {
 		);
 		if (created && created.primitiveId) await host.pcb_PrimitiveComponent.delete(created.primitiveId);
 	}
-	await host.sch_PrimitiveComponent.create({ libraryUuid: libraryUuid, uuid: devUuid }, 0, 0, '', 0, false, true, true);
+	// 交互式放置：只发起、不等待。
+	// V2.2.45 的 sch_PrimitiveComponent.create(..., addIntoPcb=true) 会把封装挂到鼠标上，
+	// 返回的 Promise 在该版本永不 resolve —— 一旦 await，下面的删除原图元与收尾全部卡死
+	//（症状：按钮一直停在「处理中...」、面板不关、画布图元不清理）。
+	warnOnReject(
+		host.sch_PrimitiveComponent.create({ libraryUuid: libraryUuid, uuid: devUuid }, 0, 0, '', 0, false, true, true),
+		'放置器件失败',
+	);
+}
+
+/**
+ * 给可能返回 Promise 的 EDA 调用挂一个失败告警，但不等待结果
+ *
+ * 这类调用的返回值对本流程没有意义；V2.2.45 在交互放置态下还可能把后续 API 一起挂起，
+ * 等它就是等死。这里只兜住 reject，避免变成未处理的 Promise 拒绝。
+ *
+ * @param {any} task API 返回值（Promise 或布尔值）
+ * @param {string} label 告警文案
+ * @returns {void}
+ * @sideEffects 挂一个 catch 回调、console
+ */
+function warnOnReject(task, label) {
+	if (task && typeof task.catch === 'function') task.catch((e) => console.warn(label, e));
 }
 
 /** 图元类型 → 删除 API（未知类型不删，与原实现一致；焊盘异形已知不支持删除） */
@@ -296,18 +318,22 @@ const DELETE_HANDLERS = new Map([
 ]);
 
 /**
- * 删除原图元（逐条容错，单条失败只告警）
+ * 删除原图元（同步下发，逐条容错，单条失败只告警）
+ *
+ * 不串行 await：删除结果对流程没有意义，而 V2.2.45 在交互放置态下可能把后续 API 挂起，
+ * 一旦逐条等待就会在这里二次卡死。
  *
  * @param {object} host EDA 宿主对象
  * @param {Array<object>} targets 选中图元
- * @returns {Promise<void>}
+ * @returns {void}
  * @sideEffects eda API（各类 delete）、console
  */
-async function deleteTargets(host, targets) {
+function deleteTargets(host, targets) {
 	for (const item of targets) {
 		try {
 			const remove = DELETE_HANDLERS.get(item.primitiveType);
-			if (remove) await remove(host, item.primitiveId);
+			if (!remove) continue;
+			warnOnReject(remove(host, item.primitiveId), '删除临时图元失败');
 		} catch (e) {
 			console.warn('删除临时图元失败', e);
 		}
@@ -360,7 +386,7 @@ async function onRunClick() {
 		const created = await createLibraryElements(host, inputs.libraryUuid, names);
 		await writeSources(host, inputs.libraryUuid, primitives, names, created);
 		await placeDevice(host, inputs.libraryUuid, created.devUuid, names);
-		await deleteTargets(host, targets);
+		deleteTargets(host, targets);
 		finishSuccess(host, names.deviceName);
 	} catch (err) {
 		console.error('执行错误: ', err);

@@ -13,10 +13,23 @@
 - `生成物理网络` 在 V2.2.45 下经源码写入后，重开文档会丢失部分弧线导线 —— 早期 EDA V2.2.45 的平台缺陷，非插件逻辑问题
 - `批量替换器件` 在 V2.2.45 下替换完器件后网表取空、参数无法补全 —— 同上，V2.2.45 API 缺陷
 - `创建封装` 暂不支持 V3 / V4：底层源码写入 API 存在缺陷
+- ⚠️ `sch_PrimitiveComponent.create(..., addIntoBom=true, addIntoPcb=true)` 在 V2.2.45 下会进入**交互式放置**态（封装跟随鼠标），返回的 Promise **永不 resolve** —— 只能发起、不能 await；同理，交互放置态下的后续 PCB 写操作也可能被挂起，别串行等（v1.23.3 前的卡死根因）
 - V2.2.\* 版本不支持快捷键功能（该 API 仅 V3+ 提供）
 - 已知的 V4 坐标差异：V4 的 PCB 坐标单位为 mil、网格尺寸 ×10 —— 实测同一份 PCB 在 V2.2.45.5 与 V4.1.78 下 LINE/POLY/CANVAS 的 `unit:"mil"`、栅格 5、数值完全一致，**坐标搬运不乘 10**（`docs/FORMATLOG.md` 里「V4 网格 ×10」的旧结论已作废）
 - **V4 三条写盘流程已人工验证通过**（2026-10-22，V4.1.78）：PCB转原理图（符号与引脚完整）、生成物理网络三种写回、批量替换器件（器件真正替换、坐标角度不变、无临时件残留）。详见 `docs/V4回归记录.md`
 - ⚠️ **V4 待处理**：V4 下 `sys_FileManager.setDocumentSource()` 整份写回会丢掉 `POURED`（铜皮已计算填充）行 —— 实测同一份原文写回后 45,557 → 43,119 字节，`POUR` 本体仍在、填充缓存消失（V2.2.45 逐字节一致）。受影响：`生成物理网络`（源码方式）、`PCB转原理图` 等整份重写源码的功能；重算铜皮可恢复。处理方案待定
+
+## v1.23.3 `2026-11-04`
+
+> `创建封装` 卡「处理中...」：await 了一个永不 resolve 的交互式放置 Promise
+
+- **根因**（`app/create-footprint/index.js` 的 `placeDevice`）：`await host.sch_PrimitiveComponent.create({...}, 0, 0, '', 0, false, true, true)`。由声明顺序 `(component, x, y, subPartName, rotation, mirror, addIntoBom, addIntoPcb)` 可知第 7/8 参 `addIntoBom/addIntoPcb = true`，封装因此在 PCB 里进入「跟随鼠标放置」的交互态；该版本返回的 Promise 永不 resolve → `onRunClick` 钉死在这一行：按钮不复位（`finally` 进不去）、`deleteTargets` 与 `finishSuccess` 一行都没执行（原图元不清理、面板不关）。三个症状一一对应：封装能放 = create 已下发；「处理中...」= 354 行设置的按钮文案没被复位；图元还在 = 363 行的删除压根没跑
+- **回归来源**：迁移提交 `845f26b`（B2 页面迁移）引入该 `await`。重构前的单文件版（`c98f3f2` 的 `iframe/CreateFootprint.html`）与 bundle（`40090bf` 的 `app/CreateFootprint.js`）都是**裸调用不等待**，紧接着同步删图元
+- **修法**：该 create 改为裸调用，新增 `warnOnReject(task, label)` —— 只给返回的 Promise 挂 `.catch` 防未处理拒绝，不等它。同步异常仍向上抛，由 `onRunClick` 的 catch 走错误提示：放置真失败时不能继续删源图元
+- **`deleteTargets` 同步化**：去掉逐条 `await`，改为 `warnOnReject(remove(...), '删除临时图元失败')` 一次性下发。理由同上——交互放置态下若后续 API 被挂起，串行等待会第二次卡死。单条同步异常仍逐条 try/catch 告警；`DELETE_HANDLERS` 与旧版一一对应（`Region → pcb_PrimitivePour.delete`；异形焊盘 2.2.45 已知删不掉，属既有缺陷）
+- 2.2.43 分支的 `pcb_PrimitiveComponent.create`（带坐标、非交互）保持 `await` 不变，`placeDevice` 仍是 `async`；`onRunClick` 里 `await placeDevice(...)` 保留
+- 验证：`npm test` **871 用例全通过**（pretest 重建产物，`iframe/js/app/CreateFootprint.js` 中已是 `warnOnReject(host.sch_PrimitiveComponent.create(...))`，不再有 await）；`check:js` 0 违规、`check:deps` 无环
+- **实机未验证**：本机无 V2.2.45 环境。需在 V2.2.45 上跑一次「选中图元 → 创建封装」，确认放置后面板自动关闭、原图元清空、库中封装/符号/器件齐全
 
 ## v1.23.1 `2026-10-24`
 
