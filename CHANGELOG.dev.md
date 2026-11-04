@@ -28,8 +28,9 @@
 - **修法**：该 create 改为裸调用，新增 `warnOnReject(task, label)` —— 只给返回的 Promise 挂 `.catch` 防未处理拒绝，不等它。同步异常仍向上抛，由 `onRunClick` 的 catch 走错误提示：放置真失败时不能继续删源图元
 - **`deleteTargets` 同步化**：去掉逐条 `await`，改为 `warnOnReject(remove(...), '删除临时图元失败')` 一次性下发。理由同上——交互放置态下若后续 API 被挂起，串行等待会第二次卡死。单条同步异常仍逐条 try/catch 告警；`DELETE_HANDLERS` 与旧版一一对应（`Region → pcb_PrimitivePour.delete`；异形焊盘 2.2.45 已知删不掉，属既有缺陷）
 - 2.2.43 分支的 `pcb_PrimitiveComponent.create`（带坐标、非交互）保持 `await` 不变，`placeDevice` 仍是 `async`；`onRunClick` 里 `await placeDevice(...)` 保留
-- 验证：`npm test` **871 用例全通过**（pretest 重建产物，`iframe/js/app/CreateFootprint.js` 中已是 `warnOnReject(host.sch_PrimitiveComponent.create(...))`，不再有 await）；`check:js` 0 违规、`check:deps` 无环
-- **实机未验证**：本机无 V2.2.45 环境。需在 V2.2.45 上跑一次「选中图元 → 创建封装」，确认放置后面板自动关闭、原图元清空、库中封装/符号/器件齐全
+- **`finishSuccess` 不再隐藏面板**（同版本内按需求追加）：去掉 `sys_IFrame.hideIFrame('CreateFootprint')`，改为清空 `#fooNameInput` 与 `#desNameInput`、**保留** `#libSelect` 的选中值。连续做封装时不用反复从菜单开窗口；`host` 参数随之移除（函数内已无宿主调用），调用点改为 `finishSuccess(names.deviceName)`。注意副作用：面板常驻后，重复点按钮而画布上没有新选中时，`readSelection` 会抛「请先在 PCB 中选中图元！」——这是预期的防错，不会误建库元素
+- 验证：`npm test` **871 用例全通过**（pretest 重建产物，`iframe/js/app/CreateFootprint.js` 中已是 `warnOnReject(host.sch_PrimitiveComponent.create(...))`，不再有 await；`finishSuccess` 已无 hideIFrame）；`check:js` 0 违规、`check:deps` 无环
+- **实机未验证**：本机无 V2.2.45 环境。需在 V2.2.45 上跑一次「选中图元 → 创建封装」，确认原图元清空、库中封装/符号/器件齐全、面板保持打开且名称/位号已清空、库选项仍是刚才选的那个；再选一批新图元连做第二个，确认不残留上一次状态
 
 ## v1.23.1 `2026-10-24`
 

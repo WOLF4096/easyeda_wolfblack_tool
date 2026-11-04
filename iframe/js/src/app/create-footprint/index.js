@@ -341,16 +341,17 @@ function deleteTargets(host, targets) {
 }
 
 /**
- * 收尾：隐藏面板、清空名称输入、提示成功
+ * 收尾：清空名称与位号输入框、保留目标库、提示成功
  *
- * @param {object} host EDA 宿主对象
+ * 面板**不关闭**：连续做封装时不用反复从菜单打开，选好新图元直接再点「创建封装」。
+ *
  * @param {string} deviceName 器件名
  * @returns {void}
- * @sideEffects eda API（hideIFrame）、DOM、toast
+ * @sideEffects DOM、toast
  */
-function finishSuccess(host, deviceName) {
-	if (host.sys_IFrame) host.sys_IFrame.hideIFrame('CreateFootprint');
+function finishSuccess(deviceName) {
 	document.getElementById('fooNameInput').value = '';
+	document.getElementById('desNameInput').value = '';
 	toast('成功创建封装: ' + deviceName, 'success');
 }
 
@@ -358,7 +359,7 @@ function finishSuccess(host, deviceName) {
  * 主流程
  *
  * @returns {Promise<void>}
- * @sideEffects eda API（读源码、建库、写源码、放器件、删图元、隐藏面板）、DOM
+ * @sideEffects eda API（读源码、建库、写源码、放器件、删图元）、DOM
  */
 async function onRunClick() {
 	const btn = document.getElementById('runBtn');
@@ -387,7 +388,7 @@ async function onRunClick() {
 		await writeSources(host, inputs.libraryUuid, primitives, names, created);
 		await placeDevice(host, inputs.libraryUuid, created.devUuid, names);
 		deleteTargets(host, targets);
-		finishSuccess(host, names.deviceName);
+		finishSuccess(names.deviceName);
 	} catch (err) {
 		console.error('执行错误: ', err);
 		toast(err.message, 'error');
