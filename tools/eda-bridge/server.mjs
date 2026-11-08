@@ -159,6 +159,11 @@ function onBridgeMessage(text) {
 		lastSeen = Date.now();
 		return;
 	}
+	// 主动上报：导入进度（**不是**指令结果；它带 id，若不拦在这里会把 pending 提前 resolve 掉）
+	if (msg.type === 'progress') {
+		lastSeen = Date.now();
+		return;
+	}
 	// 指令回包
 	if (msg.id && pending.has(msg.id)) {
 		const { resolve, timer } = pending.get(msg.id);

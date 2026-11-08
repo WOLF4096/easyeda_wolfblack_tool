@@ -36,6 +36,17 @@
 - 验证：`npm test` **873 用例全通过**（原 871 + 新增 2；pretest 重建产物，`iframe/js/app/CreateFootprint.js` 中已是 `warnOnReject(host.sch_PrimitiveComponent.create(...))`，不再有 await；`finishSuccess` 已无 hideIFrame）；`check:js` 0 违规、`check:deps` 无环
 - **实机未验证**：本机无 V2.2.45 环境。需在 V2.2.45 上跑一次「选中图元 → 创建封装」，确认原图元清空、库中封装/符号/器件齐全、面板保持打开且名称/位号已清空、库选项仍是刚才选的那个；再选一批新图元连做第二个，确认不残留上一次状态
 
+### 追加：EDA桥导入提速（料号批量解析 + 本页缓存 + 8 路并发）
+
+- **根因**（`app/eda-bridge/commands.js` 的 `execItems`）：`for` 循环里逐个 `await resolveUuid(item.cno)` —— 每个元件一次 `lib_Device.getByLcscIds` 网络查询（几百毫秒），重复料号也照查；全仓没有任何缓存。另有两个连带问题：`create` 漏 `await`（把 V2.2.45 交互放置的教训误推广到非交互 create），错误全变成未处理 rejection、"成功 N" 不可信；页面选中采样每 100ms 一次，导入时与 create 抢宿主主线程。
+- **新模块**：`app/eda-bridge/concurrent.js`（`mapLimit` / `throttled`）、`app/eda-bridge/resolve.js`（去重 → 本页 Map 缓存 → `getByLcscIds(数组)` 批量，50/批 → 缺项按并发 6 逐个查）。
+- **V4 形态差异**：传单个字符串返回**器件对象**、不是数组（见 `docs/V4问题分析报告-v1.17.11.md` §1.2），`asList()` 归一；只有数组入参才返回数组。批量结果靠 `supplierId` 回映 C 编号；一条都不带时先单查第一个核对 uuid，一致才按返回顺序对齐 —— 顺序错位等于整批元件换成别的型号。
+- **创建**：`mapLimit(items, 8, createOne)`，每个都 `await`；失败条目串行重试一次（并发偶尔撞「文档正忙」）。`create` 优先用器件自带的 `libraryUuid`，失败退回系统库再试一次（缓存可能来自另一套库）。
+- **协议**：`handleImport` 回包新增可选字段 `resolved`（本次新解析的 C→UUID）/ `stale`（报「找不到器件」的编号）/ `ms` / `concurrency` / `total`；新增进度帧 `{type:'progress', id, progress:{phase,done,total}}`。⚠️ `tools/eda-bridge/server.mjs` 必须显式忽略 progress 帧 —— 它带 `id`，不拦会把 pending 提前 resolve 成进度对象。
+- **导入期间暂停选中采样**：`createCommandHandler` 新增可选依赖 `pauseWatch` / `resumeWatch`，`index.js` 注入并在结束后按原状态恢复（已断开则不恢复）。桥版本 2.2 → 2.3。
+- **验证**：`npm test` 881 全通过；`check:js` 0 违规；`check:deps` 118 模块 / 229 条 import 无环；`check:eext` 56 文件通过。离线 e2e `temp/_sdk_bridge_e2e.js`（真静态服务 + 真工作台后端 + 真 WebSocket + mock EDA）：100 元件 / 10 料号 → 批量查 1 次、create 100 次、并发峰值 8、0.3s；二次导入 `cache_hit=100`、0 次查询；14/14 通过。
+- **实机未验证**：8 路并发在真 EDA 上的表现待测。若出现成批失败，把 `CREATE_CONCURRENCY` 改成 1 即退回串行，其余优化不变。
+
 ## v1.23.1 `2026-10-24`
 
 > 四处交互缺陷修复 + 转换值可编辑 + 桥页去开关

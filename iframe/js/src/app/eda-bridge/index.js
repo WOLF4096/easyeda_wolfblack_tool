@@ -17,7 +17,7 @@ import { createCommandHandler } from './commands.js';
 import { parseAddr } from './protocol.js';
 
 /** 桥协议版本（不是 EDA 版本） */
-const VER = '2.2';
+const VER = '2.3';
 
 /** 采样间隔 / 回传间隔 */
 const SAMPLE_MS = 100;
@@ -30,6 +30,7 @@ let selSampleTimer = null;
 let selPushTimer = null;
 let selBusy = false;
 let watchStarted = false;
+let pausedByCommand = false; // 导入期间是否由指令主动暂停过采样（结束时按原样恢复）
 let lastSel = null; // 最近一次「选中对象」参数；未选中时保留上一次（继承）
 
 /**
@@ -106,12 +107,38 @@ function send(payload) {
 	}
 }
 
+/**
+ * 导入期间暂停选中采样：那 100ms 一次的 API 调用会和 create 抢 EDA 主线程，
+ * 几十个元件一起建的时候尤其明显。记下暂停前是否在采样，结束时按原样恢复。
+ *
+ * @returns {void}
+ * @sideEffects 清除定时器
+ */
+function pauseWatch() {
+	pausedByCommand = watchStarted;
+	stopWatch();
+}
+
+/**
+ * 导入结束后恢复选中采样（已断开连接时不恢复）
+ *
+ * @returns {void}
+ * @sideEffects 注册定时器
+ */
+function resumeWatch() {
+	const restore = pausedByCommand;
+	pausedByCommand = false;
+	if (restore && wsOpen()) startWatch();
+}
+
 const handleCommand = createCommandHandler({
 	getHost: getEda,
 	send: send,
 	log: log,
 	debugAllowed: debugAllowed,
 	ver: VER,
+	pauseWatch: pauseWatch,
+	resumeWatch: resumeWatch,
 });
 
 /**
