@@ -19,6 +19,61 @@
 - **V4 三条写盘流程已人工验证通过**（2026-10-22，V4.1.78）：PCB转原理图（符号与引脚完整）、生成物理网络三种写回、批量替换器件（器件真正替换、坐标角度不变、无临时件残留）。详见 `docs/V4回归记录.md`
 - ⚠️ **V4 待处理**：V4 下 `sys_FileManager.setDocumentSource()` 整份写回会丢掉 `POURED`（铜皮已计算填充）行 —— 实测同一份原文写回后 45,557 → 43,119 字节，`POUR` 本体仍在、填充缓存消失（V2.2.45 逐字节一致）。受影响：`生成物理网络`（源码方式）、`PCB转原理图` 等整份重写源码的功能；重算铜皮可恢复。处理方案待定
 
+## v1.24.0 `2026-11-09`
+
+> 新增「批量修改线宽」：按线宽统计整板导线，批量改宽；期望线宽填 0 表示删除
+
+### 新增页面与模块
+
+- `iframe/ModifyLineWidth.html`（560×560）+ `iframe/js/src/app/modify-line-width/`：
+  - `stats.js` 纯函数：单位换算、格式化（mil 1 位 / mm 3 位）、三态解析、按线宽分组、柱宽归一；
+  - `reader.js`：`pcb_PrimitiveLine/Arc.getAll()` 归一（字段/getter 双读）+ 弧长计算；
+  - `sourceWidthWriter.js`：逐行改 `width` / 整行删除（V2 数组 + V3V4 日志两套）；
+  - `writer.js`：`planChanges()` 生成计划、`writeBySource()` / `writeByApi()` 两种写回；
+  - `index.js`：取 DOM、绑事件、刷表（输入值按**图元 id** 存 `pending`，切层/切单位不丢）。
+- 菜单：PCB → 新增「导线」分组 → 「批量修改线宽」（`registerFn: ModifyLineWidth`）。
+
+### 实测事实（决定实现方式）
+
+- **源码线宽字段是 `width`**（不是 `lineWidth`），圆弧角度是 `angle`；V2 数组里直线 `width` 在下标 9、圆弧在下标 10（与 `generate-net/sourceParser.js` 的 `v2Line`/`v2Arc` 一致）。
+- **源码与 API 的长度单位都是 mil**。`CANVAS.unit` / `RULE.ruleContext.unit` 只是显示单位：样本里 `unit:"mm"` 的规则存的是 `5.9843`、`11.811` 这类 mil 量级值 → 不能按那个字段换算。
+- **`primitiveId` 与源码行 `id` 同源**：`src/js/RegionImageConverter.js` 的 `_extractPath(segments, item.primitiveId)` 就是拿它去源码文本里找 `"<id>"`。仍设保护：命中 0 条时**中止写回**（避免整份文档白写一遍，V4 还会连带丢 `POURED`）。
+- `pcb_PrimitiveLine.modify(id, { lineWidth })` 只传线宽即可，其它字段不传等于不改；实现统一传 number（`toApiLength(v, 3)`）。
+  实测 V4.1.97 的 `modify` 其实接受字符串 `"6.0"` 且生效，但 `create` 系列是严格类型 —— 不赌版本差异。
+- `delete([ids])` 支持数组：删除按种类各调一次，不逐条。
+
+### 关键设计
+
+- **分组键 = 当前单位下格式化后的线宽字符串**（`"6.0"` / `"0.152"`）：`6.000000000000001` 与 `6` 自动合并；若固定按 mil 舍入，mm 模式下 0.1mm 与 0.11mm 会被错并。
+- **圆弧长度按弧长**：`R = chord / (2·sin(θ/2))`，`L = R·θ`；90° 约为弦长的 1.1107 倍。退化（角度 0、弦长 0、≥360°）回退成弦长。
+- **柱状图以列内最大值为 100%**（不是占总量比），最小 2% 保可见；`td{position:relative}` + 绝对定位 `div.lw-bar`，百分比随单元格宽度自适应。
+- **删除与改宽在同一次源码写回里完成**：拆成「先删后写」会把删掉的行复活（写回的是删除前快照），「先写后删」可能碰上文档重载后的 id 变化。
+- 期望线宽与当前值相同（|Δ| < 1e-6）按 no-op 跳过，避免为了一个没变化的输入整份写回。
+- 源码改写每 2000 行 `yieldToUi()` 一次，大文档不卡渲染。
+
+### 门禁与验证
+
+- 新增 `test/modifyLineWidth.test.mjs`（20 个用例）：格式化/三态解析/分组/柱宽、弧长、源码逐字节安全（未命中行 `===` 原串、行尾 `|` 保留、只动 LINE/ARC）、计划生成、API 写入（含单条失败不中断）、源码写入（命中 0 条不写回）。
+- `mock-eda.js` 补 `pcb_PrimitiveLine/Arc.getAll|modify`（带 3 条直线 + 1 条弧线的样本）、`pcb_Layer.getAllLayers`、`pcb_PrimitivePour` → `node test/pages/run.mjs --only ModifyLineWidth` **PASS，0 错误 / 0 未 mock**。
+- `node tools/layout-check.mjs --only ModifyLineWidth` → 560×560 **无溢出/裁切**。
+- `npm test` **921 用例全通过**；`check:js` 0 违规（`apply` 初版复杂度 13，拆出 `precheck` / `runWrite` 后达标）；`check:deps` 123 模块 / 246 条 import 无环。
+- 文档数：`docConsistency` 与 `eextManifest` 的页面数断言 18 → 19。
+
+### 实机验证（V4.1.97，EDA 桥探针 26–28）
+
+- `getAll()` 与源码行 id 逐条命中：**直线 8/8、圆弧 2/2**（同文档）；ARC 源码字段确认 `angle` / `width` / `arcType:"DOT"`。
+- 源码路径：建 3 个临时图元 → 改 2 条（直线 10→8、圆弧 10→12）+ 删 1 条 → 一次 `setDocumentSource`；
+  回读 `lineWidth = 8 / 12`、被删直线消失、圆弧 `arcAngle` 仍 90，文档正常。
+- API 路径：`modify` 即时生效、`delete([id])` 后 `getAll()` 不再返回。
+- 精度：`lineWidth: 7.906` 回读仍 `7.906`（未量化），mm 的 3 位小数可如实落盘。
+- 顺带发现：源码圆弧端点 `135.8579` 而 API 读回 `135.9`（API 按 0.1 mil 取整）→ 坐标匹配不可靠，进一步确认按 id 命中是对的。
+
+### 未验证 / 注意
+
+- **页面本体尚未在 EDA 内实测**：桥只能跑脚本，页面的 UI 交互（点按钮、切层/切单位）需装上新版 `.eext` 后人工过一遍：
+  V4 与 V2.2.45 各测一次改宽、填 0 删除、两种写入方式、含圆弧的板。
+- V4 源码方式仍会丢 `POURED`：确认框已提示，写后需重算铜皮（探针 27 特意跳过有铺铜的文档）。
+
 ## v1.23.3 `2026-11-04`
 
 > `创建封装` 卡「处理中...」：await 了一个永不 resolve 的交互式放置 Promise

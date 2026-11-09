@@ -1,0 +1,80 @@
+<!doctype html>
+<!--
+  开发者：WOLF4096
+  辅助开发：DeepSeek-V4.1-Flash
+  本工具为非官方第三方开源扩展
+-->
+<html lang="zh-CN">
+
+<head>
+	<meta charset="UTF-8" />
+	<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+	<title>狼黑工具 - 批量修改线宽</title>
+	<link rel="stylesheet" href="/iframe/css/common.css" />
+</head>
+
+<body class="app">
+	<div class="toolbar">
+		<div class="toolbar-left">
+			<span class="title">批量修改线宽</span>
+		</div>
+		<div class="button-group">
+			<button id="btnRefresh" class="btn-secondary">刷新</button>
+			<button id="btnApply" disabled>应用修改</button>
+		</div>
+	</div>
+
+	<div class="lw-controls">
+		<span class="lw-label">层</span>
+		<select id="layerSelect" title="只统计所选层上的导线">
+			<option value="">全部层</option>
+		</select>
+
+		<span class="lw-label"> 单位</span>
+		<span class="lw-units">
+			<label title="线宽与长度以 mil 显示，保留 1 位小数"><input type="radio" name="lwUnit" value="mil" checked />mil</label>
+			<label title="线宽与长度以毫米显示，保留 3 位小数"><input type="radio" name="lwUnit" value="mm" />mm</label>
+		</span>
+
+		<span class="lw-label"> 更新方式</span>
+		<select id="modeSelect" title="源码更新：一次整份写回；API 修改：逐条调用，较慢">
+			<option value="source">源码更新</option>
+			<option value="api">API 修改</option>
+		</select>
+	</div>
+
+	<div class="lw-summary" id="summary">正在读取导线…</div>
+
+	<div class="table-wrap">
+		<table class="tbl lw-table">
+			<colgroup>
+				<col class="c-w" />
+				<col class="c-n" />
+				<col class="c-len" />
+				<col class="c-exp" />
+			</colgroup>
+			<thead>
+				<tr>
+					<th id="thWidth">线宽 (mil)</th>
+					<th id="thCount">数量</th>
+					<th id="thLength">长度 (mil)</th>
+					<th id="thExpect">目标线宽 (mil)</th>
+				</tr>
+			</thead>
+			<tbody id="tableBody">
+				<tr class="empty-row">
+					<td colspan="4">正在读取导线…</td>
+				</tr>
+			</tbody>
+		</table>
+	</div>
+
+	<footer class="status-bar">
+		<div class="progress-fill" id="progressBar"></div>
+		<span class="status-text" id="status">就绪</span>
+	</footer>
+
+	<script src="/iframe/js/app/ModifyLineWidth.js"></script>
+</body>
+
+</html>

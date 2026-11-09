@@ -219,6 +219,26 @@
 		known[ns] = known[ns] || { getAll: async () => [], get: async () => null, create: async () => created(), delete: ok };
 	}
 
+	/* ---------------- 「批量修改线宽」用的导线样本 ---------------- */
+	// 只给这一页几张真实形态的图元，页面才能真的跑出统计表（含 6.000000000000001 的浮点噪声）
+	const mockLines = [
+		{ primitiveId: 'l1', primitiveType: 'Line', net: 'A', layer: 1, startX: 0, startY: 0, endX: 100, endY: 0, lineWidth: 10, primitiveLock: false },
+		{ primitiveId: 'l2', primitiveType: 'Line', net: 'A', layer: 1, startX: 0, startY: 0, endX: 0, endY: 100, lineWidth: 6.000000000000001, primitiveLock: false },
+		{ primitiveId: 'l3', primitiveType: 'Line', net: 'B', layer: 2, startX: 0, startY: 0, endX: 50, endY: 50, lineWidth: 10, primitiveLock: false },
+	];
+	const mockArcs = [
+		{ primitiveId: 'a1', primitiveType: 'Arc', net: 'A', layer: 1, startX: 0, startY: 0, endX: 100, endY: 0, arcAngle: 90, lineWidth: 6.000000000000001, primitiveLock: false },
+	];
+	known.pcb_PrimitiveLine = Object.assign({}, known.pcb_PrimitiveLine, { getAll: async () => mockLines, modify: async () => created() });
+	known.pcb_PrimitiveArc = Object.assign({}, known.pcb_PrimitiveArc, { getAll: async () => mockArcs, modify: async () => created() });
+	known.pcb_Layer = {
+		getAllLayers: async () => [
+			{ id: 1, name: 'Top Layer', type: 'SIGNAL', layerStatus: 1 },
+			{ id: 2, name: 'Bottom Layer', type: 'SIGNAL', layerStatus: 1 },
+		],
+	};
+	known.pcb_PrimitivePour = { getAll: async () => [] };
+
 	/** 未 mock 的命名空间：返回可链式调用、可 await 的空实现，并记录到 missing */
 	function namespaceStub(name) {
 		const handler = {

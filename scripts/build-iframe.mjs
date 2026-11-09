@@ -51,6 +51,7 @@ const PAGES = {
 	ImportQrcode: 'app/import-qrcode/index.js',
 	InADNetlist: 'app/in-ad-netlist/index.js',
 	ModifyNet: 'app/modify-net/index.js',
+	ModifyLineWidth: 'app/modify-line-width/index.js',
 	NetlistUpdate3DModels: 'app/netlist-3d/index.js',
 	OutPinNet: 'app/out-pin-net/index.js',
 	PcbToSch: 'app/pcb-to-sch/index.js',

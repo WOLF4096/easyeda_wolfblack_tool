@@ -1,10 +1,11 @@
 /**
  * @//module/ core/layer
- * @//description/ PCB 图层常量与铜层/内层判定（官方层表的唯一前端来源）
- * @//exports/ LAYER, isInnerLayer, isCopperLayer, isConductiveLayer
+ * @//description/ PCB 图层常量、铜层/内层判定与中文层名（官方层表的唯一前端来源）
+ * @//exports/ LAYER, LAYER_LABEL, layerLabel, isInnerLayer, isCopperLayer, isConductiveLayer
  * @//dependencies/ 无
- * @//example/ const { LAYER, isConductiveLayer } = await import('./core/layer.js')
+ * @//example/ const { LAYER, isConductiveLayer, layerLabel } = await import('./core/layer.js')
  *            isConductiveLayer(prim.layer) // true 表示该图元参与电气连通
+ *            layerLabel(15) // '内层 1'
  *
  * 开发者：WOLF4096
  * 辅助开发：DeepSeek-V4.1-Flash
@@ -83,4 +84,69 @@ export function isCopperLayer(layer) {
 export function isConductiveLayer(layer) {
 	const value = Number(layer);
 	return isCopperLayer(value) || value === LAYER.MULTI;
+}
+
+/**
+ * 层号 → 中文短名（仅用于界面展示，不参与任何判定）
+ *
+ * 只收录「画布上真正会放图元、且用户叫得出名字」的层；内层与自定义层按区间批量生成。
+ * 这张表是**展示文本**，与 `src/js/common/pcbConstants.js` 的数值层表不必同步
+ * （后端不渲染层名，改了也不会漂移）。
+ *
+ * @type {Readonly<Record<number, string>>}
+ */
+export const LAYER_LABEL = (() => {
+	const label = {
+		1: '顶层',
+		2: '底层',
+		3: '顶层丝印',
+		4: '底层丝印',
+		5: '顶层阻焊',
+		6: '底层阻焊',
+		7: '顶层锡膏',
+		8: '底层锡膏',
+		9: '顶层装配',
+		10: '底层装配',
+		11: '板框',
+		12: '多层',
+		13: '文档',
+		14: '机械',
+		47: '孔层',
+		48: '元件外形',
+		49: '元件标识',
+		50: '引脚焊接',
+		51: '引脚悬空',
+		52: '元件模型',
+		53: '3D 外壳边框',
+		54: '3D 外壳顶层',
+		55: '3D 外壳底层',
+		56: '钻孔图',
+		57: '飞线',
+		58: '顶层补强',
+		59: '底层补强',
+	};
+	// 内层 15~46：官方表只到 30，实测存在 31/32；按区间生成避免漏项
+	for (let id = 15; id <= 46; id++) label[id] = `内层 ${id - 14}`;
+	// 自定义层 71~100
+	for (let id = 71; id <= 100; id++) label[id] = `自定义 ${id - 70}`;
+	return Object.freeze(label);
+})();
+
+/**
+ * 取层的显示名
+ *
+ * 取值顺序：内置中文名 → 调用方给的字典（通常是 `pcb_Layer.getAllLayers()` 的
+ * `id → name`，用于自定义层或未来的新层号）→ `层 N`。
+ *
+ * @param {number|string} layer 层号
+ * @param {Record<number, string>} [names] 兜底字典（可选）
+ * @returns {string} 显示名
+ * @sideEffects 无（纯函数）
+ */
+export function layerLabel(layer, names) {
+	const id = Number(layer);
+	if (!Number.isFinite(id)) return '未知层';
+	if (LAYER_LABEL[id]) return LAYER_LABEL[id];
+	if (names && typeof names === 'object' && names[id]) return String(names[id]);
+	return `层 ${id}`;
 }

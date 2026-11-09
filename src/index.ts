@@ -128,6 +128,11 @@ export function ModifyNet(): void {
 	openPage('ModifyNet', 540, 540);
 }
 
+/** 批量修改线宽（按层统计分布，改宽或填 0 删除） */
+export function ModifyLineWidth(): void {
+	openPage('ModifyLineWidth', 400, 500);
+}
+
 /** 校准API误差（坐标 / 尺寸校准，转换类功能的倍率来源） */
 export function APITest(): void {
 	openPage('APITest', 512, 640);

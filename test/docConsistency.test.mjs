@@ -98,10 +98,10 @@ describe('文档一致性', () => {
 		assert.deepEqual(onlyV22, ['创建封装'], '只有「创建封装」允许标注为仅 V2.2.45');
 	});
 
-	it('18 个页面标题统一为「狼黑工具 - X」', () => {
+	it('19 个页面标题统一为「狼黑工具 - X」', () => {
 		const dir = path.join(ROOT, 'iframe');
 		const pages = fs.readdirSync(dir).filter((file) => file.endsWith('.html'));
-		assert.equal(pages.length, 18, `页面数应为 18，实际 ${pages.length}`);
+		assert.equal(pages.length, 19, `页面数应为 19，实际 ${pages.length}`);
 		for (const page of pages) {
 			const html = fs.readFileSync(path.join(dir, page), 'utf8');
 			const title = (html.match(/<title>([^<]*)<\/title>/) || [])[1];

@@ -99,11 +99,11 @@ describe('eext 清单：真实仓库', () => {
 		assert.deepEqual(unknown, [], `发现无关内容：${unknown.join(', ')}`);
 	});
 
-	it('广场展示资源与 18 个页面都在（这些是 EDA 会读的）', async () => {
+	it('广场展示资源与 19 个页面都在（这些是 EDA 会读的）', async () => {
 		for (const rel of ['README.md', 'CHANGELOG.md', 'LICENSE', 'PRIVACY.md', 'images/info.png', 'locales/zh-Hans.json']) {
 			assert.ok(files.includes(rel), `缺少展示资源 ${rel}`);
 		}
-		assert.equal(files.filter((rel) => /^iframe\/[^/]+\.html$/.test(rel)).length, 18, '页面数应为 18');
+		assert.equal(files.filter((rel) => /^iframe\/[^/]+\.html$/.test(rel)).length, 19, '页面数应为 19');
 	});
 
 	it('引用完整性无问题（需先构建，未构建时跳过）', async (t) => {

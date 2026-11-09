@@ -3628,6 +3628,151 @@ label.inline,
 	border-top-color: var(--vscode-link);
 }
 
+/* —— 批量修改线宽（ModifyLineWidth） —— */
+.lw-controls {
+	display: flex;
+	flex: 0 0 auto;
+	align-items: center;
+	gap: 6px;
+	height: 32px;
+	padding: 0 10px;
+	background-color: var(--vscode-panel);
+	border-bottom: 1px solid var(--vscode-border);
+	white-space: nowrap;
+}
+
+.lw-label {
+	flex: 0 0 auto;
+	color: var(--vscode-text-muted);
+	font-size: 12px;
+}
+
+.lw-controls select {
+	flex: 0 0 auto;
+	height: 22px;
+	padding: 0 4px;
+	font-size: 12px;
+}
+
+.lw-units {
+	display: flex;
+	flex: 0 0 auto;
+	align-items: center;
+	gap: 8px;
+}
+
+.lw-units label {
+	display: inline-flex;
+	align-items: center;
+	gap: 3px;
+	color: var(--vscode-text);
+	font-size: 12px;
+	cursor: pointer;
+}
+
+.lw-units input[type='radio'] {
+	margin: 0;
+}
+
+.lw-summary {
+	flex: 0 0 auto;
+	height: 22px;
+	padding: 0 10px;
+	overflow: hidden;
+	background-color: var(--vscode-bg);
+	border-bottom: 1px solid var(--vscode-border);
+	color: var(--vscode-text-muted);
+	font-size: 11px;
+	line-height: 22px;
+	white-space: nowrap;
+	text-overflow: ellipsis;
+}
+
+/* 列宽固定，柱状图靠绝对定位铺在文字下面 */
+.lw-table col.c-w {
+	width: 22%;
+}
+
+.lw-table col.c-n {
+	width: 18%;
+}
+
+.lw-table col.c-len {
+	width: 28%;
+}
+
+.lw-table col.c-exp {
+	width: 32%;
+}
+
+.lw-table td.num {
+	position: relative;
+}
+
+.lw-table td.num > span {
+	position: relative;
+	z-index: 1;
+}
+
+.lw-bar {
+	position: absolute;
+	top: 3px;
+	bottom: 3px;
+	left: 0;
+	width: 0;
+	border-radius: 2px;
+	pointer-events: none;
+	transition: width 0.15s ease;
+	z-index: 0;
+}
+
+.lw-bar.count {
+	background-color: rgba(55, 148, 255, 0.18);
+}
+
+.lw-bar.len {
+	background-color: rgba(137, 209, 133, 0.15);
+}
+
+/* 输入框必须带父级前缀：全局 input[type='text'] 的特异性是 (0,1,1)，单类压不住 */
+.lw-table input.lw-input {
+	width: 100%;
+	height: 20px;
+	padding: 0 6px;
+	background-color: var(--vscode-input-bg);
+	border: 1px solid var(--vscode-border);
+	border-radius: var(--vscode-radius);
+	color: var(--vscode-text);
+	font: inherit;
+	font-size: 12px;
+	text-align: right;
+	outline: none;
+}
+
+.lw-table input.lw-input:focus {
+	border-color: var(--vscode-focus);
+}
+
+.lw-table input.lw-input.is-modified {
+	background-color: rgba(0, 127, 212, 0.12);
+	border-color: var(--vscode-focus);
+	color: var(--vscode-text-bright);
+}
+
+.lw-table input.lw-input.is-del {
+	border-color: var(--vscode-warning);
+	color: var(--vscode-warning-text);
+}
+
+.lw-table input.lw-input.invalid {
+	border-color: var(--vscode-error);
+	color: var(--vscode-error);
+}
+
+.lw-row-del > td {
+	color: var(--vscode-warning-text);
+}
+
 /* ==================================================================
  * 十、工具类（放文件最末，保证能覆盖前面的组件 display）
  * ================================================================== */
