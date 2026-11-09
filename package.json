@@ -1,6 +1,6 @@
 {
 	"name": "wolfblack-tool",
-	"version": "1.24.0",
+	"version": "1.24.1",
 	"description": "画板工具集：PCB转原理图、改网络、换器件、记工时",
 	"author": "WOLF4096",
 	"license": "Apache-2.0",

@@ -1,10 +1,11 @@
 /**
  * @//module/ app/modify-line-width/stats
  * @//description/ 线宽统计的纯函数层：单位换算、格式化/解析、按线宽分组、背景柱占比
- * @//exports/ MM_PER_MIL, MIL_PER_MM, WIDTH_DIGITS, MAX_WIDTH_MIL, BAR_MIN_PERCENT, convertLength, formatNumber, formatWidth, parseWidth, groupByWidth, barPercent
+ * @//exports/ MM_PER_MIL, MIL_PER_MM, WIDTH_DIGITS, MAX_WIDTH_MIL, BAR_MIN_PERCENT, convertLength, formatNumber, formatWidth, formatLength, parseWidth, groupByWidth, barPercent
  * @//dependencies/ 无
- * @//example/ const { formatWidth, parseWidth, groupByWidth } = await import('./stats.js')
+ * @//example/ const { formatWidth, formatLength, parseWidth, groupByWidth } = await import('./stats.js')
  *            formatWidth(6.000000000000001, 'mil') // '6.0'
+ *            formatLength(8115, 'mm')              // '206.121'（mil → mm 后再格式化）
  *            parseWidth('0', 'mil')                 // 0（删除）
  *            groupByWidth(items, 'mil')             // [{ key:'6.0', count:130, lengthMil:2000, … }]
  *
@@ -72,6 +73,21 @@ export function formatNumber(value, digits = 0) {
 }
 
 /**
+ * 把 mil 数值按当前单位格式化（线宽与长度共用的内核）
+ *
+ * @param {number|string} milValue 数值（mil）
+ * @param {'mil'|'mm'} unit 显示单位
+ * @returns {string} 显示文本；入参非有限数时返回空串
+ * @sideEffects 无（纯函数）
+ */
+function formatMil(milValue, unit) {
+	const num = Number(milValue);
+	if (!Number.isFinite(num)) return '';
+	const value = unit === 'mm' ? num * MM_PER_MIL : num;
+	return formatNumber(value, WIDTH_DIGITS[unit] || WIDTH_DIGITS.mil);
+}
+
+/**
  * 线宽 → 显示文本（按单位选精度）
  *
  * @param {number|string} widthMil 线宽（mil）
@@ -80,10 +96,22 @@ export function formatNumber(value, digits = 0) {
  * @sideEffects 无（纯函数）
  */
 export function formatWidth(widthMil, unit) {
-	const num = Number(widthMil);
-	if (!Number.isFinite(num)) return '';
-	const value = unit === 'mm' ? num * MM_PER_MIL : num;
-	return formatNumber(value, WIDTH_DIGITS[unit] || WIDTH_DIGITS.mil);
+	return formatMil(widthMil, unit);
+}
+
+/**
+ * 长度 → 显示文本（先换算单位再格式化）
+ *
+ * ⚠️ 统计里的 `lengthMil` **永远是 mil**，切到 mm 时必须先乘 0.0254，
+ * 只改小数位数会显示成「长度 (mm) 8,115.0」这种错值。
+ *
+ * @param {number|string} lengthMil 长度（mil）
+ * @param {'mil'|'mm'} unit 显示单位
+ * @returns {string} 显示文本；入参非有限数时返回空串
+ * @sideEffects 无（纯函数）
+ */
+export function formatLength(lengthMil, unit) {
+	return formatMil(lengthMil, unit);
 }
 
 /**

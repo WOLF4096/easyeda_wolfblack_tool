@@ -45,6 +45,15 @@ describe('stats：单位与格式化', () => {
 		assert.equal(formatWidth(0, 'mil'), '0.0');
 	});
 
+	it('formatLength：长度必须真的换算单位，不能只改小数位', async () => {
+		const { formatLength } = await import(STATS);
+		assert.equal(formatLength(2000, 'mil'), '2,000.0');
+		// 8115 mil = 206.121 mm —— 只改小数位会错显示成 "8,115.0"
+		assert.equal(formatLength(8115, 'mm'), '206.121');
+		assert.equal(formatLength(0, 'mm'), '0.000');
+		assert.equal(formatLength(6, 'mm'), '0.152', '与线宽同精度');
+	});
+
 	it('convertLength：mil ⇄ mm 往返误差可忽略', async () => {
 		const { convertLength } = await import(STATS);
 		assert.ok(Math.abs(convertLength(6, 'mil', 'mm') - 0.1524) < 1e-12);

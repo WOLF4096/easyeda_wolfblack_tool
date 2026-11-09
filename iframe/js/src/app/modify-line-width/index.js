@@ -20,7 +20,7 @@ import { confirm } from '../../ui/dialogs.js';
 import { createStatusBar } from '../../ui/statusBar.js';
 import { toast } from '../../ui/toast.js';
 import { readPrimitives } from './reader.js';
-import { barPercent, formatNumber, formatWidth, groupByWidth, parseWidth, WIDTH_DIGITS } from './stats.js';
+import { barPercent, formatLength, formatNumber, formatWidth, groupByWidth, parseWidth } from './stats.js';
 import { planChanges, writeByApi, writeBySource } from './writer.js';
 
 /** 与写入器一致的 no-op 判定阈值（mil） */
@@ -175,7 +175,6 @@ function rowHtml(row, index, maxCount, maxLength) {
 	else if (isDelete) cls = ' is-del';
 	else if (isModify) cls = ' is-modified';
 
-	const digits = WIDTH_DIGITS[state.unit] || 1;
 	const countBar = barPercent(row.count, maxCount);
 	const lengthBar = barPercent(row.lengthMil, maxLength);
 	const title = isDelete ? '填 0 表示删除该行全部导线' : '输入目标线宽；留空不修改';
@@ -183,7 +182,7 @@ function rowHtml(row, index, maxCount, maxLength) {
 	return `<tr${isDelete ? ' class="lw-row-del"' : ''}>
 		<td>${escapeHtml(row.key)}</td>
 		<td class="num"><div class="lw-bar count" style="width:${countBar}%"></div><span>${formatNumber(row.count, 0)}</span></td>
-		<td class="num"><div class="lw-bar len" style="width:${lengthBar}%"></div><span>${formatNumber(row.lengthMil, digits)}</span></td>
+		<td class="num"><div class="lw-bar len" style="width:${lengthBar}%"></div><span>${formatLength(row.lengthMil, state.unit)}</span></td>
 		<td><input class="lw-input${cls}" data-row="${index}" value="${escapeHtml(row.input)}" placeholder="${escapeHtml(row.key)}" inputmode="decimal" title="${title}" /></td>
 	</tr>`;
 }

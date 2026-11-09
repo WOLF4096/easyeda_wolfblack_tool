@@ -19,6 +19,16 @@
 - **V4 三条写盘流程已人工验证通过**（2026-10-22，V4.1.78）：PCB转原理图（符号与引脚完整）、生成物理网络三种写回、批量替换器件（器件真正替换、坐标角度不变、无临时件残留）。详见 `docs/V4回归记录.md`
 - ⚠️ **V4 待处理**：V4 下 `sys_FileManager.setDocumentSource()` 整份写回会丢掉 `POURED`（铜皮已计算填充）行 —— 实测同一份原文写回后 45,557 → 43,119 字节，`POUR` 本体仍在、填充缓存消失（V2.2.45 逐字节一致）。受影响：`生成物理网络`（源码方式）、`PCB转原理图` 等整份重写源码的功能；重算铜皮可恢复。处理方案待定
 
+## v1.24.1 `2026-11-09`
+
+> 修复「批量修改线宽」切单位后长度不换算
+
+- **根因**：`app/modify-line-width/index.js` 的 `rowHtml()` 里长度单元格写成 `formatNumber(row.lengthMil, digits)` —— `lengthMil` 永远是 mil，这里只按单位改了小数位数、**没有乘 0.0254**，于是 mm 模式下表头是 mm、数值还是 mil（8115 → 显示 `8,115.0`）。
+- **修法**：`stats.js` 抽出共用内核 `formatMil(milValue, unit)`（先换算再 `formatNumber`），导出 `formatLength()`；`formatWidth()` 改为同一内核的薄封装，两者精度保持一致（mil 1 位 / mm 3 位）。页面长度列改用 `formatLength(row.lengthMil, state.unit)`。
+- **回归测试**：新增用例 `formatLength：长度必须真的换算单位，不能只改小数位` —— `formatLength(8115,'mm') === '206.121'`（只改小数位会得到 `8,115.0`）、`formatLength(2000,'mil') === '2,000.0'`、`formatLength(0,'mm') === '0.000'`。
+- 数量列与柱条比例不受影响（本来就用 mil 原值算百分比，比值不变）。
+- 验证：`npm test` **922 全通过**；`check:js` 0 违规；`check:deps` 无环；重新打包 58 文件。
+
 ## v1.24.0 `2026-11-09`
 
 > 新增「批量修改线宽」：按线宽统计整板导线，批量改宽；期望线宽填 0 表示删除
