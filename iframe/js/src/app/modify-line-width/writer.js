@@ -8,7 +8,7 @@
  *            await writeByApi(eda, plan, { onProgress })
  *
  * 两条铁律：
- *   1. **期望线宽 = 0 → 删除**（不是写 0 宽，0 宽 API 与源码都不接受）；
+ *   1. **目标线宽 = 0 → 删除**（不是写 0 宽，0 宽 API 与源码都不接受）；
  *   2. 源码模式改宽与删行在**同一次** `setDocumentSource` 里完成，绝不拆成两步
  *      （先删后写会把行"复活"，先写后删可能碰上文档重载后的 id 变化）。
  *
@@ -174,15 +174,20 @@ export async function writeByApi(host, plan, hooks = {}) {
 	let modified = 0;
 	let deleted = 0;
 
-	await mapInChunks(plan.modify, 8, async (item) => {
-		try {
-			await host[API_OF[item.kind]].modify(item.id, { lineWidth: toApiLength(item.widthMil, 3) });
-			modified += 1;
-		} catch (e) {
-			console.error(`修改线宽失败 ${item.id}:`, e);
-			failed.push(item.id);
-		}
-	}, { onProgress: hooks.onProgress });
+	await mapInChunks(
+		plan.modify,
+		8,
+		async (item) => {
+			try {
+				await host[API_OF[item.kind]].modify(item.id, { lineWidth: toApiLength(item.widthMil, 3) });
+				modified += 1;
+			} catch (e) {
+				console.error(`修改线宽失败 ${item.id}:`, e);
+				failed.push(item.id);
+			}
+		},
+		{ onProgress: hooks.onProgress },
+	);
 
 	for (const [kind, ids] of groupByKind(plan.remove)) {
 		try {

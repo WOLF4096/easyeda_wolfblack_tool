@@ -115,7 +115,7 @@ export function formatLength(lengthMil, unit) {
 }
 
 /**
- * 解析「期望线宽」输入（三态）
+ * 解析「目标线宽」输入（三态）
  *
  * - 留空 → `null`（不修改）
  * - `0` → `0`（删除该行导线）

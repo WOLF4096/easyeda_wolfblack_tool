@@ -214,7 +214,7 @@ function updateSummary() {
 	const unit = state.unit;
 	thWidth.textContent = `线宽 (${unit})`;
 	thLength.textContent = `长度 (${unit})`;
-	thExpect.textContent = `期望线宽 (${unit})`;
+	thExpect.textContent = `目标线宽 (${unit})`;
 
 	const layerText = state.layer === '' ? '全部层' : layerLabel(Number(state.layer), state.layerNames);
 	const total = layerItems().length;
@@ -301,7 +301,10 @@ function describeResult(result, mode) {
 	if (mode === 'api') {
 		const failed = (result.failed || []).length + (result.deleteFailed || []).length;
 		if (failed > 0) {
-			const sample = (result.failed || []).concat(result.deleteFailed || []).slice(0, 3).join('、');
+			const sample = (result.failed || [])
+				.concat(result.deleteFailed || [])
+				.slice(0, 3)
+				.join('、');
 			return { text: `成功修改 ${result.modified} 条、删除 ${result.deleted} 条；失败 ${failed} 条（${sample}）`, level: 'warning' };
 		}
 		return { text: `已修改 ${result.modified} 条、删除 ${result.deleted} 条（API，${seconds}s）`, level: 'success' };
@@ -321,7 +324,7 @@ function describeResult(result, mode) {
  */
 function precheck(plan, host) {
 	if (plan.invalid.length) {
-		return { text: '有「期望线宽」不是有效数值（需 ≥ 0，填 0 表示删除）', level: 'error' };
+		return { text: '有「目标线宽」不是有效数值（需 ≥ 0，填 0 表示删除）', level: 'error' };
 	}
 	if (plan.modify.length + plan.remove.length === 0) {
 		return { text: '没有需要修改的行（留空不修改，填 0 表示删除）', level: 'warning' };

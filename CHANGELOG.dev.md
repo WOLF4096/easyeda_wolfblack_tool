@@ -31,16 +31,16 @@
 
 ## v1.24.0 `2026-11-09`
 
-> 新增「批量修改线宽」：按线宽统计整板导线，批量改宽；期望线宽填 0 表示删除
+> 新增「批量修改线宽」：按线宽统计整板导线，批量改宽；目标线宽填 0 表示删除
 
 ### 新增页面与模块
 
 - `iframe/ModifyLineWidth.html`（560×560）+ `iframe/js/src/app/modify-line-width/`：
-  - `stats.js` 纯函数：单位换算、格式化（mil 1 位 / mm 3 位）、三态解析、按线宽分组、柱宽归一；
-  - `reader.js`：`pcb_PrimitiveLine/Arc.getAll()` 归一（字段/getter 双读）+ 弧长计算；
-  - `sourceWidthWriter.js`：逐行改 `width` / 整行删除（V2 数组 + V3V4 日志两套）；
-  - `writer.js`：`planChanges()` 生成计划、`writeBySource()` / `writeByApi()` 两种写回；
-  - `index.js`：取 DOM、绑事件、刷表（输入值按**图元 id** 存 `pending`，切层/切单位不丢）。
+    - `stats.js` 纯函数：单位换算、格式化（mil 1 位 / mm 3 位）、三态解析、按线宽分组、柱宽归一；
+    - `reader.js`：`pcb_PrimitiveLine/Arc.getAll()` 归一（字段/getter 双读）+ 弧长计算；
+    - `sourceWidthWriter.js`：逐行改 `width` / 整行删除（V2 数组 + V3V4 日志两套）；
+    - `writer.js`：`planChanges()` 生成计划、`writeBySource()` / `writeByApi()` 两种写回；
+    - `index.js`：取 DOM、绑事件、刷表（输入值按**图元 id** 存 `pending`，切层/切单位不丢）。
 - 菜单：PCB → 新增「导线」分组 → 「批量修改线宽」（`registerFn: ModifyLineWidth`）。
 
 ### 实测事实（决定实现方式）
@@ -58,7 +58,7 @@
 - **圆弧长度按弧长**：`R = chord / (2·sin(θ/2))`，`L = R·θ`；90° 约为弦长的 1.1107 倍。退化（角度 0、弦长 0、≥360°）回退成弦长。
 - **柱状图以列内最大值为 100%**（不是占总量比），最小 2% 保可见；`td{position:relative}` + 绝对定位 `div.lw-bar`，百分比随单元格宽度自适应。
 - **删除与改宽在同一次源码写回里完成**：拆成「先删后写」会把删掉的行复活（写回的是删除前快照），「先写后删」可能碰上文档重载后的 id 变化。
-- 期望线宽与当前值相同（|Δ| < 1e-6）按 no-op 跳过，避免为了一个没变化的输入整份写回。
+- 目标线宽与当前值相同（|Δ| < 1e-6）按 no-op 跳过，避免为了一个没变化的输入整份写回。
 - 源码改写每 2000 行 `yieldToUi()` 一次，大文档不卡渲染。
 
 ### 门禁与验证
