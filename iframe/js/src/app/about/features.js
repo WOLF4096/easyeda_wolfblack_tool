@@ -221,7 +221,7 @@ export const featuresData = [
 		shortcutType: '',
 		brief: '按线宽分布统计导线，批量改宽或填 0 删除',
 		scope: ['PCB'],
-		version: 'V2.2.45 ~ 4',
+		version: 'V3 ~ 4',
 		demoUrl: '',
 		steps: [
 			'打开页面会自动统计当前 PCB 的导线，按线宽分组列出数量与总长',
