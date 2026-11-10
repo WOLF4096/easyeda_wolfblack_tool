@@ -66,7 +66,7 @@
 | 导入 AD 网表    | 把 Altium Designer 的网表导入当前 PCB          | PCB          | V2.2.45 ~ 4    | [打开](https://www.jlc-bbs.com/platform/a/1230646) |
 | 导出引脚网络    | 把器件引脚与网络的对应关系导出成表格           | PCB          | V2.2.45 ~ 4    | [打开](https://www.jlc-bbs.com/platform/a/1447636) |
 | 批量修改网络    | 用 Excel 两列数据批量改名，还能反查引脚        | PCB          | V2.2.45 ~ 4    | [打开](https://www.jlc-bbs.com/platform/a/1221464) |
-| 批量修改线宽    | 按线宽分布统计导线，批量改宽或填 0 删除        | PCB          | V2.2.45 ~ 4    | —                                                  |
+| 批量修改线宽    | 按线宽分布统计导线，批量改宽或填 0 删除        | PCB          | V3 ~ 4         | —                                                  |
 | 丝印代码转换    | 把 01C 这类丝印代码换算成 10kΩ 并写回          | PCB / 原理图 | V2.2.45 ~ 4    | [打开](https://www.jlc-bbs.com/platform/a/1221485) |
 | 清除多余属性    | 一键清掉替换件用不上的器件属性                 | PCB / 原理图 | V2.2.45 ~ 4    | [打开](https://www.jlc-bbs.com/platform/a/1221495) |
 | 刷新网表        | 重新读一遍网表再写回，清掉属性里的占位符       | PCB / 原理图 | V2.2.45 ~ 3    | [打开](https://www.jlc-bbs.com/platform/a/1447654) |
